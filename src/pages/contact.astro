@@ -23,7 +23,7 @@ import Base from '../layouts/Base.astro';
       <div class="grid lg:grid-cols-5 gap-16">
         <!-- Form -->
         <div class="lg:col-span-3 reveal">
-          <form action="https://formspree.io/f/YOUR_FORM_ID" method="POST" class="space-y-8">
+          <form id="contact-form" class="space-y-8">
             <div>
               <label for="name" class="block text-neutral-500 text-xs tracking-[0.15em] uppercase mb-3">Name</label>
               <input
@@ -112,12 +112,16 @@ import Base from '../layouts/Base.astro';
                 placeholder="Tell me about the problem you're trying to solve..."
               ></textarea>
             </div>
-            <button
-              type="submit"
-              class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]"
-            >
-              Send it
-            </button>
+            <div class="flex items-center gap-4">
+              <button
+                type="submit"
+                id="submit-btn"
+                class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]"
+              >
+                Send it
+              </button>
+              <p id="form-status" class="text-sm transition-opacity duration-300 opacity-0"></p>
+            </div>
           </form>
         </div>
 
@@ -305,7 +309,69 @@ import Base from '../layouts/Base.astro';
       });
     }
 
+    function initForm() {
+      const form = document.getElementById('contact-form');
+      const btn = document.getElementById('submit-btn');
+      const status = document.getElementById('form-status');
+      if (!form || !btn || !status) return;
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        btn.disabled = true;
+        btn.textContent = 'Sending...';
+        status.textContent = '';
+        status.classList.add('opacity-0');
+
+        try {
+          const formData = new FormData(form);
+          const res = await fetch('/api/contact', {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (res.ok) {
+            status.textContent = 'Sent. I\'ll be in touch.';
+            status.classList.remove('opacity-0');
+            status.classList.add('text-amber-400');
+            status.classList.remove('text-red-400');
+            form.reset();
+            // Reset checkbox visual states
+            document.querySelectorAll('#interest-grid .service-title').forEach(t => {
+              t.classList.remove('text-amber-400');
+              t.classList.add('text-neutral-300');
+            });
+            document.querySelectorAll('.service-nudge').forEach(n => {
+              n.style.maxHeight = '0';
+              n.style.opacity = '0';
+              n.style.marginTop = '0';
+            });
+            document.querySelectorAll('.service-card').forEach(c => {
+              c.classList.remove('border-amber-500/15', 'bg-amber-500/[0.02]');
+            });
+            const comboBanner = document.getElementById('combo-banner');
+            if (comboBanner) { comboBanner.style.maxHeight = '0'; comboBanner.style.opacity = '0'; }
+          } else {
+            const data = await res.json();
+            status.textContent = data.error || 'Something went wrong. Try emailing me directly.';
+            status.classList.remove('opacity-0');
+            status.classList.add('text-red-400');
+            status.classList.remove('text-amber-400');
+          }
+        } catch {
+          status.textContent = 'Connection error. Try emailing me directly.';
+          status.classList.remove('opacity-0');
+          status.classList.add('text-red-400');
+          status.classList.remove('text-amber-400');
+        }
+
+        btn.disabled = false;
+        btn.textContent = 'Send it';
+      });
+    }
+
     initNudges();
-    document.addEventListener('astro:after-swap', initNudges);
+    initForm();
+    document.addEventListener('astro:after-swap', () => { initNudges(); initForm(); });
   </script>
 </Base>

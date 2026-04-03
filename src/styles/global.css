@@ -127,7 +127,7 @@
   .surface-1 { background-color: var(--color-neutral-900); }
   .surface-2 { background-color: var(--color-neutral-850); }
 
-  /* Quote font — uses Lora which has real italics */
+  /* Quote font. Uses Lora which has real italics. */
   .font-quote {
     font-family: var(--font-quote);
   }

@@ -47,49 +47,58 @@ import Base from '../layouts/Base.astro';
               />
             </div>
             <div>
-              <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Interested in</p>
+              <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Interested in <span class="text-neutral-700">(pick as many as you want)</span></p>
               <div class="grid grid-cols-2 gap-3" id="interest-grid">
-                <label class="interest-option group cursor-pointer">
+
+                <label class="cursor-pointer" data-service="web-management">
                   <input type="checkbox" name="interest" value="web-management" class="hidden peer" />
-                  <div class="p-4 rounded-lg border border-white/5 bg-neutral-900/50 peer-checked:border-amber-500/40 peer-checked:bg-amber-500/5 transition-all duration-300 hover:border-white/15">
-                    <p class="text-neutral-300 text-sm font-medium peer-checked:group-[]:text-amber-400 transition-colors">Web Management</p>
-                    <p class="text-neutral-600 text-xs mt-1">Hosting, security, updates</p>
+                  <div class="service-card relative p-4 rounded-lg border border-white/5 bg-neutral-900/50 peer-checked:border-amber-500/40 peer-checked:bg-amber-500/5 transition-all duration-300 hover:border-white/15 overflow-hidden">
+                    <p class="service-title text-neutral-300 text-sm font-medium transition-colors duration-300">Web Management</p>
+                    <p class="service-desc text-neutral-600 text-xs mt-1 transition-all duration-400">Hosting, security, updates</p>
+                    <p class="service-nudge text-amber-400/70 text-xs mt-0 leading-relaxed transition-all duration-400 max-h-0 opacity-0 overflow-hidden"></p>
                   </div>
                 </label>
-                <label class="interest-option group cursor-pointer">
+
+                <label class="cursor-pointer" data-service="marketing-strategy">
                   <input type="checkbox" name="interest" value="marketing-strategy" class="hidden peer" />
-                  <div class="p-4 rounded-lg border border-white/5 bg-neutral-900/50 peer-checked:border-amber-500/40 peer-checked:bg-amber-500/5 transition-all duration-300 hover:border-white/15">
-                    <p class="text-neutral-300 text-sm font-medium peer-checked:group-[]:text-amber-400 transition-colors">Marketing Strategy</p>
-                    <p class="text-neutral-600 text-xs mt-1">SEO, content, competitive</p>
+                  <div class="service-card relative p-4 rounded-lg border border-white/5 bg-neutral-900/50 peer-checked:border-amber-500/40 peer-checked:bg-amber-500/5 transition-all duration-300 hover:border-white/15 overflow-hidden">
+                    <p class="service-title text-neutral-300 text-sm font-medium transition-colors duration-300">Marketing Strategy</p>
+                    <p class="service-desc text-neutral-600 text-xs mt-1 transition-all duration-400">SEO, content, competitive</p>
+                    <p class="service-nudge text-amber-400/70 text-xs mt-0 leading-relaxed transition-all duration-400 max-h-0 opacity-0 overflow-hidden"></p>
                   </div>
                 </label>
-                <label class="interest-option group cursor-pointer">
+
+                <label class="cursor-pointer" data-service="implementation">
                   <input type="checkbox" name="interest" value="implementation" class="hidden peer" />
-                  <div class="p-4 rounded-lg border border-white/5 bg-neutral-900/50 peer-checked:border-amber-500/40 peer-checked:bg-amber-500/5 transition-all duration-300 hover:border-white/15">
-                    <p class="text-neutral-300 text-sm font-medium peer-checked:group-[]:text-amber-400 transition-colors">Implementation</p>
-                    <p class="text-neutral-600 text-xs mt-1">Integrations, page builds</p>
+                  <div class="service-card relative p-4 rounded-lg border border-white/5 bg-neutral-900/50 peer-checked:border-amber-500/40 peer-checked:bg-amber-500/5 transition-all duration-300 hover:border-white/15 overflow-hidden">
+                    <p class="service-title text-neutral-300 text-sm font-medium transition-colors duration-300">Implementation</p>
+                    <p class="service-desc text-neutral-600 text-xs mt-1 transition-all duration-400">Integrations, page builds</p>
+                    <p class="service-nudge text-amber-400/70 text-xs mt-0 leading-relaxed transition-all duration-400 max-h-0 opacity-0 overflow-hidden"></p>
                   </div>
                 </label>
-                <label class="interest-option group cursor-pointer">
+
+                <label class="cursor-pointer" data-service="training">
                   <input type="checkbox" name="interest" value="training" class="hidden peer" />
-                  <div class="p-4 rounded-lg border border-white/5 bg-neutral-900/50 peer-checked:border-amber-500/40 peer-checked:bg-amber-500/5 transition-all duration-300 hover:border-white/15">
-                    <p class="text-neutral-300 text-sm font-medium peer-checked:group-[]:text-amber-400 transition-colors">Training</p>
-                    <p class="text-neutral-600 text-xs mt-1">WordPress, SEO, AI workflows</p>
+                  <div class="service-card relative p-4 rounded-lg border border-white/5 bg-neutral-900/50 peer-checked:border-amber-500/40 peer-checked:bg-amber-500/5 transition-all duration-300 hover:border-white/15 overflow-hidden">
+                    <p class="service-title text-neutral-300 text-sm font-medium transition-colors duration-300">Training</p>
+                    <p class="service-desc text-neutral-600 text-xs mt-1 transition-all duration-400">WordPress, SEO, AI workflows</p>
+                    <p class="service-nudge text-amber-400/70 text-xs mt-0 leading-relaxed transition-all duration-400 max-h-0 opacity-0 overflow-hidden"></p>
                   </div>
                 </label>
-                <label class="interest-option group cursor-pointer col-span-2">
+
+                <label class="cursor-pointer col-span-2" data-service="not-sure">
                   <input type="checkbox" name="interest" value="not-sure" class="hidden peer" />
-                  <div class="p-4 rounded-lg border border-white/5 bg-neutral-900/50 peer-checked:border-amber-500/40 peer-checked:bg-amber-500/5 transition-all duration-300 hover:border-white/15">
-                    <p class="text-neutral-300 text-sm font-medium peer-checked:group-[]:text-amber-400 transition-colors">Not sure yet</p>
-                    <p class="text-neutral-600 text-xs mt-1">Tell me what's going on and I'll figure out what fits</p>
+                  <div class="service-card relative p-4 rounded-lg border border-white/5 bg-neutral-900/50 peer-checked:border-amber-500/40 peer-checked:bg-amber-500/5 transition-all duration-300 hover:border-white/15 overflow-hidden">
+                    <p class="service-title text-neutral-300 text-sm font-medium transition-colors duration-300">Not sure yet</p>
+                    <p class="service-desc text-neutral-600 text-xs mt-1 transition-all duration-400">We'll figure it out together</p>
+                    <p class="service-nudge text-amber-400/70 text-xs mt-0 leading-relaxed transition-all duration-400 max-h-0 opacity-0 overflow-hidden"></p>
                   </div>
                 </label>
+
               </div>
-              <!-- Nudge area -->
-              <div id="nudge" class="mt-4 overflow-hidden transition-all duration-500" style="max-height: 0; opacity: 0;">
-                <div class="p-4 rounded-lg bg-amber-500/5 border border-amber-500/10">
-                  <p id="nudge-text" class="text-amber-400/80 text-sm leading-relaxed"></p>
-                </div>
+              <!-- Combo banner for 2+ selections -->
+              <div id="combo-banner" class="mt-3 transition-all duration-500 max-h-0 opacity-0 overflow-hidden">
+                <p id="combo-text" class="text-center text-amber-400/60 text-xs py-2"></p>
               </div>
             </div>
             <div>
@@ -158,65 +167,141 @@ import Base from '../layouts/Base.astro';
   <script>
     function initNudges() {
       const grid = document.getElementById('interest-grid');
-      const nudge = document.getElementById('nudge');
-      const nudgeText = document.getElementById('nudge-text');
-      if (!grid || !nudge || !nudgeText) return;
+      const comboBanner = document.getElementById('combo-banner');
+      const comboText = document.getElementById('combo-text');
+      if (!grid) return;
 
-      // Product ascension nudges: each combo maps to a contextual suggestion
-      const nudges = {
-        // Single selections: gentle cross-sell
-        'web-management': "Most clients who start with web management end up wanting a clearer picture of how their site is actually performing in search. That's where marketing strategy picks up.",
-        'marketing-strategy': "Good strategy needs a stable foundation. If your site is on shared hosting or hasn't been maintained, web management makes sure the strategy has something solid to build on.",
-        'implementation': "One-time projects work best when someone's watching the site long-term. Clients who pair implementation with web management get more value from both.",
-        'training': "Training sticks better when your team has a well-managed site to practice on. Worth thinking about whether the site itself needs attention first.",
-        'not-sure': "That's the right answer more often than people think. We'll figure it out together.",
-
-        // Powerful combos: reinforce the decision
-        'web-management+marketing-strategy': "This is the combination most clients land on. Clean infrastructure plus clear direction. They reinforce each other.",
-        'web-management+implementation': "Smart pairing. Get the foundation right, then build on it. These two naturally work together.",
-        'web-management+training': "Your team learns faster when they're working on a site that's properly managed. Good instinct.",
-        'marketing-strategy+training': "Strategy sets the direction, training gives your team the skills to execute it. This combo builds real independence.",
-        'marketing-strategy+implementation': "The strategy tells you what pages and integrations you need. Implementation builds them. Natural sequence.",
-        'implementation+training': "Build it, then teach your team to maintain it. This keeps you from becoming dependent on outside help long-term.",
-
-        // Three or more: they're serious
-        'web-management+marketing-strategy+implementation': "You're thinking about this the right way. Foundation, direction, and execution. That's the full picture.",
-        'web-management+marketing-strategy+training': "This is the full ecosystem. Most businesses that reach this point are ready to stop patching and start building properly.",
+      // What each service whispers to the OTHER cards when selected alone
+      const whispers = {
+        'web-management': {
+          'marketing-strategy': 'Most clients add this next',
+          'implementation': 'Pairs well with this',
+        },
+        'marketing-strategy': {
+          'web-management': 'Strategy needs a stable site',
+          'implementation': 'You\'ll need pages built',
+        },
+        'implementation': {
+          'web-management': 'Someone should watch it after',
+          'training': 'Then teach your team to use it',
+        },
+        'training': {
+          'web-management': 'Easier to learn on a clean site',
+          'marketing-strategy': 'Know the strategy first',
+        },
       };
 
-      grid.addEventListener('change', () => {
-        const checked = Array.from(grid.querySelectorAll('input:checked')).map(i => i.value).sort();
+      // Combo messages that appear as a small banner
+      const combos = {
+        'web-management+marketing-strategy': '^ most popular combo',
+        'web-management+implementation': '^ strong pairing',
+        'web-management+training': '^ good instinct',
+        'marketing-strategy+implementation': '^ natural sequence',
+        'marketing-strategy+training': '^ builds real independence',
+        'implementation+training': '^ build it, then own it',
+      };
 
-        // "Not sure" unchecks others, others uncheck "not sure"
-        const lastChanged = event?.target;
-        if (lastChanged?.value === 'not-sure' && lastChanged?.checked) {
+      const comboFallbacks = {
+        2: '^ these work well together',
+        3: '^ you\'re thinking about this the right way',
+        4: '^ the full picture',
+      };
+
+      // "Not sure" self-nudge
+      const notSureNudge = 'That\'s honestly the right answer half the time';
+
+      function updateCards() {
+        const checked = Array.from(grid.querySelectorAll('input:checked')).map(i => i.value);
+
+        // Reset all nudges and suggested states
+        grid.querySelectorAll('[data-service]').forEach(label => {
+          const card = label.querySelector('.service-card');
+          const nudge = label.querySelector('.service-nudge');
+          const title = label.querySelector('.service-title');
+          const svc = label.dataset.service;
+          const isChecked = checked.includes(svc);
+
+          // Reset nudge
+          nudge.textContent = '';
+          nudge.style.maxHeight = '0';
+          nudge.style.opacity = '0';
+          nudge.style.marginTop = '0';
+
+          // Reset suggested glow
+          if (!isChecked) {
+            card.classList.remove('border-amber-500/15', 'bg-amber-500/[0.02]');
+          }
+
+          // Checked state styling for title
+          if (isChecked) {
+            title.classList.add('text-amber-400');
+            title.classList.remove('text-neutral-300');
+          } else {
+            title.classList.remove('text-amber-400');
+            title.classList.add('text-neutral-300');
+          }
+        });
+
+        // If "not sure" is checked, nudge itself
+        if (checked.includes('not-sure') && checked.length === 1) {
+          const notSureLabel = grid.querySelector('[data-service="not-sure"]');
+          const nudge = notSureLabel.querySelector('.service-nudge');
+          nudge.textContent = notSureNudge;
+          nudge.style.maxHeight = '40px';
+          nudge.style.opacity = '1';
+          nudge.style.marginTop = '6px';
+        }
+
+        // Single service selected: whisper to companion cards
+        if (checked.length === 1 && !checked.includes('not-sure')) {
+          const selected = checked[0];
+          const targets = whispers[selected] || {};
+          Object.entries(targets).forEach(([targetSvc, msg]) => {
+            const targetLabel = grid.querySelector(`[data-service="${targetSvc}"]`);
+            if (!targetLabel) return;
+            const card = targetLabel.querySelector('.service-card');
+            const nudge = targetLabel.querySelector('.service-nudge');
+
+            // Subtle suggested glow
+            card.classList.add('border-amber-500/15', 'bg-amber-500/[0.02]');
+
+            // Show nudge text inside the card
+            nudge.textContent = msg;
+            nudge.style.maxHeight = '30px';
+            nudge.style.opacity = '1';
+            nudge.style.marginTop = '6px';
+          });
+        }
+
+        // 2+ services: combo banner
+        if (checked.length >= 2 && !checked.includes('not-sure')) {
+          const key = checked.sort().join('+');
+          const msg = combos[key] || comboFallbacks[checked.length] || comboFallbacks[3];
+          if (comboText && comboBanner) {
+            comboText.textContent = msg;
+            comboBanner.style.maxHeight = '40px';
+            comboBanner.style.opacity = '1';
+          }
+        } else {
+          if (comboBanner) {
+            comboBanner.style.maxHeight = '0';
+            comboBanner.style.opacity = '0';
+          }
+        }
+      }
+
+      grid.addEventListener('change', (e) => {
+        const target = e.target;
+
+        // "Not sure" is exclusive
+        if (target.value === 'not-sure' && target.checked) {
           grid.querySelectorAll('input:not([value="not-sure"])').forEach(i => i.checked = false);
-        } else if (lastChanged?.checked && lastChanged?.value !== 'not-sure') {
+        } else if (target.checked && target.value !== 'not-sure') {
           const notSure = grid.querySelector('input[value="not-sure"]');
           if (notSure) notSure.checked = false;
         }
 
-        const rechecked = Array.from(grid.querySelectorAll('input:checked')).map(i => i.value).sort();
-        const key = rechecked.join('+');
-
-        // Find best matching nudge
-        let text = nudges[key];
-        if (!text && rechecked.length >= 3) {
-          text = "You're looking at this holistically. That's usually the right call. We'll talk through what makes sense to start with and what can come later.";
-        }
-        if (!text && rechecked.length === 2) {
-          // Fallback for unlisted combos
-          text = "Good combination. These tend to work well together. We'll talk through the best sequence.";
-        }
-
-        if (text && rechecked.length > 0) {
-          nudgeText.textContent = text;
-          nudge.style.maxHeight = '200px';
-          nudge.style.opacity = '1';
-        } else {
-          nudge.style.maxHeight = '0';
-          nudge.style.opacity = '0';
-        }
+        updateCards();
       });
     }
 

@@ -4,23 +4,26 @@ import Base from '../layouts/Base.astro';
 
 <Base title="Cody Smith — Web Management & Marketing Strategy">
   <!-- Hero -->
-  <section class="pt-32 pb-20 px-6">
-    <div class="max-w-3xl mx-auto">
-      <p class="text-amber-500 font-mono text-sm tracking-wider mb-6">Cedar City, Utah</p>
-      <h1 class="font-serif text-4xl md:text-5xl lg:text-6xl text-stone-100 leading-tight mb-8">
+  <section class="relative pt-40 pb-32 px-6 overflow-hidden">
+    <!-- Ambient glow -->
+    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+
+    <div class="relative max-w-4xl mx-auto">
+      <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Cedar City, Utah</p>
+      <h1 class="reveal font-serif text-5xl md:text-7xl lg:text-8xl text-neutral-100 leading-[1.05] mb-10" style="--i:1">
         I keep websites running<br />
-        and businesses<br class="hidden md:block" />
+        <span class="gradient-text">and businesses</span><br class="hidden md:block" />
         moving forward.
       </h1>
-      <p class="text-stone-400 text-lg md:text-xl leading-relaxed max-w-2xl mb-12">
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl mb-14" style="--i:2">
         Web management, marketing strategy, and training for companies that build things.
         I handle the digital infrastructure so you can focus on the work that matters.
       </p>
-      <div class="flex flex-col sm:flex-row gap-4">
-        <a href="/services" class="inline-flex items-center justify-center px-6 py-3 bg-amber-600 text-stone-950 font-medium text-sm rounded hover:bg-amber-500 transition-colors">
+      <div class="reveal flex flex-col sm:flex-row gap-4" style="--i:3">
+        <a href="/services" class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
           See how I work
         </a>
-        <a href="/contact" class="inline-flex items-center justify-center px-6 py-3 border border-stone-700 text-stone-300 font-medium text-sm rounded hover:border-stone-500 hover:text-stone-100 transition-colors">
+        <a href="/contact" class="inline-flex items-center justify-center px-8 py-4 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-white/25 hover:text-neutral-100 transition-all duration-300">
           Get in touch
         </a>
       </div>
@@ -28,31 +31,46 @@ import Base from '../layouts/Base.astro';
   </section>
 
   <!-- What I do -->
-  <section class="py-20 px-6 border-t border-stone-800/50">
-    <div class="max-w-5xl mx-auto">
-      <h2 class="font-serif text-2xl text-stone-100 mb-12">Four lanes. One practice.</h2>
-      <div class="grid md:grid-cols-2 gap-8">
-        <div class="p-6 rounded-lg border border-stone-800/50 hover:border-stone-700 transition-colors">
-          <h3 class="text-stone-100 font-medium mb-2">Web Management</h3>
-          <p class="text-stone-400 text-sm leading-relaxed">
+  <section class="py-32 px-6 surface-1">
+    <div class="max-w-6xl mx-auto">
+      <div class="reveal mb-16">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">What I do</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Four lanes. One practice.</h2>
+      </div>
+      <div class="grid md:grid-cols-2 gap-6 reveal-stagger">
+        <div class="reveal glow-card p-8" style="--i:0">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="text-amber-400 font-mono text-xs">01</span>
+            <h3 class="text-neutral-100 text-lg font-medium">Web Management</h3>
+          </div>
+          <p class="text-neutral-400 text-sm leading-relaxed">
             Hosting, security, performance, updates, monitoring. Monthly health reports that prove the work is happening. Your site runs — I make sure it keeps running.
           </p>
         </div>
-        <div class="p-6 rounded-lg border border-stone-800/50 hover:border-stone-700 transition-colors">
-          <h3 class="text-stone-100 font-medium mb-2">Marketing Strategy</h3>
-          <p class="text-stone-400 text-sm leading-relaxed">
+        <div class="reveal glow-card p-8" style="--i:1">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="text-amber-400 font-mono text-xs">02</span>
+            <h3 class="text-neutral-100 text-lg font-medium">Marketing Strategy</h3>
+          </div>
+          <p class="text-neutral-400 text-sm leading-relaxed">
             SEO, competitive analysis, content direction, keyword strategy. I tell you what to do and why — then help you measure whether it worked.
           </p>
         </div>
-        <div class="p-6 rounded-lg border border-stone-800/50 hover:border-stone-700 transition-colors">
-          <h3 class="text-stone-100 font-medium mb-2">Implementation</h3>
-          <p class="text-stone-400 text-sm leading-relaxed">
+        <div class="reveal glow-card p-8" style="--i:2">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="text-amber-400 font-mono text-xs">03</span>
+            <h3 class="text-neutral-100 text-lg font-medium">Implementation</h3>
+          </div>
+          <p class="text-neutral-400 text-sm leading-relaxed">
             Site migrations, integrations, page builds, analytics setup. The project work that changes production systems. Scoped, quoted, delivered.
           </p>
         </div>
-        <div class="p-6 rounded-lg border border-stone-800/50 hover:border-stone-700 transition-colors">
-          <h3 class="text-stone-100 font-medium mb-2">Training</h3>
-          <p class="text-stone-400 text-sm leading-relaxed">
+        <div class="reveal glow-card p-8" style="--i:3">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="text-amber-400 font-mono text-xs">04</span>
+            <h3 class="text-neutral-100 text-lg font-medium">Training</h3>
+          </div>
+          <p class="text-neutral-400 text-sm leading-relaxed">
             WordPress, SEO, AI workflows. Built on learning science, not slide decks. Your team leaves knowing how to do the work — not just what the work is.
           </p>
         </div>
@@ -61,25 +79,41 @@ import Base from '../layouts/Base.astro';
   </section>
 
   <!-- The pitch -->
-  <section class="py-20 px-6 border-t border-stone-800/50">
+  <section class="relative py-32 px-6 dot-grid">
     <div class="max-w-3xl mx-auto">
-      <h2 class="font-serif text-2xl text-stone-100 mb-8">The short version.</h2>
-      <div class="space-y-6 text-stone-400 leading-relaxed">
-        <p>
+      <div class="reveal">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">The short version</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100 mb-12">Why me.</h2>
+      </div>
+      <div class="space-y-8 text-neutral-400 text-lg leading-relaxed">
+        <p class="reveal">
           Most small businesses don't need a marketing department. They need one person who understands the whole picture — someone who can look at the website, the analytics, the SEO, the content, and the competitive landscape, and tell them what actually matters this month.
         </p>
-        <p>
+        <p class="reveal">
           That's what I do. I've spent a career absorbing adjacent problems — writing that turned into web strategy, web strategy that turned into marketing operations, marketing operations that turned into training programs. Every role, the same pattern: start with the thing I was hired for, end up doing the three things nobody else was handling.
         </p>
-        <p>
+        <p class="reveal text-neutral-100 font-serif text-2xl md:text-3xl italic">
           Now I do it on purpose.
         </p>
       </div>
-      <a href="/about" class="inline-flex items-center gap-2 text-amber-500 text-sm mt-8 hover:text-amber-400 transition-colors">
+      <a href="/about" class="reveal inline-flex items-center gap-3 text-amber-400 text-sm mt-12 hover:text-amber-300 transition-colors duration-300 group">
         Read the longer version
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
         </svg>
+      </a>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="relative py-32 px-6 surface-1 overflow-hidden">
+    <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative max-w-3xl mx-auto text-center">
+      <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Get started</p>
+      <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Ready to talk?</h2>
+      <p class="reveal text-neutral-400 text-lg mb-10">Every engagement starts with a conversation about what you actually need.</p>
+      <a href="/contact" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
+        Start a conversation
       </a>
     </div>
   </section>

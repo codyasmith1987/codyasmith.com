@@ -3,49 +3,85 @@ import Base from '../layouts/Base.astro';
 ---
 
 <Base title="Work — Cody Smith" description="Selected work across web management, marketing strategy, journalism, and photography.">
-  <section class="pt-32 pb-16 px-6">
-    <div class="max-w-3xl mx-auto">
-      <p class="text-amber-500 font-mono text-sm tracking-wider mb-6">Work</p>
-      <h1 class="font-serif text-4xl md:text-5xl text-stone-100 leading-tight mb-8">
-        The work that<br />got me here.
+  <!-- Hero -->
+  <section class="relative pt-40 pb-24 px-6 overflow-hidden">
+    <div class="absolute top-0 left-0 w-[400px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative max-w-4xl mx-auto">
+      <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Work</p>
+      <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10">
+        The work that<br />
+        <span class="gradient-text">got me here.</span>
       </h1>
-      <p class="text-stone-400 text-lg leading-relaxed">
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl">
         A career that looks scattered on paper but follows one thread: find the problem nobody's solving, figure it out, make it work.
       </p>
     </div>
   </section>
 
   <!-- Web & Marketing -->
-  <section class="py-16 px-6 border-t border-stone-800/50">
-    <div class="max-w-4xl mx-auto">
-      <h2 class="font-serif text-2xl text-stone-100 mb-10">Web & Marketing</h2>
-      <div class="space-y-12">
-        <div class="border-l-2 border-stone-800 pl-6">
-          <p class="text-amber-500 font-mono text-xs tracking-wider mb-1">Current</p>
-          <h3 class="text-stone-100 text-lg font-medium">SC Broadband</h3>
-          <p class="text-stone-500 text-sm mb-3">Marketing Representative — Cedar City, UT</p>
-          <p class="text-stone-400 text-sm leading-relaxed">
+  <section class="py-28 px-6 surface-1">
+    <div class="max-w-5xl mx-auto">
+      <div class="reveal mb-16">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Web & Marketing</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Strategy at every scale.</h2>
+      </div>
+      <div class="space-y-8 reveal-stagger">
+        <div class="reveal glow-card p-8" style="--i:0">
+          <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
+            <div>
+              <p class="text-amber-400 font-mono text-xs tracking-wider mb-2">Current</p>
+              <h3 class="text-neutral-100 text-xl font-medium">SC Broadband</h3>
+              <p class="text-neutral-500 text-sm">Marketing Representative — Cedar City, UT</p>
+            </div>
+          </div>
+          <p class="text-neutral-400 text-sm leading-relaxed">
             Sole marketing strategist for a fiber cooperative serving 30,500+ members across Southern Utah and Northern Arizona. Built the dual-brand strategy (residential + managed IT), rebuilt the web presence, launched SEO and content programs from zero. The title says "representative." The work says something different.
           </p>
         </div>
-        <div class="border-l-2 border-stone-800 pl-6">
-          <h3 class="text-stone-100 text-lg font-medium">Truvy</h3>
-          <p class="text-stone-500 text-sm mb-3">Senior Director of Marketing — Draper, UT</p>
-          <p class="text-stone-400 text-sm leading-relaxed">
+
+        <div class="reveal glow-card p-8" style="--i:1">
+          <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
+            <div>
+              <h3 class="text-neutral-100 text-xl font-medium">Truvy</h3>
+              <p class="text-neutral-500 text-sm">Senior Director of Marketing — Draper, UT</p>
+            </div>
+            <div class="flex gap-4 text-xs">
+              <span class="px-3 py-1 rounded-full border border-white/10 text-neutral-400">$2.5M budget</span>
+              <span class="px-3 py-1 rounded-full border border-white/10 text-neutral-400">NPS 35→60</span>
+            </div>
+          </div>
+          <p class="text-neutral-400 text-sm leading-relaxed">
             Managed a $2.5M budget and a team of 15+. Moved NPS from 35 to 60. Increased brand recognition 33%. Six months — long enough to prove the model, short enough to know it wasn't the right fit.
           </p>
         </div>
-        <div class="border-l-2 border-stone-800 pl-6">
-          <h3 class="text-stone-100 text-lg font-medium">MCC Apparel / H.M. Cole</h3>
-          <p class="text-stone-500 text-sm mb-3">Creative Director</p>
-          <p class="text-stone-400 text-sm leading-relaxed">
-            Drove +120% in sales. Started in creative, ended up running analytics, data strategy, and marketing operations. Managed a $90K budget. Another role where the job description stopped being accurate about three months in.
+
+        <div class="reveal glow-card p-8" style="--i:2">
+          <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
+            <div>
+              <h3 class="text-neutral-100 text-xl font-medium">MCC Apparel / H.M. Cole</h3>
+              <p class="text-neutral-500 text-sm">Creative Director</p>
+            </div>
+            <div class="flex gap-4 text-xs">
+              <span class="px-3 py-1 rounded-full border border-white/10 text-neutral-400">+120% sales</span>
+            </div>
+          </div>
+          <p class="text-neutral-400 text-sm leading-relaxed">
+            Started in creative, ended up running analytics, data strategy, and marketing operations. Managed a $90K budget. Another role where the job description stopped being accurate about three months in.
           </p>
         </div>
-        <div class="border-l-2 border-stone-800 pl-6">
-          <h3 class="text-stone-100 text-lg font-medium">AllenComm</h3>
-          <p class="text-stone-500 text-sm mb-3">Technical Writer / Lead Copywriter</p>
-          <p class="text-stone-400 text-sm leading-relaxed">
+
+        <div class="reveal glow-card p-8" style="--i:3">
+          <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
+            <div>
+              <h3 class="text-neutral-100 text-xl font-medium">AllenComm</h3>
+              <p class="text-neutral-500 text-sm">Technical Writer / Lead Copywriter</p>
+            </div>
+            <div class="flex gap-4 text-xs flex-wrap">
+              <span class="px-3 py-1 rounded-full border border-amber-500/20 text-amber-400">Horizon Award</span>
+              <span class="px-3 py-1 rounded-full border border-amber-500/20 text-amber-400">Davey Award</span>
+            </div>
+          </div>
+          <p class="text-neutral-400 text-sm leading-relaxed">
             Designed the SPTS online training program completed by 50,000+ teachers nationwide. Won Best Advocacy Training Program (Horizon International) and the Davey Award for Education.
           </p>
         </div>
@@ -54,28 +90,31 @@ import Base from '../layouts/Base.astro';
   </section>
 
   <!-- Writing & Photography -->
-  <section class="py-16 px-6 border-t border-stone-800/50">
-    <div class="max-w-4xl mx-auto">
-      <h2 class="font-serif text-2xl text-stone-100 mb-10">Writing & Photography</h2>
-      <div class="space-y-12">
-        <div class="border-l-2 border-amber-600/40 pl-6">
-          <h3 class="text-stone-100 text-lg font-medium">Iron County Today</h3>
-          <p class="text-stone-500 text-sm mb-3">Staff Writer & Photographer — Cedar City, UT</p>
-          <p class="text-stone-400 text-sm leading-relaxed">
-            Built their digital presence from nothing. Grew the online following 200%. Won Utah Press Association Awards. The first job where I realized what I was actually good at.
+  <section class="py-28 px-6 dot-grid">
+    <div class="max-w-5xl mx-auto">
+      <div class="reveal mb-16">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Writing & Photography</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">The other half.</h2>
+      </div>
+      <div class="grid md:grid-cols-3 gap-6 reveal-stagger">
+        <div class="reveal glow-card p-8" style="--i:0">
+          <h3 class="text-neutral-100 text-lg font-medium mb-2">Iron County Today</h3>
+          <p class="text-neutral-500 text-sm mb-4">Staff Writer & Photographer</p>
+          <p class="text-neutral-400 text-sm leading-relaxed">
+            Built their digital presence from nothing. Grew online following 200%. Won Utah Press Association Awards. The first job where I realized what I was actually good at.
           </p>
         </div>
-        <div class="border-l-2 border-amber-600/40 pl-6">
-          <h3 class="text-stone-100 text-lg font-medium">Standing Rock</h3>
-          <p class="text-stone-500 text-sm mb-3">Photojournalism — 2016–2017</p>
-          <p class="text-stone-400 text-sm leading-relaxed">
+        <div class="reveal glow-card p-8" style="--i:1">
+          <h3 class="text-neutral-100 text-lg font-medium mb-2">Standing Rock</h3>
+          <p class="text-neutral-500 text-sm mb-4">Photojournalism, 2016–2017</p>
+          <p class="text-neutral-400 text-sm leading-relaxed">
             Covered the Dakota Access Pipeline protests. Some of the most important work I've done — not for the portfolio, but for the reminder that showing up matters more than having a plan.
           </p>
         </div>
-        <div class="border-l-2 border-amber-600/40 pl-6">
-          <h3 class="text-stone-100 text-lg font-medium">Mt. Rainier Expedition</h3>
-          <p class="text-stone-500 text-sm mb-3">Expedition Photographer — SummitClimb</p>
-          <p class="text-stone-400 text-sm leading-relaxed">
+        <div class="reveal glow-card p-8" style="--i:2">
+          <h3 class="text-neutral-100 text-lg font-medium mb-2">Mt. Rainier</h3>
+          <p class="text-neutral-500 text-sm mb-4">Expedition Photographer — SummitClimb</p>
+          <p class="text-neutral-400 text-sm leading-relaxed">
             Published expedition photography with full credit. A 14,411-foot reminder that the best stories happen when you're too tired to make them up.
           </p>
         </div>
@@ -84,10 +123,11 @@ import Base from '../layouts/Base.astro';
   </section>
 
   <!-- CTA -->
-  <section class="py-20 px-6 border-t border-stone-800/50">
-    <div class="max-w-3xl mx-auto text-center">
-      <p class="text-stone-400 mb-8">Want to know more about a specific project or see writing samples? Let's talk.</p>
-      <a href="/contact" class="inline-flex items-center justify-center px-6 py-3 bg-amber-600 text-stone-950 font-medium text-sm rounded hover:bg-amber-500 transition-colors">
+  <section class="relative py-32 px-6 surface-1 overflow-hidden">
+    <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative max-w-3xl mx-auto text-center">
+      <p class="reveal text-neutral-400 text-lg mb-10">Want to know more about a specific project or see writing samples?</p>
+      <a href="/contact" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
         Get in touch
       </a>
     </div>

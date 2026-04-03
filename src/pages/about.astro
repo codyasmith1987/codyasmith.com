@@ -3,88 +3,115 @@ import Base from '../layouts/Base.astro';
 ---
 
 <Base title="About — Cody Smith" description="The longer version. Writer, strategist, consultant. Cedar City, Utah.">
-  <section class="pt-32 pb-16 px-6">
-    <div class="max-w-3xl mx-auto">
-      <p class="text-amber-500 font-mono text-sm tracking-wider mb-6">About</p>
-      <h1 class="font-serif text-4xl md:text-5xl text-stone-100 leading-tight mb-8">
+  <!-- Hero -->
+  <section class="relative pt-40 pb-16 px-6 overflow-hidden">
+    <div class="absolute top-0 right-1/4 w-[500px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative max-w-4xl mx-auto">
+      <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">About</p>
+      <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05]">
         The longer version.
       </h1>
     </div>
   </section>
 
-  <section class="pb-20 px-6">
-    <div class="max-w-3xl mx-auto space-y-6 text-stone-400 leading-relaxed">
-      <p>
+  <!-- Story -->
+  <section class="pb-28 px-6">
+    <div class="max-w-3xl mx-auto space-y-8 text-neutral-400 text-lg leading-relaxed">
+      <p class="reveal">
         I'm a writer who became a marketer who became a strategist who became a consultant — though if you asked me on any given Tuesday, I'd probably tell you I'm still mostly a writer.
       </p>
-      <p>
+      <p class="reveal">
         I live in Cedar City, Utah. I have two sons. I hold an MBA from Southern Utah University and a degree in Communications from the same place, which is convenient because it means I only had to learn one campus.
       </p>
-      <p>
+      <p class="reveal">
         The career looks scattered if you read it as a list of job titles. Staff writer, photographer, technical writer, creative director, senior director of marketing, marketing representative. The titles went up, then down, then sideways, and at no point did any of them accurately describe what I was actually doing.
       </p>
-      <p>
-        Here's the pattern: every role, I was hired for one thing and ended up doing three others. At the newspaper, I built their entire digital presence. At AllenComm, a copywriting gig turned into designing a training program that 50,000 teachers completed. At MCC Apparel, creative direction turned into analytics, data strategy, and a 120% sales increase. At Truvy, I moved the NPS 25 points in six months while managing a $2.5M budget and fifteen people.
-      </p>
-      <p>
-        And at SC Broadband — where my business card says "Marketing Representative" — I'm the sole marketing strategist, web developer, SEO strategist, and brand architect for a fiber cooperative serving 30,500 members across two states.
-      </p>
-      <p>
-        The consulting practice exists because I finally decided to do on purpose what I'd been doing by accident for a decade: absorb the adjacent problems, figure out the whole picture, and tell people what actually needs to happen.
-      </p>
+    </div>
+  </section>
 
-      <div class="border-l-2 border-amber-600/40 pl-6 my-12">
-        <p class="text-stone-300 font-serif text-lg italic leading-relaxed">
-          "The best stories happen when you're too tired to make them up."
+  <!-- The Pattern -->
+  <section class="py-28 px-6 surface-1">
+    <div class="max-w-3xl mx-auto">
+      <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-12">The pattern</p>
+      <div class="space-y-8 text-neutral-400 text-lg leading-relaxed">
+        <p class="reveal">
+          Here's the pattern: every role, I was hired for one thing and ended up doing three others. At the newspaper, I built their entire digital presence. At AllenComm, a copywriting gig turned into designing a training program that 50,000 teachers completed. At MCC Apparel, creative direction turned into analytics, data strategy, and a 120% sales increase. At Truvy, I moved the NPS 25 points in six months while managing a $2.5M budget and fifteen people.
         </p>
-        <p class="text-stone-500 text-sm mt-2">— from a dispatch at 12,000 feet on Mt. Rainier</p>
+        <p class="reveal">
+          And at SC Broadband — where my business card says "Marketing Representative" — I'm the sole marketing strategist, web developer, SEO strategist, and brand architect for a fiber cooperative serving 30,500 members across two states.
+        </p>
+        <p class="reveal text-neutral-100 text-xl">
+          The consulting practice exists because I finally decided to do on purpose what I'd been doing by accident for a decade: absorb the adjacent problems, figure out the whole picture, and tell people what actually needs to happen.
+        </p>
       </div>
+    </div>
+  </section>
 
-      <p>
+  <!-- Quote -->
+  <section class="relative py-24 px-6 overflow-hidden">
+    <div class="absolute inset-0 dot-grid"></div>
+    <div class="relative max-w-3xl mx-auto text-center">
+      <div class="reveal">
+        <p class="font-serif text-3xl md:text-4xl text-neutral-200 italic leading-snug mb-4">
+          "The best stories happen when you're<br class="hidden md:block" /> too tired to make them up."
+        </p>
+        <p class="text-neutral-600 text-sm">— from a dispatch at 12,000 feet on Mt. Rainier</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Before -->
+  <section class="py-28 px-6 surface-1">
+    <div class="max-w-3xl mx-auto space-y-8 text-neutral-400 text-lg leading-relaxed">
+      <p class="reveal">
         Before any of this made sense as a career, I covered the Standing Rock protests as a photojournalist. I climbed Rainier as an expedition photographer for SummitClimb. I drove a pedicab in downtown Salt Lake and lived out of a van for a while. I started college with a 1.7 GPA from high school, made the Dean's List, and finished with an MBA fifteen years later.
       </p>
-      <p>
+      <p class="reveal">
         I don't tell you that because adversity is a credential. I tell you because it's the same pattern — show up to a thing you're not quite qualified for, figure it out faster than anyone expects, and leave it better than you found it.
       </p>
-      <p>
+      <p class="reveal text-neutral-100 font-serif text-2xl italic">
         That's what I do for clients now. Smaller scale, higher stakes, better invoicing.
       </p>
     </div>
   </section>
 
-  <section class="py-16 px-6 border-t border-stone-800/50">
-    <div class="max-w-3xl mx-auto">
-      <h2 class="font-serif text-2xl text-stone-100 mb-8">Education & Recognition</h2>
-      <div class="grid md:grid-cols-2 gap-8 text-sm">
-        <div>
-          <h3 class="text-stone-300 font-medium mb-4">Education</h3>
-          <ul class="space-y-3 text-stone-400">
-            <li>
-              <span class="text-stone-300">MBA, Marketing</span><br />
-              <span class="text-stone-500">Southern Utah University, 2025</span>
-            </li>
-            <li>
-              <span class="text-stone-300">BS, General Studies — Communications</span><br />
-              <span class="text-stone-500">Southern Utah University, 2018</span>
-            </li>
-          </ul>
+  <!-- Education & Awards -->
+  <section class="py-28 px-6">
+    <div class="max-w-5xl mx-auto">
+      <div class="reveal mb-16">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Credentials</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Education & Recognition</h2>
+      </div>
+      <div class="grid md:grid-cols-2 gap-8 reveal-stagger">
+        <div class="reveal glow-card p-8" style="--i:0">
+          <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-6">Education</p>
+          <div class="space-y-6">
+            <div>
+              <p class="text-neutral-100 font-medium">MBA, Marketing</p>
+              <p class="text-neutral-500 text-sm">Southern Utah University, 2025</p>
+            </div>
+            <div>
+              <p class="text-neutral-100 font-medium">BS, General Studies — Communications</p>
+              <p class="text-neutral-500 text-sm">Southern Utah University, 2018</p>
+            </div>
+          </div>
         </div>
-        <div>
-          <h3 class="text-stone-300 font-medium mb-4">Awards</h3>
-          <ul class="space-y-3 text-stone-400">
-            <li>
-              <span class="text-stone-300">Best Advocacy Training Program</span><br />
-              <span class="text-stone-500">Horizon Interactive Awards — SPTS / AllenComm</span>
-            </li>
-            <li>
-              <span class="text-stone-300">Award for Education</span><br />
-              <span class="text-stone-500">Davey Awards — SPTS / AllenComm</span>
-            </li>
-            <li>
-              <span class="text-stone-300">Utah Press Association Awards</span><br />
-              <span class="text-stone-500">Iron County Today</span>
-            </li>
-          </ul>
+        <div class="reveal glow-card p-8" style="--i:1">
+          <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-6">Awards</p>
+          <div class="space-y-6">
+            <div>
+              <p class="text-neutral-100 font-medium">Best Advocacy Training Program</p>
+              <p class="text-neutral-500 text-sm">Horizon Interactive Awards — SPTS / AllenComm</p>
+            </div>
+            <div>
+              <p class="text-neutral-100 font-medium">Award for Education</p>
+              <p class="text-neutral-500 text-sm">Davey Awards — SPTS / AllenComm</p>
+            </div>
+            <div>
+              <p class="text-neutral-100 font-medium">Utah Press Association Awards</p>
+              <p class="text-neutral-500 text-sm">Iron County Today</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>

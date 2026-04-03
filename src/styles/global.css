@@ -52,6 +52,17 @@
     background-color: var(--color-amber-600);
     color: var(--color-neutral-950);
   }
+
+  /* Kill browser autofill white background */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    -webkit-text-fill-color: var(--color-neutral-100);
+    -webkit-box-shadow: 0 0 0px 1000px var(--color-neutral-950) inset;
+    transition: background-color 5000s ease-in-out 0s;
+  }
 }
 
 @layer components {

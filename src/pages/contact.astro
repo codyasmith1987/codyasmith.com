@@ -50,55 +50,61 @@ import Base from '../layouts/Base.astro';
               <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Interested in <span class="text-neutral-700">(pick as many as you want)</span></p>
               <div class="grid grid-cols-2 gap-3" id="interest-grid">
 
-                <label class="cursor-pointer" data-service="web-management">
-                  <input type="checkbox" name="interest" value="web-management" class="hidden peer" />
-                  <div class="service-card relative p-4 rounded-lg border border-white/5 bg-neutral-900/50 peer-checked:border-amber-500/40 peer-checked:bg-amber-500/5 transition-all duration-300 hover:border-white/15 overflow-hidden">
-                    <p class="service-title text-neutral-300 text-sm font-medium transition-colors duration-300">Web Management</p>
-                    <p class="service-desc text-neutral-600 text-xs mt-1 transition-all duration-400">Hosting, security, updates</p>
-                    <p class="service-nudge text-amber-400/70 text-xs mt-0 leading-relaxed transition-all duration-400 max-h-0 opacity-0 overflow-hidden"></p>
+                <label class="cursor-pointer block" data-service="web-management">
+                  <input type="checkbox" name="interest" value="web-management" class="hidden" />
+                  <div class="svc-card relative p-4 rounded-lg border border-white/5 bg-neutral-900/50 transition-all duration-500 hover:border-white/15 overflow-hidden">
+                    <div class="svc-glow absolute inset-0 rounded-lg opacity-0 transition-opacity duration-700 pointer-events-none" style="background: radial-gradient(ellipse at center, rgba(251,191,36,0.08) 0%, transparent 70%);"></div>
+                    <div class="relative">
+                      <p class="svc-title text-neutral-300 text-sm font-medium transition-all duration-300">Web Management</p>
+                      <p class="svc-sub text-neutral-600 text-xs mt-1 transition-all duration-500">Hosting, security, updates</p>
+                    </div>
                   </div>
                 </label>
 
-                <label class="cursor-pointer" data-service="marketing-strategy">
-                  <input type="checkbox" name="interest" value="marketing-strategy" class="hidden peer" />
-                  <div class="service-card relative p-4 rounded-lg border border-white/5 bg-neutral-900/50 peer-checked:border-amber-500/40 peer-checked:bg-amber-500/5 transition-all duration-300 hover:border-white/15 overflow-hidden">
-                    <p class="service-title text-neutral-300 text-sm font-medium transition-colors duration-300">Marketing Strategy</p>
-                    <p class="service-desc text-neutral-600 text-xs mt-1 transition-all duration-400">SEO, content, competitive</p>
-                    <p class="service-nudge text-amber-400/70 text-xs mt-0 leading-relaxed transition-all duration-400 max-h-0 opacity-0 overflow-hidden"></p>
+                <label class="cursor-pointer block" data-service="marketing-strategy">
+                  <input type="checkbox" name="interest" value="marketing-strategy" class="hidden" />
+                  <div class="svc-card relative p-4 rounded-lg border border-white/5 bg-neutral-900/50 transition-all duration-500 hover:border-white/15 overflow-hidden">
+                    <div class="svc-glow absolute inset-0 rounded-lg opacity-0 transition-opacity duration-700 pointer-events-none" style="background: radial-gradient(ellipse at center, rgba(251,191,36,0.08) 0%, transparent 70%);"></div>
+                    <div class="relative">
+                      <p class="svc-title text-neutral-300 text-sm font-medium transition-all duration-300">Marketing Strategy</p>
+                      <p class="svc-sub text-neutral-600 text-xs mt-1 transition-all duration-500">SEO, content, competitive</p>
+                    </div>
                   </div>
                 </label>
 
-                <label class="cursor-pointer" data-service="implementation">
-                  <input type="checkbox" name="interest" value="implementation" class="hidden peer" />
-                  <div class="service-card relative p-4 rounded-lg border border-white/5 bg-neutral-900/50 peer-checked:border-amber-500/40 peer-checked:bg-amber-500/5 transition-all duration-300 hover:border-white/15 overflow-hidden">
-                    <p class="service-title text-neutral-300 text-sm font-medium transition-colors duration-300">Implementation</p>
-                    <p class="service-desc text-neutral-600 text-xs mt-1 transition-all duration-400">Integrations, page builds</p>
-                    <p class="service-nudge text-amber-400/70 text-xs mt-0 leading-relaxed transition-all duration-400 max-h-0 opacity-0 overflow-hidden"></p>
+                <label class="cursor-pointer block" data-service="implementation">
+                  <input type="checkbox" name="interest" value="implementation" class="hidden" />
+                  <div class="svc-card relative p-4 rounded-lg border border-white/5 bg-neutral-900/50 transition-all duration-500 hover:border-white/15 overflow-hidden">
+                    <div class="svc-glow absolute inset-0 rounded-lg opacity-0 transition-opacity duration-700 pointer-events-none" style="background: radial-gradient(ellipse at center, rgba(251,191,36,0.08) 0%, transparent 70%);"></div>
+                    <div class="relative">
+                      <p class="svc-title text-neutral-300 text-sm font-medium transition-all duration-300">Implementation</p>
+                      <p class="svc-sub text-neutral-600 text-xs mt-1 transition-all duration-500">Integrations, page builds</p>
+                    </div>
                   </div>
                 </label>
 
-                <label class="cursor-pointer" data-service="training">
-                  <input type="checkbox" name="interest" value="training" class="hidden peer" />
-                  <div class="service-card relative p-4 rounded-lg border border-white/5 bg-neutral-900/50 peer-checked:border-amber-500/40 peer-checked:bg-amber-500/5 transition-all duration-300 hover:border-white/15 overflow-hidden">
-                    <p class="service-title text-neutral-300 text-sm font-medium transition-colors duration-300">Training</p>
-                    <p class="service-desc text-neutral-600 text-xs mt-1 transition-all duration-400">WordPress, SEO, AI workflows</p>
-                    <p class="service-nudge text-amber-400/70 text-xs mt-0 leading-relaxed transition-all duration-400 max-h-0 opacity-0 overflow-hidden"></p>
+                <label class="cursor-pointer block" data-service="training">
+                  <input type="checkbox" name="interest" value="training" class="hidden" />
+                  <div class="svc-card relative p-4 rounded-lg border border-white/5 bg-neutral-900/50 transition-all duration-500 hover:border-white/15 overflow-hidden">
+                    <div class="svc-glow absolute inset-0 rounded-lg opacity-0 transition-opacity duration-700 pointer-events-none" style="background: radial-gradient(ellipse at center, rgba(251,191,36,0.08) 0%, transparent 70%);"></div>
+                    <div class="relative">
+                      <p class="svc-title text-neutral-300 text-sm font-medium transition-all duration-300">Training</p>
+                      <p class="svc-sub text-neutral-600 text-xs mt-1 transition-all duration-500">WordPress, SEO, AI workflows</p>
+                    </div>
                   </div>
                 </label>
 
-                <label class="cursor-pointer col-span-2" data-service="not-sure">
-                  <input type="checkbox" name="interest" value="not-sure" class="hidden peer" />
-                  <div class="service-card relative p-4 rounded-lg border border-white/5 bg-neutral-900/50 peer-checked:border-amber-500/40 peer-checked:bg-amber-500/5 transition-all duration-300 hover:border-white/15 overflow-hidden">
-                    <p class="service-title text-neutral-300 text-sm font-medium transition-colors duration-300">Not sure yet</p>
-                    <p class="service-desc text-neutral-600 text-xs mt-1 transition-all duration-400">We'll figure it out together</p>
-                    <p class="service-nudge text-amber-400/70 text-xs mt-0 leading-relaxed transition-all duration-400 max-h-0 opacity-0 overflow-hidden"></p>
+                <label class="cursor-pointer block col-span-2" data-service="not-sure">
+                  <input type="checkbox" name="interest" value="not-sure" class="hidden" />
+                  <div class="svc-card relative p-4 rounded-lg border border-white/5 bg-neutral-900/50 transition-all duration-500 hover:border-white/15 overflow-hidden">
+                    <div class="svc-glow absolute inset-0 rounded-lg opacity-0 transition-opacity duration-700 pointer-events-none" style="background: radial-gradient(ellipse at center, rgba(251,191,36,0.08) 0%, transparent 70%);"></div>
+                    <div class="relative">
+                      <p class="svc-title text-neutral-300 text-sm font-medium transition-all duration-300">Not sure yet</p>
+                      <p class="svc-sub text-neutral-600 text-xs mt-1 transition-all duration-500">That's fine. Tell me what's happening and we'll figure it out.</p>
+                    </div>
                   </div>
                 </label>
 
-              </div>
-              <!-- Combo banner for 2+ selections -->
-              <div id="combo-banner" class="mt-3 transition-all duration-500 max-h-0 opacity-0 overflow-hidden">
-                <p id="combo-text" class="text-center text-amber-400/60 text-xs py-2"></p>
               </div>
             </div>
             <div>
@@ -171,126 +177,163 @@ import Base from '../layouts/Base.astro';
   <script>
     function initNudges() {
       const grid = document.getElementById('interest-grid');
-      const comboBanner = document.getElementById('combo-banner');
-      const comboText = document.getElementById('combo-text');
       if (!grid) return;
 
-      // What each service whispers to the OTHER cards when selected alone
+      const defaults = {
+        'web-management': 'Hosting, security, updates',
+        'marketing-strategy': 'SEO, content, competitive',
+        'implementation': 'Integrations, page builds',
+        'training': 'WordPress, SEO, AI workflows',
+        'not-sure': 'That\'s fine. Tell me what\'s happening and we\'ll figure it out.',
+      };
+
+      // When ONE service is checked, companion cards transform their subtitle
       const whispers = {
         'web-management': {
-          'marketing-strategy': 'Most clients add this next',
-          'implementation': 'Pairs well with this',
+          'marketing-strategy': { text: 'Most clients add this next \u2192', icon: '\u2728' },
+          'implementation': { text: 'Pairs naturally with this', icon: '\u{1F517}' },
         },
         'marketing-strategy': {
-          'web-management': 'Strategy needs a stable site',
-          'implementation': 'You\'ll need pages built',
+          'web-management': { text: 'Strategy needs a stable foundation', icon: '\u{1F3D7}\uFE0F' },
+          'implementation': { text: 'You\'ll need pages built for this', icon: '\u{1F4C4}' },
         },
         'implementation': {
-          'web-management': 'Someone should watch it after',
-          'training': 'Then teach your team to use it',
+          'web-management': { text: 'Someone should watch it after', icon: '\u{1F441}\uFE0F' },
+          'training': { text: 'Then teach your team to run it', icon: '\u{1F393}' },
         },
         'training': {
-          'web-management': 'Easier to learn on a clean site',
-          'marketing-strategy': 'Know the strategy first',
+          'web-management': { text: 'Easier on a well-managed site', icon: '\u2699\uFE0F' },
+          'marketing-strategy': { text: 'Know the direction first', icon: '\u{1F9ED}' },
         },
       };
 
-      // Combo messages that appear as a small banner
+      // 2+ selected: the checked cards celebrate
       const combos = {
-        'web-management+marketing-strategy': '^ most popular combo',
-        'web-management+implementation': '^ strong pairing',
-        'web-management+training': '^ good instinct',
-        'marketing-strategy+implementation': '^ natural sequence',
-        'marketing-strategy+training': '^ builds real independence',
-        'implementation+training': '^ build it, then own it',
+        'web-management+marketing-strategy': 'Most popular combo.',
+        'web-management+implementation': 'Strong pairing.',
+        'web-management+training': 'Good instinct.',
+        'marketing-strategy+implementation': 'Natural sequence.',
+        'marketing-strategy+training': 'Builds real independence.',
+        'implementation+training': 'Build it, then own it.',
       };
 
-      const comboFallbacks = {
-        2: '^ these work well together',
-        3: '^ you\'re thinking about this the right way',
-        4: '^ the full picture',
-      };
-
-      // "Not sure" self-nudge
-      const notSureNudge = 'That\'s honestly the right answer half the time';
+      function pulse(card) {
+        card.style.transform = 'scale(1.03)';
+        setTimeout(() => { card.style.transform = ''; }, 300);
+      }
 
       function updateCards() {
         const checked = Array.from(grid.querySelectorAll('input:checked')).map(i => i.value);
+        const allLabels = grid.querySelectorAll('[data-service]');
 
-        // Reset all nudges and suggested states
-        grid.querySelectorAll('[data-service]').forEach(label => {
-          const card = label.querySelector('.service-card');
-          const nudge = label.querySelector('.service-nudge');
-          const title = label.querySelector('.service-title');
+        // Reset everything first
+        allLabels.forEach(label => {
           const svc = label.dataset.service;
+          const card = label.querySelector('.svc-card');
+          const title = label.querySelector('.svc-title');
+          const sub = label.querySelector('.svc-sub');
+          const glow = label.querySelector('.svc-glow');
           const isChecked = checked.includes(svc);
 
-          // Reset nudge
-          nudge.textContent = '';
-          nudge.style.maxHeight = '0';
-          nudge.style.opacity = '0';
-          nudge.style.marginTop = '0';
+          // Reset subtitle to default
+          sub.textContent = defaults[svc];
+          sub.classList.remove('text-amber-400/60');
+          sub.classList.add('text-neutral-600');
 
-          // Reset suggested glow
-          if (!isChecked) {
-            card.classList.remove('border-amber-500/15', 'bg-amber-500/[0.02]');
-          }
+          // Reset glow
+          glow.style.opacity = '0';
 
-          // Checked state styling for title
+          // Reset dim
+          card.classList.remove('opacity-30');
+
           if (isChecked) {
+            // Checked state
+            card.classList.add('border-amber-500/40', 'bg-amber-500/5');
+            card.classList.remove('border-white/5');
             title.classList.add('text-amber-400');
             title.classList.remove('text-neutral-300');
+            glow.style.opacity = '1';
           } else {
+            card.classList.remove('border-amber-500/40', 'bg-amber-500/5');
+            card.classList.add('border-white/5');
             title.classList.remove('text-amber-400');
             title.classList.add('text-neutral-300');
           }
         });
 
-        // If "not sure" is checked, nudge itself
-        if (checked.includes('not-sure') && checked.length === 1) {
-          const notSureLabel = grid.querySelector('[data-service="not-sure"]');
-          const nudge = notSureLabel.querySelector('.service-nudge');
-          nudge.textContent = notSureNudge;
-          nudge.style.maxHeight = '40px';
-          nudge.style.opacity = '1';
-          nudge.style.marginTop = '6px';
+        // "Not sure" dims everything else
+        if (checked.includes('not-sure')) {
+          allLabels.forEach(label => {
+            if (label.dataset.service !== 'not-sure') {
+              label.querySelector('.svc-card').classList.add('opacity-30');
+            }
+          });
+          return;
         }
 
-        // Single service selected: whisper to companion cards
-        if (checked.length === 1 && !checked.includes('not-sure')) {
+        // Single selection: companion cards transform
+        if (checked.length === 1) {
           const selected = checked[0];
           const targets = whispers[selected] || {};
-          Object.entries(targets).forEach(([targetSvc, msg]) => {
+
+          Object.entries(targets).forEach(([targetSvc, nudge]) => {
             const targetLabel = grid.querySelector(`[data-service="${targetSvc}"]`);
             if (!targetLabel) return;
-            const card = targetLabel.querySelector('.service-card');
-            const nudge = targetLabel.querySelector('.service-nudge');
+            const card = targetLabel.querySelector('.svc-card');
+            const sub = targetLabel.querySelector('.svc-sub');
+            const glow = targetLabel.querySelector('.svc-glow');
 
-            // Subtle suggested glow
-            card.classList.add('border-amber-500/15', 'bg-amber-500/[0.02]');
+            // Transform the subtitle
+            sub.textContent = `${nudge.icon} ${nudge.text}`;
+            sub.classList.remove('text-neutral-600');
+            sub.classList.add('text-amber-400/60');
 
-            // Show nudge text inside the card
-            nudge.textContent = msg;
-            nudge.style.maxHeight = '30px';
-            nudge.style.opacity = '1';
-            nudge.style.marginTop = '6px';
+            // Soft glow
+            glow.style.opacity = '0.5';
+
+            // Border hint
+            card.classList.remove('border-white/5');
+            card.classList.add('border-amber-500/15');
+
+            // Pulse the card
+            pulse(card);
+          });
+
+          // Dim the non-relevant, non-checked cards
+          allLabels.forEach(label => {
+            const svc = label.dataset.service;
+            if (svc === selected || svc === 'not-sure') return;
+            if (!(whispers[selected] || {})[svc]) {
+              label.querySelector('.svc-card').classList.add('opacity-30');
+            }
           });
         }
 
-        // 2+ services: combo banner
-        if (checked.length >= 2 && !checked.includes('not-sure')) {
-          const key = checked.sort().join('+');
-          const msg = combos[key] || comboFallbacks[checked.length] || comboFallbacks[3];
-          if (comboText && comboBanner) {
-            comboText.textContent = msg;
-            comboBanner.style.maxHeight = '40px';
-            comboBanner.style.opacity = '1';
+        // Two+ selected: celebration mode
+        if (checked.length >= 2) {
+          const key = checked.filter(s => s !== 'not-sure').sort().join('+');
+          const comboMsg = combos[key]
+            || (checked.length === 3 ? 'You\'re thinking about this the right way.'
+            : checked.length >= 4 ? 'The full picture.'
+            : 'These work well together.');
+
+          // Show combo message on the last checked card's subtitle
+          const lastChecked = checked[checked.length - 1];
+          const lastLabel = grid.querySelector(`[data-service="${lastChecked}"]`);
+          if (lastLabel) {
+            const sub = lastLabel.querySelector('.svc-sub');
+            sub.textContent = `\u2705 ${comboMsg}`;
+            sub.classList.remove('text-neutral-600');
+            sub.classList.add('text-amber-400/60');
           }
-        } else {
-          if (comboBanner) {
-            comboBanner.style.maxHeight = '0';
-            comboBanner.style.opacity = '0';
-          }
+
+          // Dim unchecked cards
+          allLabels.forEach(label => {
+            const svc = label.dataset.service;
+            if (!checked.includes(svc)) {
+              label.querySelector('.svc-card').classList.add('opacity-30');
+            }
+          });
         }
       }
 
@@ -303,6 +346,12 @@ import Base from '../layouts/Base.astro';
         } else if (target.checked && target.value !== 'not-sure') {
           const notSure = grid.querySelector('input[value="not-sure"]');
           if (notSure) notSure.checked = false;
+        }
+
+        // Pulse the card that was just clicked
+        const clickedLabel = target.closest('[data-service]');
+        if (clickedLabel && target.checked) {
+          pulse(clickedLabel.querySelector('.svc-card'));
         }
 
         updateCards();
@@ -336,21 +385,20 @@ import Base from '../layouts/Base.astro';
             status.classList.add('text-amber-400');
             status.classList.remove('text-red-400');
             form.reset();
-            // Reset checkbox visual states
-            document.querySelectorAll('#interest-grid .service-title').forEach(t => {
-              t.classList.remove('text-amber-400');
-              t.classList.add('text-neutral-300');
+            // Reset all card states
+            document.querySelectorAll('#interest-grid [data-service]').forEach(label => {
+              const card = label.querySelector('.svc-card');
+              const title = label.querySelector('.svc-title');
+              const sub = label.querySelector('.svc-sub');
+              const glow = label.querySelector('.svc-glow');
+              card.classList.remove('border-amber-500/40', 'bg-amber-500/5', 'border-amber-500/15', 'opacity-30');
+              card.classList.add('border-white/5');
+              title.classList.remove('text-amber-400');
+              title.classList.add('text-neutral-300');
+              sub.classList.remove('text-amber-400/60');
+              sub.classList.add('text-neutral-600');
+              glow.style.opacity = '0';
             });
-            document.querySelectorAll('.service-nudge').forEach(n => {
-              n.style.maxHeight = '0';
-              n.style.opacity = '0';
-              n.style.marginTop = '0';
-            });
-            document.querySelectorAll('.service-card').forEach(c => {
-              c.classList.remove('border-amber-500/15', 'bg-amber-500/[0.02]');
-            });
-            const comboBanner = document.getElementById('combo-banner');
-            if (comboBanner) { comboBanner.style.maxHeight = '0'; comboBanner.style.opacity = '0'; }
           } else {
             const data = await res.json();
             status.textContent = data.error || 'Something went wrong. Try emailing me directly.';

@@ -2,7 +2,8 @@
 
 @theme {
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
-  --font-serif: "Instrument Serif", "Lora", Georgia, serif;
+  --font-serif: "Instrument Serif", Georgia, serif;
+  --font-quote: "Lora", Georgia, serif;
   --font-mono: "JetBrains Mono", "Fira Code", monospace;
 
   --color-neutral-950: #0a0a0a;
@@ -125,6 +126,11 @@
   .surface-0 { background-color: var(--color-neutral-950); }
   .surface-1 { background-color: var(--color-neutral-900); }
   .surface-2 { background-color: var(--color-neutral-850); }
+
+  /* Quote font — uses Lora which has real italics */
+  .font-quote {
+    font-family: var(--font-quote);
+  }
 
   /* Dot grid background */
   .dot-grid {

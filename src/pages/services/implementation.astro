@@ -1,0 +1,218 @@
+---
+import Base from '../../layouts/Base.astro';
+---
+
+<Base title="Implementation — Cody Smith" description="CRM integrations, page builds, analytics setup. Scoped projects with a start and a finish.">
+  <!-- Hero -->
+  <section class="relative pt-40 pb-24 px-6 overflow-hidden">
+    <div class="absolute top-0 left-1/3 w-[600px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative max-w-4xl mx-auto">
+      <a href="/services" class="reveal inline-flex items-center gap-2 text-neutral-500 text-sm hover:text-neutral-300 transition-colors duration-300 mb-8 group">
+        <svg class="w-4 h-4 group-hover:-translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" />
+        </svg>
+        All services
+      </a>
+      <div class="flex items-center gap-4 mb-6">
+        <span class="reveal text-amber-400 font-mono text-xs tracking-[0.2em]">03</span>
+        <div class="reveal gradient-divider flex-1"></div>
+      </div>
+      <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-6">
+        Implementation
+      </h1>
+      <p class="reveal text-neutral-500 italic text-sm tracking-wide mb-10">Changes to production systems.</p>
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl">
+        Project work with a start, a scope, and a finish line. I scope it, quote it, build it, and hand it over. No ambiguity about what's included.
+      </p>
+    </div>
+  </section>
+
+  <!-- Project types -->
+  <section class="py-28 px-6 surface-1">
+    <div class="max-w-5xl mx-auto">
+      <div class="reveal mb-16">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Project types</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">What I build.</h2>
+      </div>
+
+      <div class="space-y-8 reveal-stagger">
+        <div class="reveal glow-card p-8" style="--i:0">
+          <div class="grid lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2">
+              <h3 class="text-neutral-100 text-xl font-medium mb-4">Integrations</h3>
+              <p class="text-neutral-400 leading-relaxed mb-4">
+                Your website talks to other systems — CRM, email marketing, payment processing, analytics. When those connections break or don't exist yet, that's where I come in.
+              </p>
+              <p class="text-neutral-400 leading-relaxed">
+                I build the bridge between your website and your business tools. Form submissions that land in your CRM. Email sequences that fire when someone downloads a guide. Payment links that actually track conversions.
+              </p>
+            </div>
+            <div class="border-l border-white/5 pl-8">
+              <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Common projects</p>
+              <ul class="text-neutral-300 text-sm space-y-3">
+                <li class="flex items-start gap-3">
+                  <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
+                  Gravity Forms → Pipedrive
+                </li>
+                <li class="flex items-start gap-3">
+                  <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
+                  Brevo email automation
+                </li>
+                <li class="flex items-start gap-3">
+                  <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
+                  WooCommerce + payment
+                </li>
+                <li class="flex items-start gap-3">
+                  <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
+                  Custom webhook flows
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="reveal glow-card p-8" style="--i:1">
+          <div class="grid lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2">
+              <h3 class="text-neutral-100 text-xl font-medium mb-4">Page builds</h3>
+              <p class="text-neutral-400 leading-relaxed mb-4">
+                Landing pages, service pages, content rewrites — the pages that need to exist for your marketing to work. Built to convert, optimized for search, written for humans.
+              </p>
+              <p class="text-neutral-400 leading-relaxed">
+                I handle everything from keyword-targeted content architecture to the actual build in WordPress. You review, approve, and it goes live.
+              </p>
+            </div>
+            <div class="border-l border-white/5 pl-8">
+              <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Common projects</p>
+              <ul class="text-neutral-300 text-sm space-y-3">
+                <li class="flex items-start gap-3">
+                  <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
+                  Location landing pages
+                </li>
+                <li class="flex items-start gap-3">
+                  <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
+                  Service/product pages
+                </li>
+                <li class="flex items-start gap-3">
+                  <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
+                  Homepage rewrites
+                </li>
+                <li class="flex items-start gap-3">
+                  <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
+                  Pricing pages
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="reveal glow-card p-8" style="--i:2">
+          <div class="grid lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2">
+              <h3 class="text-neutral-100 text-xl font-medium mb-4">Analytics setup</h3>
+              <p class="text-neutral-400 leading-relaxed mb-4">
+                You can't manage what you can't measure. GA4, Google Search Console, Microsoft Clarity, conversion tracking — configured properly so the data you see actually means something.
+              </p>
+              <p class="text-neutral-400 leading-relaxed">
+                Most sites have analytics installed. Very few have analytics configured correctly. I make sure yours tells the truth.
+              </p>
+            </div>
+            <div class="border-l border-white/5 pl-8">
+              <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Common projects</p>
+              <ul class="text-neutral-300 text-sm space-y-3">
+                <li class="flex items-start gap-3">
+                  <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
+                  GA4 configuration
+                </li>
+                <li class="flex items-start gap-3">
+                  <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
+                  Search Console setup
+                </li>
+                <li class="flex items-start gap-3">
+                  <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
+                  Conversion tracking
+                </li>
+                <li class="flex items-start gap-3">
+                  <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
+                  Cookie consent compliance
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How projects work -->
+  <section class="py-28 px-6 dot-grid">
+    <div class="max-w-5xl mx-auto">
+      <div class="reveal mb-16">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Process</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">How projects work.</h2>
+      </div>
+
+      <div class="grid md:grid-cols-4 gap-6 reveal-stagger">
+        <div class="reveal glow-card p-6 text-center" style="--i:0">
+          <div class="w-10 h-10 rounded-full border-2 border-amber-500 flex items-center justify-center mx-auto mb-4">
+            <span class="text-amber-400 text-sm font-mono font-bold">1</span>
+          </div>
+          <h3 class="text-neutral-100 font-medium mb-2">Scope</h3>
+          <p class="text-neutral-500 text-sm leading-relaxed">You describe what you need. I define exactly what's included, what's not, and what it costs.</p>
+        </div>
+        <div class="reveal glow-card p-6 text-center" style="--i:1">
+          <div class="w-10 h-10 rounded-full border-2 border-amber-500/70 flex items-center justify-center mx-auto mb-4">
+            <span class="text-amber-400/70 text-sm font-mono font-bold">2</span>
+          </div>
+          <h3 class="text-neutral-100 font-medium mb-2">Quote</h3>
+          <p class="text-neutral-500 text-sm leading-relaxed">Fixed price. No hourly surprises. You approve the quote, pay at signing, and work begins.</p>
+        </div>
+        <div class="reveal glow-card p-6 text-center" style="--i:2">
+          <div class="w-10 h-10 rounded-full border-2 border-amber-500/50 flex items-center justify-center mx-auto mb-4">
+            <span class="text-amber-400/50 text-sm font-mono font-bold">3</span>
+          </div>
+          <h3 class="text-neutral-100 font-medium mb-2">Build</h3>
+          <p class="text-neutral-500 text-sm leading-relaxed">I build it. You get progress updates. If something changes scope, we discuss it before the price changes.</p>
+        </div>
+        <div class="reveal glow-card p-6 text-center" style="--i:3">
+          <div class="w-10 h-10 rounded-full border-2 border-amber-500/30 flex items-center justify-center mx-auto mb-4">
+            <span class="text-amber-400/30 text-sm font-mono font-bold">4</span>
+          </div>
+          <h3 class="text-neutral-100 font-medium mb-2">Deliver</h3>
+          <p class="text-neutral-500 text-sm leading-relaxed">You review, I revise if needed, it goes live. Documentation included so your team knows what changed.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing note -->
+  <section class="py-28 px-6 surface-1">
+    <div class="max-w-3xl mx-auto text-center">
+      <div class="reveal">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Pricing</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100 mb-8">Project-based pricing.</h2>
+        <p class="text-neutral-400 text-lg leading-relaxed mb-4">
+          Implementation work is quoted per-project, not billed hourly. The scope defines the price.
+        </p>
+        <p class="text-neutral-400 leading-relaxed mb-4">
+          Rate card for reference: <span class="text-neutral-200">$125/hr</span> implementation, <span class="text-neutral-200">$150/hr</span> advisory. Rush work is <span class="text-neutral-200">1.5x</span>. Emergency is <span class="text-neutral-200">2x</span>.
+        </p>
+        <p class="text-neutral-500 text-sm">
+          Most projects are scoped at a fixed price so you know the cost before work begins.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="relative py-32 px-6 overflow-hidden">
+    <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative max-w-3xl mx-auto text-center">
+      <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Have a project in mind?</h2>
+      <p class="reveal text-neutral-400 text-lg mb-10">Tell me what needs to happen and I'll tell you what it takes.</p>
+      <a href="/contact" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
+        Start a conversation
+      </a>
+    </div>
+  </section>
+</Base>

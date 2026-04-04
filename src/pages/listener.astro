@@ -124,86 +124,70 @@ const recentScans = await getRecentScans(5);
     </div>
   </section>
 
-  <!-- TIER 1: Ungated Preview -->
+  <!-- TIER 1: Ungated Preview — diagnostic-first layout -->
   <section id="tier1" class="hidden pb-12 px-6">
     <div class="max-w-4xl mx-auto">
-      <!-- Category Hero -->
-      <div class="text-center mb-12">
-        <p id="t1-brand" class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-6"></p>
-        <div id="t1-category-badge" class="inline-flex items-center gap-3 px-6 py-3 rounded-xl border mb-4">
-          <span id="t1-category-dot" class="w-3 h-3 rounded-full"></span>
-          <span id="t1-label" class="text-lg font-semibold"></span>
-        </div>
-        <p id="t1-mention-count" class="text-neutral-500 text-sm mt-3"></p>
-        <p id="t1-confidence" class="text-neutral-600 text-xs mt-1 italic"></p>
+
+      <!-- Summary header -->
+      <div class="mb-10">
+        <p id="t1-brand" class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4"></p>
+        <p id="t1-summary" class="text-neutral-300 text-base leading-relaxed max-w-3xl"></p>
+        <p id="t1-confidence" class="text-neutral-600 text-xs mt-3 italic"></p>
       </div>
 
-      <!-- Summary -->
-      <p id="t1-summary" class="text-neutral-400 text-sm leading-relaxed text-center max-w-2xl mx-auto mb-12"></p>
+      <!-- DIAGNOSTIC: primary output — this IS the product -->
+      <div id="t1-diagnostic" class="mb-12">
+        <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-6">Your Digital Presence</p>
 
-      <!-- Trustpilot Summary (if available) -->
-      <div id="t1-trustpilot" class="hidden mb-12">
-        <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Trustpilot</p>
-        <div class="bg-neutral-900/30 border border-white/5 rounded-lg p-5 flex items-center gap-6">
-          <div>
-            <span class="text-neutral-600 text-xs uppercase tracking-wider">Trust Score</span>
-            <p id="tp-score" class="text-neutral-100 font-mono text-2xl"></p>
-          </div>
-          <div>
-            <span class="text-neutral-600 text-xs uppercase tracking-wider">Total Reviews</span>
-            <p id="tp-reviews" class="text-neutral-100 font-mono text-2xl"></p>
-          </div>
-          <div id="tp-stars" class="flex gap-1 ml-auto"></div>
-        </div>
-      </div>
-
-      <!-- Source Breakdown -->
-      <div id="t1-sources" class="mb-12">
-        <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Mentions by source</p>
-        <div id="t1-source-bars" class="space-y-3"></div>
-      </div>
-
-      <!-- Sample Mentions -->
-      <div id="t1-samples" class="mb-12">
-        <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Sample mentions</p>
-        <div id="t1-sample-cards" class="space-y-3"></div>
-      </div>
-
-      <!-- Teaser Lines -->
-      <div id="t1-teasers" class="space-y-2 mb-4">
-      </div>
-
-      <!-- Dimensional Diagnostic (shown for sparse-data scans) -->
-      <div id="t1-diagnostic" class="hidden mb-12">
-        <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Digital presence assessment</p>
-        <p id="diag-summary" class="text-neutral-400 text-sm leading-relaxed mb-6"></p>
-
-        <!-- Address Now -->
-        <div id="diag-now" class="hidden mb-6">
-          <p class="text-red-400 text-xs font-semibold tracking-[0.1em] uppercase mb-3">Address Now</p>
+        <div id="diag-now" class="hidden mb-8">
+          <p class="text-red-400 text-xs font-semibold tracking-[0.1em] uppercase mb-3">Needs Attention</p>
           <div id="diag-now-items" class="space-y-3"></div>
         </div>
 
-        <!-- Build Next -->
-        <div id="diag-next" class="hidden mb-6">
-          <p class="text-amber-400 text-xs font-semibold tracking-[0.1em] uppercase mb-3">Build Over Next 3-6 Months</p>
+        <div id="diag-next" class="hidden mb-8">
+          <p class="text-amber-400 text-xs font-semibold tracking-[0.1em] uppercase mb-3">Room to Grow</p>
           <div id="diag-next-items" class="space-y-3"></div>
         </div>
 
-        <!-- Maintain -->
-        <div id="diag-maintain" class="hidden mb-6">
+        <div id="diag-maintain" class="hidden mb-8">
           <p class="text-emerald-400 text-xs font-semibold tracking-[0.1em] uppercase mb-3">Looking Good</p>
           <div id="diag-maintain-items" class="space-y-3"></div>
         </div>
       </div>
 
-      <!-- Soft recommendation teaser (before gate) -->
-      <div id="t1-rec-teaser" class="hidden text-center">
-        <p class="text-amber-400/60 text-xs flex items-center justify-center gap-2">
-          <span class="text-amber-500">&#128274;</span>
-          We found specific steps you can take. Unlock your full report to see them.
-        </p>
+      <!-- Trustpilot (standalone card if found) -->
+      <div id="t1-trustpilot" class="hidden mb-12">
+        <div class="bg-neutral-900/30 border border-white/5 rounded-lg p-5 flex items-center gap-6">
+          <span class="text-neutral-500 text-xs font-medium">Trustpilot</span>
+          <div>
+            <span class="text-neutral-600 text-xs uppercase tracking-wider">Score</span>
+            <p id="tp-score" class="text-neutral-100 font-mono text-lg"></p>
+          </div>
+          <div>
+            <span class="text-neutral-600 text-xs uppercase tracking-wider">Reviews</span>
+            <p id="tp-reviews" class="text-neutral-100 font-mono text-lg"></p>
+          </div>
+          <div id="tp-stars" class="flex gap-1 ml-auto"></div>
+        </div>
       </div>
+
+      <!-- Sample mentions (2-3, supporting evidence for the diagnostic) -->
+      <div id="t1-samples" class="mb-8">
+        <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">What people are saying</p>
+        <div id="t1-sample-cards" class="space-y-3"></div>
+      </div>
+
+      <!-- Locked content teaser -->
+      <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-6">
+        <div id="t1-teasers" class="space-y-2 mb-3"></div>
+        <div id="t1-rec-teaser" class="hidden border-t border-white/5 pt-4 mt-2">
+          <p class="text-amber-400/80 text-sm flex items-center gap-2">
+            <span class="text-amber-500">&#128274;</span>
+            We identified specific steps to strengthen your presence. Unlock the full report to see them.
+          </p>
+        </div>
+      </div>
+
     </div>
   </section>
 
@@ -426,45 +410,59 @@ const recentScans = await getRecentScans(5);
       const SOURCE_LABELS: Record<string, string> = { review: 'Review Sites', forum: 'Forums', news: 'News', social: 'Social Media', blog: 'Blogs', directory: 'Directories', other: 'Other' };
 
       function renderTier1(data: any) {
-        const styles = getStyles(data.overall_category || data.overall_label);
+        // Header — diagnostic summary leads
         document.getElementById('t1-brand')!.textContent = `Results for ${data.brand}`;
-
-        // Category badge
-        const badge = document.getElementById('t1-category-badge')!;
-        badge.className = `inline-flex items-center gap-3 px-6 py-3 rounded-xl border mb-4 ${styles.badge}`;
-        const dot = document.getElementById('t1-category-dot')!;
-        dot.className = `w-3 h-3 rounded-full ${styles.dot}`;
-        const labelEl = document.getElementById('t1-label')!;
-        labelEl.textContent = data.overall_label;
-        labelEl.className = `text-lg font-semibold ${styles.label}`;
-
-        document.getElementById('t1-mention-count')!.textContent = data.mention_count === 0
-          ? 'No mentions found across the web'
-          : `${data.mention_count} mention${data.mention_count !== 1 ? 's' : ''} analyzed across the web`;
+        const diagSummary = data.diagnostic?.summary || data.summary;
+        document.getElementById('t1-summary')!.textContent = diagSummary;
         document.getElementById('t1-confidence')!.textContent = data.confidence_note || '';
-        document.getElementById('t1-summary')!.textContent = data.summary;
 
-        const sourceBars = document.getElementById('t1-source-bars')!;
-        sourceBars.innerHTML = '';
-        const totalMentions = data.mention_count || 1;
-        for (const [type, info] of Object.entries(data.source_breakdown as Record<string, { count: number; avg_score: number }>)) {
-          const pct = Math.round((info.count / totalMentions) * 100);
-          const barColor = info.avg_score > 0.1 ? 'bg-emerald-500' : info.avg_score < -0.1 ? 'bg-red-500' : 'bg-neutral-500';
-          sourceBars.innerHTML += `<div class="flex items-center gap-3"><span class="text-neutral-400 text-xs w-24 shrink-0">${SOURCE_LABELS[type] || type}</span><div class="flex-1 bg-neutral-800 rounded-full h-2 relative"><div class="${barColor} h-2 rounded-full transition-all duration-700" style="width: ${pct}%"></div></div><span class="text-neutral-600 text-xs font-mono w-8 text-right">${info.count}</span></div>`;
+        // DIAGNOSTIC — the primary output
+        const statusDot: Record<string, string> = {
+          'strong': 'bg-emerald-500', 'adequate': 'bg-emerald-500',
+          'needs-attention': 'bg-amber-500', 'critical-gap': 'bg-red-500', 'not-found': 'bg-neutral-500',
+        };
+        const statusBorder: Record<string, string> = {
+          'strong': 'border-emerald-500/20', 'adequate': 'border-emerald-500/20',
+          'needs-attention': 'border-amber-500/20', 'critical-gap': 'border-red-500/20', 'not-found': 'border-white/5',
+        };
+        const statusLabelMap: Record<string, string> = {
+          'strong': 'Strong', 'adequate': 'Adequate',
+          'needs-attention': 'Needs Attention', 'critical-gap': 'Critical Gap', 'not-found': 'Not Found',
+        };
+
+        function dimCard(d: any): string {
+          return `<div class="bg-neutral-900/30 border ${statusBorder[d.status] || 'border-white/5'} rounded-lg p-5">
+            <div class="flex items-center gap-3 mb-2">
+              <span class="w-2.5 h-2.5 rounded-full ${statusDot[d.status] || 'bg-neutral-500'}"></span>
+              <span class="text-neutral-200 text-sm font-medium">${d.name}</span>
+              <span class="ml-auto text-xs px-2 py-0.5 rounded-full border ${statusBorder[d.status] || ''} text-neutral-500">${statusLabelMap[d.status] || d.status}</span>
+            </div>
+            <p class="text-neutral-400 text-xs leading-relaxed pl-[22px]">${d.detail}</p>
+          </div>`;
         }
 
-        document.getElementById('t1-sample-cards')!.innerHTML = (data.sample_mentions || []).map((m: any) => mentionCard(m)).join('');
-        document.getElementById('t1-teasers')!.innerHTML = (data.teaser_lines || []).map((t: string) =>
-          `<div class="flex items-center gap-2 text-amber-400/60 text-xs"><span class="text-amber-500">&#128274;</span> ${t}</div>`
-        ).join('');
+        function renderDimGroup(items: any[], containerId: string, sectionId: string) {
+          if (items.length > 0) {
+            document.getElementById(containerId)!.innerHTML = items.map(dimCard).join('');
+            document.getElementById(sectionId)!.classList.remove('hidden');
+          } else {
+            document.getElementById(sectionId)!.classList.add('hidden');
+          }
+        }
 
-        // Trustpilot summary card
+        if (data.diagnostic) {
+          renderDimGroup(data.diagnostic.address_now, 'diag-now-items', 'diag-now');
+          renderDimGroup(data.diagnostic.build_next, 'diag-next-items', 'diag-next');
+          renderDimGroup(data.diagnostic.maintain, 'diag-maintain-items', 'diag-maintain');
+          document.getElementById('t1-diagnostic')!.classList.remove('hidden');
+        }
+
+        // Trustpilot card
         const tpSection = document.getElementById('t1-trustpilot')!;
         if (data.trustpilot) {
           const tp = data.trustpilot;
           document.getElementById('tp-score')!.textContent = (tp.trustScore || 0).toFixed(1) + ' / 5';
           document.getElementById('tp-reviews')!.textContent = String(tp.numberOfReviews || 0);
-          // Star visualization
           const starsEl = document.getElementById('tp-stars')!;
           const fullStars = Math.floor(tp.trustScore || 0);
           starsEl.innerHTML = Array.from({ length: 5 }, (_, i) =>
@@ -475,69 +473,18 @@ const recentScans = await getRecentScans(5);
           tpSection.classList.add('hidden');
         }
 
-        // Dimensional diagnostic (for sparse-data scans)
-        const diagSection = document.getElementById('t1-diagnostic')!;
-        if (data.diagnostic) {
-          const diag = data.diagnostic;
-          document.getElementById('diag-summary')!.textContent = diag.summary;
+        // Sample mentions — supporting evidence
+        document.getElementById('t1-sample-cards')!.innerHTML = (data.sample_mentions || []).map((m: any) => mentionCard(m)).join('');
 
-          const statusDot: Record<string, string> = {
-            'strong': 'bg-emerald-500',
-            'adequate': 'bg-emerald-500',
-            'needs-attention': 'bg-amber-500',
-            'critical-gap': 'bg-red-500',
-            'not-found': 'bg-neutral-500',
-          };
-          const statusBorder: Record<string, string> = {
-            'strong': 'border-emerald-500/20',
-            'adequate': 'border-emerald-500/20',
-            'needs-attention': 'border-amber-500/20',
-            'critical-gap': 'border-red-500/20',
-            'not-found': 'border-white/5',
-          };
-          const statusLabel: Record<string, string> = {
-            'strong': 'Strong',
-            'adequate': 'Adequate',
-            'needs-attention': 'Needs Attention',
-            'critical-gap': 'Critical Gap',
-            'not-found': 'Not Found',
-          };
-
-          function dimCard(d: any): string {
-            return `<div class="bg-neutral-900/30 border ${statusBorder[d.status] || 'border-white/5'} rounded-lg p-5">
-              <div class="flex items-center gap-3 mb-2">
-                <span class="w-2.5 h-2.5 rounded-full ${statusDot[d.status] || 'bg-neutral-500'}"></span>
-                <span class="text-neutral-200 text-sm font-medium">${d.name}</span>
-                <span class="ml-auto text-xs px-2 py-0.5 rounded-full border ${statusBorder[d.status] || ''} text-neutral-500">${statusLabel[d.status] || d.status}</span>
-              </div>
-              <p class="text-neutral-400 text-xs leading-relaxed pl-[22px]">${d.detail}</p>
-            </div>`;
-          }
-
-          function renderDimGroup(items: any[], containerId: string, sectionId: string) {
-            if (items.length > 0) {
-              document.getElementById(containerId)!.innerHTML = items.map(dimCard).join('');
-              document.getElementById(sectionId)!.classList.remove('hidden');
-            } else {
-              document.getElementById(sectionId)!.classList.add('hidden');
-            }
-          }
-
-          renderDimGroup(diag.address_now, 'diag-now-items', 'diag-now');
-          renderDimGroup(diag.build_next, 'diag-next-items', 'diag-next');
-          renderDimGroup(diag.maintain, 'diag-maintain-items', 'diag-maintain');
-
-          diagSection.classList.remove('hidden');
-        } else {
-          diagSection.classList.add('hidden');
-        }
-
-        tier1.classList.remove('hidden');
-
-        // Show soft recommendation teaser before the gate
+        // Teasers + soft recommendation
+        document.getElementById('t1-teasers')!.innerHTML = (data.teaser_lines || []).map((t: string) =>
+          `<div class="flex items-center gap-2 text-amber-400/60 text-xs"><span class="text-amber-500">&#128274;</span> ${t}</div>`
+        ).join('');
         if (data.recommendation) {
           document.getElementById('t1-rec-teaser')?.classList.remove('hidden');
         }
+
+        tier1.classList.remove('hidden');
       }
 
       function renderTier2(data: any) {

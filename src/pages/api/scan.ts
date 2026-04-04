@@ -256,8 +256,11 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     // Generate smart service recommendation based on results
     const recommendation = getRecommendation(report.overall_score, report.mention_count, brand);
 
-    // Generate dimensional diagnostic for sparse-data scans
-    const diagnostic = report.mention_count < 8 ? generateDiagnostic({
+    // Generate dimensional diagnostic for ALL scans — this is the primary
+    // output format. For data-rich scans the dimensions show strength.
+    // For data-sparse scans they show gaps. Either way it provides the
+    // multi-dimensional picture the tool is built around.
+    const diagnostic = generateDiagnostic({
       brand,
       domain,
       mentionCount: report.mention_count,
@@ -267,7 +270,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       positiveCount: report.mentions.filter(m => m.sentiment_label === 'positive').length,
       negativeCount: report.mentions.filter(m => m.sentiment_label === 'negative').length,
       neutralCount: report.mentions.filter(m => m.sentiment_label === 'neutral').length,
-    }) : undefined;
+    });
 
     // Return Tier 1 data (ungated preview)
     return json({

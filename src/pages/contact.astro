@@ -175,6 +175,28 @@ import Base from '../layouts/Base.astro';
   </section>
 
   <script>
+    // Pre-populate from scanner CTA query params (?brand=X&interest=Y&interest=Z)
+    function prefillFromScan() {
+      const params = new URLSearchParams(window.location.search);
+      const brand = params.get('brand');
+      if (brand) {
+        const msgField = document.querySelector('textarea[name="message"]') as HTMLTextAreaElement;
+        if (msgField && !msgField.value) {
+          msgField.value = `I just ran your brand scanner on ${brand} and I'd like to discuss the results.`;
+        }
+      }
+      const interests = params.getAll('interest');
+      if (interests.length > 0) {
+        interests.forEach(slug => {
+          const checkbox = document.querySelector(`input[name="interest"][value="${slug}"]`) as HTMLInputElement;
+          if (checkbox) {
+            checkbox.checked = true;
+            checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+        });
+      }
+    }
+
     function initNudges() {
       const grid = document.getElementById('interest-grid');
       if (!grid) return;
@@ -420,6 +442,7 @@ import Base from '../layouts/Base.astro';
 
     initNudges();
     initForm();
-    document.addEventListener('astro:after-swap', () => { initNudges(); initForm(); });
+    prefillFromScan();
+    document.addEventListener('astro:after-swap', () => { initNudges(); initForm(); prefillFromScan(); });
   </script>
 </Base>

@@ -36,7 +36,22 @@ export interface ScanReport {
   teaser_lines: string[];
 }
 
-// --- VADER per-mention analysis ---
+// --- Brand-aware VADER analysis ---
+//
+// Plain VADER scores all words equally regardless of WHO they're about.
+// "I left my terrible old ISP and switched to [brand] — best decision"
+// gets penalized for "terrible" even though it's about a competitor.
+//
+// Fix: split text into sentences, score each sentence, weight sentences
+// containing the brand name higher. Sentences without the brand name
+// get reduced weight — they're more likely to be about competitors,
+// context, or other entities.
+
+let _currentBrand: string | null = null;
+
+export function setBrandContext(brand: string) {
+  _currentBrand = brand.toLowerCase().trim();
+}
 
 function analyzeSingleMention(text: string): {
   score: number;
@@ -44,23 +59,52 @@ function analyzeSingleMention(text: string): {
   positiveWords: string[];
   negativeWords: string[];
 } {
-  const scores = vader.SentimentIntensityAnalyzer.polarity_scores(text);
-  const compound = scores.compound;
+  // Split into sentences for brand-proximity weighting
+  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 5);
+  const brandLower = _currentBrand || '';
+  const brandSlug = brandLower.replace(/[^a-z0-9]/g, '');
 
-  // VADER thresholds (from Hutto & Gilbert 2014)
+  let weightedSum = 0;
+  let totalWeight = 0;
+
+  if (sentences.length > 1 && brandLower) {
+    for (const sentence of sentences) {
+      const sentLower = sentence.toLowerCase();
+      const sentScores = vader.SentimentIntensityAnalyzer.polarity_scores(sentence.trim());
+
+      // Sentences mentioning the brand get full weight
+      // Sentences without the brand get reduced weight (0.3)
+      const mentionsBrand = sentLower.includes(brandLower)
+        || (brandSlug.length >= 4 && sentLower.replace(/[^a-z0-9]/g, '').includes(brandSlug));
+      const weight = mentionsBrand ? 1.0 : 0.3;
+
+      weightedSum += sentScores.compound * weight;
+      totalWeight += weight;
+    }
+  }
+
+  // Fall back to full-text VADER when we can't split or no brand context
+  const fullScores = vader.SentimentIntensityAnalyzer.polarity_scores(text);
+  const compound = (totalWeight > 0 && sentences.length > 1 && brandLower)
+    ? weightedSum / totalWeight
+    : fullScores.compound;
+
+  // VADER thresholds (Hutto & Gilbert 2014)
   const label = compound >= 0.05 ? 'positive'
     : compound <= -0.05 ? 'negative'
     : 'neutral';
 
-  // Extract sentiment-bearing words by scoring individual tokens
+  // Extract sentiment-bearing words
   const words = text.split(/\s+/).filter(w => w.length > 2);
   const positiveWords: string[] = [];
   const negativeWords: string[] = [];
 
   for (const word of words) {
+    const clean = word.toLowerCase().replace(/[^a-z]/g, '');
+    if (!clean || clean.length < 3) continue;
     const wordScore = vader.SentimentIntensityAnalyzer.polarity_scores(word);
-    if (wordScore.compound >= 0.3) positiveWords.push(word.toLowerCase().replace(/[^a-z]/g, ''));
-    if (wordScore.compound <= -0.3) negativeWords.push(word.toLowerCase().replace(/[^a-z]/g, ''));
+    if (wordScore.compound >= 0.3) positiveWords.push(clean);
+    if (wordScore.compound <= -0.3) negativeWords.push(clean);
   }
 
   return {

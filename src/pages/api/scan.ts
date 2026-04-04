@@ -3,7 +3,7 @@ export const prerender = false;
 import type { APIRoute } from 'astro';
 import { parseInput, searchForMentions } from '../../lib/search';
 import { scrapeAll } from '../../lib/scraper';
-import { generateReport } from '../../lib/sentiment';
+import { generateReport, setBrandContext } from '../../lib/sentiment';
 import { getRecommendation } from '../../lib/recommend';
 import { createScan, updateScan, insertMention, checkRateLimit, incrementRateLimit, getMonthlySearchCount, getScan, getMentions, getCachedScan, setCacheEntry } from '../../lib/db';
 import { fetchTrustpilotData } from '../../lib/trustpilot';
@@ -215,9 +215,11 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     }));
 
     // Merge with RRF (Reciprocal Rank Fusion, k=60)
-    // Each source ranks its results independently. RRF produces a combined
-    // ranking without requiring score normalization across heterogeneous sources.
     const allMentions = rrfMerge(scraped, trustpilotMentions);
+
+    // Set brand context for sentiment — weights sentences mentioning
+    // the brand higher than sentences about competitors/other entities
+    setBrandContext(brand);
 
     // Generate the full report
     const report = generateReport(allMentions);

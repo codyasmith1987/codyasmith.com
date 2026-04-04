@@ -101,7 +101,7 @@ async function sendReportEmail(apiKey: string, email: string, name: string, scan
           <p>${scan.summary}</p>
 
           <p style="margin-top: 24px;">
-            <a href="https://codyasmith.com/listener" style="background: #f59e0b; color: #1a1a1a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">View Full Report</a>
+            <a href="https://codyasmith.com/listener?report=${scan.id}" style="background: #f59e0b; color: #1a1a1a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">View Full Report</a>
           </p>
 
           <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0;" />

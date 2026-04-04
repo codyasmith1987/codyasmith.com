@@ -310,6 +310,81 @@ const recentScans = await getRecentScans(5);
         }
       }
 
+      const SOURCE_LABELS: Record<string, string> = { review: 'Review Sites', forum: 'Forums', news: 'News', social: 'Social Media', blog: 'Blogs', directory: 'Directories', other: 'Other' };
+
+      function renderTier1(data: any) {
+        const color = scoreColor(data.overall_score);
+        document.getElementById('t1-brand')!.textContent = `Results for ${data.brand}`;
+        const ring = document.getElementById('t1-score-ring')!;
+        ring.className = `inline-flex items-center justify-center w-36 h-36 rounded-full border-4 mb-4 border-${color}-500/40`;
+        document.getElementById('t1-score')!.textContent = String(data.overall_score);
+        const labelEl = document.getElementById('t1-label')!;
+        labelEl.textContent = data.overall_label;
+        labelEl.className = `text-lg font-semibold mb-2 text-${color}-400`;
+        document.getElementById('t1-mention-count')!.textContent = `${data.mention_count} mentions analyzed across the web`;
+        document.getElementById('t1-summary')!.textContent = data.summary;
+
+        const sourceBars = document.getElementById('t1-source-bars')!;
+        sourceBars.innerHTML = '';
+        const totalMentions = data.mention_count || 1;
+        for (const [type, info] of Object.entries(data.source_breakdown as Record<string, { count: number; avg_score: number }>)) {
+          const pct = Math.round((info.count / totalMentions) * 100);
+          const barColor = info.avg_score > 0.1 ? 'bg-emerald-500' : info.avg_score < -0.1 ? 'bg-red-500' : 'bg-neutral-500';
+          sourceBars.innerHTML += `<div class="flex items-center gap-3"><span class="text-neutral-400 text-xs w-24 shrink-0">${SOURCE_LABELS[type] || type}</span><div class="flex-1 bg-neutral-800 rounded-full h-2 relative"><div class="${barColor} h-2 rounded-full transition-all duration-700" style="width: ${pct}%"></div></div><span class="text-neutral-600 text-xs font-mono w-8 text-right">${info.count}</span></div>`;
+        }
+
+        document.getElementById('t1-sample-cards')!.innerHTML = (data.sample_mentions || []).map((m: any) => mentionCard(m)).join('');
+        document.getElementById('t1-teasers')!.innerHTML = (data.teaser_lines || []).map((t: string) =>
+          `<div class="flex items-center gap-2 text-amber-400/60 text-xs"><span class="text-amber-500">&#128274;</span> ${t}</div>`
+        ).join('');
+
+        tier1.classList.remove('hidden');
+        if (data.recommendation) renderRecommendation(data.recommendation);
+      }
+
+      function renderTier2(data: any) {
+        document.getElementById('t2-all-mentions')!.innerHTML = (data.mentions || []).map((m: any) => mentionCard(m, true)).join('');
+
+        document.getElementById('t2-positive-phrases')!.innerHTML = (data.top_positive_phrases || []).map((p: string) =>
+          `<span class="px-3 py-1.5 bg-emerald-500/5 border border-emerald-500/20 rounded-full text-xs text-emerald-400">${p}</span>`
+        ).join('') || '<span class="text-neutral-600 text-xs">None detected</span>';
+
+        document.getElementById('t2-negative-phrases')!.innerHTML = (data.top_negative_phrases || []).map((p: string) =>
+          `<span class="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-full text-xs text-red-400">${p}</span>`
+        ).join('') || '<span class="text-neutral-600 text-xs">None detected</span>';
+
+        const sourceDetail = document.getElementById('t2-source-detail')!;
+        sourceDetail.innerHTML = '';
+        for (const [type, info] of Object.entries(data.source_breakdown as Record<string, { count: number; avg_score: number }>)) {
+          const sc = info.avg_score > 0.1 ? 'text-emerald-400' : info.avg_score < -0.1 ? 'text-red-400' : 'text-neutral-400';
+          sourceDetail.innerHTML += `<div class="bg-neutral-900/30 border border-white/5 rounded-lg p-4"><p class="text-neutral-300 text-sm font-medium">${SOURCE_LABELS[type] || type}</p><p class="text-neutral-600 text-xs mt-1">${info.count} mention${info.count !== 1 ? 's' : ''}</p><p class="${sc} font-mono text-sm mt-1">${info.avg_score > 0 ? '+' : ''}${info.avg_score.toFixed(2)} avg</p></div>`;
+        }
+
+        tier2.classList.remove('hidden');
+
+        const t3Text = document.getElementById('t3-text')!;
+        t3Text.textContent = `This scan covered ${(data.mentions || []).length} sources. A full audit covers 10x more, includes competitor comparison, tracks changes over time, and comes with a personal strategy call.`;
+        tier3.classList.remove('hidden');
+
+        if (data.recommendation) renderRecommendation(data.recommendation);
+      }
+
+      // Listen for saved report loads (from email link with ?report=ID)
+      window.addEventListener('render-report', ((e: CustomEvent) => {
+        const data = e.detail;
+        currentScanId = data.scan_id;
+        renderTier1(data);
+        if (data.unlocked) {
+          // Already unlocked — skip the gate, show everything
+          gate.classList.add('hidden');
+          document.getElementById('gate-confirmed')!.classList.remove('hidden');
+          renderTier2(data);
+        } else {
+          gate.classList.remove('hidden');
+        }
+        tier1.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }) as EventListener);
+
       function scoreColor(score: number): string {
         if (score >= 65) return 'emerald';
         if (score >= 40) return 'amber';
@@ -410,60 +485,9 @@ const recentScans = await getRecentScans(5);
           loading.classList.add('hidden');
 
           currentScanId = data.scan_id;
-
-          // ---- RENDER TIER 1 ----
-          const color = scoreColor(data.overall_score);
-
-          document.getElementById('t1-brand')!.textContent = `Results for ${data.brand}`;
-
-          const ring = document.getElementById('t1-score-ring')!;
-          ring.className = `inline-flex items-center justify-center w-36 h-36 rounded-full border-4 mb-4 border-${color}-500/40`;
-          document.getElementById('t1-score')!.textContent = String(data.overall_score);
-
-          const labelEl = document.getElementById('t1-label')!;
-          labelEl.textContent = data.overall_label;
-          labelEl.className = `text-lg font-semibold mb-2 text-${color}-400`;
-
-          document.getElementById('t1-mention-count')!.textContent = `${data.mention_count} mentions analyzed across the web`;
-          document.getElementById('t1-summary')!.textContent = data.summary;
-
-          // Source breakdown bars
-          const sourceTypes: Record<string, string> = { review: 'Review Sites', forum: 'Forums', news: 'News', social: 'Social Media', blog: 'Blogs', directory: 'Directories', other: 'Other' };
-          const sourceBars = document.getElementById('t1-source-bars')!;
-          sourceBars.innerHTML = '';
-          const totalMentions = data.mention_count || 1;
-          for (const [type, info] of Object.entries(data.source_breakdown as Record<string, { count: number; avg_score: number }>)) {
-            const pct = Math.round((info.count / totalMentions) * 100);
-            const barColor = info.avg_score > 0.1 ? 'bg-emerald-500' : info.avg_score < -0.1 ? 'bg-red-500' : 'bg-neutral-500';
-            sourceBars.innerHTML += `
-              <div class="flex items-center gap-3">
-                <span class="text-neutral-400 text-xs w-24 shrink-0">${sourceTypes[type] || type}</span>
-                <div class="flex-1 bg-neutral-800 rounded-full h-2 relative">
-                  <div class="${barColor} h-2 rounded-full transition-all duration-700" style="width: ${pct}%"></div>
-                </div>
-                <span class="text-neutral-600 text-xs font-mono w-8 text-right">${info.count}</span>
-              </div>`;
-          }
-
-          // Sample mentions
-          const sampleCards = document.getElementById('t1-sample-cards')!;
-          sampleCards.innerHTML = (data.sample_mentions || []).map((m: any) => mentionCard(m)).join('');
-
-          // Teaser lines
-          const teasers = document.getElementById('t1-teasers')!;
-          teasers.innerHTML = (data.teaser_lines || []).map((t: string) =>
-            `<div class="flex items-center gap-2 text-amber-400/60 text-xs"><span class="text-amber-500">&#128274;</span> ${t}</div>`
-          ).join('');
-
-          tier1.classList.remove('hidden');
+          renderTier1(data);
           gate.classList.remove('hidden');
-
-          // Show smart recommendation
-          if (data.recommendation) renderRecommendation(data.recommendation);
-
-          // Smooth scroll to results
           tier1.scrollIntoView({ behavior: 'smooth', block: 'start' });
-
           input.value = '';
 
         } catch (err: any) {
@@ -508,44 +532,7 @@ const recentScans = await getRecentScans(5);
             gate.classList.add('hidden');
             document.getElementById('gate-confirmed')!.classList.remove('hidden');
 
-            // ---- RENDER TIER 2 ----
-            // All mentions
-            const allMentions = document.getElementById('t2-all-mentions')!;
-            allMentions.innerHTML = (data.mentions || []).map((m: any) => mentionCard(m, true)).join('');
-
-            // Phrases
-            const posEl = document.getElementById('t2-positive-phrases')!;
-            posEl.innerHTML = (data.top_positive_phrases || []).map((p: string) =>
-              `<span class="px-3 py-1.5 bg-emerald-500/5 border border-emerald-500/20 rounded-full text-xs text-emerald-400">${p}</span>`
-            ).join('') || '<span class="text-neutral-600 text-xs">None detected</span>';
-
-            const negEl = document.getElementById('t2-negative-phrases')!;
-            negEl.innerHTML = (data.top_negative_phrases || []).map((p: string) =>
-              `<span class="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-full text-xs text-red-400">${p}</span>`
-            ).join('') || '<span class="text-neutral-600 text-xs">None detected</span>';
-
-            // Source detail
-            const sourceDetail = document.getElementById('t2-source-detail')!;
-            const sourceTypes: Record<string, string> = { review: 'Review Sites', forum: 'Forums', news: 'News', social: 'Social Media', blog: 'Blogs', directory: 'Directories', other: 'Other' };
-            sourceDetail.innerHTML = '';
-            for (const [type, info] of Object.entries(data.source_breakdown as Record<string, { count: number; avg_score: number }>)) {
-              const scoreColor = info.avg_score > 0.1 ? 'text-emerald-400' : info.avg_score < -0.1 ? 'text-red-400' : 'text-neutral-400';
-              sourceDetail.innerHTML += `
-                <div class="bg-neutral-900/30 border border-white/5 rounded-lg p-4">
-                  <p class="text-neutral-300 text-sm font-medium">${sourceTypes[type] || type}</p>
-                  <p class="text-neutral-600 text-xs mt-1">${info.count} mention${info.count !== 1 ? 's' : ''}</p>
-                  <p class="${scoreColor} font-mono text-sm mt-1">${info.avg_score > 0 ? '+' : ''}${info.avg_score.toFixed(2)} avg</p>
-                </div>`;
-            }
-
-            tier2.classList.remove('hidden');
-
-            // Tier 3 teaser
-            const t3Text = document.getElementById('t3-text')!;
-            const mentionCount = (data.mentions || []).length;
-            t3Text.textContent = `This scan covered ${mentionCount} sources. A full audit covers 10x more, includes competitor comparison, tracks changes over time, and comes with a personal strategy call.`;
-            tier3.classList.remove('hidden');
-
+            renderTier2(data);
             tier2.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
           } catch (err: any) {
@@ -559,7 +546,41 @@ const recentScans = await getRecentScans(5);
       }
     }
 
+    // Check for ?report= param and auto-load the full report
+    async function loadSavedReport() {
+      const params = new URLSearchParams(window.location.search);
+      const reportId = params.get('report');
+      if (!reportId) return;
+
+      initScanner(); // set up event listeners first
+
+      const loading = document.getElementById('loading')!;
+      loading.classList.remove('hidden');
+      document.getElementById('loading-text')!.textContent = 'Loading your report...';
+      ['search', 'scrape', 'analyze', 'report'].forEach(s => {
+        const el = document.getElementById(`step-${s}`);
+        if (el) { el.classList.remove('text-neutral-600'); el.classList.add('text-emerald-400'); el.querySelector('span')!.textContent = '\u2713'; }
+      });
+
+      try {
+        const res = await fetch(`/api/report?id=${reportId}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+
+        loading.classList.add('hidden');
+
+        // Reuse the same rendering the scanner uses — dispatch a custom event
+        // with the data so we don't duplicate all the rendering code
+        window.dispatchEvent(new CustomEvent('render-report', { detail: data }));
+      } catch {
+        loading.classList.add('hidden');
+        document.getElementById('form-error')!.textContent = 'Could not load report. Try running a new scan.';
+        document.getElementById('form-error')!.classList.remove('hidden');
+      }
+    }
+
     initScanner();
-    document.addEventListener('astro:after-swap', initScanner);
+    document.addEventListener('astro:after-swap', () => { initScanner(); loadSavedReport(); });
+    loadSavedReport();
   </script>
 </Base>

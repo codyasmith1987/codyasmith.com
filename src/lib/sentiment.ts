@@ -1,78 +1,163 @@
-import Sentiment from 'sentiment';
+import vader from 'vader-sentiment';
 import type { ScrapedMention } from './scraper';
 
-const analyzer = new Sentiment();
+// --- Categorical scoring system ---
+// Replaces the false-precision 0-100 score with defensible categories.
+// Based on Wilson score interval research: 10-20 mentions produce ±25-point
+// confidence intervals, making numeric scores statistically indefensible.
+
+export type SentimentCategory = 'strong' | 'adequate' | 'mixed' | 'needs-attention' | 'critical' | 'insufficient-data';
+export type ConfidenceLevel = 'solid' | 'moderate' | 'preliminary' | 'insufficient';
 
 export interface MentionSentiment {
   url: string;
   source_name: string;
   source_type: string;
   snippet: string;
-  sentiment_score: number;
-  sentiment_label: string;
+  sentiment_score: number;       // VADER compound: -1 to 1
+  sentiment_label: string;       // positive / negative / neutral / mixed
   key_phrases: string[];
   query_type: string;
 }
 
 export interface ScanReport {
-  overall_score: number;       // 0-100
-  overall_label: string;       // Poor / Mixed / Positive / Strong
+  overall_score: number;                // 0-100 (kept for backward compat / internal use)
+  overall_label: string;                // categorical: Strong / Adequate / Mixed / Needs Attention / Critical
+  overall_category: SentimentCategory;  // machine-readable category
+  confidence_level: ConfidenceLevel;    // based on mention count
+  confidence_note: string;              // human-readable confidence explanation
   mention_count: number;
   mentions: MentionSentiment[];
   source_breakdown: Record<string, { count: number; avg_score: number }>;
   top_positive_phrases: string[];
   top_negative_phrases: string[];
   summary: string;
-  // Tier 1 preview
-  sample_mentions: MentionSentiment[];  // 2-3 samples for ungated preview
+  sample_mentions: MentionSentiment[];
   teaser_lines: string[];
 }
 
-function analyzeSingleMention(text: string): { score: number; label: string; positive: string[]; negative: string[] } {
-  const result = analyzer.analyze(text);
-  const raw = result.comparative;
-  const normalized = Math.max(-1, Math.min(1, raw * 2));
-  const label = normalized > 0.1 ? 'positive' : normalized < -0.1 ? 'negative' : 'neutral';
+// --- VADER per-mention analysis ---
+
+function analyzeSingleMention(text: string): {
+  score: number;
+  label: string;
+  positiveWords: string[];
+  negativeWords: string[];
+} {
+  const scores = vader.SentimentIntensityAnalyzer.polarity_scores(text);
+  const compound = scores.compound;
+
+  // VADER thresholds (from Hutto & Gilbert 2014)
+  const label = compound >= 0.05 ? 'positive'
+    : compound <= -0.05 ? 'negative'
+    : 'neutral';
+
+  // Extract sentiment-bearing words by scoring individual tokens
+  const words = text.split(/\s+/).filter(w => w.length > 2);
+  const positiveWords: string[] = [];
+  const negativeWords: string[] = [];
+
+  for (const word of words) {
+    const wordScore = vader.SentimentIntensityAnalyzer.polarity_scores(word);
+    if (wordScore.compound >= 0.3) positiveWords.push(word.toLowerCase().replace(/[^a-z]/g, ''));
+    if (wordScore.compound <= -0.3) negativeWords.push(word.toLowerCase().replace(/[^a-z]/g, ''));
+  }
+
   return {
-    score: Math.round(normalized * 100) / 100,
+    score: Math.round(compound * 100) / 100,
     label,
-    positive: [...new Set(result.positive)],
-    negative: [...new Set(result.negative)],
+    positiveWords: [...new Set(positiveWords)],
+    negativeWords: [...new Set(negativeWords)],
   };
 }
 
-function scoreToLabel(score: number): string {
-  if (score >= 75) return 'Strong';
-  if (score >= 55) return 'Positive';
-  if (score >= 35) return 'Mixed';
-  return 'Poor';
+// --- Confidence graduation ---
+// Based on Wilson score interval research: confidence depends on sample size
+
+function getConfidence(mentionCount: number): { level: ConfidenceLevel; note: string } {
+  if (mentionCount < 3) {
+    return {
+      level: 'insufficient',
+      note: `Based on ${mentionCount} mention${mentionCount !== 1 ? 's' : ''}. We found very little about this brand online — that itself may be worth discussing.`,
+    };
+  }
+  if (mentionCount <= 7) {
+    return {
+      level: 'preliminary',
+      note: `Based on ${mentionCount} mentions. This is a preliminary picture — the data is directional, not definitive.`,
+    };
+  }
+  if (mentionCount <= 15) {
+    return {
+      level: 'moderate',
+      note: `Based on ${mentionCount} mentions across multiple sources. Moderate confidence — results are directional.`,
+    };
+  }
+  return {
+    level: 'solid',
+    note: `Based on ${mentionCount} mentions across multiple sources. Solid coverage for a meaningful assessment.`,
+  };
 }
 
-/**
- * Generate a complete scan report from scraped mentions.
- */
-export function generateReport(scrapedMentions: (ScrapedMention & { query_type: string })[]): ScanReport {
-  // Analyze each mention
-  const mentions: MentionSentiment[] = scrapedMentions.map(m => {
-    const analysis = analyzeSingleMention(m.full_text);
-    return {
-      url: m.url,
-      source_name: m.source_name,
-      source_type: m.source_type,
-      snippet: m.snippet,
-      sentiment_score: analysis.score,
-      sentiment_label: analysis.label,
-      key_phrases: [...analysis.positive.slice(0, 2), ...analysis.negative.slice(0, 2)],
-      query_type: m.query_type,
-    };
-  });
+// --- Categorical scoring ---
+// Maps raw sentiment + mention count to a defensible category
 
-  // Overall score: convert -1..1 average to 0..100
-  const avgScore = mentions.length > 0
+function categorize(avgCompound: number, mentionCount: number): {
+  category: SentimentCategory;
+  label: string;
+  score: number;  // 0-100 for backward compat
+} {
+  if (mentionCount < 3) {
+    return { category: 'insufficient-data', label: 'Insufficient Data', score: 50 };
+  }
+
+  // Convert compound (-1..1) to 0-100 scale for internal use
+  const score = Math.round(((avgCompound + 1) / 2) * 100);
+
+  if (avgCompound >= 0.3) return { category: 'strong', label: 'Strong', score };
+  if (avgCompound >= 0.1) return { category: 'adequate', label: 'Adequate', score };
+  if (avgCompound >= -0.1) return { category: 'mixed', label: 'Mixed', score };
+  if (avgCompound >= -0.3) return { category: 'needs-attention', label: 'Needs Attention', score };
+  return { category: 'critical', label: 'Critical', score };
+}
+
+// --- Public helpers for cached results ---
+
+export function deriveCategoryAndConfidence(overallScore: number, mentionCount: number) {
+  // Reverse the 0-100 score back to compound (-1..1)
+  const compound = (overallScore / 100) * 2 - 1;
+  const { category, label } = categorize(compound, mentionCount);
+  const { level, note } = getConfidence(mentionCount);
+  return { overall_category: category, overall_label: label, confidence_level: level, confidence_note: note };
+}
+
+// --- Report generation ---
+
+export function generateReport(scrapedMentions: (ScrapedMention & { query_type: string })[]): ScanReport {
+  // Analyze all mentions once, keep the full analysis for phrase aggregation
+  const analyses = scrapedMentions.map(m => ({
+    scraped: m,
+    analysis: analyzeSingleMention(m.full_text),
+  }));
+
+  const mentions: MentionSentiment[] = analyses.map(({ scraped, analysis }) => ({
+    url: scraped.url,
+    source_name: scraped.source_name,
+    source_type: scraped.source_type,
+    snippet: scraped.snippet,
+    sentiment_score: analysis.score,
+    sentiment_label: analysis.label,
+    key_phrases: [...analysis.positiveWords.slice(0, 2), ...analysis.negativeWords.slice(0, 2)],
+    query_type: scraped.query_type,
+  }));
+
+  // Average compound score
+  const avgCompound = mentions.length > 0
     ? mentions.reduce((sum, m) => sum + m.sentiment_score, 0) / mentions.length
     : 0;
-  const overall_score = Math.round(((avgScore + 1) / 2) * 100);
-  const overall_label = scoreToLabel(overall_score);
+
+  const { category, label, score } = categorize(avgCompound, mentions.length);
+  const { level: confidenceLevel, note: confidenceNote } = getConfidence(mentions.length);
 
   // Source breakdown
   const source_breakdown: Record<string, { count: number; avg_score: number }> = {};
@@ -89,16 +174,15 @@ export function generateReport(scrapedMentions: (ScrapedMention & { query_type: 
     ) / 100;
   }
 
-  // Aggregate phrase analysis across all mentions
+  // Aggregate phrases from the already-computed analyses (no re-analysis)
   const allPositive: Record<string, number> = {};
   const allNegative: Record<string, number> = {};
-  for (const m of scrapedMentions) {
-    const analysis = analyzer.analyze(m.full_text);
-    for (const w of analysis.positive) {
-      allPositive[w.toLowerCase()] = (allPositive[w.toLowerCase()] || 0) + 1;
+  for (const { analysis } of analyses) {
+    for (const w of analysis.positiveWords) {
+      allPositive[w] = (allPositive[w] || 0) + 1;
     }
-    for (const w of analysis.negative) {
-      allNegative[w.toLowerCase()] = (allNegative[w.toLowerCase()] || 0) + 1;
+    for (const w of analysis.negativeWords) {
+      allNegative[w] = (allNegative[w] || 0) + 1;
     }
   }
   const top_positive_phrases = Object.entries(allPositive)
@@ -110,22 +194,29 @@ export function generateReport(scrapedMentions: (ScrapedMention & { query_type: 
     .slice(0, 8)
     .map(([word]) => word);
 
-  // Build summary
+  // Summary — adapted for categorical output
   const posCount = mentions.filter(m => m.sentiment_label === 'positive').length;
   const negCount = mentions.filter(m => m.sentiment_label === 'negative').length;
   const neuCount = mentions.filter(m => m.sentiment_label === 'neutral').length;
+
   let summary: string;
   if (mentions.length === 0) {
-    summary = 'No mentions found to analyze. This brand may have limited online presence.';
-  } else if (overall_score >= 65) {
-    summary = `Your online sentiment is ${overall_label.toLowerCase()}. Across ${mentions.length} mentions, ${posCount} were positive, ${neuCount} neutral, and ${negCount} negative. ${top_positive_phrases.length > 0 ? `Words like "${top_positive_phrases.slice(0, 3).join('", "')}" appear frequently.` : ''}`;
-  } else if (overall_score >= 40) {
-    summary = `Your online sentiment is mixed. Of ${mentions.length} mentions found, ${posCount} were positive and ${negCount} negative. ${top_negative_phrases.length > 0 ? `Watch for recurring themes like "${top_negative_phrases.slice(0, 3).join('", "')}" in negative mentions.` : ''}`;
+    summary = 'No mentions found. This brand may have limited online presence, or the name may be too common. Try adding a city or industry to your search.';
+  } else if (category === 'insufficient-data') {
+    summary = `We found only ${mentions.length} mention${mentions.length !== 1 ? 's' : ''} — not enough for a reliable sentiment assessment. This limited online presence is itself a finding worth addressing.`;
+  } else if (category === 'strong') {
+    summary = `Online sentiment looks strong. Across ${mentions.length} mentions, ${posCount} were positive, ${neuCount} neutral, and ${negCount} negative.${top_positive_phrases.length > 0 ? ` Terms like "${top_positive_phrases.slice(0, 3).join('", "')}" come up frequently.` : ''} ${confidenceNote}`;
+  } else if (category === 'adequate') {
+    summary = `Online sentiment is generally positive. Of ${mentions.length} mentions, ${posCount} were positive and ${negCount} negative.${top_positive_phrases.length > 0 ? ` Positive signals include "${top_positive_phrases.slice(0, 2).join('", "')}"` : ''}${top_negative_phrases.length > 0 ? `, but watch for "${top_negative_phrases.slice(0, 2).join('", "')}" in negative mentions.` : '.'} ${confidenceNote}`;
+  } else if (category === 'mixed') {
+    summary = `Online sentiment is mixed. Of ${mentions.length} mentions, ${posCount} were positive and ${negCount} negative — no clear pattern in either direction.${top_negative_phrases.length > 0 ? ` Recurring negative themes: "${top_negative_phrases.slice(0, 3).join('", "')}".` : ''} ${confidenceNote}`;
+  } else if (category === 'needs-attention') {
+    summary = `Online sentiment needs attention. ${negCount} of ${mentions.length} mentions were negative.${top_negative_phrases.length > 0 ? ` The most common negative signals: "${top_negative_phrases.slice(0, 3).join('", "')}".` : ''} This is fixable with the right approach. ${confidenceNote}`;
   } else {
-    summary = `Your online sentiment needs attention. ${negCount} of ${mentions.length} mentions were negative. ${top_negative_phrases.length > 0 ? `The most common negative signals: "${top_negative_phrases.slice(0, 3).join('", "')}".` : ''} This is fixable — most brands can shift sentiment within 90 days with the right strategy.`;
+    summary = `Online sentiment is a serious concern. ${negCount} of ${mentions.length} mentions were negative.${top_negative_phrases.length > 0 ? ` Dominant negative themes: "${top_negative_phrases.slice(0, 3).join('", "')}".` : ''} Immediate action recommended. ${confidenceNote}`;
   }
 
-  // Tier 1 samples: pick one positive, one negative, one neutral (if available)
+  // Tier 1 samples: one positive, one negative, one neutral
   const sample_mentions: MentionSentiment[] = [];
   const pos = mentions.find(m => m.sentiment_label === 'positive');
   const neg = mentions.find(m => m.sentiment_label === 'negative');
@@ -133,7 +224,6 @@ export function generateReport(scrapedMentions: (ScrapedMention & { query_type: 
   if (pos) sample_mentions.push(pos);
   if (neg) sample_mentions.push(neg);
   if (neu && sample_mentions.length < 3) sample_mentions.push(neu);
-  // If we still need samples, add the first ones we haven't used
   if (sample_mentions.length < 2) {
     for (const m of mentions) {
       if (!sample_mentions.includes(m)) {
@@ -143,17 +233,20 @@ export function generateReport(scrapedMentions: (ScrapedMention & { query_type: 
     }
   }
 
-  // Teaser lines for gated content
+  // Teaser lines
   const hiddenCount = mentions.length - sample_mentions.length;
   const teaser_lines: string[] = [];
   if (hiddenCount > 0) teaser_lines.push(`${hiddenCount} more mentions analyzed`);
-  if (top_negative_phrases.length > 0) teaser_lines.push(`Top ${Math.min(3, top_negative_phrases.length)} phrases hurting your score`);
-  if (top_positive_phrases.length > 0) teaser_lines.push(`Top ${Math.min(3, top_positive_phrases.length)} phrases helping your score`);
+  if (top_negative_phrases.length > 0) teaser_lines.push(`Top ${Math.min(3, top_negative_phrases.length)} phrases hurting your reputation`);
+  if (top_positive_phrases.length > 0) teaser_lines.push(`Top ${Math.min(3, top_positive_phrases.length)} phrases helping your reputation`);
   if (Object.keys(source_breakdown).length > 1) teaser_lines.push('Source-by-source breakdown available');
 
   return {
-    overall_score,
-    overall_label,
+    overall_score: score,
+    overall_label: label,
+    overall_category: category,
+    confidence_level: confidenceLevel,
+    confidence_note: confidenceNote,
     mention_count: mentions.length,
     mentions,
     source_breakdown,

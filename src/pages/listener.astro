@@ -129,13 +129,19 @@ const recentScans = await getRecentScans(5);
     <div class="max-w-4xl mx-auto">
 
       <!-- Summary header -->
-      <div class="mb-10">
+      <div class="mb-10 opacity-0 transition-opacity duration-700" id="t1-header">
         <p id="t1-brand" class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4"></p>
         <p id="t1-summary" class="text-neutral-300 text-base leading-relaxed max-w-3xl"></p>
         <p id="t1-confidence" class="text-neutral-600 text-xs mt-3 italic"></p>
       </div>
 
       <!-- DIAGNOSTIC: primary output — this IS the product -->
+      <style>
+        .dim-card { opacity: 0; transform: translateY(12px); transition: opacity 0.4s ease, transform 0.4s ease; }
+        .dim-card.revealed { opacity: 1; transform: translateY(0); }
+        .dim-dot-pulse { animation: dotPulse 0.6s ease-out forwards; }
+        @keyframes dotPulse { 0% { transform: scale(0); opacity: 0; } 60% { transform: scale(1.4); } 100% { transform: scale(1); opacity: 1; } }
+      </style>
       <div id="t1-diagnostic" class="mb-12">
         <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-6">Your Digital Presence</p>
 
@@ -410,11 +416,14 @@ const recentScans = await getRecentScans(5);
       const SOURCE_LABELS: Record<string, string> = { review: 'Review Sites', forum: 'Forums', news: 'News', social: 'Social Media', blog: 'Blogs', directory: 'Directories', other: 'Other' };
 
       function renderTier1(data: any) {
-        // Header — diagnostic summary leads
+        // Header — diagnostic summary leads, fades in
         document.getElementById('t1-brand')!.textContent = `Results for ${data.brand}`;
         const diagSummary = data.diagnostic?.summary || data.summary;
         document.getElementById('t1-summary')!.textContent = diagSummary;
         document.getElementById('t1-confidence')!.textContent = data.confidence_note || '';
+        const header = document.getElementById('t1-header')!;
+        header.classList.remove('opacity-0');
+        header.classList.add('opacity-100');
 
         // DIAGNOSTIC — the primary output
         const statusDot: Record<string, string> = {
@@ -431,9 +440,9 @@ const recentScans = await getRecentScans(5);
         };
 
         function dimCard(d: any): string {
-          return `<div class="bg-neutral-900/30 border ${statusBorder[d.status] || 'border-white/5'} rounded-lg p-5">
+          return `<div class="dim-card bg-neutral-900/30 border ${statusBorder[d.status] || 'border-white/5'} rounded-lg p-5">
             <div class="flex items-center gap-3 mb-2">
-              <span class="w-2.5 h-2.5 rounded-full ${statusDot[d.status] || 'bg-neutral-500'}"></span>
+              <span class="w-2.5 h-2.5 rounded-full dim-dot-pulse ${statusDot[d.status] || 'bg-neutral-500'}" style="opacity:0"></span>
               <span class="text-neutral-200 text-sm font-medium">${d.name}</span>
               <span class="ml-auto text-xs px-2 py-0.5 rounded-full border ${statusBorder[d.status] || ''} text-neutral-500">${statusLabelMap[d.status] || d.status}</span>
             </div>
@@ -455,6 +464,12 @@ const recentScans = await getRecentScans(5);
           renderDimGroup(data.diagnostic.build_next, 'diag-next-items', 'diag-next');
           renderDimGroup(data.diagnostic.maintain, 'diag-maintain-items', 'diag-maintain');
           document.getElementById('t1-diagnostic')!.classList.remove('hidden');
+
+          // Staggered reveal animation — each card appears 150ms after the previous
+          const allCards = document.querySelectorAll('.dim-card');
+          allCards.forEach((card, i) => {
+            setTimeout(() => card.classList.add('revealed'), 150 * i);
+          });
         }
 
         // Trustpilot card

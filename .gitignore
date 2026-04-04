@@ -20,6 +20,9 @@ pnpm-debug.log*
 # DO app spec (contains secrets)
 .do/
 
+# database
+data/*.db
+
 # macOS-specific files
 .DS_Store
 

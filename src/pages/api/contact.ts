@@ -71,25 +71,33 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     // Send confirmation to the person who submitted
-    await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
-      headers: {
-        'accept': 'application/json',
-        'content-type': 'application/json',
-        'api-key': apiKey,
-      },
-      body: JSON.stringify({
-        sender: { name: 'Cody Smith', email: 'cody@codyasmith.com' },
-        to: [{ email: email, name: name }],
-        subject: 'Got your message',
-        htmlContent: `
-          <p>Hey ${name},</p>
-          <p>Got your message. I'll take a look and get back to you within one business day. Usually faster.</p>
-          <p>If anything changes or you want to add context, just reply to this email.</p>
-          <p>Talk soon,<br>Cody</p>
-        `,
-      }),
-    }).catch(err => console.error('Confirmation email failed:', err));
+    try {
+      const confirmRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'content-type': 'application/json',
+          'api-key': apiKey,
+        },
+        body: JSON.stringify({
+          sender: { name: 'Cody Smith', email: 'cody@codyasmith.com' },
+          to: [{ email: email, name: name }],
+          subject: 'Got your message',
+          htmlContent: `
+            <p>Hey ${name},</p>
+            <p>Got your message. I'll take a look and get back to you within one business day. Usually faster.</p>
+            <p>If anything changes or you want to add context, just reply to this email.</p>
+            <p>Talk soon,<br>Cody</p>
+          `,
+        }),
+      });
+      if (!confirmRes.ok) {
+        const confirmErr = await confirmRes.text();
+        console.error('Confirmation email API error:', confirmRes.status, confirmErr);
+      }
+    } catch (err) {
+      console.error('Confirmation email failed:', err);
+    }
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,

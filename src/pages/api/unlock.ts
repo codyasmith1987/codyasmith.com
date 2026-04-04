@@ -112,6 +112,10 @@ async function sendReportEmail(apiKey: string, email: string, name: string, scan
           </p>
 
           <p>Cody Smith<br /><a href="https://codyasmith.com" style="color: #f59e0b;">codyasmith.com</a></p>
+
+          <p style="font-size: 11px; color: #999; margin-top: 24px; line-height: 1.6;">
+            This report reflects publicly available web data at the time of your scan. Results are stored for 30 days, after which the report link will expire. Sentiment scores are generated using automated analysis and should be interpreted as directional indicators, not definitive assessments. To unsubscribe from future emails, reply with "unsubscribe."
+          </p>
         </div>
       `,
     }),

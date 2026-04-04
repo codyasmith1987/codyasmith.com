@@ -15,6 +15,13 @@ export const GET: APIRoute = async ({ url }) => {
   const scan = await getScan(scanId);
   if (!scan || !scan.overall_score) return json({ error: 'Report not found' }, 404);
 
+  // Check if report has expired (30 days)
+  const createdAt = new Date(scan.created_at + 'Z');
+  const daysSince = (Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24);
+  if (daysSince > 30) {
+    return json({ error: 'This report has expired. Run a new scan for fresh results.' }, 410);
+  }
+
   const mentions = await getMentions(scanId);
   const recommendation = getRecommendation(scan.overall_score, scan.mention_count);
 

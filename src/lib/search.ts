@@ -93,10 +93,54 @@ export function parseInput(input: string): { brand: string; domain: string | nul
 }
 
 /**
+ * Build a list of domains to exclude (the brand's own properties).
+ * Works even when only a brand name is provided (no explicit domain).
+ */
+function buildExcludedDomains(brand: string, domain: string | null): string[] {
+  const excluded: string[] = [];
+
+  if (domain) {
+    excluded.push(domain.toLowerCase());
+  }
+
+  // Derive likely owned domains from the brand name
+  // "Starbucks" -> starbucks.com, starbucks.co, etc.
+  const slug = brand.toLowerCase()
+    .replace(/[^a-z0-9]/g, '')  // "Acme Plumbing" -> "acmeplumbing"
+    .trim();
+
+  if (slug.length >= 3) {
+    excluded.push(`${slug}.com`);
+    excluded.push(`${slug}.co`);
+    excluded.push(`${slug}.net`);
+    excluded.push(`${slug}.org`);
+  }
+
+  // Also try hyphenated/spaced versions: "Acme Plumbing" -> "acme-plumbing.com"
+  const hyphenated = brand.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').trim();
+  if (hyphenated !== slug && hyphenated.length >= 3) {
+    excluded.push(`${hyphenated}.com`);
+  }
+
+  return excluded;
+}
+
+function isOwnDomain(url: string, excludedDomains: string[]): boolean {
+  try {
+    const hostname = new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+    return excludedDomains.some(d => hostname === d || hostname.endsWith('.' + d));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Run the full search: 4 queries, 5 results each, deduplicated.
+ * Filters out the brand's own domains — we only want external mentions.
  */
 export async function searchForMentions(brand: string, domain: string | null, apiKey: string): Promise<SearchResult[]> {
   const queries = buildQueries(brand, domain);
+  const excludedDomains = buildExcludedDomains(brand, domain);
   const seen = new Set<string>();
   const results: SearchResult[] = [];
 
@@ -104,7 +148,7 @@ export async function searchForMentions(brand: string, domain: string | null, ap
   const queryResults = await Promise.all(
     queries.map(async ({ query, type }) => {
       try {
-        const hits = await serperSearch(query, apiKey, 5);
+        const hits = await serperSearch(query, apiKey, 8);
         return hits.map(h => ({ url: h.link, title: h.title, description: h.snippet, query_type: type }));
       } catch (err) {
         console.error(`Search query failed (${type}):`, err);
@@ -118,8 +162,8 @@ export async function searchForMentions(brand: string, domain: string | null, ap
       const key = hit.url.split('?')[0].toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
-      // Skip the brand's own domain — we want external mentions
-      if (domain && hit.url.toLowerCase().includes(domain.toLowerCase())) continue;
+      // Skip the brand's own domains — we only want what others say
+      if (isOwnDomain(hit.url, excludedDomains)) continue;
       results.push({
         url: hit.url,
         title: hit.title,

@@ -1,220 +1,402 @@
 ---
 import Base from '../layouts/Base.astro';
-import { getAnalyses } from '../lib/db';
+import { getRecentScans } from '../lib/db';
 
-const recent = await getAnalyses(10, 0);
+const recentScans = await getRecentScans(5);
 ---
 
-<Base title="Web Listener | Cody Smith" description="Free sentiment analysis tool. Paste a URL and see how the web feels about it.">
+<Base title="Sentiment Scanner | Cody Smith" description="Free brand sentiment analysis. Enter your business name and see what the web says about you.">
   <!-- Hero -->
   <section class="relative pt-40 pb-16 px-6 overflow-hidden">
     <div class="absolute top-0 left-1/3 w-[400px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
     <div class="relative max-w-4xl mx-auto">
-      <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Web Listener</p>
+      <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Sentiment Scanner</p>
       <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10">
-        What's the tone?
+        What does the web<br />say about you?
       </h1>
       <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl">
-        Paste any URL. We'll scrape the page, run sentiment analysis, and tell you whether the content reads positive, negative, or neutral. Fast, free, no login.
+        Enter your brand name or website. We'll search the web for mentions, analyze the sentiment, and show you how your business comes across online. Free. Instant. No login.
       </p>
     </div>
   </section>
 
-  <!-- Analyzer -->
-  <section class="pb-20 px-6">
+  <!-- Scanner Input -->
+  <section class="pb-12 px-6">
     <div class="max-w-4xl mx-auto">
-      <form id="analyze-form" class="reveal flex gap-3">
+      <form id="scan-form" class="reveal flex gap-3">
+        <!-- Honeypot field for bots -->
+        <input type="text" name="website" style="display:none" tabindex="-1" autocomplete="off" />
         <input
-          type="url"
-          id="url-input"
-          name="url"
+          type="text"
+          id="brand-input"
+          name="brand"
           required
-          placeholder="https://example.com/article"
+          placeholder="Your brand name or website URL"
           class="flex-1 bg-transparent border-b border-white/10 pb-3 text-neutral-100 text-lg focus:border-amber-400 focus:outline-none transition-colors duration-300 placeholder:text-neutral-700"
         />
         <button
           type="submit"
-          id="analyze-btn"
-          class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)] disabled:opacity-50 disabled:cursor-not-allowed"
+          id="scan-btn"
+          class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)] disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
         >
-          Analyze
+          Scan Now
         </button>
       </form>
       <p id="form-error" class="text-red-400 text-sm mt-4 hidden"></p>
+    </div>
+  </section>
 
-      <!-- Loading State -->
-      <div id="loading" class="hidden mt-12">
-        <div class="flex items-center gap-3">
-          <div class="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
-          <p class="text-neutral-500 text-sm">Scraping and analyzing...</p>
+  <!-- Loading State (animated progress) -->
+  <section id="loading" class="hidden pb-12 px-6">
+    <div class="max-w-4xl mx-auto">
+      <div class="glow-card p-8">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
+          <p id="loading-text" class="text-neutral-300 text-sm font-medium">Starting scan...</p>
         </div>
-      </div>
-
-      <!-- Result Card -->
-      <div id="result-card" class="hidden mt-12">
-        <div class="glow-card p-8">
-          <div class="flex items-start justify-between gap-6 mb-6">
-            <div class="min-w-0">
-              <h3 id="result-title" class="text-neutral-100 font-serif text-2xl mb-2"></h3>
-              <a id="result-url" href="#" target="_blank" class="text-neutral-600 text-xs hover:text-amber-400 transition-colors truncate block font-mono"></a>
-            </div>
-            <div id="result-badge" class="shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold border"></div>
+        <div class="space-y-2">
+          <div id="step-search" class="flex items-center gap-2 text-neutral-600 text-xs">
+            <span class="w-4 text-center">-</span> Searching the web for mentions
           </div>
-
-          <p id="result-summary" class="text-neutral-400 text-sm leading-relaxed mb-8"></p>
-
-          <!-- Score + Confidence -->
-          <div class="grid grid-cols-2 gap-8 mb-8">
-            <div>
-              <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-2">Sentiment Score</p>
-              <p id="result-score" class="text-neutral-100 font-mono text-3xl"></p>
-            </div>
-            <div>
-              <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-2">Confidence</p>
-              <p id="result-confidence" class="text-neutral-100 font-mono text-3xl"></p>
-            </div>
+          <div id="step-scrape" class="flex items-center gap-2 text-neutral-600 text-xs">
+            <span class="w-4 text-center">-</span> Scraping and reading pages
           </div>
-
-          <!-- Score Bar -->
-          <div class="mb-8">
-            <div class="flex justify-between text-neutral-700 text-[10px] font-mono mb-1">
-              <span>-1.0 negative</span>
-              <span>0 neutral</span>
-              <span>+1.0 positive</span>
-            </div>
-            <div class="w-full bg-neutral-800 rounded-full h-2 relative">
-              <div class="absolute left-1/2 top-0 bottom-0 w-px bg-neutral-600"></div>
-              <div id="score-bar" class="h-2 rounded-full transition-all duration-700"></div>
-            </div>
+          <div id="step-analyze" class="flex items-center gap-2 text-neutral-600 text-xs">
+            <span class="w-4 text-center">-</span> Running sentiment analysis
           </div>
-
-          <!-- Key Phrases -->
-          <div>
-            <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-3">Key signals</p>
-            <div id="result-phrases" class="flex flex-wrap gap-2"></div>
+          <div id="step-report" class="flex items-center gap-2 text-neutral-600 text-xs">
+            <span class="w-4 text-center">-</span> Building your report
           </div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Recent Analyses -->
-  {recent.length > 0 && (
-    <section class="pb-28 px-6">
-      <div class="max-w-4xl mx-auto">
-        <div class="gradient-divider mb-12"></div>
-        <p class="reveal text-neutral-500 text-xs tracking-[0.15em] uppercase mb-6">Recent analyses</p>
-        <div class="space-y-3" id="history-list">
-          {recent.map((a) => {
-            const badgeColor = a.sentiment_label === 'positive' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-              : a.sentiment_label === 'negative' ? 'bg-red-500/10 text-red-400 border-red-500/20'
-              : a.sentiment_label === 'mixed' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-              : 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20';
-            return (
-              <div class="reveal bg-neutral-900/30 border border-white/5 rounded-lg p-5 flex items-center justify-between gap-4 hover:border-white/10 transition-all duration-300">
-                <div class="min-w-0">
-                  <p class="text-neutral-100 text-sm font-medium truncate">{a.page_title || a.url}</p>
-                  <p class="text-neutral-600 text-xs font-mono truncate mt-1">{a.url}</p>
-                </div>
-                <div class="flex items-center gap-3 shrink-0">
-                  <span class="text-neutral-500 font-mono text-xs">{a.sentiment_score > 0 ? '+' : ''}{a.sentiment_score.toFixed(2)}</span>
-                  <span class={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${badgeColor}`}>
-                    {a.sentiment_label}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
+  <!-- TIER 1: Ungated Preview -->
+  <section id="tier1" class="hidden pb-12 px-6">
+    <div class="max-w-4xl mx-auto">
+      <!-- Score Hero -->
+      <div class="text-center mb-12">
+        <p id="t1-brand" class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4"></p>
+        <div id="t1-score-ring" class="inline-flex items-center justify-center w-36 h-36 rounded-full border-4 mb-4">
+          <span id="t1-score" class="font-mono text-5xl font-bold text-neutral-100"></span>
+        </div>
+        <p id="t1-label" class="text-lg font-semibold mb-2"></p>
+        <p id="t1-mention-count" class="text-neutral-500 text-sm"></p>
+      </div>
+
+      <!-- Summary -->
+      <p id="t1-summary" class="text-neutral-400 text-sm leading-relaxed text-center max-w-2xl mx-auto mb-12"></p>
+
+      <!-- Source Breakdown -->
+      <div id="t1-sources" class="mb-12">
+        <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Mentions by source</p>
+        <div id="t1-source-bars" class="space-y-3"></div>
+      </div>
+
+      <!-- Sample Mentions -->
+      <div id="t1-samples" class="mb-12">
+        <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Sample mentions</p>
+        <div id="t1-sample-cards" class="space-y-3"></div>
+      </div>
+
+      <!-- Teaser Lines -->
+      <div id="t1-teasers" class="space-y-2 mb-8">
+      </div>
+    </div>
+  </section>
+
+  <!-- GATE: Lead Capture Form -->
+  <section id="gate" class="hidden pb-12 px-6">
+    <div class="max-w-4xl mx-auto">
+      <div class="bg-neutral-900/80 border border-amber-500/20 rounded-xl p-8 md:p-10">
+        <h3 class="font-serif text-2xl text-neutral-100 mb-3">Your full report is ready.</h3>
+        <p class="text-neutral-400 text-sm mb-8 leading-relaxed">
+          Get the complete sentiment breakdown, every mention we found, and the key phrases driving your score.
+        </p>
+        <form id="unlock-form" class="space-y-4">
+          <div class="grid grid-cols-2 gap-4">
+            <input
+              type="text"
+              id="lead-name"
+              name="first_name"
+              required
+              placeholder="First name"
+              class="bg-transparent border-b border-white/10 pb-3 text-neutral-100 focus:border-amber-400 focus:outline-none transition-colors placeholder:text-neutral-700"
+            />
+            <input
+              type="email"
+              id="lead-email"
+              name="email"
+              required
+              placeholder="Email"
+              class="bg-transparent border-b border-white/10 pb-3 text-neutral-100 focus:border-amber-400 focus:outline-none transition-colors placeholder:text-neutral-700"
+            />
+          </div>
+          <label class="flex items-start gap-3 cursor-pointer">
+            <input type="checkbox" id="lead-consent" name="consent" required class="mt-1 accent-amber-500" />
+            <span class="text-neutral-500 text-xs leading-relaxed">
+              Send me the report and occasional insights on brand reputation and digital marketing. You can unsubscribe anytime.
+            </span>
+          </label>
+          <button
+            type="submit"
+            id="unlock-btn"
+            class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Get My Full Report
+          </button>
+          <p id="unlock-error" class="text-red-400 text-sm hidden"></p>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- Gate Confirmed (replaces form after submit) -->
+  <section id="gate-confirmed" class="hidden pb-12 px-6">
+    <div class="max-w-4xl mx-auto">
+      <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-6 text-center">
+        <p class="text-emerald-400 text-sm font-medium">Report unlocked. A copy was sent to your email.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- TIER 2: Full Report (unlocked) -->
+  <section id="tier2" class="hidden pb-12 px-6">
+    <div class="max-w-4xl mx-auto">
+      <!-- All Mentions -->
+      <div class="mb-12">
+        <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">All mentions</p>
+        <div id="t2-all-mentions" class="space-y-3"></div>
+      </div>
+
+      <!-- Source Breakdown Detail -->
+      <div class="grid md:grid-cols-2 gap-8 mb-12">
+        <div>
+          <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Phrases helping you</p>
+          <div id="t2-positive-phrases" class="flex flex-wrap gap-2"></div>
+        </div>
+        <div>
+          <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Phrases hurting you</p>
+          <div id="t2-negative-phrases" class="flex flex-wrap gap-2"></div>
         </div>
       </div>
-    </section>
-  )}
 
-  <!-- CTA -->
-  <section class="pb-28 px-6">
-    <div class="max-w-4xl mx-auto text-center">
-      <div class="glow-card p-10">
-        <p class="reveal text-neutral-400 text-sm leading-relaxed mb-6">
-          Want to know what people are saying about your brand across the web?<br />
-          I build monitoring systems like this for businesses.
-        </p>
-        <a href="/contact" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
-          Let's talk about your project
+      <!-- Source by source -->
+      <div class="mb-12">
+        <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Source-by-source breakdown</p>
+        <div id="t2-source-detail" class="grid grid-cols-2 md:grid-cols-3 gap-3"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TIER 3: Premium Teaser -->
+  <section id="tier3" class="hidden pb-28 px-6">
+    <div class="max-w-4xl mx-auto">
+      <div class="glow-card p-10 text-center">
+        <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Go deeper</p>
+        <p id="t3-text" class="text-neutral-400 text-sm leading-relaxed mb-6"></p>
+        <a href="/contact" class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
+          Request a Full Audit
         </a>
       </div>
     </div>
   </section>
 
+  <!-- Soft CTA (always visible) -->
+  <section class="pb-28 px-6">
+    <div class="max-w-4xl mx-auto text-center">
+      <div class="gradient-divider mb-12"></div>
+      <p class="reveal text-neutral-400 text-sm leading-relaxed mb-6">
+        Want help fixing what's broken?
+      </p>
+      <a href="/contact" class="reveal inline-flex items-center justify-center px-8 py-4 border border-white/10 text-neutral-300 font-semibold text-sm rounded-lg hover:border-amber-500/40 hover:text-amber-400 transition-all duration-300">
+        Learn about my consulting services
+      </a>
+    </div>
+  </section>
+
   <script>
-    function initListener() {
-      const form = document.getElementById('analyze-form') as HTMLFormElement;
-      const input = document.getElementById('url-input') as HTMLInputElement;
-      const btn = document.getElementById('analyze-btn') as HTMLButtonElement;
-      const errorEl = document.getElementById('form-error') as HTMLParagraphElement;
-      const loading = document.getElementById('loading') as HTMLDivElement;
-      const resultCard = document.getElementById('result-card') as HTMLDivElement;
+    function initScanner() {
+      const pageLoadTime = Date.now();
+      let currentScanId: number | null = null;
+
+      const form = document.getElementById('scan-form') as HTMLFormElement;
+      const input = document.getElementById('brand-input') as HTMLInputElement;
+      const btn = document.getElementById('scan-btn') as HTMLButtonElement;
+      const errorEl = document.getElementById('form-error')!;
+      const loading = document.getElementById('loading')!;
+      const tier1 = document.getElementById('tier1')!;
+      const gate = document.getElementById('gate')!;
+      const tier2 = document.getElementById('tier2')!;
+      const tier3 = document.getElementById('tier3')!;
       if (!form || !btn) return;
 
+      // Animated loading steps
+      function setStep(step: string, status: 'active' | 'done') {
+        const el = document.getElementById(`step-${step}`);
+        if (!el) return;
+        const icon = el.querySelector('span')!;
+        if (status === 'active') {
+          el.classList.remove('text-neutral-600');
+          el.classList.add('text-amber-400');
+          icon.textContent = '...';
+        } else {
+          el.classList.remove('text-amber-400');
+          el.classList.add('text-emerald-400');
+          icon.textContent = '\u2713';
+        }
+      }
+
+      function scoreColor(score: number): string {
+        if (score >= 65) return 'emerald';
+        if (score >= 40) return 'amber';
+        return 'red';
+      }
+
+      function badgeClasses(label: string): string {
+        if (label === 'positive' || label === 'Strong' || label === 'Positive') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+        if (label === 'negative' || label === 'Poor') return 'bg-red-500/10 text-red-400 border-red-500/20';
+        if (label === 'mixed' || label === 'Mixed') return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+        return 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20';
+      }
+
+      function mentionCard(m: any, showFull = false): string {
+        const badge = badgeClasses(m.sentiment_label);
+        const score = m.sentiment_score > 0 ? '+' + m.sentiment_score.toFixed(2) : m.sentiment_score.toFixed(2);
+        return `
+          <div class="bg-neutral-900/30 border border-white/5 rounded-lg p-5 hover:border-white/10 transition-all duration-300">
+            <div class="flex items-start justify-between gap-4 mb-2">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="text-neutral-500 text-xs font-medium">${m.source_name}</span>
+                  <span class="text-neutral-700 text-xs">${m.source_type}</span>
+                </div>
+                <a href="${m.url}" target="_blank" class="text-neutral-600 text-xs font-mono hover:text-amber-400 transition-colors truncate block">${m.url.length > 60 ? m.url.slice(0, 60) + '...' : m.url}</a>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <span class="text-neutral-500 font-mono text-xs">${score}</span>
+                <span class="px-2 py-0.5 rounded-full text-xs font-medium border ${badge}">${m.sentiment_label}</span>
+              </div>
+            </div>
+            <p class="text-neutral-400 text-xs leading-relaxed mt-2">${(m.snippet || '').slice(0, 200)}${(m.snippet || '').length > 200 ? '...' : ''}</p>
+            ${showFull && m.key_phrases ? `<div class="flex flex-wrap gap-1 mt-2">${(typeof m.key_phrases === 'string' ? JSON.parse(m.key_phrases) : m.key_phrases).map((p: string) => `<span class="px-2 py-0.5 bg-white/5 border border-white/10 rounded text-[10px] text-neutral-500">${p}</span>`).join('')}</div>` : ''}
+          </div>`;
+      }
+
+      // ---- SCAN ----
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const url = input.value.trim();
-        if (!url) return;
+        const honeypot = (form.querySelector('input[name="website"]') as HTMLInputElement)?.value;
+        if (honeypot) return; // bot detected
+
+        const brandInput = input.value.trim();
+        if (!brandInput) return;
 
         btn.disabled = true;
-        btn.textContent = 'Analyzing...';
+        btn.textContent = 'Scanning...';
         errorEl.classList.add('hidden');
-        resultCard.classList.add('hidden');
+        tier1.classList.add('hidden');
+        gate.classList.add('hidden');
+        tier2.classList.add('hidden');
+        tier3.classList.add('hidden');
+        document.getElementById('gate-confirmed')!.classList.add('hidden');
         loading.classList.remove('hidden');
 
+        // Reset loading steps
+        ['search', 'scrape', 'analyze', 'report'].forEach(s => {
+          const el = document.getElementById(`step-${s}`);
+          if (el) { el.classList.remove('text-amber-400', 'text-emerald-400'); el.classList.add('text-neutral-600'); el.querySelector('span')!.textContent = '-'; }
+        });
+
+        // Animate steps with timing
+        setStep('search', 'active');
+        document.getElementById('loading-text')!.textContent = 'Searching the web for mentions...';
+
         try {
-          const res = await fetch('/api/analyze', {
+          // Simulate progress while the real request runs
+          const progressTimer = setTimeout(() => {
+            setStep('search', 'done');
+            setStep('scrape', 'active');
+            document.getElementById('loading-text')!.textContent = 'Scraping pages...';
+          }, 3000);
+
+          const progressTimer2 = setTimeout(() => {
+            setStep('scrape', 'done');
+            setStep('analyze', 'active');
+            document.getElementById('loading-text')!.textContent = 'Analyzing sentiment...';
+          }, 8000);
+
+          const res = await fetch('/api/scan', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url }),
+            body: JSON.stringify({ input: brandInput, timestamp: pageLoadTime }),
           });
 
+          clearTimeout(progressTimer);
+          clearTimeout(progressTimer2);
+
           const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Analysis failed');
+          if (!res.ok) throw new Error(data.error || 'Scan failed');
 
+          // Complete all steps
+          ['search', 'scrape', 'analyze', 'report'].forEach(s => setStep(s, 'done'));
+          document.getElementById('loading-text')!.textContent = 'Report ready!';
+
+          await new Promise(r => setTimeout(r, 600));
           loading.classList.add('hidden');
-          resultCard.classList.remove('hidden');
 
-          document.getElementById('result-title')!.textContent = data.page_title || 'Untitled';
-          const urlEl = document.getElementById('result-url') as HTMLAnchorElement;
-          urlEl.textContent = data.url;
-          urlEl.href = data.url;
-          document.getElementById('result-summary')!.textContent = data.summary;
-          document.getElementById('result-score')!.textContent = (data.sentiment_score > 0 ? '+' : '') + data.sentiment_score.toFixed(2);
-          document.getElementById('result-confidence')!.textContent = (data.confidence * 100).toFixed(0) + '%';
+          currentScanId = data.scan_id;
 
-          // Badge
-          const badge = document.getElementById('result-badge')!;
-          const label = data.sentiment_label;
-          badge.textContent = label;
-          badge.className = 'shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold border ' + (
-            label === 'positive' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-            : label === 'negative' ? 'bg-red-500/10 text-red-400 border-red-500/20'
-            : label === 'mixed' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-            : 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20'
-          );
+          // ---- RENDER TIER 1 ----
+          const color = scoreColor(data.overall_score);
 
-          // Score bar
-          const pct = ((data.sentiment_score + 1) / 2) * 100;
-          const bar = document.getElementById('score-bar')!;
-          bar.style.width = pct + '%';
-          bar.className = 'h-2 rounded-full transition-all duration-700 ' + (
-            label === 'positive' ? 'bg-emerald-500'
-            : label === 'negative' ? 'bg-red-500'
-            : label === 'mixed' ? 'bg-amber-500'
-            : 'bg-neutral-500'
-          );
+          document.getElementById('t1-brand')!.textContent = `Results for ${data.brand}`;
 
-          // Key phrases
-          let phrases: string[] = [];
-          try { phrases = typeof data.key_phrases === 'string' ? JSON.parse(data.key_phrases) : data.key_phrases || []; } catch { phrases = []; }
-          document.getElementById('result-phrases')!.innerHTML = phrases.length > 0
-            ? phrases.map((p: string) => `<span class="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-xs text-neutral-400">${p}</span>`).join('')
-            : '<span class="text-neutral-600 text-xs">No strong signal words detected</span>';
+          const ring = document.getElementById('t1-score-ring')!;
+          ring.className = `inline-flex items-center justify-center w-36 h-36 rounded-full border-4 mb-4 border-${color}-500/40`;
+          document.getElementById('t1-score')!.textContent = String(data.overall_score);
+
+          const labelEl = document.getElementById('t1-label')!;
+          labelEl.textContent = data.overall_label;
+          labelEl.className = `text-lg font-semibold mb-2 text-${color}-400`;
+
+          document.getElementById('t1-mention-count')!.textContent = `${data.mention_count} mentions analyzed across the web`;
+          document.getElementById('t1-summary')!.textContent = data.summary;
+
+          // Source breakdown bars
+          const sourceTypes: Record<string, string> = { review: 'Review Sites', forum: 'Forums', news: 'News', social: 'Social Media', blog: 'Blogs', directory: 'Directories', other: 'Other' };
+          const sourceBars = document.getElementById('t1-source-bars')!;
+          sourceBars.innerHTML = '';
+          const totalMentions = data.mention_count || 1;
+          for (const [type, info] of Object.entries(data.source_breakdown as Record<string, { count: number; avg_score: number }>)) {
+            const pct = Math.round((info.count / totalMentions) * 100);
+            const barColor = info.avg_score > 0.1 ? 'bg-emerald-500' : info.avg_score < -0.1 ? 'bg-red-500' : 'bg-neutral-500';
+            sourceBars.innerHTML += `
+              <div class="flex items-center gap-3">
+                <span class="text-neutral-400 text-xs w-24 shrink-0">${sourceTypes[type] || type}</span>
+                <div class="flex-1 bg-neutral-800 rounded-full h-2 relative">
+                  <div class="${barColor} h-2 rounded-full transition-all duration-700" style="width: ${pct}%"></div>
+                </div>
+                <span class="text-neutral-600 text-xs font-mono w-8 text-right">${info.count}</span>
+              </div>`;
+          }
+
+          // Sample mentions
+          const sampleCards = document.getElementById('t1-sample-cards')!;
+          sampleCards.innerHTML = (data.sample_mentions || []).map((m: any) => mentionCard(m)).join('');
+
+          // Teaser lines
+          const teasers = document.getElementById('t1-teasers')!;
+          teasers.innerHTML = (data.teaser_lines || []).map((t: string) =>
+            `<div class="flex items-center gap-2 text-amber-400/60 text-xs"><span class="text-amber-500">&#128274;</span> ${t}</div>`
+          ).join('');
+
+          tier1.classList.remove('hidden');
+          gate.classList.remove('hidden');
+
+          // Smooth scroll to results
+          tier1.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
           input.value = '';
 
@@ -225,11 +407,93 @@ const recent = await getAnalyses(10, 0);
         }
 
         btn.disabled = false;
-        btn.textContent = 'Analyze';
+        btn.textContent = 'Scan Now';
       });
+
+      // ---- UNLOCK (Tier 2) ----
+      const unlockForm = document.getElementById('unlock-form') as HTMLFormElement;
+      if (unlockForm) {
+        unlockForm.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const unlockErr = document.getElementById('unlock-error')!;
+          unlockErr.classList.add('hidden');
+          const unlockBtn = document.getElementById('unlock-btn') as HTMLButtonElement;
+
+          const firstName = (document.getElementById('lead-name') as HTMLInputElement).value.trim();
+          const email = (document.getElementById('lead-email') as HTMLInputElement).value.trim();
+          const consent = (document.getElementById('lead-consent') as HTMLInputElement).checked;
+
+          if (!firstName || !email) { unlockErr.textContent = 'Please fill in all fields'; unlockErr.classList.remove('hidden'); return; }
+          if (!consent) { unlockErr.textContent = 'Consent is required to receive your report'; unlockErr.classList.remove('hidden'); return; }
+
+          unlockBtn.disabled = true;
+          unlockBtn.textContent = 'Unlocking...';
+
+          try {
+            const res = await fetch('/api/unlock', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ scan_id: currentScanId, first_name: firstName, email, consent }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Failed to unlock');
+
+            // Hide gate, show confirmation
+            gate.classList.add('hidden');
+            document.getElementById('gate-confirmed')!.classList.remove('hidden');
+
+            // ---- RENDER TIER 2 ----
+            // All mentions
+            const allMentions = document.getElementById('t2-all-mentions')!;
+            allMentions.innerHTML = (data.mentions || []).map((m: any) => mentionCard(m, true)).join('');
+
+            // Phrases
+            const posEl = document.getElementById('t2-positive-phrases')!;
+            posEl.innerHTML = (data.top_positive_phrases || []).map((p: string) =>
+              `<span class="px-3 py-1.5 bg-emerald-500/5 border border-emerald-500/20 rounded-full text-xs text-emerald-400">${p}</span>`
+            ).join('') || '<span class="text-neutral-600 text-xs">None detected</span>';
+
+            const negEl = document.getElementById('t2-negative-phrases')!;
+            negEl.innerHTML = (data.top_negative_phrases || []).map((p: string) =>
+              `<span class="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-full text-xs text-red-400">${p}</span>`
+            ).join('') || '<span class="text-neutral-600 text-xs">None detected</span>';
+
+            // Source detail
+            const sourceDetail = document.getElementById('t2-source-detail')!;
+            const sourceTypes: Record<string, string> = { review: 'Review Sites', forum: 'Forums', news: 'News', social: 'Social Media', blog: 'Blogs', directory: 'Directories', other: 'Other' };
+            sourceDetail.innerHTML = '';
+            for (const [type, info] of Object.entries(data.source_breakdown as Record<string, { count: number; avg_score: number }>)) {
+              const scoreColor = info.avg_score > 0.1 ? 'text-emerald-400' : info.avg_score < -0.1 ? 'text-red-400' : 'text-neutral-400';
+              sourceDetail.innerHTML += `
+                <div class="bg-neutral-900/30 border border-white/5 rounded-lg p-4">
+                  <p class="text-neutral-300 text-sm font-medium">${sourceTypes[type] || type}</p>
+                  <p class="text-neutral-600 text-xs mt-1">${info.count} mention${info.count !== 1 ? 's' : ''}</p>
+                  <p class="${scoreColor} font-mono text-sm mt-1">${info.avg_score > 0 ? '+' : ''}${info.avg_score.toFixed(2)} avg</p>
+                </div>`;
+            }
+
+            tier2.classList.remove('hidden');
+
+            // Tier 3 teaser
+            const t3Text = document.getElementById('t3-text')!;
+            const mentionCount = (data.mentions || []).length;
+            t3Text.textContent = `This scan covered ${mentionCount} sources. A full audit covers 10x more, includes competitor comparison, tracks changes over time, and comes with a personal strategy call.`;
+            tier3.classList.remove('hidden');
+
+            tier2.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+          } catch (err: any) {
+            unlockErr.textContent = err.message;
+            unlockErr.classList.remove('hidden');
+          }
+
+          unlockBtn.disabled = false;
+          unlockBtn.textContent = 'Get My Full Report';
+        });
+      }
     }
 
-    initListener();
-    document.addEventListener('astro:after-swap', initListener);
+    initScanner();
+    document.addEventListener('astro:after-swap', initScanner);
   </script>
 </Base>

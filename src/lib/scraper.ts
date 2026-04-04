@@ -1,60 +1,108 @@
 import * as cheerio from 'cheerio';
-import { Agent } from 'https';
 
-const agent = new Agent({ rejectUnauthorized: false });
-
-export interface ScrapedPage {
+export interface ScrapedMention {
   url: string;
-  title: string;
-  text: string;
+  source_name: string;
+  source_type: 'review' | 'forum' | 'news' | 'social' | 'blog' | 'directory' | 'other';
+  snippet: string;
+  full_text: string;
 }
 
-export async function scrapePage(url: string): Promise<ScrapedPage> {
-  // Use undici dispatcher to bypass TLS cert issues on managed machines
-  const fetchOptions: any = {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; WebListener/1.0)',
-      'Accept': 'text/html',
-    },
-    signal: AbortSignal.timeout(15000),
-  };
+// Source type detection based on URL patterns
+const SOURCE_PATTERNS: { pattern: RegExp; type: ScrapedMention['source_type']; name?: string }[] = [
+  { pattern: /yelp\.com/i, type: 'review', name: 'Yelp' },
+  { pattern: /google\.com\/maps|maps\.google/i, type: 'review', name: 'Google' },
+  { pattern: /bbb\.org/i, type: 'review', name: 'BBB' },
+  { pattern: /trustpilot\.com/i, type: 'review', name: 'Trustpilot' },
+  { pattern: /glassdoor\.com/i, type: 'review', name: 'Glassdoor' },
+  { pattern: /tripadvisor\.com/i, type: 'review', name: 'TripAdvisor' },
+  { pattern: /angi\.com|angieslist|homeadvisor/i, type: 'review', name: 'Angi' },
+  { pattern: /thumbtack\.com/i, type: 'review', name: 'Thumbtack' },
+  { pattern: /reddit\.com/i, type: 'forum', name: 'Reddit' },
+  { pattern: /quora\.com/i, type: 'forum', name: 'Quora' },
+  { pattern: /stackexchange|stackoverflow/i, type: 'forum', name: 'Stack Exchange' },
+  { pattern: /facebook\.com/i, type: 'social', name: 'Facebook' },
+  { pattern: /twitter\.com|x\.com/i, type: 'social', name: 'X' },
+  { pattern: /linkedin\.com/i, type: 'social', name: 'LinkedIn' },
+  { pattern: /instagram\.com/i, type: 'social', name: 'Instagram' },
+  { pattern: /tiktok\.com/i, type: 'social', name: 'TikTok' },
+  { pattern: /youtube\.com/i, type: 'social', name: 'YouTube' },
+  { pattern: /nextdoor\.com/i, type: 'social', name: 'Nextdoor' },
+  { pattern: /reuters\.com|apnews|cnn\.com|bbc\.com|nytimes|washingtonpost|forbes\.com|bloomberg/i, type: 'news' },
+  { pattern: /news|press|gazette|herald|tribune|journal|times|post/i, type: 'news' },
+  { pattern: /yellowpages|manta\.com|chamberofcommerce|hotfrog/i, type: 'directory' },
+  { pattern: /blog|medium\.com|substack|wordpress\.com|tumblr/i, type: 'blog' },
+];
 
-  // For Node.js environments with TLS issues
-  if (url.startsWith('https')) {
-    (fetchOptions as any).dispatcher = undefined; // let Node handle it
+function detectSource(url: string): { type: ScrapedMention['source_type']; name: string } {
+  for (const { pattern, type, name } of SOURCE_PATTERNS) {
+    if (pattern.test(url)) {
+      const sourceName = name || new URL(url).hostname.replace(/^www\./, '');
+      return { type, name: sourceName };
+    }
+  }
+  try {
+    return { type: 'other', name: new URL(url).hostname.replace(/^www\./, '') };
+  } catch {
+    return { type: 'other', name: 'Unknown' };
+  }
+}
+
+async function scrapeSinglePage(url: string): Promise<{ text: string; snippet: string } | null> {
+  try {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml',
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!res.ok) return null;
+
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('text/html') && !contentType.includes('text/plain')) return null;
+
+    const html = await res.text();
+    const $ = cheerio.load(html);
+
+    $('script, style, nav, footer, header, aside, iframe, noscript, svg, [role="navigation"], [role="banner"]').remove();
+
+    const text = ($('article, main, [role="main"]').text().trim() || $('body').text().trim())
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (text.length < 30) return null;
+
+    return { text: text.slice(0, 3000), snippet: text.slice(0, 300).trim() };
+  } catch {
+    return null;
   }
+}
 
-  const response = await fetch(url, fetchOptions);
+/**
+ * Scrape multiple URLs in parallel with graceful per-URL failure.
+ */
+export async function scrapeAll(urls: { url: string; query_type: string }[]): Promise<(ScrapedMention & { query_type: string })[]> {
+  const results = await Promise.allSettled(
+    urls.map(async ({ url, query_type }) => {
+      const scraped = await scrapeSinglePage(url);
+      if (!scraped) return null;
+      const source = detectSource(url);
+      return {
+        url,
+        source_name: source.name,
+        source_type: source.type,
+        snippet: scraped.snippet,
+        full_text: scraped.text,
+        query_type,
+      };
+    })
+  );
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch ${url}: ${response.status} ${response.statusText}`);
-  }
-
-  const html = await response.text();
-  const $ = cheerio.load(html);
-
-  // Remove non-content elements
-  $('script, style, nav, footer, header, aside, iframe, noscript, svg, [role="navigation"], [role="banner"], [aria-hidden="true"]').remove();
-
-  const title = $('title').first().text().trim()
-    || $('h1').first().text().trim()
-    || 'Untitled';
-
-  // Get the main content text
-  const text = $('article, main, [role="main"]').text().trim()
-    || $('body').text().trim();
-
-  // Clean up whitespace
-  const cleaned = text
-    .replace(/\s+/g, ' ')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-    .slice(0, 6000); // Keep it under Claude's sweet spot for fast analysis
-
-  if (cleaned.length < 50) {
-    throw new Error('Page has too little readable content to analyze');
-  }
-
-  return { url, title, text: cleaned };
+  return results
+    .filter((r): r is PromiseFulfilledResult<(ScrapedMention & { query_type: string }) | null> => r.status === 'fulfilled')
+    .map(r => r.value)
+    .filter((r): r is ScrapedMention & { query_type: string } => r !== null);
 }

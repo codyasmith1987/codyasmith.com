@@ -83,21 +83,38 @@ async function scrapeSinglePage(url: string): Promise<{ text: string; snippet: s
 
 /**
  * Scrape multiple URLs in parallel with graceful per-URL failure.
+ * Uses search snippets as fallback when scraping is blocked (403, captcha, timeout).
  */
-export async function scrapeAll(urls: { url: string; query_type: string }[]): Promise<(ScrapedMention & { query_type: string })[]> {
+export async function scrapeAll(urls: { url: string; query_type: string; fallback_snippet?: string; fallback_title?: string }[]): Promise<(ScrapedMention & { query_type: string })[]> {
   const results = await Promise.allSettled(
-    urls.map(async ({ url, query_type }) => {
-      const scraped = await scrapeSinglePage(url);
-      if (!scraped) return null;
+    urls.map(async ({ url, query_type, fallback_snippet, fallback_title }) => {
       const source = detectSource(url);
-      return {
-        url,
-        source_name: source.name,
-        source_type: source.type,
-        snippet: scraped.snippet,
-        full_text: scraped.text,
-        query_type,
-      };
+      const scraped = await scrapeSinglePage(url);
+
+      if (scraped) {
+        return {
+          url,
+          source_name: source.name,
+          source_type: source.type,
+          snippet: scraped.snippet,
+          full_text: scraped.text,
+          query_type,
+        };
+      }
+
+      // Fallback: use the Google search snippet if scraping failed
+      if (fallback_snippet && fallback_snippet.length > 20) {
+        return {
+          url,
+          source_name: source.name,
+          source_type: source.type,
+          snippet: fallback_snippet,
+          full_text: fallback_snippet,
+          query_type,
+        };
+      }
+
+      return null;
     })
   );
 

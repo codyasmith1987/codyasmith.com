@@ -85,8 +85,13 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       });
     }
 
-    // Scrape all found URLs in parallel
-    const scraped = await scrapeAll(searchResults.map(r => ({ url: r.url, query_type: r.query_type })));
+    // Scrape all found URLs in parallel (with search snippets as fallback)
+    const scraped = await scrapeAll(searchResults.map(r => ({
+      url: r.url,
+      query_type: r.query_type,
+      fallback_snippet: r.description,
+      fallback_title: r.title,
+    })));
 
     // Generate the full report
     const report = generateReport(scraped);

@@ -42,6 +42,51 @@ const recentScans = await getRecentScans(5);
           Scan Now
         </button>
       </form>
+
+      <!-- Optional refinement fields (collapsed by default) -->
+      <button id="refine-toggle" class="mt-4 text-neutral-600 text-xs hover:text-neutral-400 transition-colors flex items-center gap-1">
+        <span id="refine-arrow" class="transition-transform duration-200">&#9654;</span> Refine your search <span class="text-neutral-700">(optional)</span>
+      </button>
+      <div id="refine-fields" class="hidden mt-4 grid md:grid-cols-3 gap-4">
+        <div>
+          <label for="location-input" class="block text-neutral-600 text-xs tracking-[0.1em] uppercase mb-2">Location</label>
+          <input
+            type="text"
+            id="location-input"
+            placeholder="e.g. Cedar City, Utah"
+            class="w-full bg-transparent border-b border-white/10 pb-2 text-neutral-300 text-sm focus:border-amber-400/50 focus:outline-none transition-colors placeholder:text-neutral-700"
+          />
+        </div>
+        <div>
+          <label for="industry-input" class="block text-neutral-600 text-xs tracking-[0.1em] uppercase mb-2">Industry</label>
+          <select id="industry-input" class="w-full bg-transparent border-b border-white/10 pb-2 text-neutral-300 text-sm focus:border-amber-400/50 focus:outline-none transition-colors appearance-none">
+            <option value="" class="bg-neutral-900">Any industry</option>
+            <option value="restaurant" class="bg-neutral-900">Restaurant / Food</option>
+            <option value="healthcare" class="bg-neutral-900">Healthcare</option>
+            <option value="legal" class="bg-neutral-900">Legal</option>
+            <option value="construction" class="bg-neutral-900">Construction / Trades</option>
+            <option value="technology" class="bg-neutral-900">Technology / Software</option>
+            <option value="retail" class="bg-neutral-900">Retail / E-commerce</option>
+            <option value="real estate" class="bg-neutral-900">Real Estate</option>
+            <option value="automotive" class="bg-neutral-900">Automotive</option>
+            <option value="finance" class="bg-neutral-900">Finance / Insurance</option>
+            <option value="education" class="bg-neutral-900">Education</option>
+            <option value="telecom" class="bg-neutral-900">Telecom / Internet</option>
+            <option value="hospitality" class="bg-neutral-900">Hospitality / Travel</option>
+            <option value="professional services" class="bg-neutral-900">Professional Services</option>
+          </select>
+        </div>
+        <div>
+          <label for="exclude-input" class="block text-neutral-600 text-xs tracking-[0.1em] uppercase mb-2">Exclude terms</label>
+          <input
+            type="text"
+            id="exclude-input"
+            placeholder='e.g. "North Carolina"'
+            class="w-full bg-transparent border-b border-white/10 pb-2 text-neutral-300 text-sm focus:border-amber-400/50 focus:outline-none transition-colors placeholder:text-neutral-700"
+          />
+        </div>
+      </div>
+
       <p id="form-error" class="text-red-400 text-sm mt-4 hidden"></p>
     </div>
   </section>
@@ -257,6 +302,18 @@ const recentScans = await getRecentScans(5);
       const recSection = document.getElementById('recommendation')!;
       if (!form || !btn) return;
 
+      // Refine toggle
+      const refineToggle = document.getElementById('refine-toggle');
+      const refineFields = document.getElementById('refine-fields');
+      const refineArrow = document.getElementById('refine-arrow');
+      if (refineToggle && refineFields) {
+        refineToggle.addEventListener('click', () => {
+          const open = !refineFields.classList.contains('hidden');
+          refineFields.classList.toggle('hidden');
+          if (refineArrow) refineArrow.style.transform = open ? '' : 'rotate(90deg)';
+        });
+      }
+
       function renderRecommendation(rec: any) {
         if (!rec) return;
 
@@ -468,7 +525,13 @@ const recentScans = await getRecentScans(5);
           const res = await fetch('/api/scan', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ input: brandInput, timestamp: pageLoadTime }),
+            body: JSON.stringify({
+              input: brandInput,
+              timestamp: pageLoadTime,
+              location: (document.getElementById('location-input') as HTMLInputElement)?.value.trim() || null,
+              industry: (document.getElementById('industry-input') as HTMLSelectElement)?.value || null,
+              exclude: (document.getElementById('exclude-input') as HTMLInputElement)?.value.trim() || null,
+            }),
           });
 
           clearTimeout(progressTimer);

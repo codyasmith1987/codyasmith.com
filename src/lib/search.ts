@@ -47,19 +47,41 @@ async function serperSearch(query: string, apiKey: string, num = 5): Promise<Ser
  * Review sites and Reddit are gold — those are real people talking.
  * Brand-owned social pages are noise — that's the company talking about itself.
  */
-function buildQueries(brand: string, domain: string | null): { query: string; type: SearchResult['query_type'] }[] {
+export interface SearchRefinements {
+  location?: string | null;
+  industry?: string | null;
+  exclude?: string | null;
+}
+
+function buildQueries(brand: string, domain: string | null, refinements: SearchRefinements = {}): { query: string; type: SearchResult['query_type'] }[] {
   const q = `"${brand}"`;
   const ownSite = domain || (brand.toLowerCase().replace(/[^a-z0-9]/g, '') + '.com');
 
+  // Build modifier string from refinements
+  // Location narrows to the right geography: "SC Broadband" + "Utah" avoids the NC one
+  // Industry adds context for generic names: "Summit" + "construction"
+  // Exclude removes false matches: -"North Carolina"
+  const modifiers: string[] = [];
+  if (refinements.location) modifiers.push(`"${refinements.location}"`);
+  if (refinements.industry) modifiers.push(refinements.industry);
+  if (refinements.exclude) {
+    // Support multiple exclude terms separated by commas
+    refinements.exclude.split(',').forEach(term => {
+      const t = term.trim();
+      if (t) modifiers.push(`-"${t}"`);
+    });
+  }
+  const mod = modifiers.length > 0 ? ' ' + modifiers.join(' ') : '';
+
   const queries: { query: string; type: SearchResult['query_type'] }[] = [
     // 1. Review platforms: real consumer reviews
-    { query: `${q} site:yelp.com OR site:trustpilot.com OR site:bbb.org OR site:consumeraffairs.com OR site:glassdoor.com`, type: 'reviews' },
-    // 2. Reddit + forums: real discussions (not brand accounts)
-    { query: `${q} site:reddit.com OR site:quora.com`, type: 'complaints' },
-    // 3. News + independent coverage about the brand
-    { query: `${q} review OR complaint OR experience OR opinion -site:${ownSite}`, type: 'testimonials' },
-    // 4. Broader web: anything people say, excluding owned properties
-    { query: `${q} recommended OR terrible OR "stay away" OR "love this" OR "would not" -site:${ownSite}`, type: 'domain' },
+    { query: `${q}${mod} site:yelp.com OR site:trustpilot.com OR site:bbb.org OR site:consumeraffairs.com OR site:glassdoor.com`, type: 'reviews' },
+    // 2. Reddit + forums: real discussions
+    { query: `${q}${mod} site:reddit.com OR site:quora.com`, type: 'complaints' },
+    // 3. News + independent coverage
+    { query: `${q}${mod} review OR complaint OR experience OR opinion -site:${ownSite}`, type: 'testimonials' },
+    // 4. Broader web: opinion-bearing mentions
+    { query: `${q}${mod} recommended OR terrible OR "stay away" OR "love this" OR "would not" -site:${ownSite}`, type: 'domain' },
   ];
 
   return queries;
@@ -169,8 +191,8 @@ function isOwnContent(url: string, excludedDomains: string[], brandSlug: string)
  * Run the full search: 4 queries, 5 results each, deduplicated.
  * Filters out the brand's own domains — we only want external mentions.
  */
-export async function searchForMentions(brand: string, domain: string | null, apiKey: string): Promise<SearchResult[]> {
-  const queries = buildQueries(brand, domain);
+export async function searchForMentions(brand: string, domain: string | null, apiKey: string, refinements: SearchRefinements = {}): Promise<SearchResult[]> {
+  const queries = buildQueries(brand, domain, refinements);
   const excludedDomains = buildExcludedDomains(brand, domain);
   const brandSlug = brand.toLowerCase().replace(/[^a-z0-9]/g, '');
   const seen = new Set<string>();

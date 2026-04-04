@@ -16,6 +16,9 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     const body = await request.json();
     const input = body.input?.trim();
     const timestamp = body.timestamp;
+    const location = body.location?.trim() || null;
+    const industry = body.industry?.trim() || null;
+    const exclude = body.exclude?.trim() || null;
 
     if (!input) return json({ error: 'Enter a brand name or URL' }, 400);
 
@@ -60,7 +63,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     await incrementRateLimit(ip);
 
     // Search for mentions (4 queries, 5 results each)
-    const searchResults = await searchForMentions(brand, domain, serperKey);
+    const searchResults = await searchForMentions(brand, domain, serperKey, { location, industry, exclude });
 
     if (searchResults.length === 0) {
       await updateScan(scanId, {

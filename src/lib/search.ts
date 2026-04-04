@@ -40,21 +40,26 @@ async function serperSearch(query: string, apiKey: string, num = 5): Promise<Ser
 
 /**
  * Construct 4 smart queries from the input.
- * Prioritizes review sites, forums, and social platforms — that's where
- * real consumer sentiment lives. Generic blogs and directories are noise.
+ *
+ * Key principle: we want what OTHER PEOPLE say about the brand.
+ * Not the brand's own website, social profiles, or marketing.
+ *
+ * Review sites and Reddit are gold — those are real people talking.
+ * Brand-owned social pages are noise — that's the company talking about itself.
  */
 function buildQueries(brand: string, domain: string | null): { query: string; type: SearchResult['query_type'] }[] {
   const q = `"${brand}"`;
+  const ownSite = domain || (brand.toLowerCase().replace(/[^a-z0-9]/g, '') + '.com');
 
   const queries: { query: string; type: SearchResult['query_type'] }[] = [
-    // 1. Review platforms: Yelp, Trustpilot, BBB, Google Reviews, ConsumerAffairs
+    // 1. Review platforms: real consumer reviews
     { query: `${q} site:yelp.com OR site:trustpilot.com OR site:bbb.org OR site:consumeraffairs.com OR site:glassdoor.com`, type: 'reviews' },
-    // 2. Reddit + forums: where people actually talk
-    { query: `${q} site:reddit.com OR site:quora.com OR site:nextdoor.com`, type: 'complaints' },
-    // 3. Social + video: Facebook, YouTube, X, TikTok mentions indexed by Google
-    { query: `${q} site:facebook.com OR site:youtube.com OR site:twitter.com OR site:linkedin.com`, type: 'testimonials' },
-    // 4. General web mentions: news, blogs, and anything else people say
-    { query: `${q} reviews OR complaints OR experience OR recommended -site:${domain || (q.replace(/"/g, '').toLowerCase().replace(/\s+/g, '') + '.com')}`, type: 'domain' },
+    // 2. Reddit + forums: real discussions (not brand accounts)
+    { query: `${q} site:reddit.com OR site:quora.com`, type: 'complaints' },
+    // 3. News + independent coverage about the brand
+    { query: `${q} review OR complaint OR experience OR opinion -site:${ownSite}`, type: 'testimonials' },
+    // 4. Broader web: anything people say, excluding owned properties
+    { query: `${q} recommended OR terrible OR "stay away" OR "love this" OR "would not" -site:${ownSite}`, type: 'domain' },
   ];
 
   return queries;
@@ -121,10 +126,40 @@ function buildExcludedDomains(brand: string, domain: string | null): string[] {
   return excluded;
 }
 
-function isOwnDomain(url: string, excludedDomains: string[]): boolean {
+/**
+ * Detect if a URL belongs to the brand (own website, social profiles, etc.)
+ * This catches:
+ * - Brand's own domain (starbucks.com, *.starbucks.com)
+ * - Brand's social profiles (facebook.com/starbucks, youtube.com/@starbucks)
+ * - Brand's official pages on any platform
+ */
+function isOwnContent(url: string, excludedDomains: string[], brandSlug: string): boolean {
   try {
-    const hostname = new URL(url).hostname.replace(/^www\./, '').toLowerCase();
-    return excludedDomains.some(d => hostname === d || hostname.endsWith('.' + d));
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.replace(/^www\./, '').toLowerCase();
+    const pathname = parsed.pathname.toLowerCase();
+
+    // Check if it's the brand's own domain
+    if (excludedDomains.some(d => hostname === d || hostname.endsWith('.' + d))) return true;
+
+    // Check if it's a brand-owned social profile
+    // e.g. facebook.com/starbucks, twitter.com/starbucks, youtube.com/@starbucks
+    const socialPlatforms = ['facebook.com', 'twitter.com', 'x.com', 'instagram.com', 'linkedin.com', 'youtube.com', 'tiktok.com', 'pinterest.com'];
+    if (socialPlatforms.some(p => hostname === p || hostname.endsWith('.' + p))) {
+      // Check if the first path segment is the brand name (their profile page)
+      const firstSegment = pathname.split('/').filter(Boolean)[0]?.replace('@', '') || '';
+      if (firstSegment && brandSlug && (
+        firstSegment === brandSlug ||
+        firstSegment.includes(brandSlug) ||
+        brandSlug.includes(firstSegment)
+      )) {
+        return true;
+      }
+      // Also check for /channel/, /user/, /company/ patterns with brand name
+      if (pathname.includes(brandSlug)) return true;
+    }
+
+    return false;
   } catch {
     return false;
   }
@@ -137,6 +172,7 @@ function isOwnDomain(url: string, excludedDomains: string[]): boolean {
 export async function searchForMentions(brand: string, domain: string | null, apiKey: string): Promise<SearchResult[]> {
   const queries = buildQueries(brand, domain);
   const excludedDomains = buildExcludedDomains(brand, domain);
+  const brandSlug = brand.toLowerCase().replace(/[^a-z0-9]/g, '');
   const seen = new Set<string>();
   const results: SearchResult[] = [];
 
@@ -158,8 +194,8 @@ export async function searchForMentions(brand: string, domain: string | null, ap
       const key = hit.url.split('?')[0].toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
-      // Skip the brand's own domains — we only want what others say
-      if (isOwnDomain(hit.url, excludedDomains)) continue;
+      // Skip the brand's own content — website, social profiles, official pages
+      if (isOwnContent(hit.url, excludedDomains, brandSlug)) continue;
       results.push({
         url: hit.url,
         title: hit.title,

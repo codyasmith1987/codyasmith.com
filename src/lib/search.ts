@@ -149,6 +149,55 @@ function buildExcludedDomains(brand: string, domain: string | null): string[] {
 }
 
 /**
+ * Detect if a URL is a government/policy page that likely discusses
+ * broadband policy rather than a specific company.
+ * e.g. "SC Broadband" matches South Carolina broadband office pages
+ */
+function isGovernmentOrPolicyPage(url: string): boolean {
+  try {
+    const hostname = new URL(url).hostname.toLowerCase();
+    // Government domains
+    if (hostname.endsWith('.gov') || hostname.endsWith('.gov.uk') || hostname.endsWith('.gc.ca')) return true;
+    // State-level broadband offices, regulatory bodies
+    if (hostname.includes('broadbandoffice') || hostname.includes('broadbandnow')) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Detect if a search result is likely about a different entity than the brand.
+ * Uses the search snippet/title to check for disambiguating signals.
+ */
+function isLikelyDifferentEntity(title: string, snippet: string, brand: string, refinements: SearchRefinements): boolean {
+  const text = (title + ' ' + snippet).toLowerCase();
+  const brandLower = brand.toLowerCase();
+
+  // If the brand name appears as part of a state/government context
+  // e.g. "SC Broadband Office" vs "SC Broadband" (the company)
+  if (text.includes(brandLower + ' office') || text.includes(brandLower + ' program')) return true;
+
+  // If location refinement is set and the result mentions a different state/location prominently
+  if (refinements.location) {
+    const loc = refinements.location.toLowerCase();
+    // Check if result is about a clearly different location
+    // Only filter if the result doesn't mention the target location at all
+    // and mentions a different state context
+    const stateAbbrevs = ['alabama', 'alaska', 'arizona', 'arkansas', 'california', 'colorado', 'connecticut', 'delaware', 'florida', 'georgia', 'hawaii', 'idaho', 'illinois', 'indiana', 'iowa', 'kansas', 'kentucky', 'louisiana', 'maine', 'maryland', 'massachusetts', 'michigan', 'minnesota', 'mississippi', 'missouri', 'montana', 'nebraska', 'nevada', 'new hampshire', 'new jersey', 'new mexico', 'new york', 'north carolina', 'north dakota', 'ohio', 'oklahoma', 'oregon', 'pennsylvania', 'rhode island', 'south carolina', 'south dakota', 'tennessee', 'texas', 'vermont', 'virginia', 'washington', 'west virginia', 'wisconsin', 'wyoming'];
+    const targetState = stateAbbrevs.find(s => loc.includes(s));
+    if (targetState) {
+      const otherStates = stateAbbrevs.filter(s => s !== targetState && text.includes(s));
+      if (otherStates.length > 0 && !text.includes(targetState)) {
+        return true; // Mentions other states but not the target state
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
  * Detect if a URL belongs to the brand (own website, social profiles, etc.)
  * This catches:
  * - Brand's own domain (starbucks.com, *.starbucks.com)
@@ -218,6 +267,10 @@ export async function searchForMentions(brand: string, domain: string | null, ap
       seen.add(key);
       // Skip the brand's own content — website, social profiles, official pages
       if (isOwnContent(hit.url, excludedDomains, brandSlug)) continue;
+      // Skip government/policy pages — these discuss broadband policy, not the company
+      if (isGovernmentOrPolicyPage(hit.url)) continue;
+      // Skip results that are clearly about a different entity
+      if (isLikelyDifferentEntity(hit.title, hit.description, brand, refinements)) continue;
       results.push({
         url: hit.url,
         title: hit.title,

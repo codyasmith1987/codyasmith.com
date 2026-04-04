@@ -99,6 +99,20 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
 
         const recommendation = getRecommendation(cachedScan.overall_score, cachedScan.mention_count, cachedScan.brand);
         const derived = deriveCategoryAndConfidence(cachedScan.overall_score, cachedScan.mention_count);
+
+        // Generate diagnostic for cached results too
+        const cachedDiagnostic = generateDiagnostic({
+          brand: cachedScan.brand,
+          domain: cachedScan.domain,
+          mentionCount: cachedScan.mention_count,
+          sourceTypes: cachedMentions.map(m => m.source_type).filter(Boolean) as string[],
+          sourceNames: cachedMentions.map(m => m.source_name).filter(Boolean) as string[],
+          trustpilot: null, // not stored in cache — Trustpilot card won't show for cached
+          positiveCount: cachedMentions.filter(m => m.sentiment_label === 'positive').length,
+          negativeCount: cachedMentions.filter(m => m.sentiment_label === 'negative').length,
+          neutralCount: cachedMentions.filter(m => m.sentiment_label === 'neutral').length,
+        });
+
         const sampleMentions = cachedMentions.slice(0, 3).map(m => ({
           url: m.url,
           source_name: m.source_name,
@@ -125,6 +139,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
           source_breakdown: cachedScan.source_breakdown ? JSON.parse(cachedScan.source_breakdown) : {},
           teaser_lines: [],
           recommendation,
+          diagnostic: cachedDiagnostic,
           cached: true,
         });
       }

@@ -190,31 +190,55 @@ const recentScans = await getRecentScans(5);
     </div>
   </section>
 
-  <!-- TIER 3: Premium Teaser -->
-  <section id="tier3" class="hidden pb-28 px-6">
+  <!-- Smart Recommendation (appears after Tier 1, upgrades after Tier 2) -->
+  <section id="recommendation" class="hidden pb-12 px-6">
     <div class="max-w-4xl mx-auto">
-      <div class="glow-card p-10 text-center">
-        <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Go deeper</p>
+      <div class="gradient-divider mb-12"></div>
+      <div id="rec-card" class="relative overflow-hidden rounded-xl border border-white/5">
+        <!-- Urgency indicator stripe -->
+        <div id="rec-urgency-stripe" class="h-1 w-full"></div>
+        <div class="p-8 md:p-10">
+          <!-- Header -->
+          <div class="flex items-start gap-4 mb-6">
+            <div id="rec-icon" class="shrink-0 w-12 h-12 rounded-xl flex items-center justify-center text-xl"></div>
+            <div>
+              <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-2">What this means for you</p>
+              <h3 id="rec-headline" class="font-serif text-2xl text-neutral-100"></h3>
+            </div>
+          </div>
+
+          <!-- Body -->
+          <p id="rec-body" class="text-neutral-400 text-sm leading-relaxed mb-8"></p>
+
+          <!-- Service Cards -->
+          <div id="rec-services" class="grid md:grid-cols-2 gap-4 mb-8"></div>
+
+          <!-- CTA -->
+          <div class="flex flex-col sm:flex-row items-center gap-4">
+            <a id="rec-cta" href="/contact" class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
+            </a>
+            <span class="text-neutral-600 text-xs">No pressure. No pitch deck. Just a conversation.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tier 3: Premium Teaser -->
+  <section id="tier3" class="hidden pb-12 px-6">
+    <div class="max-w-4xl mx-auto">
+      <div class="bg-neutral-900/50 border border-white/5 rounded-xl p-8 text-center">
+        <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-3">Go deeper</p>
         <p id="t3-text" class="text-neutral-400 text-sm leading-relaxed mb-6"></p>
-        <a href="/contact" class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
+        <a href="/contact" class="inline-flex items-center justify-center px-6 py-3 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/40 hover:text-amber-400 transition-all duration-300">
           Request a Full Audit
         </a>
       </div>
     </div>
   </section>
 
-  <!-- Soft CTA (always visible) -->
-  <section class="pb-28 px-6">
-    <div class="max-w-4xl mx-auto text-center">
-      <div class="gradient-divider mb-12"></div>
-      <p class="reveal text-neutral-400 text-sm leading-relaxed mb-6">
-        Want help fixing what's broken?
-      </p>
-      <a href="/contact" class="reveal inline-flex items-center justify-center px-8 py-4 border border-white/10 text-neutral-300 font-semibold text-sm rounded-lg hover:border-amber-500/40 hover:text-amber-400 transition-all duration-300">
-        Learn about my consulting services
-      </a>
-    </div>
-  </section>
+  <!-- Bottom spacer -->
+  <div class="pb-20"></div>
 
   <script>
     function initScanner() {
@@ -230,7 +254,45 @@ const recentScans = await getRecentScans(5);
       const gate = document.getElementById('gate')!;
       const tier2 = document.getElementById('tier2')!;
       const tier3 = document.getElementById('tier3')!;
+      const recSection = document.getElementById('recommendation')!;
       if (!form || !btn) return;
+
+      function renderRecommendation(rec: any) {
+        if (!rec) return;
+
+        const urgencyColors: Record<string, { stripe: string; icon_bg: string; icon: string }> = {
+          high: { stripe: 'bg-red-500', icon_bg: 'bg-red-500/10', icon: '\u26A0\uFE0F' },
+          medium: { stripe: 'bg-amber-500', icon_bg: 'bg-amber-500/10', icon: '\u{1F4CA}' },
+          low: { stripe: 'bg-emerald-500', icon_bg: 'bg-emerald-500/10', icon: '\u2705' },
+        };
+        const style = urgencyColors[rec.urgency] || urgencyColors.medium;
+
+        document.getElementById('rec-urgency-stripe')!.className = `h-1 w-full ${style.stripe}`;
+        const iconEl = document.getElementById('rec-icon')!;
+        iconEl.className = `shrink-0 w-12 h-12 rounded-xl flex items-center justify-center text-xl ${style.icon_bg}`;
+        iconEl.textContent = style.icon;
+        document.getElementById('rec-headline')!.textContent = rec.headline;
+        document.getElementById('rec-body')!.textContent = rec.body;
+
+        // Service cards
+        const servicesEl = document.getElementById('rec-services')!;
+        servicesEl.innerHTML = rec.services.map((s: any) => `
+          <a href="${s.url}" class="block bg-neutral-900/50 border border-white/5 rounded-lg p-5 hover:border-amber-500/20 transition-all duration-300 group">
+            <div class="flex items-center gap-2 mb-2">
+              <p class="text-neutral-100 text-sm font-semibold group-hover:text-amber-400 transition-colors">${s.name}</p>
+              <span class="text-neutral-700 group-hover:text-amber-500/50 transition-colors">\u2192</span>
+            </div>
+            <p class="text-neutral-500 text-xs leading-relaxed">${s.why}</p>
+          </a>
+        `).join('');
+
+        // CTA
+        const ctaEl = document.getElementById('rec-cta') as HTMLAnchorElement;
+        ctaEl.textContent = rec.cta_text;
+        ctaEl.href = rec.cta_url;
+
+        recSection.classList.remove('hidden');
+      }
 
       // Animated loading steps
       function setStep(step: string, status: 'active' | 'done') {
@@ -300,6 +362,7 @@ const recentScans = await getRecentScans(5);
         gate.classList.add('hidden');
         tier2.classList.add('hidden');
         tier3.classList.add('hidden');
+        recSection.classList.add('hidden');
         document.getElementById('gate-confirmed')!.classList.add('hidden');
         loading.classList.remove('hidden');
 
@@ -394,6 +457,9 @@ const recentScans = await getRecentScans(5);
 
           tier1.classList.remove('hidden');
           gate.classList.remove('hidden');
+
+          // Show smart recommendation
+          if (data.recommendation) renderRecommendation(data.recommendation);
 
           // Smooth scroll to results
           tier1.scrollIntoView({ behavior: 'smooth', block: 'start' });

@@ -4,6 +4,7 @@ import type { APIRoute } from 'astro';
 import { parseInput, searchForMentions } from '../../lib/search';
 import { scrapeAll } from '../../lib/scraper';
 import { generateReport } from '../../lib/sentiment';
+import { getRecommendation } from '../../lib/recommend';
 import { createScan, updateScan, insertMention, checkRateLimit, incrementRateLimit, getMonthlySearchCount } from '../../lib/db';
 
 export const POST: APIRoute = async ({ request, clientAddress }) => {
@@ -122,6 +123,9 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       source_breakdown: JSON.stringify(report.source_breakdown),
     });
 
+    // Generate smart service recommendation based on results
+    const recommendation = getRecommendation(report.overall_score, report.mention_count);
+
     // Return Tier 1 data (ungated preview)
     return json({
       scan_id: scanId,
@@ -134,6 +138,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       sample_mentions: report.sample_mentions,
       source_breakdown: report.source_breakdown,
       teaser_lines: report.teaser_lines,
+      recommendation,
     });
 
   } catch (err: any) {

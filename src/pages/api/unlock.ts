@@ -2,6 +2,7 @@ export const prerender = false;
 
 import type { APIRoute } from 'astro';
 import { getScan, getMentions, insertLead } from '../../lib/db';
+import { getRecommendation } from '../../lib/recommend';
 
 export const POST: APIRoute = async ({ request }) => {
   const json = (s: any, status = 200) => new Response(JSON.stringify(s), {
@@ -56,12 +57,15 @@ export const POST: APIRoute = async ({ request }) => {
     try { topPositive = JSON.parse(scan.top_positive_phrases || '[]'); } catch {}
     try { topNegative = JSON.parse(scan.top_negative_phrases || '[]'); } catch {}
 
+    const recommendation = getRecommendation(scan.overall_score || 50, scan.mention_count || 0);
+
     return json({
       mentions,
       top_positive_phrases: topPositive,
       top_negative_phrases: topNegative,
       source_breakdown: JSON.parse(scan.source_breakdown || '{}'),
       summary: scan.summary,
+      recommendation,
     });
 
   } catch (err: any) {

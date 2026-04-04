@@ -40,26 +40,22 @@ async function serperSearch(query: string, apiKey: string, num = 5): Promise<Ser
 
 /**
  * Construct 4 smart queries from the input.
- * Each query is designed to find a different facet of online sentiment.
+ * Prioritizes review sites, forums, and social platforms — that's where
+ * real consumer sentiment lives. Generic blogs and directories are noise.
  */
 function buildQueries(brand: string, domain: string | null): { query: string; type: SearchResult['query_type'] }[] {
   const q = `"${brand}"`;
 
   const queries: { query: string; type: SearchResult['query_type'] }[] = [
-    // 1. Reviews: catches Yelp, Google Reviews, BBB, aggregators
-    { query: `${q} reviews`, type: 'reviews' },
-    // 2. Complaints: catches Reddit, forums, complaint boards
-    { query: `${q} complaints OR problems OR issues`, type: 'complaints' },
-    // 3. Testimonials: catches positive mentions, case studies, recommendations
-    { query: `${q} testimonials OR recommended OR "great experience"`, type: 'testimonials' },
+    // 1. Review platforms: Yelp, Trustpilot, BBB, Google Reviews, ConsumerAffairs
+    { query: `${q} site:yelp.com OR site:trustpilot.com OR site:bbb.org OR site:consumeraffairs.com OR site:glassdoor.com`, type: 'reviews' },
+    // 2. Reddit + forums: where people actually talk
+    { query: `${q} site:reddit.com OR site:quora.com OR site:nextdoor.com`, type: 'complaints' },
+    // 3. Social + video: Facebook, YouTube, X, TikTok mentions indexed by Google
+    { query: `${q} site:facebook.com OR site:youtube.com OR site:twitter.com OR site:linkedin.com`, type: 'testimonials' },
+    // 4. General web mentions: news, blogs, and anything else people say
+    { query: `${q} reviews OR complaints OR experience OR recommended -site:${domain || (q.replace(/"/g, '').toLowerCase().replace(/\s+/g, '') + '.com')}`, type: 'domain' },
   ];
-
-  // 4. Domain mentions: catches any page linking to or mentioning the domain
-  if (domain) {
-    queries.push({ query: `"${domain}"`, type: 'domain' });
-  } else {
-    queries.push({ query: `${q} reputation OR experience OR feedback`, type: 'domain' });
-  }
 
   return queries;
 }

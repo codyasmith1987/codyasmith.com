@@ -97,9 +97,9 @@ export function generateDiagnostic(input: DiagnosticInput): DiagnosticReport {
 
   // --- Dimension 2: Review Site Presence ---
   const hasReviewSites = input.sourceTypes.includes('review');
-  const reviewSources = input.sourceNames.filter(n =>
+  const reviewSources = [...new Set(input.sourceNames.filter(n =>
     ['Yelp', 'BBB', 'Trustpilot', 'Google', 'TripAdvisor', 'Glassdoor', 'Angi', 'Thumbtack'].includes(n)
-  );
+  ))];
 
   if (!hasReviewSites && !input.trustpilot) {
     dimensions.push({
@@ -167,7 +167,7 @@ export function generateDiagnostic(input: DiagnosticInput): DiagnosticReport {
   }
 
   // --- Dimension 4: Source Diversity ---
-  const uniqueSourceTypes = new Set(input.sourceTypes);
+  const uniqueSourceTypes = new Set(input.sourceTypes.filter(Boolean));
   if (uniqueSourceTypes.size === 0) {
     dimensions.push({
       name: 'Source Diversity',

@@ -784,7 +784,7 @@ const recentScans = await getRecentScans(5);
       const loading = document.getElementById('loading')!;
       loading.classList.remove('hidden');
       document.getElementById('loading-text')!.textContent = 'Loading your report...';
-      ['search', 'scrape', 'analyze', 'report'].forEach(s => {
+      ['reviews', 'forums', 'news', 'scrape', 'analyze', 'report'].forEach(s => {
         const el = document.getElementById(`step-${s}`);
         if (el) { el.classList.remove('text-neutral-600'); el.classList.add('text-emerald-400'); el.querySelector('span')!.textContent = '\u2713'; }
       });

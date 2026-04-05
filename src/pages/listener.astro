@@ -5,17 +5,17 @@ import { getRecentScans } from '../lib/db';
 const recentScans = await getRecentScans(5);
 ---
 
-<Base title="Free Brand Scanner | Cody Smith" description="See how your business shows up online. We check review sites, forums, news, and social media — then tell you what's working and what's not.">
+<Base title="Sentiment Scanner | Cody Smith" description="Free brand sentiment analysis. Enter your business name and see what the web says about you.">
   <!-- Hero -->
   <section class="relative pt-40 pb-16 px-6 overflow-hidden">
     <div class="absolute top-0 left-1/3 w-[400px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
     <div class="relative max-w-4xl mx-auto">
-      <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Brand Scanner</p>
+      <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Sentiment Scanner</p>
       <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10">
-        How does your business<br />show up online?
+        What does the web<br />say about you?
       </h1>
       <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl">
-        We check review sites, forums, news, and social media for mentions of your brand. You'll see what people are saying, where you're visible, and where the gaps are. Free. No login required.
+        Enter your brand name or website. We'll search the web for mentions, analyze the sentiment, and show you how your business comes across online. Free. Instant. No login.
       </p>
     </div>
   </section>
@@ -91,7 +91,7 @@ const recentScans = await getRecentScans(5);
     </div>
   </section>
 
-  <!-- Loading State (animated progress — labor illusion) -->
+  <!-- Loading State (animated progress) -->
   <section id="loading" class="hidden pb-12 px-6">
     <div class="max-w-4xl mx-auto">
       <div class="glow-card p-8">
@@ -100,100 +100,54 @@ const recentScans = await getRecentScans(5);
           <p id="loading-text" class="text-neutral-300 text-sm font-medium">Starting scan...</p>
         </div>
         <div class="space-y-2">
-          <div id="step-reviews" class="flex items-center gap-2 text-neutral-600 text-xs">
-            <span class="w-4 text-center">-</span> Checking Yelp, BBB, Trustpilot, and review sites
-          </div>
-          <div id="step-forums" class="flex items-center gap-2 text-neutral-600 text-xs">
-            <span class="w-4 text-center">-</span> Searching Reddit, forums, and discussions
-          </div>
-          <div id="step-news" class="flex items-center gap-2 text-neutral-600 text-xs">
-            <span class="w-4 text-center">-</span> Scanning news and media coverage
+          <div id="step-search" class="flex items-center gap-2 text-neutral-600 text-xs">
+            <span class="w-4 text-center">-</span> Searching the web for mentions
           </div>
           <div id="step-scrape" class="flex items-center gap-2 text-neutral-600 text-xs">
-            <span class="w-4 text-center">-</span> Reading and extracting content from each source
+            <span class="w-4 text-center">-</span> Scraping and reading pages
           </div>
           <div id="step-analyze" class="flex items-center gap-2 text-neutral-600 text-xs">
-            <span class="w-4 text-center">-</span> Analyzing tone and sentiment across mentions
+            <span class="w-4 text-center">-</span> Running sentiment analysis
           </div>
           <div id="step-report" class="flex items-center gap-2 text-neutral-600 text-xs">
-            <span class="w-4 text-center">-</span> Assessing your digital presence
+            <span class="w-4 text-center">-</span> Building your report
           </div>
         </div>
-        <p id="loading-detail" class="text-neutral-700 text-[10px] mt-4 font-mono"></p>
       </div>
     </div>
   </section>
 
-  <!-- TIER 1: Ungated Preview — diagnostic-first layout -->
+  <!-- TIER 1: Ungated Preview -->
   <section id="tier1" class="hidden pb-12 px-6">
     <div class="max-w-4xl mx-auto">
-
-      <!-- Summary header -->
-      <div class="mb-10 opacity-0 transition-opacity duration-700" id="t1-header">
+      <!-- Score Hero -->
+      <div class="text-center mb-12">
         <p id="t1-brand" class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4"></p>
-        <p id="t1-summary" class="text-neutral-300 text-base leading-relaxed max-w-3xl"></p>
-        <p id="t1-confidence" class="text-neutral-600 text-xs mt-3 italic"></p>
+        <div id="t1-score-ring" class="inline-flex items-center justify-center w-36 h-36 rounded-full border-4 mb-4">
+          <span id="t1-score" class="font-mono text-5xl font-bold text-neutral-100"></span>
+        </div>
+        <p id="t1-label" class="text-lg font-semibold mb-2"></p>
+        <p id="t1-mention-count" class="text-neutral-500 text-sm"></p>
       </div>
 
-      <!-- DIAGNOSTIC: primary output — this IS the product -->
-      <style>
-        .dim-card { opacity: 0; transform: translateY(12px); transition: opacity 0.4s ease, transform 0.4s ease; }
-        .dim-card.revealed { opacity: 1; transform: translateY(0); }
-        .dim-dot-pulse { animation: dotPulse 0.6s ease-out forwards; }
-        @keyframes dotPulse { 0% { transform: scale(0); opacity: 0; } 60% { transform: scale(1.4); } 100% { transform: scale(1); opacity: 1; } }
-      </style>
-      <div id="t1-diagnostic" class="mb-12">
-        <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-6">Your Digital Presence</p>
+      <!-- Summary -->
+      <p id="t1-summary" class="text-neutral-400 text-sm leading-relaxed text-center max-w-2xl mx-auto mb-12"></p>
 
-        <div id="diag-now" class="hidden mb-8">
-          <p class="text-red-400 text-xs font-semibold tracking-[0.1em] uppercase mb-3">Needs Attention</p>
-          <div id="diag-now-items" class="space-y-3"></div>
-        </div>
-
-        <div id="diag-next" class="hidden mb-8">
-          <p class="text-amber-400 text-xs font-semibold tracking-[0.1em] uppercase mb-3">Room to Grow</p>
-          <div id="diag-next-items" class="space-y-3"></div>
-        </div>
-
-        <div id="diag-maintain" class="hidden mb-8">
-          <p class="text-emerald-400 text-xs font-semibold tracking-[0.1em] uppercase mb-3">Looking Good</p>
-          <div id="diag-maintain-items" class="space-y-3"></div>
-        </div>
+      <!-- Source Breakdown -->
+      <div id="t1-sources" class="mb-12">
+        <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Mentions by source</p>
+        <div id="t1-source-bars" class="space-y-3"></div>
       </div>
 
-      <!-- Trustpilot (standalone card if found) -->
-      <div id="t1-trustpilot" class="hidden mb-12">
-        <div class="bg-neutral-900/30 border border-white/5 rounded-lg p-5 flex items-center gap-6">
-          <span class="text-neutral-500 text-xs font-medium">Trustpilot</span>
-          <div>
-            <span class="text-neutral-600 text-xs uppercase tracking-wider">Score</span>
-            <p id="tp-score" class="text-neutral-100 font-mono text-lg"></p>
-          </div>
-          <div>
-            <span class="text-neutral-600 text-xs uppercase tracking-wider">Reviews</span>
-            <p id="tp-reviews" class="text-neutral-100 font-mono text-lg"></p>
-          </div>
-          <div id="tp-stars" class="flex gap-1 ml-auto"></div>
-        </div>
-      </div>
-
-      <!-- Sample mentions (2-3, supporting evidence for the diagnostic) -->
-      <div id="t1-samples" class="mb-8">
-        <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">What people are saying</p>
+      <!-- Sample Mentions -->
+      <div id="t1-samples" class="mb-12">
+        <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Sample mentions</p>
         <div id="t1-sample-cards" class="space-y-3"></div>
       </div>
 
-      <!-- Locked content teaser -->
-      <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-6">
-        <div id="t1-teasers" class="space-y-2 mb-3"></div>
-        <div id="t1-rec-teaser" class="hidden border-t border-white/5 pt-4 mt-2">
-          <p class="text-amber-400/80 text-sm flex items-center gap-2">
-            <span class="text-amber-500">&#128274;</span>
-            We identified specific steps to strengthen your presence. Unlock the full report to see them.
-          </p>
-        </div>
+      <!-- Teaser Lines -->
+      <div id="t1-teasers" class="space-y-2 mb-8">
       </div>
-
     </div>
   </section>
 
@@ -201,9 +155,9 @@ const recentScans = await getRecentScans(5);
   <section id="gate" class="hidden pb-12 px-6">
     <div class="max-w-4xl mx-auto">
       <div class="bg-neutral-900/80 border border-amber-500/20 rounded-xl p-8 md:p-10">
-        <h3 class="font-serif text-2xl text-neutral-100 mb-3">We found more than we can show here.</h3>
+        <h3 class="font-serif text-2xl text-neutral-100 mb-3">Your full report is ready.</h3>
         <p class="text-neutral-400 text-sm mb-8 leading-relaxed">
-          Unlock the full breakdown — every mention, the phrases shaping your reputation, source-by-source analysis, and specific steps to improve what we found.
+          Get the complete sentiment breakdown, every mention we found, and the key phrases driving your score.
         </p>
         <form id="unlock-form" class="space-y-4">
           <div class="grid grid-cols-2 gap-4">
@@ -321,7 +275,7 @@ const recentScans = await getRecentScans(5);
       <div class="bg-neutral-900/50 border border-white/5 rounded-xl p-8 text-center">
         <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-3">Go deeper</p>
         <p id="t3-text" class="text-neutral-400 text-sm leading-relaxed mb-6"></p>
-        <a id="t3-cta" href="/contact" class="inline-flex items-center justify-center px-6 py-3 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/40 hover:text-amber-400 transition-all duration-300">
+        <a href="/contact" class="inline-flex items-center justify-center px-6 py-3 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/40 hover:text-amber-400 transition-all duration-300">
           Request a Full Audit
         </a>
       </div>
@@ -416,90 +370,33 @@ const recentScans = await getRecentScans(5);
       const SOURCE_LABELS: Record<string, string> = { review: 'Review Sites', forum: 'Forums', news: 'News', social: 'Social Media', blog: 'Blogs', directory: 'Directories', other: 'Other' };
 
       function renderTier1(data: any) {
-        // Header — diagnostic summary leads, fades in
+        const color = scoreColor(data.overall_score);
         document.getElementById('t1-brand')!.textContent = `Results for ${data.brand}`;
-        const diagSummary = data.diagnostic?.summary || data.summary;
-        document.getElementById('t1-summary')!.textContent = diagSummary;
-        document.getElementById('t1-confidence')!.textContent = data.confidence_note || '';
-        const header = document.getElementById('t1-header')!;
-        header.classList.remove('opacity-0');
-        header.classList.add('opacity-100');
+        const ring = document.getElementById('t1-score-ring')!;
+        ring.className = `inline-flex items-center justify-center w-36 h-36 rounded-full border-4 mb-4 border-${color}-500/40`;
+        document.getElementById('t1-score')!.textContent = String(data.overall_score);
+        const labelEl = document.getElementById('t1-label')!;
+        labelEl.textContent = data.overall_label;
+        labelEl.className = `text-lg font-semibold mb-2 text-${color}-400`;
+        document.getElementById('t1-mention-count')!.textContent = `${data.mention_count} mentions analyzed across the web`;
+        document.getElementById('t1-summary')!.textContent = data.summary;
 
-        // DIAGNOSTIC — the primary output
-        const statusDot: Record<string, string> = {
-          'strong': 'bg-emerald-500', 'adequate': 'bg-emerald-500',
-          'needs-attention': 'bg-amber-500', 'critical-gap': 'bg-red-500', 'not-found': 'bg-neutral-500',
-        };
-        const statusBorder: Record<string, string> = {
-          'strong': 'border-emerald-500/20', 'adequate': 'border-emerald-500/20',
-          'needs-attention': 'border-amber-500/20', 'critical-gap': 'border-red-500/20', 'not-found': 'border-white/5',
-        };
-        const statusLabelMap: Record<string, string> = {
-          'strong': 'Strong', 'adequate': 'Adequate',
-          'needs-attention': 'Needs Attention', 'critical-gap': 'Critical Gap', 'not-found': 'Not Found',
-        };
-
-        function dimCard(d: any): string {
-          return `<div class="dim-card bg-neutral-900/30 border ${statusBorder[d.status] || 'border-white/5'} rounded-lg p-5">
-            <div class="flex items-center gap-3 mb-2">
-              <span class="w-2.5 h-2.5 rounded-full dim-dot-pulse ${statusDot[d.status] || 'bg-neutral-500'}" style="opacity:0"></span>
-              <span class="text-neutral-200 text-sm font-medium">${d.name}</span>
-              <span class="ml-auto text-xs px-2 py-0.5 rounded-full border ${statusBorder[d.status] || ''} text-neutral-500">${statusLabelMap[d.status] || d.status}</span>
-            </div>
-            <p class="text-neutral-400 text-xs leading-relaxed pl-[22px]">${d.detail}</p>
-          </div>`;
+        const sourceBars = document.getElementById('t1-source-bars')!;
+        sourceBars.innerHTML = '';
+        const totalMentions = data.mention_count || 1;
+        for (const [type, info] of Object.entries(data.source_breakdown as Record<string, { count: number; avg_score: number }>)) {
+          const pct = Math.round((info.count / totalMentions) * 100);
+          const barColor = info.avg_score > 0.1 ? 'bg-emerald-500' : info.avg_score < -0.1 ? 'bg-red-500' : 'bg-neutral-500';
+          sourceBars.innerHTML += `<div class="flex items-center gap-3"><span class="text-neutral-400 text-xs w-24 shrink-0">${SOURCE_LABELS[type] || type}</span><div class="flex-1 bg-neutral-800 rounded-full h-2 relative"><div class="${barColor} h-2 rounded-full transition-all duration-700" style="width: ${pct}%"></div></div><span class="text-neutral-600 text-xs font-mono w-8 text-right">${info.count}</span></div>`;
         }
 
-        function renderDimGroup(items: any[], containerId: string, sectionId: string) {
-          if (items.length > 0) {
-            document.getElementById(containerId)!.innerHTML = items.map(dimCard).join('');
-            document.getElementById(sectionId)!.classList.remove('hidden');
-          } else {
-            document.getElementById(sectionId)!.classList.add('hidden');
-          }
-        }
-
-        if (data.diagnostic) {
-          renderDimGroup(data.diagnostic.address_now, 'diag-now-items', 'diag-now');
-          renderDimGroup(data.diagnostic.build_next, 'diag-next-items', 'diag-next');
-          renderDimGroup(data.diagnostic.maintain, 'diag-maintain-items', 'diag-maintain');
-          document.getElementById('t1-diagnostic')!.classList.remove('hidden');
-
-          // Staggered reveal animation — each card appears 150ms after the previous
-          const allCards = document.querySelectorAll('.dim-card');
-          allCards.forEach((card, i) => {
-            setTimeout(() => card.classList.add('revealed'), 150 * i);
-          });
-        }
-
-        // Trustpilot card
-        const tpSection = document.getElementById('t1-trustpilot')!;
-        if (data.trustpilot) {
-          const tp = data.trustpilot;
-          document.getElementById('tp-score')!.textContent = (tp.trustScore || 0).toFixed(1) + ' / 5';
-          document.getElementById('tp-reviews')!.textContent = String(tp.numberOfReviews || 0);
-          const starsEl = document.getElementById('tp-stars')!;
-          const fullStars = Math.floor(tp.trustScore || 0);
-          starsEl.innerHTML = Array.from({ length: 5 }, (_, i) =>
-            `<span class="text-lg ${i < fullStars ? 'text-amber-400' : 'text-neutral-700'}">\u2605</span>`
-          ).join('');
-          tpSection.classList.remove('hidden');
-        } else {
-          tpSection.classList.add('hidden');
-        }
-
-        // Sample mentions — supporting evidence
         document.getElementById('t1-sample-cards')!.innerHTML = (data.sample_mentions || []).map((m: any) => mentionCard(m)).join('');
-
-        // Teasers + soft recommendation
         document.getElementById('t1-teasers')!.innerHTML = (data.teaser_lines || []).map((t: string) =>
           `<div class="flex items-center gap-2 text-amber-400/60 text-xs"><span class="text-amber-500">&#128274;</span> ${t}</div>`
         ).join('');
-        if (data.recommendation) {
-          document.getElementById('t1-rec-teaser')?.classList.remove('hidden');
-        }
 
         tier1.classList.remove('hidden');
+        if (data.recommendation) renderRecommendation(data.recommendation);
       }
 
       function renderTier2(data: any) {
@@ -513,23 +410,17 @@ const recentScans = await getRecentScans(5);
           `<span class="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-full text-xs text-red-400">${p}</span>`
         ).join('') || '<span class="text-neutral-600 text-xs">None detected</span>';
 
-        // Source detail — categorical tone instead of numeric avg
         const sourceDetail = document.getElementById('t2-source-detail')!;
         sourceDetail.innerHTML = '';
         for (const [type, info] of Object.entries(data.source_breakdown as Record<string, { count: number; avg_score: number }>)) {
-          const tone = info.avg_score > 0.1 ? 'Mostly positive' : info.avg_score < -0.1 ? 'Mostly negative' : 'Neutral / mixed';
-          const toneColor = info.avg_score > 0.1 ? 'text-emerald-400' : info.avg_score < -0.1 ? 'text-red-400' : 'text-neutral-400';
-          sourceDetail.innerHTML += `<div class="bg-neutral-900/30 border border-white/5 rounded-lg p-4"><p class="text-neutral-300 text-sm font-medium">${SOURCE_LABELS[type] || type}</p><p class="text-neutral-600 text-xs mt-1">${info.count} mention${info.count !== 1 ? 's' : ''}</p><p class="${toneColor} text-xs mt-1">${tone}</p></div>`;
+          const sc = info.avg_score > 0.1 ? 'text-emerald-400' : info.avg_score < -0.1 ? 'text-red-400' : 'text-neutral-400';
+          sourceDetail.innerHTML += `<div class="bg-neutral-900/30 border border-white/5 rounded-lg p-4"><p class="text-neutral-300 text-sm font-medium">${SOURCE_LABELS[type] || type}</p><p class="text-neutral-600 text-xs mt-1">${info.count} mention${info.count !== 1 ? 's' : ''}</p><p class="${sc} font-mono text-sm mt-1">${info.avg_score > 0 ? '+' : ''}${info.avg_score.toFixed(2)} avg</p></div>`;
         }
 
         tier2.classList.remove('hidden');
 
-        // Tier 3 teaser — personalized
-        const brandName = data.brand || 'your brand';
         const t3Text = document.getElementById('t3-text')!;
-        t3Text.textContent = `This scan found ${(data.mentions || []).length} mentions across ${Object.keys(data.source_breakdown || {}).length} source types. A full audit goes deeper — competitor comparison, review response strategy, listing accuracy, and a personal strategy call to walk through everything.`;
-        const t3Cta = document.getElementById('t3-cta') as HTMLAnchorElement;
-        if (t3Cta) t3Cta.href = `/contact?interest=marketing-strategy&brand=${encodeURIComponent(brandName)}`;
+        t3Text.textContent = `This scan covered ${(data.mentions || []).length} sources. A full audit covers 10x more, includes competitor comparison, tracks changes over time, and comes with a personal strategy call.`;
         tier3.classList.remove('hidden');
 
         if (data.recommendation) renderRecommendation(data.recommendation);
@@ -551,74 +442,39 @@ const recentScans = await getRecentScans(5);
         tier1.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }) as EventListener);
 
-      // Full class strings — Tailwind JIT needs to see complete class names at build time.
-      // Dynamic interpolation like `bg-${color}-500` gets purged.
-      const CATEGORY_STYLES: Record<string, { badge: string; dot: string; label: string; bar: string }> = {
-        emerald: {
-          badge: 'bg-emerald-500/5 border-emerald-500/20',
-          dot: 'bg-emerald-500',
-          label: 'text-emerald-400',
-          bar: 'bg-emerald-500',
-        },
-        amber: {
-          badge: 'bg-amber-500/5 border-amber-500/20',
-          dot: 'bg-amber-500',
-          label: 'text-amber-400',
-          bar: 'bg-amber-500',
-        },
-        red: {
-          badge: 'bg-red-500/5 border-red-500/20',
-          dot: 'bg-red-500',
-          label: 'text-red-400',
-          bar: 'bg-red-500',
-        },
-        neutral: {
-          badge: 'bg-neutral-500/5 border-neutral-500/20',
-          dot: 'bg-neutral-500',
-          label: 'text-neutral-400',
-          bar: 'bg-neutral-500',
-        },
-      };
-
-      function categoryColor(cat: string): string {
-        if (cat === 'strong' || cat === 'Strong') return 'emerald';
-        if (cat === 'adequate' || cat === 'Adequate') return 'emerald';
-        if (cat === 'mixed' || cat === 'Mixed') return 'amber';
-        if (cat === 'needs-attention' || cat === 'Needs Attention') return 'amber';
-        if (cat === 'critical' || cat === 'Critical') return 'red';
-        if (cat === 'insufficient-data' || cat === 'Insufficient Data') return 'neutral';
-        if (cat === 'Positive') return 'emerald';
-        if (cat === 'Poor') return 'red';
-        return 'neutral';
-      }
-
-      function getStyles(cat: string) {
-        return CATEGORY_STYLES[categoryColor(cat)] || CATEGORY_STYLES.neutral;
+      function scoreColor(score: number): string {
+        if (score >= 65) return 'emerald';
+        if (score >= 40) return 'amber';
+        return 'red';
       }
 
       function badgeClasses(label: string): string {
-        if (label === 'positive') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-        if (label === 'negative') return 'bg-red-500/10 text-red-400 border-red-500/20';
-        if (label === 'mixed') return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+        if (label === 'positive' || label === 'Strong' || label === 'Positive') return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+        if (label === 'negative' || label === 'Poor') return 'bg-red-500/10 text-red-400 border-red-500/20';
+        if (label === 'mixed' || label === 'Mixed') return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
         return 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20';
       }
 
       function mentionCard(m: any, showFull = false): string {
         const badge = badgeClasses(m.sentiment_label);
+        const score = m.sentiment_score > 0 ? '+' + m.sentiment_score.toFixed(2) : m.sentiment_score.toFixed(2);
         return `
           <div class="bg-neutral-900/30 border border-white/5 rounded-lg p-5 hover:border-white/10 transition-all duration-300">
             <div class="flex items-start justify-between gap-4 mb-2">
               <div class="min-w-0">
                 <div class="flex items-center gap-2 mb-1">
-                  <span class="text-neutral-300 text-xs font-medium">${m.source_name}</span>
+                  <span class="text-neutral-500 text-xs font-medium">${m.source_name}</span>
                   <span class="text-neutral-700 text-xs">${m.source_type}</span>
                 </div>
                 <a href="${m.url}" target="_blank" class="text-neutral-600 text-xs font-mono hover:text-amber-400 transition-colors truncate block">${m.url.length > 60 ? m.url.slice(0, 60) + '...' : m.url}</a>
               </div>
-              <span class="px-2 py-0.5 rounded-full text-xs font-medium border shrink-0 ${badge}">${m.sentiment_label}</span>
+              <div class="flex items-center gap-2 shrink-0">
+                <span class="text-neutral-500 font-mono text-xs">${score}</span>
+                <span class="px-2 py-0.5 rounded-full text-xs font-medium border ${badge}">${m.sentiment_label}</span>
+              </div>
             </div>
-            <p class="text-neutral-400 text-xs leading-relaxed mt-2">${(m.snippet || '').slice(0, 250)}${(m.snippet || '').length > 250 ? '...' : ''}</p>
-            ${showFull && m.key_phrases ? `<div class="flex flex-wrap gap-1 mt-3">${(typeof m.key_phrases === 'string' ? JSON.parse(m.key_phrases) : m.key_phrases).map((p: string) => `<span class="px-2 py-0.5 bg-white/5 border border-white/10 rounded text-[10px] text-neutral-500">${p}</span>`).join('')}</div>` : ''}
+            <p class="text-neutral-400 text-xs leading-relaxed mt-2">${(m.snippet || '').slice(0, 200)}${(m.snippet || '').length > 200 ? '...' : ''}</p>
+            ${showFull && m.key_phrases ? `<div class="flex flex-wrap gap-1 mt-2">${(typeof m.key_phrases === 'string' ? JSON.parse(m.key_phrases) : m.key_phrases).map((p: string) => `<span class="px-2 py-0.5 bg-white/5 border border-white/10 rounded text-[10px] text-neutral-500">${p}</span>`).join('')}</div>` : ''}
           </div>`;
       }
 
@@ -643,48 +499,28 @@ const recentScans = await getRecentScans(5);
         loading.classList.remove('hidden');
 
         // Reset loading steps
-        const stepIds = ['reviews', 'forums', 'news', 'scrape', 'analyze', 'report'];
-        stepIds.forEach(s => {
+        ['search', 'scrape', 'analyze', 'report'].forEach(s => {
           const el = document.getElementById(`step-${s}`);
           if (el) { el.classList.remove('text-amber-400', 'text-emerald-400'); el.classList.add('text-neutral-600'); el.querySelector('span')!.textContent = '-'; }
         });
-        const detailEl = document.getElementById('loading-detail')!;
-        detailEl.textContent = '';
 
-        // Staggered loading animation — makes the work visible
-        setStep('reviews', 'active');
-        document.getElementById('loading-text')!.textContent = 'Checking review platforms...';
-        detailEl.textContent = 'Querying Yelp, BBB, Trustpilot, ConsumerAffairs, Glassdoor...';
+        // Animate steps with timing
+        setStep('search', 'active');
+        document.getElementById('loading-text')!.textContent = 'Searching the web for mentions...';
 
         try {
-          const timers: number[] = [];
-          timers.push(window.setTimeout(() => {
-            setStep('reviews', 'done');
-            setStep('forums', 'active');
-            document.getElementById('loading-text')!.textContent = 'Searching forums and discussions...';
-            detailEl.textContent = 'Querying Reddit, Quora, community forums...';
-          }, 2000));
-
-          timers.push(window.setTimeout(() => {
-            setStep('forums', 'done');
-            setStep('news', 'active');
-            document.getElementById('loading-text')!.textContent = 'Scanning news coverage...';
-            detailEl.textContent = 'Checking news sites, blogs, independent coverage...';
-          }, 4000));
-
-          timers.push(window.setTimeout(() => {
-            setStep('news', 'done');
+          // Simulate progress while the real request runs
+          const progressTimer = setTimeout(() => {
+            setStep('search', 'done');
             setStep('scrape', 'active');
-            document.getElementById('loading-text')!.textContent = 'Reading each source...';
-            detailEl.textContent = 'Extracting content from found pages...';
-          }, 6500));
+            document.getElementById('loading-text')!.textContent = 'Scraping pages...';
+          }, 3000);
 
-          timers.push(window.setTimeout(() => {
+          const progressTimer2 = setTimeout(() => {
             setStep('scrape', 'done');
             setStep('analyze', 'active');
-            document.getElementById('loading-text')!.textContent = 'Analyzing what we found...';
-            detailEl.textContent = 'Evaluating tone, context, and sentiment across mentions...';
-          }, 9000));
+            document.getElementById('loading-text')!.textContent = 'Analyzing sentiment...';
+          }, 8000);
 
           const res = await fetch('/api/scan', {
             method: 'POST',
@@ -698,15 +534,15 @@ const recentScans = await getRecentScans(5);
             }),
           });
 
-          timers.forEach(t => clearTimeout(t));
+          clearTimeout(progressTimer);
+          clearTimeout(progressTimer2);
 
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Scan failed');
 
           // Complete all steps
-          stepIds.forEach(s => setStep(s, 'done'));
-          document.getElementById('loading-text')!.textContent = 'Your report is ready.';
-          detailEl.textContent = `Found ${data.mention_count} mention${data.mention_count !== 1 ? 's' : ''} across ${Object.keys(data.source_breakdown || {}).length} source types.`;
+          ['search', 'scrape', 'analyze', 'report'].forEach(s => setStep(s, 'done'));
+          document.getElementById('loading-text')!.textContent = 'Report ready!';
 
           await new Promise(r => setTimeout(r, 600));
           loading.classList.add('hidden');
@@ -784,7 +620,7 @@ const recentScans = await getRecentScans(5);
       const loading = document.getElementById('loading')!;
       loading.classList.remove('hidden');
       document.getElementById('loading-text')!.textContent = 'Loading your report...';
-      ['reviews', 'forums', 'news', 'scrape', 'analyze', 'report'].forEach(s => {
+      ['search', 'scrape', 'analyze', 'report'].forEach(s => {
         const el = document.getElementById(`step-${s}`);
         if (el) { el.classList.remove('text-neutral-600'); el.classList.add('text-emerald-400'); el.querySelector('span')!.textContent = '\u2713'; }
       });
@@ -792,29 +628,12 @@ const recentScans = await getRecentScans(5);
       try {
         const res = await fetch(`/api/report?id=${reportId}`);
         const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
 
         loading.classList.add('hidden');
 
-        // Handle expired reports with re-engagement
-        if (res.status === 410 && data.expired) {
-          const errorEl = document.getElementById('form-error')!;
-          const input = document.getElementById('brand-input') as HTMLInputElement;
-          errorEl.innerHTML = `Your scan of <strong>${data.brand}</strong> from ${data.days_ago} days ago has expired. <button id="rescan-btn" class="text-amber-400 hover:underline font-medium">Re-scan ${data.brand} now</button> to see how things have changed.`;
-          errorEl.classList.remove('hidden');
-          // Pre-fill the brand name for one-click re-scan
-          if (input) input.value = data.brand;
-          const rescanBtn = document.getElementById('rescan-btn');
-          if (rescanBtn) {
-            rescanBtn.addEventListener('click', () => {
-              const form = document.getElementById('scan-form') as HTMLFormElement;
-              if (form) form.dispatchEvent(new Event('submit'));
-            });
-          }
-          return;
-        }
-
-        if (!res.ok) throw new Error(data.error);
-
+        // Reuse the same rendering the scanner uses — dispatch a custom event
+        // with the data so we don't duplicate all the rendering code
         window.dispatchEvent(new CustomEvent('render-report', { detail: data }));
       } catch {
         loading.classList.add('hidden');

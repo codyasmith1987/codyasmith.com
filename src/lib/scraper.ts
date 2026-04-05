@@ -67,21 +67,10 @@ async function scrapeSinglePage(url: string): Promise<{ text: string; snippet: s
     const html = await res.text();
     const $ = cheerio.load(html);
 
-    $('script, style, nav, footer, header, aside, iframe, noscript, svg, [role="navigation"], [role="banner"], [role="complementary"], .sidebar, .share-links, .breadcrumb, .pagination').remove();
+    $('script, style, nav, footer, header, aside, iframe, noscript, svg, [role="navigation"], [role="banner"]').remove();
 
-    let text = ($('article, main, [role="main"]').text().trim() || $('body').text().trim())
+    const text = ($('article, main, [role="main"]').text().trim() || $('body').text().trim())
       .replace(/\s+/g, ' ')
-      .trim();
-
-    // Strip known boilerplate patterns that pollute sentiment analysis
-    // BBB: template text includes "complaints", "accredited", share buttons
-    text = text
-      .replace(/Share\s*Share\s*Share on Facebook\s*Share on Twitter\s*Share on LinkedIn\s*Share via Email\s*copy URL\s*Copy this link/gi, '')
-      .replace(/Business Profile[^.]*BBB Accredited[^.]*\./gi, '')
-      .replace(/Find BBB Accredited Businesses[^.]*\./gi, '')
-      .replace(/This business is NOT BBB Accredited\./gi, '')
-      .replace(/File a Complaint/gi, '')
-      .replace(/BBB Business Profiles are provided solely.*?(?=\.|$)/gi, '')
       .trim();
 
     if (text.length < 30) return null;

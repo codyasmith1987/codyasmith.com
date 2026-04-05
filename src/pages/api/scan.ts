@@ -3,56 +3,9 @@ export const prerender = false;
 import type { APIRoute } from 'astro';
 import { parseInput, searchForMentions } from '../../lib/search';
 import { scrapeAll } from '../../lib/scraper';
-import { generateReport, setBrandContext } from '../../lib/sentiment';
+import { generateReport } from '../../lib/sentiment';
 import { getRecommendation } from '../../lib/recommend';
-import { createScan, updateScan, insertMention, checkRateLimit, incrementRateLimit, getMonthlySearchCount, getScan, getMentions, getCachedScan, setCacheEntry } from '../../lib/db';
-import { fetchTrustpilotData } from '../../lib/trustpilot';
-import { deriveCategoryAndConfidence } from '../../lib/sentiment';
-import { generateDiagnostic } from '../../lib/diagnostic';
-import type { ScrapedMention } from '../../lib/scraper';
-import { createHash } from 'crypto';
-
-/**
- * Reciprocal Rank Fusion (Cormack, Clarke & Butt, SIGIR 2009)
- * RRF_score(d) = Σ 1/(k + rank_i(d))
- * k=60 is optimal per the original paper.
- * Works purely on ranks — no score normalization needed across sources.
- */
-function rrfMerge(
-  serperResults: (ScrapedMention & { query_type: string })[],
-  trustpilotResults: (ScrapedMention & { query_type: string })[],
-  k = 60
-): (ScrapedMention & { query_type: string })[] {
-  const scores = new Map<string, { score: number; mention: ScrapedMention & { query_type: string } }>();
-
-  // Score Serper results by their rank
-  serperResults.forEach((m, rank) => {
-    const key = m.url;
-    const existing = scores.get(key);
-    const rrfScore = 1 / (k + rank);
-    if (existing) {
-      existing.score += rrfScore;
-    } else {
-      scores.set(key, { score: rrfScore, mention: m });
-    }
-  });
-
-  // Score Trustpilot results by their rank
-  trustpilotResults.forEach((m, rank) => {
-    const key = m.url + '#tp-' + rank; // Trustpilot reviews share URL, so key by index
-    scores.set(key, { score: 1 / (k + rank), mention: m });
-  });
-
-  // Sort by combined RRF score descending
-  return Array.from(scores.values())
-    .sort((a, b) => b.score - a.score)
-    .map(s => s.mention);
-}
-
-function cacheKey(brand: string, location?: string | null, industry?: string | null): string {
-  const raw = [brand.toLowerCase().trim(), location?.toLowerCase().trim() || '', industry?.toLowerCase().trim() || ''].join('|');
-  return createHash('sha256').update(raw).digest('hex').slice(0, 32);
-}
+import { createScan, updateScan, insertMention, checkRateLimit, incrementRateLimit, getMonthlySearchCount } from '../../lib/db';
 
 export const POST: APIRoute = async ({ request, clientAddress }) => {
   const json = (s: any, status = 200) => new Response(JSON.stringify(s), {
@@ -84,67 +37,6 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       }, 429);
     }
 
-    // Parse input
-    const { brand, domain, inputType } = parseInput(input);
-
-    // Check cache: same brand + location + industry within 24 hours
-    const key = cacheKey(brand, location, industry);
-    const cachedScanId = await getCachedScan(key);
-    if (cachedScanId) {
-      const cachedScan = await getScan(cachedScanId);
-      if (cachedScan && cachedScan.overall_score !== null) {
-        const cachedMentions = await getMentions(cachedScanId);
-        // Still count against rate limit
-        await incrementRateLimit(ip);
-
-        const recommendation = getRecommendation(cachedScan.overall_score, cachedScan.mention_count, cachedScan.brand);
-        const derived = deriveCategoryAndConfidence(cachedScan.overall_score, cachedScan.mention_count);
-
-        // Generate diagnostic for cached results too
-        const cachedDiagnostic = generateDiagnostic({
-          brand: cachedScan.brand,
-          domain: cachedScan.domain,
-          mentionCount: cachedScan.mention_count,
-          sourceTypes: cachedMentions.map(m => m.source_type).filter(Boolean) as string[],
-          sourceNames: cachedMentions.map(m => m.source_name).filter(Boolean) as string[],
-          trustpilot: null, // not stored in cache — Trustpilot card won't show for cached
-          positiveCount: cachedMentions.filter(m => m.sentiment_label === 'positive').length,
-          negativeCount: cachedMentions.filter(m => m.sentiment_label === 'negative').length,
-          neutralCount: cachedMentions.filter(m => m.sentiment_label === 'neutral').length,
-        });
-
-        const sampleMentions = cachedMentions.slice(0, 3).map(m => ({
-          url: m.url,
-          source_name: m.source_name,
-          source_type: m.source_type,
-          snippet: m.snippet,
-          sentiment_score: m.sentiment_score,
-          sentiment_label: m.sentiment_label,
-          key_phrases: m.key_phrases ? JSON.parse(m.key_phrases) : [],
-          query_type: m.query_type,
-        }));
-
-        return json({
-          scan_id: cachedScanId,
-          brand: cachedScan.brand,
-          domain: cachedScan.domain,
-          overall_score: cachedScan.overall_score,
-          overall_label: derived.overall_label,
-          overall_category: derived.overall_category,
-          confidence_level: derived.confidence_level,
-          confidence_note: derived.confidence_note,
-          mention_count: cachedScan.mention_count,
-          summary: cachedScan.summary,
-          sample_mentions: sampleMentions,
-          source_breakdown: cachedScan.source_breakdown ? JSON.parse(cachedScan.source_breakdown) : {},
-          teaser_lines: [],
-          recommendation,
-          diagnostic: cachedDiagnostic,
-          cached: true,
-        });
-      }
-    }
-
     // Global budget check: reserve 200 searches as buffer
     const monthlySearches = await getMonthlySearchCount();
     if (monthlySearches >= 1800) {
@@ -161,57 +53,43 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       return json({ error: 'Search service not configured' }, 500);
     }
 
+    // Parse input
+    const { brand, domain, inputType } = parseInput(input);
+
     // Create scan record
     const scanId = await createScan(brand, domain, inputType);
 
     // Increment rate limit
     await incrementRateLimit(ip);
 
-    // Run Serper search and Trustpilot lookup in parallel
-    const [searchResults, trustpilotData] = await Promise.all([
-      searchForMentions(brand, domain, serperKey, { location, industry, exclude }),
-      domain ? fetchTrustpilotData(domain) : Promise.resolve({ business: null, reviews: [] }),
-    ]);
+    // Search for mentions (4 queries, 5 results each)
+    const searchResults = await searchForMentions(brand, domain, serperKey, { location, industry, exclude });
 
-    const totalSources = searchResults.length + trustpilotData.reviews.length;
-
-    if (totalSources === 0) {
-      // Build response with Trustpilot summary if available (even with no reviews)
-      const tpSummary = trustpilotData.business
-        ? ` Trustpilot shows ${trustpilotData.business.numberOfReviews} reviews with a ${trustpilotData.business.trustScore}/5 trust score.`
-        : '';
-
+    if (searchResults.length === 0) {
       await updateScan(scanId, {
         overall_score: 50,
-        overall_label: 'Insufficient Data',
+        overall_label: 'Unknown',
         mention_count: 0,
-        summary: `No mentions found across web search${tpSummary ? '.' + tpSummary : ', and no Trustpilot presence detected.'} This brand may have limited online presence, or the name may be too common. Try adding a city or industry to your search.`,
+        summary: 'No mentions found. This brand may have limited online presence, or the name may be too common. Try adding a city or industry to your search.',
         top_positive_phrases: '[]',
         top_negative_phrases: '[]',
         source_breakdown: '{}',
       });
-
-      await setCacheEntry(key, scanId);
-
       return json({
         scan_id: scanId,
         brand,
         domain,
         overall_score: 50,
-        overall_label: 'Insufficient Data',
-        overall_category: 'insufficient-data',
-        confidence_level: 'insufficient',
-        confidence_note: 'No mentions found — this limited online presence is itself a finding worth addressing.',
+        overall_label: 'Unknown',
         mention_count: 0,
         summary: 'No mentions found. This brand may have limited online presence.',
         sample_mentions: [],
         source_breakdown: {},
         teaser_lines: [],
-        trustpilot: trustpilotData.business || undefined,
       });
     }
 
-    // Scrape Serper results in parallel (with search snippets as fallback)
+    // Scrape all found URLs in parallel (with search snippets as fallback)
     const scraped = await scrapeAll(searchResults.map(r => ({
       url: r.url,
       query_type: r.query_type,
@@ -219,25 +97,8 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       fallback_title: r.title,
     })));
 
-    // Convert Trustpilot reviews to ScrapedMention format
-    const trustpilotMentions: (ScrapedMention & { query_type: string })[] = trustpilotData.reviews.map(r => ({
-      url: `https://www.trustpilot.com/review/${domain}`,
-      source_name: 'Trustpilot',
-      source_type: 'review' as const,
-      snippet: r.text.slice(0, 300),
-      full_text: `${r.title}. ${r.text}`,
-      query_type: 'reviews',
-    }));
-
-    // Merge with RRF (Reciprocal Rank Fusion, k=60)
-    const allMentions = rrfMerge(scraped, trustpilotMentions);
-
-    // Set brand context for sentiment — weights sentences mentioning
-    // the brand higher than sentences about competitors/other entities
-    setBrandContext(brand);
-
     // Generate the full report
-    const report = generateReport(allMentions);
+    const report = generateReport(scraped);
 
     // Store mentions in DB
     for (const m of report.mentions) {
@@ -265,27 +126,8 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       source_breakdown: JSON.stringify(report.source_breakdown),
     });
 
-    // Cache this result
-    await setCacheEntry(key, scanId);
-
     // Generate smart service recommendation based on results
-    const recommendation = getRecommendation(report.overall_score, report.mention_count, brand);
-
-    // Generate dimensional diagnostic for ALL scans — this is the primary
-    // output format. For data-rich scans the dimensions show strength.
-    // For data-sparse scans they show gaps. Either way it provides the
-    // multi-dimensional picture the tool is built around.
-    const diagnostic = generateDiagnostic({
-      brand,
-      domain,
-      mentionCount: report.mention_count,
-      sourceTypes: report.mentions.map(m => m.source_type),
-      sourceNames: report.mentions.map(m => m.source_name),
-      trustpilot: trustpilotData.business,
-      positiveCount: report.mentions.filter(m => m.sentiment_label === 'positive').length,
-      negativeCount: report.mentions.filter(m => m.sentiment_label === 'negative').length,
-      neutralCount: report.mentions.filter(m => m.sentiment_label === 'neutral').length,
-    });
+    const recommendation = getRecommendation(report.overall_score, report.mention_count);
 
     // Return Tier 1 data (ungated preview)
     return json({
@@ -294,17 +136,12 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       domain,
       overall_score: report.overall_score,
       overall_label: report.overall_label,
-      overall_category: report.overall_category,
-      confidence_level: report.confidence_level,
-      confidence_note: report.confidence_note,
       mention_count: report.mention_count,
       summary: report.summary,
       sample_mentions: report.sample_mentions,
       source_breakdown: report.source_breakdown,
       teaser_lines: report.teaser_lines,
       recommendation,
-      trustpilot: trustpilotData.business || undefined,
-      diagnostic,
     });
 
   } catch (err: any) {

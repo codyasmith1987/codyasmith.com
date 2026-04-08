@@ -2,205 +2,132 @@
 import Base from '../layouts/Base.astro';
 ---
 
-<Base title="Services | Web Management, Marketing Strategy & Training" description="Web management, marketing strategy, training, and AI workflow advisory.">
+<Base title="Services | Web Management, Marketing Strategy & Training" description="Web management, marketing strategy, training, and implementation. Monthly retainers, not hourly surprises.">
   <section class="relative pt-40 pb-24 px-6 overflow-hidden">
     <div class="absolute top-0 right-0 w-[400px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
-    <div class="relative max-w-4xl mx-auto">
+    <div class="relative max-w-3xl mx-auto">
       <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Services</p>
       <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10">
-        What I do and<br />
-        <span class="gradient-text">how it's structured.</span>
+        Four things I do.
       </h1>
-      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl">
-        Four things I do. Monthly retainers, not hourly surprises. You pick the tier that fits. Everything is month-to-month after onboarding because if I'm not earning the next month, I shouldn't get it.
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed">
+        Monthly retainers, not hourly surprises. You pick the tier that fits. Everything is month-to-month after onboarding because if I'm not earning the next month, I shouldn't get it.
       </p>
     </div>
   </section>
 
   <!-- Web Management -->
   <section class="py-28 px-6 surface-1">
-    <div class="max-w-5xl mx-auto">
-      <div class="reveal flex items-center gap-4 mb-6">
-        <span class="text-amber-400 font-mono text-xs tracking-[0.2em]">01</span>
-        <div class="gradient-divider flex-1"></div>
+    <div class="max-w-3xl mx-auto">
+      <a href="/services/web-management" class="group">
+        <h2 class="reveal font-serif text-4xl md:text-5xl text-neutral-100 mb-3 group-hover:text-amber-400 transition-colors duration-300">Web Management</h2>
+      </a>
+      <div class="space-y-5 text-neutral-400 text-lg leading-relaxed mt-8">
+        <p class="reveal">
+          Your site is probably on shared hosting you don't control, running plugins that haven't been updated in months, with no one watching if it goes down at 2am on a Saturday. You find out something broke when a customer mentions it. That's the problem I solve.
+        </p>
+        <p class="reveal">
+          I take over the whole thing. Your site moves to dedicated cloud hosting under my management. I handle updates, security, backups, and monitoring. Every month you get a plain-language report showing exactly what happened and what's coming next. You stop worrying about it.
+        </p>
       </div>
-      <div class="grid lg:grid-cols-5 gap-12 items-start">
-        <div class="lg:col-span-3">
-          <a href="/services/web-management" class="group">
-            <h2 class="reveal font-serif text-4xl md:text-5xl text-neutral-100 mb-3 group-hover:text-amber-400 transition-colors duration-300 inline-flex items-center gap-4">Web Management <svg class="w-8 h-8 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-2 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg></h2>
-          </a>
-          <p class="reveal text-neutral-500 italic text-sm tracking-wide mb-8">Keep it running.</p>
-          <div class="space-y-5 text-neutral-400 leading-relaxed">
-            <p class="reveal">
-              Your site is probably on shared hosting you don't control, running plugins that haven't been updated in months, with no one watching if it goes down. You find out something broke when a customer tells you. That's the problem.
-            </p>
-            <p class="reveal">
-              I take over the whole thing. Your site moves to dedicated cloud hosting under my management. I handle updates, security, backups, and monitoring. Every month you get a plain-language report showing exactly what happened and what's next. You stop worrying about it.
-            </p>
-          </div>
-        </div>
-        <div class="lg:col-span-2 reveal">
-          <div class="glow-card p-6">
-            <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Includes</p>
-            <ul class="text-neutral-300 text-sm space-y-3">
-              <li class="flex items-start gap-3">
-                <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
-                Site migration and onboarding
-              </li>
-              <li class="flex items-start gap-3">
-                <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
-                Dedicated cloud hosting
-              </li>
-              <li class="flex items-start gap-3">
-                <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
-                Security monitoring and SSL
-              </li>
-              <li class="flex items-start gap-3">
-                <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
-                Core, theme, and plugin updates
-              </li>
-              <li class="flex items-start gap-3">
-                <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
-                Daily backups
-              </li>
-              <li class="flex items-start gap-3">
-                <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
-                Uptime monitoring
-              </li>
-              <li class="flex items-start gap-3">
-                <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
-                Monthly Site Health Report
-              </li>
-            </ul>
-          </div>
-        </div>
+      <div class="reveal mt-10 glow-card p-6">
+        <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Includes</p>
+        <p class="text-neutral-300 text-sm leading-relaxed">
+          Site migration, dedicated cloud hosting, security monitoring and SSL, WordPress core and plugin updates, daily backups, uptime monitoring, and a monthly Site Health Report.
+        </p>
       </div>
+      <a href="/services/web-management" class="reveal inline-flex items-center gap-3 text-amber-400 text-sm mt-8 hover:text-amber-300 transition-colors duration-300 group">
+        Full details and pricing
+        <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+        </svg>
+      </a>
     </div>
   </section>
 
   <!-- Marketing Strategy -->
   <section class="py-28 px-6 dot-grid">
-    <div class="max-w-5xl mx-auto">
-      <div class="reveal flex items-center gap-4 mb-6">
-        <span class="text-amber-400 font-mono text-xs tracking-[0.2em]">02</span>
-        <div class="gradient-divider flex-1"></div>
+    <div class="max-w-3xl mx-auto">
+      <a href="/services/marketing-strategy" class="group">
+        <h2 class="reveal font-serif text-4xl md:text-5xl text-neutral-100 mb-3 group-hover:text-amber-400 transition-colors duration-300">Marketing Strategy</h2>
+      </a>
+      <div class="space-y-5 text-neutral-400 text-lg leading-relaxed mt-8">
+        <p class="reveal">
+          You know your marketing could be better. You just don't know where to start. There's SEO, content, ads, social, email, and twelve opinions about which one matters most. Meanwhile the site has no meta descriptions, your competitor is outranking you, and you can't tell if your traffic is going up or down because nobody set up the tracking right.
+        </p>
+        <p class="reveal">
+          I sort through all of it and tell you what to do first. An SEO roadmap built on real keyword data. Competitive analysis that names names. Content briefs your writer can actually use. Monthly calls to keep it on track. I direct the strategy. You execute it.
+        </p>
       </div>
-      <div class="grid lg:grid-cols-5 gap-12 items-start">
-        <div class="lg:col-span-3">
-          <a href="/services/marketing-strategy" class="group">
-            <h2 class="reveal font-serif text-4xl md:text-5xl text-neutral-100 mb-3 group-hover:text-amber-400 transition-colors duration-300 inline-flex items-center gap-4">Marketing Strategy <svg class="w-8 h-8 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-2 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg></h2>
-          </a>
-          <p class="reveal text-neutral-500 italic text-sm tracking-wide mb-8">Decisions and priorities.</p>
-          <div class="space-y-5 text-neutral-400 leading-relaxed">
-            <p class="reveal">
-              You know your marketing could be better. You just don't know where to start. There's SEO, content, ads, social, email, and twelve opinions about which one matters most. Meanwhile the site has no meta descriptions, your competitor is outranking you, and you can't tell if your traffic is going up or down because nobody set up the tracking right.
-            </p>
-            <p class="reveal">
-              I sort through all of it and tell you what to do first. An SEO roadmap built on real keyword data. Competitive analysis that names names. Content briefs your writer can actually use. Monthly calls to keep it on track. I direct the strategy. You execute it.
-            </p>
-          </div>
-        </div>
-        <div class="lg:col-span-2 reveal">
-          <div class="glow-card p-6">
-            <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Starts with</p>
-            <p class="text-neutral-300 text-sm leading-relaxed mb-6">
-              A strategic audit. A full read of your site, your market, and your competitors. The findings become your roadmap.
-            </p>
-            <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Then delivers</p>
-            <ul class="text-neutral-300 text-sm space-y-3">
-              <li class="flex items-start gap-3">
-                <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
-                Keyword research and strategy
-              </li>
-              <li class="flex items-start gap-3">
-                <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
-                Competitive analysis
-              </li>
-              <li class="flex items-start gap-3">
-                <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
-                Content briefs and direction
-              </li>
-              <li class="flex items-start gap-3">
-                <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
-                Monthly strategy calls
-              </li>
-              <li class="flex items-start gap-3">
-                <span class="text-amber-400 mt-1.5 text-[8px]">&#9670;</span>
-                Quarterly reporting
-              </li>
-            </ul>
-          </div>
-        </div>
+      <div class="reveal mt-10 glow-card p-6">
+        <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Starts with</p>
+        <p class="text-neutral-300 text-sm leading-relaxed">
+          A strategic audit. A full read of your site, your market, and your competitors. The findings become your roadmap. Then monthly direction, content briefs, and quarterly reporting with real numbers.
+        </p>
       </div>
+      <a href="/services/marketing-strategy" class="reveal inline-flex items-center gap-3 text-amber-400 text-sm mt-8 hover:text-amber-300 transition-colors duration-300 group">
+        Full details and pricing
+        <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+        </svg>
+      </a>
     </div>
   </section>
 
   <!-- Implementation -->
   <section class="py-28 px-6 surface-1">
-    <div class="max-w-5xl mx-auto">
-      <div class="reveal flex items-center gap-4 mb-6">
-        <span class="text-amber-400 font-mono text-xs tracking-[0.2em]">03</span>
-        <div class="gradient-divider flex-1"></div>
-      </div>
+    <div class="max-w-3xl mx-auto">
       <a href="/services/implementation" class="group">
-        <h2 class="reveal font-serif text-4xl md:text-5xl text-neutral-100 mb-3 group-hover:text-amber-400 transition-colors duration-300 inline-flex items-center gap-4">Implementation <svg class="w-8 h-8 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-2 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg></h2>
+        <h2 class="reveal font-serif text-4xl md:text-5xl text-neutral-100 mb-3 group-hover:text-amber-400 transition-colors duration-300">Implementation</h2>
       </a>
-      <p class="reveal text-neutral-500 italic text-sm tracking-wide mb-8">Changes to production systems.</p>
-      <div class="reveal text-neutral-400 leading-relaxed max-w-3xl mb-12">
+      <div class="reveal text-neutral-400 text-lg leading-relaxed mt-8 space-y-5">
         <p>
           Your contact form submissions aren't reaching your CRM. Your analytics aren't tracking conversions. You need landing pages for a market you're entering but they don't exist yet. These are projects with a start, a scope, and a finish line. I scope it, quote it, build it, and hand it over.
         </p>
       </div>
-      <div class="grid md:grid-cols-3 gap-6 reveal-stagger">
-        <div class="reveal glow-card p-6" style="--i:0">
+      <div class="reveal mt-10 grid md:grid-cols-3 gap-6">
+        <div class="glow-card p-6">
           <h3 class="text-neutral-100 font-medium mb-3">Integrations</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed">Form-to-CRM, analytics, email marketing, payment systems. The connections between your website and your business tools.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed">Form-to-CRM, analytics, email marketing, payment systems. The connections between your website and the tools your business actually runs on.</p>
         </div>
-        <div class="reveal glow-card p-6" style="--i:1">
-          <h3 class="text-neutral-100 font-medium mb-3">Page Builds</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed">Landing pages, service pages, content rewrites. Built to convert, optimized for search, written for humans.</p>
+        <div class="glow-card p-6">
+          <h3 class="text-neutral-100 font-medium mb-3">Page builds</h3>
+          <p class="text-neutral-500 text-sm leading-relaxed">Landing pages, service pages, content rewrites. The pages that need to exist for your marketing to work.</p>
         </div>
-        <div class="reveal glow-card p-6" style="--i:2">
-          <h3 class="text-neutral-100 font-medium mb-3">Analytics Setup</h3>
+        <div class="glow-card p-6">
+          <h3 class="text-neutral-100 font-medium mb-3">Analytics setup</h3>
           <p class="text-neutral-500 text-sm leading-relaxed">GA4, Search Console, conversion tracking. Configured so the data you see actually means something.</p>
         </div>
       </div>
+      <a href="/services/implementation" class="reveal inline-flex items-center gap-3 text-amber-400 text-sm mt-8 hover:text-amber-300 transition-colors duration-300 group">
+        Full details and pricing
+        <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+        </svg>
+      </a>
     </div>
   </section>
 
   <!-- Training -->
   <section class="py-28 px-6">
-    <div class="max-w-5xl mx-auto">
-      <div class="reveal flex items-center gap-4 mb-6">
-        <span class="text-amber-400 font-mono text-xs tracking-[0.2em]">04</span>
-        <div class="gradient-divider flex-1"></div>
+    <div class="max-w-3xl mx-auto">
+      <a href="/services/training" class="group">
+        <h2 class="reveal font-serif text-4xl md:text-5xl text-neutral-100 mb-3 group-hover:text-amber-400 transition-colors duration-300">Training</h2>
+      </a>
+      <div class="space-y-5 text-neutral-400 text-lg leading-relaxed mt-8">
+        <p class="reveal">
+          Your team sat through a training webinar last year. They forgot 80% of it within a week. Now they still ask you to "update the website" because nobody actually learned how. The problem isn't your team. The problem is that one-shot training doesn't work.
+        </p>
+        <p class="reveal">
+          I build guided programs. Three sessions over three to four weeks, with real assignments between them. Your team practices on their own systems, makes mistakes in a safe context, and comes back with questions that matter. Built on learning science, not slide decks. WordPress and SEO, or AI workflows.
+        </p>
       </div>
-      <div class="grid lg:grid-cols-5 gap-12 items-start">
-        <div class="lg:col-span-3">
-          <a href="/services/training" class="group">
-            <h2 class="reveal font-serif text-4xl md:text-5xl text-neutral-100 mb-3 group-hover:text-amber-400 transition-colors duration-300 inline-flex items-center gap-4">Training <svg class="w-8 h-8 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-2 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg></h2>
-          </a>
-          <p class="reveal text-neutral-500 italic text-sm tracking-wide mb-8">Changes capability.</p>
-          <div class="space-y-5 text-neutral-400 leading-relaxed">
-            <p class="reveal">
-              Your team sat through a training webinar last year. They forgot 80% of it within a week. Now they still ask you to "update the website" because nobody actually learned how. The problem isn't your team. The problem is that one-shot training doesn't work.
-            </p>
-            <p class="reveal">
-              I build guided programs. Three sessions over three to four weeks, with real assignments between them. Your team practices on their own systems, makes mistakes in a safe context, and comes back with questions that matter. Built on learning science, not slide decks.
-            </p>
-          </div>
-        </div>
-        <div class="lg:col-span-2 space-y-6 reveal-stagger">
-          <div class="reveal glow-card p-6" style="--i:0">
-            <h3 class="text-neutral-100 font-medium mb-2">WordPress and SEO</h3>
-            <p class="text-neutral-500 text-sm leading-relaxed">Content management, basic SEO, site maintenance. Your team stops being dependent on you for every small change.</p>
-          </div>
-          <div class="reveal glow-card p-6" style="--i:1">
-            <h3 class="text-neutral-100 font-medium mb-2">AI Workflows</h3>
-            <p class="text-neutral-500 text-sm leading-relaxed">Practical AI integration for your existing processes. When to use it, when not to, and how to tell the difference.</p>
-          </div>
-        </div>
-      </div>
+      <a href="/services/training" class="reveal inline-flex items-center gap-3 text-amber-400 text-sm mt-8 hover:text-amber-300 transition-colors duration-300 group">
+        Full details and pricing
+        <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+        </svg>
+      </a>
     </div>
   </section>
 
@@ -208,10 +135,9 @@ import Base from '../layouts/Base.astro';
   <section class="relative py-32 px-6 surface-1 overflow-hidden">
     <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
     <div class="relative max-w-3xl mx-auto text-center">
-      <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Not sure where to start?</h2>
-      <p class="reveal text-neutral-400 text-lg mb-10">Tell me what's going on and I'll tell you which of these makes sense for your situation. Sometimes the answer is "none of them, here's what you actually need."</p>
+      <p class="reveal text-neutral-400 text-lg mb-10">Not sure which of these fits? Tell me what's going on and I'll tell you. Sometimes the answer is "none of them, here's what you actually need."</p>
       <a href="/contact" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
-        Start a conversation
+        Let's talk
       </a>
     </div>
   </section>

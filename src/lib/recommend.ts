@@ -51,7 +51,7 @@ export function getRecommendation(overallScore: number, mentionCount: number): R
     return {
       bucket: 'negative',
       headline: 'Your online reputation needs attention.',
-      body: "People are talking about your brand, and the tone isn't working in your favor. This is fixable — most businesses can shift their online sentiment within 90 days with the right strategy. But the longer negative mentions sit unanswered, the more they compound.",
+      body: "People are talking about your brand, and the tone isn't working in your favor. This is fixable. Most businesses can shift their online sentiment within 90 days with the right strategy. But the longer negative mentions sit unanswered, the more they compound.",
       services: [
         {
           name: 'Marketing Strategy',
@@ -63,7 +63,7 @@ export function getRecommendation(overallScore: number, mentionCount: number): R
           name: 'Implementation',
           slug: 'implementation',
           url: '/services/implementation',
-          why: 'Execute the changes — respond to reviews, update listings, publish content',
+          why: 'Execute the changes. Respond to reviews, update listings, publish content',
         },
       ],
       cta_text: 'Fix my reputation',
@@ -77,7 +77,7 @@ export function getRecommendation(overallScore: number, mentionCount: number): R
     return {
       bucket: 'mixed',
       headline: "You have presence, but you're not controlling the narrative.",
-      body: "Your brand shows up online, but the signal is inconsistent. Some mentions are positive, some aren't, and there's no clear story. A focused strategy can tip the balance — amplify what's working, address what isn't, and make sure the right message shows up first.",
+      body: "Your brand shows up online, but the signal is inconsistent. Some mentions are positive, some aren't, and there's no clear story. A focused strategy can tip the balance. Amplify what's working, address what isn't, and make sure the right message shows up first.",
       services: [
         {
           name: 'Marketing Strategy',
@@ -89,7 +89,7 @@ export function getRecommendation(overallScore: number, mentionCount: number): R
           name: 'Web Management',
           slug: 'web-management',
           url: '/services/web-management',
-          why: 'Keep your owned properties tight — fast site, strong SEO, consistent message',
+          why: 'Keep your owned properties tight. Fast site, strong SEO, consistent message',
         },
       ],
       cta_text: 'Take control of my brand',
@@ -103,7 +103,7 @@ export function getRecommendation(overallScore: number, mentionCount: number): R
     return {
       bucket: 'positive-thin',
       headline: "Good sentiment. Not enough volume.",
-      body: "When people do find you, they like what they see. The problem is not enough people are finding you. You're leaving money on the table — the foundation is solid, now it's time to amplify. More listings, more content, more places where the right people can discover you.",
+      body: "When people do find you, they like what they see. The problem is not enough people are finding you. You're leaving money on the table. The foundation is solid, now it's time to amplify. More listings, more content, more places where the right people can discover you.",
       services: [
         {
           name: 'Implementation',
@@ -128,7 +128,7 @@ export function getRecommendation(overallScore: number, mentionCount: number): R
   return {
     bucket: 'strong',
     headline: "Your brand is in strong shape.",
-    body: "You've built real positive sentiment across multiple sources. The goal now is to protect it, maintain it, and make sure your team can keep the momentum going without depending on outside help. Or, if you want to push further — monitoring, competitor benchmarking, and scaling what works.",
+    body: "You've built real positive sentiment across multiple sources. The goal now is to protect it, maintain it, and make sure your team can keep the momentum going without depending on outside help. Or, if you want to push further: monitoring, competitor benchmarking, and scaling what works.",
     services: [
       {
         name: 'Training',

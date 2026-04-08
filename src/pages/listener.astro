@@ -44,12 +44,12 @@ const recentScans = await getRecentScans(5);
       </form>
 
       <!-- Optional refinement fields (collapsed by default) -->
-      <button id="refine-toggle" class="mt-4 text-neutral-600 text-xs hover:text-neutral-400 transition-colors flex items-center gap-1">
-        <span id="refine-arrow" class="transition-transform duration-200">&#9654;</span> Refine your search <span class="text-neutral-700">(optional)</span>
+      <button id="refine-toggle" class="mt-4 text-neutral-500 text-xs hover:text-neutral-400 transition-colors flex items-center gap-1">
+        <span id="refine-arrow" class="transition-transform duration-200">&#9654;</span> Refine your search <span class="text-neutral-500">(optional)</span>
       </button>
       <div id="refine-fields" class="hidden mt-4 grid md:grid-cols-3 gap-4">
         <div>
-          <label for="location-input" class="block text-neutral-600 text-xs tracking-[0.1em] uppercase mb-2">Location</label>
+          <label for="location-input" class="block text-neutral-500 text-xs tracking-[0.1em] uppercase mb-2">Location</label>
           <input
             type="text"
             id="location-input"
@@ -58,7 +58,7 @@ const recentScans = await getRecentScans(5);
           />
         </div>
         <div>
-          <label for="industry-input" class="block text-neutral-600 text-xs tracking-[0.1em] uppercase mb-2">Industry</label>
+          <label for="industry-input" class="block text-neutral-500 text-xs tracking-[0.1em] uppercase mb-2">Industry</label>
           <select id="industry-input" class="w-full bg-transparent border-b border-white/10 pb-2 text-neutral-300 text-sm focus:border-amber-400/50 focus:outline-none transition-colors appearance-none">
             <option value="" class="bg-neutral-900">Any industry</option>
             <option value="restaurant" class="bg-neutral-900">Restaurant / Food</option>
@@ -77,7 +77,7 @@ const recentScans = await getRecentScans(5);
           </select>
         </div>
         <div>
-          <label for="exclude-input" class="block text-neutral-600 text-xs tracking-[0.1em] uppercase mb-2">Exclude terms</label>
+          <label for="exclude-input" class="block text-neutral-500 text-xs tracking-[0.1em] uppercase mb-2">Exclude terms</label>
           <input
             type="text"
             id="exclude-input"
@@ -432,7 +432,7 @@ const recentScans = await getRecentScans(5);
         currentScanId = data.scan_id;
         renderTier1(data);
         if (data.unlocked) {
-          // Already unlocked — skip the gate, show everything
+          // Already unlocked, skip the gate, show everything
           gate.classList.add('hidden');
           document.getElementById('gate-confirmed')!.classList.remove('hidden');
           renderTier2(data);
@@ -632,7 +632,7 @@ const recentScans = await getRecentScans(5);
 
         loading.classList.add('hidden');
 
-        // Reuse the same rendering the scanner uses — dispatch a custom event
+        // Reuse the same rendering the scanner uses. Dispatch a custom event
         // with the data so we don't duplicate all the rendering code
         window.dispatchEvent(new CustomEvent('render-report', { detail: data }));
       } catch {

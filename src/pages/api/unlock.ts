@@ -107,7 +107,7 @@ async function sendReportEmail(apiKey: string, email: string, name: string, scan
           <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0;" />
 
           <p style="font-size: 14px; color: #666;">
-            I help businesses fix exactly these kinds of problems — from cleaning up how your brand shows up online to building a web presence that actually converts.
+            I help businesses fix exactly these kinds of problems. From cleaning up how your brand shows up online to building a web presence that actually converts.
             Reply to this email if you want to talk about what this report means for your business.
           </p>
 

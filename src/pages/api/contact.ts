@@ -49,7 +49,7 @@ export const POST: APIRoute = async ({ request }) => {
         sender: { name: 'codyasmith.com', email: 'cody@codyasmith.com' },
         to: [{ email: 'cody@codyasmith.com', name: 'Cody Smith' }],
         replyTo: { email: email, name: name },
-        subject: `New inquiry from ${name} — ${interestList}`,
+        subject: `New inquiry from ${name}: ${interestList}`,
         htmlContent: `
           <h2>New contact form submission</h2>
           <p><strong>Name:</strong> ${name}</p>

@@ -24,9 +24,12 @@ const links = [
         </a>
       ))}
     </div>
-    <button id="mobile-menu-btn" class="md:hidden text-neutral-400 hover:text-neutral-100 transition-colors" aria-label="Menu">
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <button id="mobile-menu-btn" class="md:hidden p-2 -mr-2 text-neutral-400 hover:text-neutral-100 transition-colors" aria-label="Menu" aria-expanded="false" aria-controls="mobile-menu">
+      <svg id="menu-icon-open" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h16M4 18h16" />
+      </svg>
+      <svg id="menu-icon-close" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12" />
       </svg>
     </button>
   </div>
@@ -63,13 +66,25 @@ const links = [
     // Mobile menu
     const btn = document.getElementById('mobile-menu-btn');
     const menu = document.getElementById('mobile-menu');
-    const newBtn = btn?.cloneNode(true);
-    if (btn && newBtn) {
-      btn.replaceWith(newBtn);
-      newBtn.addEventListener('click', () => menu?.classList.toggle('hidden'));
+    const iconOpen = document.getElementById('menu-icon-open');
+    const iconClose = document.getElementById('menu-icon-close');
+
+    function setMenuState(open: boolean) {
+      if (!menu || !btn || !iconOpen || !iconClose) return;
+      menu.classList.toggle('hidden', !open);
+      btn.setAttribute('aria-expanded', String(open));
+      btn.setAttribute('aria-label', open ? 'Close menu' : 'Menu');
+      iconOpen.classList.toggle('hidden', open);
+      iconClose.classList.toggle('hidden', !open);
     }
-    // Close mobile menu on navigation
-    menu?.classList.add('hidden');
+
+    // Close menu on page nav
+    setMenuState(false);
+
+    btn?.addEventListener('click', () => {
+      const isOpen = btn.getAttribute('aria-expanded') === 'true';
+      setMenuState(!isOpen);
+    });
   }
 
   initNav();

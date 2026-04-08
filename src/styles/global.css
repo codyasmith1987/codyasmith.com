@@ -44,13 +44,26 @@
     inset: 0;
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
     pointer-events: none;
-    z-index: 9999;
+    z-index: 60;
     opacity: 0.35;
   }
 
   ::selection {
     background-color: var(--color-amber-600);
     color: var(--color-neutral-950);
+  }
+
+  /* Focus-visible styles for keyboard navigation */
+  :focus-visible {
+    outline: 2px solid var(--color-amber-400);
+    outline-offset: 2px;
+  }
+
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: none;
+    border-color: var(--color-amber-400);
   }
 
   /* Kill browser autofill white background */
@@ -131,6 +144,16 @@
   .glow-card > * {
     position: relative;
     z-index: 1;
+  }
+
+  /* Tier cards need overflow visible for the badge */
+  .tier-card {
+    overflow: visible;
+  }
+
+  .tier-card::before {
+    border-radius: 1rem;
+    overflow: hidden;
   }
 
   /* Surface levels */

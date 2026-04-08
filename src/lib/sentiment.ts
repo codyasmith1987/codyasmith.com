@@ -122,7 +122,7 @@ export function generateReport(scrapedMentions: (ScrapedMention & { query_type: 
   } else if (overall_score >= 40) {
     summary = `Your online sentiment is mixed. Of ${mentions.length} mentions found, ${posCount} were positive and ${negCount} negative. ${top_negative_phrases.length > 0 ? `Watch for recurring themes like "${top_negative_phrases.slice(0, 3).join('", "')}" in negative mentions.` : ''}`;
   } else {
-    summary = `Your online sentiment needs attention. ${negCount} of ${mentions.length} mentions were negative. ${top_negative_phrases.length > 0 ? `The most common negative signals: "${top_negative_phrases.slice(0, 3).join('", "')}".` : ''} This is fixable — most brands can shift sentiment within 90 days with the right strategy.`;
+    summary = `Your online sentiment needs attention. ${negCount} of ${mentions.length} mentions were negative. ${top_negative_phrases.length > 0 ? `The most common negative signals: "${top_negative_phrases.slice(0, 3).join('", "')}".` : ''} This is fixable. Most brands can shift sentiment within 90 days with the right strategy.`;
   }
 
   // Tier 1 samples: pick one positive, one negative, one neutral (if available)

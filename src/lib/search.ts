@@ -44,8 +44,8 @@ async function serperSearch(query: string, apiKey: string, num = 5): Promise<Ser
  * Key principle: we want what OTHER PEOPLE say about the brand.
  * Not the brand's own website, social profiles, or marketing.
  *
- * Review sites and Reddit are gold — those are real people talking.
- * Brand-owned social pages are noise — that's the company talking about itself.
+ * Review sites and Reddit are gold. Those are real people talking.
+ * Brand-owned social pages are noise. That's the company talking about itself.
  */
 export interface SearchRefinements {
   location?: string | null;
@@ -189,7 +189,7 @@ function isOwnContent(url: string, excludedDomains: string[], brandSlug: string)
 
 /**
  * Run the full search: 4 queries, 5 results each, deduplicated.
- * Filters out the brand's own domains — we only want external mentions.
+ * Filters out the brand's own domains. We only want external mentions.
  */
 export async function searchForMentions(brand: string, domain: string | null, apiKey: string, refinements: SearchRefinements = {}): Promise<SearchResult[]> {
   const queries = buildQueries(brand, domain, refinements);
@@ -216,7 +216,7 @@ export async function searchForMentions(brand: string, domain: string | null, ap
       const key = hit.url.split('?')[0].toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
-      // Skip the brand's own content — website, social profiles, official pages
+      // Skip the brand's own content: website, social profiles, official pages
       if (isOwnContent(hit.url, excludedDomains, brandSlug)) continue;
       results.push({
         url: hit.url,

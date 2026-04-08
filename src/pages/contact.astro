@@ -9,7 +9,7 @@ import Base from '../layouts/Base.astro';
     <div class="relative max-w-4xl mx-auto">
       <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Contact</p>
       <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10">
-        Let's talk.
+        Let's talk<span data-personalize="name-comma" style="display:none"></span>.
       </h1>
       <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl">
         Tell me what's going on. The version you'd tell a friend, not the one you'd put in a board presentation. I'll tell you if I can help, what it would cost, and how long it takes. If I can't help, I'll say that in the first email.
@@ -31,6 +31,7 @@ import Base from '../layouts/Base.astro';
                 id="name"
                 name="name"
                 required
+                data-personalize="prefill-name"
                 class="w-full bg-transparent border-b border-white/10 pb-3 text-neutral-100 text-lg focus:border-amber-400 focus:outline-none transition-colors duration-300 placeholder:text-neutral-700"
                 placeholder="Your name"
               />
@@ -42,6 +43,7 @@ import Base from '../layouts/Base.astro';
                 id="email"
                 name="email"
                 required
+                data-personalize="prefill-email"
                 class="w-full bg-transparent border-b border-white/10 pb-3 text-neutral-100 text-lg focus:border-amber-400 focus:outline-none transition-colors duration-300 placeholder:text-neutral-700"
                 placeholder="you@company.com"
               />

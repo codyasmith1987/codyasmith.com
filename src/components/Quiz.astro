@@ -206,6 +206,10 @@
       const email = (document.getElementById('quiz-email') as HTMLInputElement)?.value || '';
       const theme = buildThemeName();
 
+      // Save name and email for personalization across the site
+      answers['name'] = name;
+      answers['email'] = email;
+
       applyTheme(theme);
 
       // Send lead data in background

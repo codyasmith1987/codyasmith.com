@@ -74,6 +74,45 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
     </div>
 
     <script>
+      function initPersonalization() {
+        let quizData: Record<string, string> = {};
+        try {
+          quizData = JSON.parse(localStorage.getItem('cs-quiz-answers') || '{}');
+        } catch { /* empty */ }
+
+        const name = quizData.name || '';
+        const email = quizData.email || '';
+        const firstName = name.split(' ')[0] || '';
+
+        // Name injections: elements with data-personalize="name-comma"
+        // These contain ", {name}" placeholder text and are hidden by default
+        document.querySelectorAll('[data-personalize="name-comma"]').forEach(el => {
+          if (firstName) {
+            (el as HTMLElement).textContent = `, ${firstName}`;
+            (el as HTMLElement).style.display = '';
+          } else {
+            (el as HTMLElement).style.display = 'none';
+          }
+        });
+
+        // Pre-fill form inputs
+        const nameInput = document.querySelector('[data-personalize="prefill-name"]') as HTMLInputElement;
+        const emailInput = document.querySelector('[data-personalize="prefill-email"]') as HTMLInputElement;
+        if (nameInput && name && !nameInput.value) nameInput.value = name;
+        if (emailInput && email && !emailInput.value) emailInput.value = email;
+
+        // Returning visitor detection: if they've been here before, swap some CTAs
+        if (localStorage.getItem('cs-visit-count')) {
+          const count = parseInt(localStorage.getItem('cs-visit-count') || '0', 10) + 1;
+          localStorage.setItem('cs-visit-count', String(count));
+          document.querySelectorAll('[data-personalize="returning-cta"]').forEach(el => {
+            (el as HTMLElement).style.display = '';
+          });
+        } else {
+          localStorage.setItem('cs-visit-count', '1');
+        }
+      }
+
       function initReveals() {
         const observer = new IntersectionObserver((entries) => {
           entries.forEach(e => {
@@ -115,9 +154,11 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
       }
 
       initReveals();
+      initPersonalization();
       initThemeSwitcher();
       document.addEventListener('astro:after-swap', () => {
         initReveals();
+        initPersonalization();
         initThemeSwitcher();
       });
     </script>

@@ -23,6 +23,48 @@
   --color-amber-400: #fbbf24;
 }
 
+/* ============================================
+   THEME: The Newspaper (warm light)
+   ============================================ */
+[data-theme="newspaper"] {
+  --color-neutral-950: #faf6f0;
+  --color-neutral-900: #f0ebe3;
+  --color-neutral-850: #e8e2d8;
+  --color-neutral-800: #ddd5ca;
+  --color-neutral-700: #b0a79c;
+  --color-neutral-600: #8a8178;
+  --color-neutral-500: #6d645b;
+  --color-neutral-400: #4a433c;
+  --color-neutral-300: #362f2a;
+  --color-neutral-200: #261f1b;
+  --color-neutral-100: #1a1613;
+
+  --color-amber-600: #9e4a2a;
+  --color-amber-500: #b85c38;
+  --color-amber-400: #c46f48;
+}
+
+/* ============================================
+   THEME: The Dark Room (warm dark)
+   ============================================ */
+[data-theme="darkroom"] {
+  --color-neutral-950: #15120f;
+  --color-neutral-900: #1e1a16;
+  --color-neutral-850: #252019;
+  --color-neutral-800: #302a23;
+  --color-neutral-700: #4d453c;
+  --color-neutral-600: #685e54;
+  --color-neutral-500: #847a6e;
+  --color-neutral-400: #a69a8e;
+  --color-neutral-300: #c8bdb2;
+  --color-neutral-200: #ddd3c8;
+  --color-neutral-100: #f0e8df;
+
+  --color-amber-600: #a65e3a;
+  --color-amber-500: #c47d5a;
+  --color-amber-400: #d4926a;
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;
@@ -46,6 +88,11 @@
     pointer-events: none;
     z-index: 60;
     opacity: 0.35;
+  }
+
+  /* Newspaper: lighter, warmer noise */
+  [data-theme="newspaper"] body::after {
+    opacity: 0.15;
   }
 
   ::selection {
@@ -75,6 +122,39 @@
     -webkit-text-fill-color: var(--color-neutral-100);
     -webkit-box-shadow: 0 0 0px 1000px var(--color-neutral-950) inset;
     transition: background-color 5000s ease-in-out 0s;
+  }
+
+  /* Newspaper: fix white/X borders to use dark opacity instead */
+  [data-theme="newspaper"] [class*="border-white\/"],
+  [data-theme="newspaper"] [class*="border-white/"] {
+    border-color: rgba(26, 22, 19, 0.08);
+  }
+
+  /* Newspaper: fix blur orbs to use warm tones */
+  [data-theme="newspaper"] [class*="bg-amber-500\/5"] {
+    background-color: rgba(184, 92, 56, 0.04);
+  }
+
+  /* Newspaper: nav needs different backdrop */
+  [data-theme="newspaper"] nav {
+    background-color: rgba(250, 246, 240, 0.85);
+    border-bottom-color: rgba(26, 22, 19, 0.06);
+  }
+
+  [data-theme="newspaper"] #mobile-menu {
+    background-color: rgba(250, 246, 240, 0.97);
+    border-top-color: rgba(26, 22, 19, 0.06);
+  }
+
+  /* Dark Room: fix blur orbs to use copper tones */
+  [data-theme="darkroom"] [class*="bg-amber-500\/5"] {
+    background-color: rgba(196, 125, 90, 0.04);
+  }
+
+  /* Dark Room: warmer nav */
+  [data-theme="darkroom"] nav {
+    background-color: rgba(21, 18, 15, 0.85);
+    border-bottom-color: rgba(240, 232, 223, 0.04);
   }
 }
 
@@ -111,6 +191,16 @@
     background: linear-gradient(to right, transparent, rgba(255,255,255,0.08), transparent);
   }
 
+  /* Newspaper: divider uses dark */
+  [data-theme="newspaper"] .gradient-divider {
+    background: linear-gradient(to right, transparent, rgba(26, 22, 19, 0.1), transparent);
+  }
+
+  /* Dark Room: divider uses warm tone */
+  [data-theme="darkroom"] .gradient-divider {
+    background: linear-gradient(to right, transparent, rgba(240, 232, 223, 0.06), transparent);
+  }
+
   /* Card with hover glow */
   .glow-card {
     position: relative;
@@ -141,6 +231,34 @@
     border-color: rgba(251,191,36,0.15);
   }
 
+  /* Newspaper: cards use shadow instead of glow */
+  [data-theme="newspaper"] .glow-card {
+    border-color: rgba(26, 22, 19, 0.06);
+    box-shadow: 0 1px 3px rgba(26, 22, 19, 0.04);
+  }
+
+  [data-theme="newspaper"] .glow-card::before {
+    display: none;
+  }
+
+  [data-theme="newspaper"] .glow-card:hover {
+    border-color: rgba(26, 22, 19, 0.12);
+    box-shadow: 0 4px 12px rgba(26, 22, 19, 0.06);
+  }
+
+  /* Dark Room: warm copper glow */
+  [data-theme="darkroom"] .glow-card {
+    border-color: rgba(240, 232, 223, 0.04);
+  }
+
+  [data-theme="darkroom"] .glow-card:hover::before {
+    background: linear-gradient(135deg, rgba(196, 125, 90, 0.08), rgba(166, 94, 58, 0.04), rgba(196, 125, 90, 0));
+  }
+
+  [data-theme="darkroom"] .glow-card:hover {
+    border-color: rgba(196, 125, 90, 0.12);
+  }
+
   .glow-card > * {
     position: relative;
     z-index: 1;
@@ -169,5 +287,60 @@
   .dot-grid {
     background-image: radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
     background-size: 24px 24px;
+  }
+
+  /* Newspaper: subtle warm dot grid */
+  [data-theme="newspaper"] .dot-grid {
+    background-image: radial-gradient(circle, rgba(26, 22, 19, 0.03) 1px, transparent 1px);
+  }
+
+  /* Dark Room: warm-tinted dot grid */
+  [data-theme="darkroom"] .dot-grid {
+    background-image: radial-gradient(circle, rgba(240, 232, 223, 0.025) 1px, transparent 1px);
+  }
+
+  /* ============================================
+     Theme Switcher UI
+     ============================================ */
+  .theme-switcher {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 55;
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: 0.5rem;
+    background-color: var(--color-neutral-900);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  [data-theme="newspaper"] .theme-switcher {
+    border-color: rgba(26, 22, 19, 0.1);
+    box-shadow: 0 4px 24px rgba(26, 22, 19, 0.12);
+  }
+
+  .theme-switcher button {
+    padding: 0.4rem 0.75rem;
+    border-radius: 0.375rem;
+    color: var(--color-neutral-500);
+    transition: all 0.2s ease;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+  }
+
+  .theme-switcher button:hover {
+    color: var(--color-neutral-100);
+  }
+
+  .theme-switcher button.active {
+    background-color: var(--color-amber-500);
+    color: var(--color-neutral-950);
   }
 }

@@ -12,6 +12,7 @@ export const POST: APIRoute = async ({ request }) => {
     // Collect all checked interests
     const interests = data.getAll('interest').map(i => i.toString());
     const interestList = interests.length > 0 ? interests.join(', ') : 'Not specified';
+    const quizTheme = data.get('quiz-theme')?.toString() || '';
 
     if (!name || !email || !message) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
@@ -49,12 +50,13 @@ export const POST: APIRoute = async ({ request }) => {
         sender: { name: 'codyasmith.com', email: 'cody@codyasmith.com' },
         to: [{ email: 'cody@codyasmith.com', name: 'Cody Smith' }],
         replyTo: { email: email, name: name },
-        subject: `New inquiry from ${name}: ${interestList}`,
+        subject: `New inquiry from ${name}: ${interestList}${quizTheme ? ` [${quizTheme}]` : ''}`,
         htmlContent: `
           <h2>New contact form submission</h2>
           <p><strong>Name:</strong> ${name}</p>
           <p><strong>Email:</strong> ${email}</p>
           <p><strong>Interested in:</strong> ${interestList}</p>
+          ${quizTheme ? `<p><strong>Quiz theme:</strong> ${quizTheme}</p>` : ''}
           <p><strong>Message:</strong></p>
           <p>${message.replace(/\n/g, '<br>')}</p>
         `,

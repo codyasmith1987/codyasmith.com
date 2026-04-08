@@ -38,8 +38,14 @@ const personSchema = JSON.stringify({
         <span class="gradient-text">its website</span><br class="hidden md:block" />
         a while ago.
       </h1>
-      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl mb-14" style="--i:2">
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl mb-14" style="--i:2" data-vibe="default">
         You know it. You've known it for a while. The site hasn't been touched in months. The analytics might be good or bad but nobody can tell you which. The developer who built the thing stopped returning emails. And every week you think "I need to do something about the website" and then something more urgent lands on your desk and you don't.
+      </p>
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl mb-14" style="--i:2;display:none" data-vibe="beach">
+        You've built something people are finding. Traffic is up, referrals are growing, the reputation is real. But the website doesn't reflect any of that. It looks like a business half the size you actually are. The world is starting to pay attention and your front door still looks like 2019.
+      </p>
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl mb-14" style="--i:2;display:none" data-vibe="mountain">
+        The business is already working but the infrastructure under it isn't ready for what comes next. The hosting is someone else's problem. The analytics are somebody's guess. The last developer left and took the passwords with them. Meanwhile you're growing on top of a foundation you can't see and can't control.
       </p>
       <div class="reveal flex flex-col sm:flex-row gap-4" style="--i:3">
         <a href="/services" class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
@@ -57,7 +63,9 @@ const personSchema = JSON.stringify({
     <div class="max-w-6xl mx-auto">
       <div class="reveal mb-16">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">What I do</p>
-        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">I close the gap between the business you've built and the website representing it.</h2>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100" data-vibe="default">I close the gap between the business you've built and the website representing it.</h2>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100" style="display:none" data-vibe="beach">I help businesses look as good online as they actually are.</h2>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100" style="display:none" data-vibe="mountain">I make sure the infrastructure under your business is as solid as the business itself.</h2>
       </div>
       <div class="grid md:grid-cols-2 gap-6 reveal-stagger">
         <a href="/services/web-management" class="reveal glow-card p-8 block group cursor-pointer" style="--i:0">
@@ -154,8 +162,10 @@ const personSchema = JSON.stringify({
     <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
     <div class="relative max-w-3xl mx-auto text-center">
       <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Get started</p>
-      <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Sound familiar<span data-personalize="name-comma" style="display:none"></span>?</h2>
-      <p class="reveal text-neutral-400 text-lg mb-10">If you read three of those and thought "that's us," we should probably talk. No pitch deck. No discovery call theater. Just tell me what's going on.</p>
+      <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6" data-personalize="first-visit">Sound familiar<span data-personalize="name-comma" style="display:none"></span>?</h2>
+      <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6" data-personalize="returning" style="display:none">Still thinking about it<span data-personalize="name-comma" style="display:none"></span>?</h2>
+      <p class="reveal text-neutral-400 text-lg mb-10" data-personalize="first-visit">If you read three of those and thought "that's us," we should probably talk. No pitch deck. No discovery call theater. Just tell me what's going on.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" data-personalize="returning" style="display:none">No pressure. But the website isn't fixing itself. Whenever you're ready, I'm here.</p>
       <a href="/contact" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
         Start a conversation
       </a>

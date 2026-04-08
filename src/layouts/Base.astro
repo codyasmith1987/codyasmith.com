@@ -83,9 +83,10 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
         const name = quizData.name || '';
         const email = quizData.email || '';
         const firstName = name.split(' ')[0] || '';
+        const place = quizData['2'] || '';   // beach or mountain
+        const season = quizData['3'] || '';  // spring or fall
 
-        // Name injections: elements with data-personalize="name-comma"
-        // These contain ", {name}" placeholder text and are hidden by default
+        // ---- Name injections ----
         document.querySelectorAll('[data-personalize="name-comma"]').forEach(el => {
           if (firstName) {
             (el as HTMLElement).textContent = `, ${firstName}`;
@@ -95,23 +96,50 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
           }
         });
 
-        // Pre-fill form inputs
+        // ---- Pre-fill form inputs ----
         const nameInput = document.querySelector('[data-personalize="prefill-name"]') as HTMLInputElement;
         const emailInput = document.querySelector('[data-personalize="prefill-email"]') as HTMLInputElement;
         if (nameInput && name && !nameInput.value) nameInput.value = name;
         if (emailInput && email && !emailInput.value) emailInput.value = email;
 
-        // Returning visitor detection: if they've been here before, swap some CTAs
-        if (localStorage.getItem('cs-visit-count')) {
-          const count = parseInt(localStorage.getItem('cs-visit-count') || '0', 10) + 1;
-          localStorage.setItem('cs-visit-count', String(count));
-          document.querySelectorAll('[data-personalize="returning-cta"]').forEach(el => {
-            (el as HTMLElement).style.display = '';
+        // ---- Personality-aware copy (vibe variants) ----
+        // If quiz was taken and place preference exists, swap copy
+        if (place) {
+          // Show the matching vibe, hide default
+          document.querySelectorAll('[data-vibe]').forEach(el => {
+            const vibe = (el as HTMLElement).dataset.vibe;
+            if (vibe === place) {
+              (el as HTMLElement).style.display = '';
+            } else if (vibe === 'default') {
+              (el as HTMLElement).style.display = 'none';
+            }
+            // Other vibes stay hidden
           });
+        }
+
+        // ---- Returning visitor detection ----
+        const visitCount = parseInt(localStorage.getItem('cs-visit-count') || '0', 10);
+        const isReturning = visitCount > 1;
+
+        if (visitCount > 0) {
+          localStorage.setItem('cs-visit-count', String(visitCount + 1));
         } else {
           localStorage.setItem('cs-visit-count', '1');
         }
+
+        if (isReturning && localStorage.getItem('cs-quiz-done')) {
+          // Show returning visitor elements, hide first-visit ones
+          document.querySelectorAll('[data-personalize="returning"]').forEach(el => {
+            (el as HTMLElement).style.display = '';
+          });
+          document.querySelectorAll('[data-personalize="first-visit"]').forEach(el => {
+            (el as HTMLElement).style.display = 'none';
+          });
+        }
       }
+
+      // Expose for quiz to call after completion
+      (window as any).__initPersonalization = initPersonalization;
 
       function initReveals() {
         const observer = new IntersectionObserver((entries) => {

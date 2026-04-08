@@ -10,9 +10,14 @@ const links = [
 
 <nav class="fixed top-0 w-full z-50 bg-neutral-950/80 backdrop-blur-md border-b border-white/5">
   <div class="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
-    <a href="/" class="text-neutral-100 font-serif text-xl tracking-tight hover:text-amber-400 transition-colors duration-300">
-      Cody Smith
-    </a>
+    <div class="flex items-center gap-3">
+      <a href="/" class="text-neutral-100 font-serif text-xl tracking-tight hover:text-amber-400 transition-colors duration-300">
+        Cody Smith
+      </a>
+      <span id="nav-personalized" class="text-neutral-700 text-[10px] font-mono tracking-wider uppercase hidden">
+        built for <span id="nav-visitor-name"></span>
+      </span>
+    </div>
     <div class="hidden md:flex items-center gap-8">
       {links.map(link => (
         <a
@@ -49,6 +54,20 @@ const links = [
 </nav>
 
 <script>
+  function initNavPersonalization() {
+    const badge = document.getElementById('nav-personalized');
+    const nameEl = document.getElementById('nav-visitor-name');
+    if (!badge || !nameEl) return;
+    try {
+      const data = JSON.parse(localStorage.getItem('cs-quiz-answers') || '{}');
+      const firstName = (data.name || '').split(' ')[0];
+      if (firstName) {
+        nameEl.textContent = firstName.toLowerCase();
+        badge.classList.remove('hidden');
+      }
+    } catch { /* empty */ }
+  }
+
   function initNav() {
     // Active state
     const path = window.location.pathname.replace(/\/$/, '') || '/';
@@ -88,5 +107,6 @@ const links = [
   }
 
   initNav();
-  document.addEventListener('astro:after-swap', initNav);
+  initNavPersonalization();
+  document.addEventListener('astro:after-swap', () => { initNav(); initNavPersonalization(); });
 </script>

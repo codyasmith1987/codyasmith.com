@@ -76,6 +76,7 @@
 
       <!-- Step 4: Lead capture -->
       <div data-step="4" class="quiz-step text-center" style="display:none">
+
         <p class="font-mono text-xs tracking-[0.2em] uppercase mb-8" style="color:#d4926a">Almost done</p>
         <h2 class="font-serif text-3xl md:text-4xl leading-tight mb-4" style="color:#f0e8df">
           Now I know how to set the room.
@@ -97,6 +98,13 @@
             </button>
           </div>
         </form>
+      </div>
+
+      <!-- Step 5: Reveal interstitial -->
+      <div data-step="5" class="quiz-step text-center" style="display:none">
+        <p class="font-quote italic text-3xl md:text-4xl leading-snug" style="color:#f0e8df">
+          Setting the room<span id="reveal-name"></span>...
+        </p>
       </div>
 
     </div>
@@ -145,7 +153,23 @@
 
     function closeQuiz() {
       quiz.style.opacity = '0';
-      setTimeout(() => { quiz.style.display = 'none'; }, 500);
+      setTimeout(() => {
+        quiz.style.display = 'none';
+        // Trigger personalization now that quiz data is saved
+        if (typeof (window as any).__initPersonalization === 'function') {
+          (window as any).__initPersonalization();
+        }
+      }, 500);
+    }
+
+    function showRevealThenClose(nameStr?: string) {
+      // Set the name in the reveal text
+      const revealName = document.getElementById('reveal-name');
+      if (revealName && nameStr) {
+        revealName.textContent = ` for ${nameStr.split(' ')[0]}`;
+      }
+      showStep(5);
+      setTimeout(closeQuiz, 1400);
     }
 
     function buildThemeName(): string {
@@ -178,7 +202,7 @@
       } else if (action === 'skip-lead') {
         const theme = buildThemeName();
         applyTheme(theme);
-        closeQuiz();
+        showRevealThenClose();
       } else if (answer) {
         // Store answer for current step
         answers[String(currentStep)] = answer;
@@ -214,7 +238,7 @@
 
       // Send lead data in background
       try {
-        await fetch('/api/quiz', {
+        fetch('/api/quiz', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name, email, theme, answers }),
@@ -223,7 +247,7 @@
         // Fail silently - the theme still applies
       }
 
-      closeQuiz();
+      showRevealThenClose(name);
     });
   }
 

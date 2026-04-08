@@ -24,6 +24,7 @@ import Base from '../layouts/Base.astro';
         <!-- Form -->
         <div class="lg:col-span-3 reveal">
           <form id="contact-form" class="space-y-8">
+            <input type="hidden" name="quiz-theme" id="quiz-theme-field" value="" />
             <div>
               <label for="name" class="block text-neutral-500 text-xs tracking-[0.15em] uppercase mb-3">Name</label>
               <input
@@ -467,9 +468,16 @@ import Base from '../layouts/Base.astro';
       grid.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
+    // Pre-fill quiz theme into hidden field
+    function initQuizField() {
+      const field = document.getElementById('quiz-theme-field') as HTMLInputElement;
+      if (field) field.value = localStorage.getItem('cs-theme') || '';
+    }
+
+    initQuizField();
     initNudges();
     initForm();
     initFromURL();
-    document.addEventListener('astro:after-swap', () => { initNudges(); initForm(); initFromURL(); });
+    document.addEventListener('astro:after-swap', () => { initQuizField(); initNudges(); initForm(); initFromURL(); });
   </script>
 </Base>

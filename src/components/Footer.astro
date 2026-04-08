@@ -19,9 +19,14 @@ const year = new Date().getFullYear();
       </div>
     </div>
     <div class="gradient-divider mt-10 mb-6"></div>
-    <p class="text-neutral-700 text-xs">
-      &copy; {year} Cody Smith. All rights reserved.
-    </p>
+    <div class="flex items-center justify-between">
+      <p class="text-neutral-700 text-xs">
+        &copy; {year} Cody Smith. All rights reserved.
+      </p>
+      <button id="repersonalize-btn" class="text-neutral-700 hover:text-amber-400 text-xs transition-colors duration-300 cursor-pointer" style="display:none">
+        Repersonalize
+      </button>
+    </div>
   </div>
 </footer>
 
@@ -36,6 +41,20 @@ const year = new Date().getFullYear();
       if (placeholder) placeholder.textContent = addr;
     });
   }
+  function initRepersonalize() {
+    const btn = document.getElementById('repersonalize-btn');
+    if (!btn) return;
+    if (localStorage.getItem('cs-quiz-done')) btn.style.display = '';
+    btn.addEventListener('click', () => {
+      localStorage.removeItem('cs-quiz-done');
+      localStorage.removeItem('cs-theme');
+      localStorage.removeItem('cs-quiz-answers');
+      document.documentElement.removeAttribute('data-theme');
+      window.location.reload();
+    });
+  }
+
   hydrateEmails();
-  document.addEventListener('astro:after-swap', hydrateEmails);
+  initRepersonalize();
+  document.addEventListener('astro:after-swap', () => { hydrateEmails(); initRepersonalize(); });
 </script>

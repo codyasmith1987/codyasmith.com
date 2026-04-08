@@ -24,9 +24,61 @@
 }
 
 /* ============================================
-   THEME: The Newspaper (warm light)
+   SUN THEMES (light base)
    ============================================ */
-[data-theme="newspaper"] {
+
+[data-theme="sun-beach-spring"] {
+  --color-neutral-950: #f2f6f7;
+  --color-neutral-900: #e8eef0;
+  --color-neutral-850: #dde4e8;
+  --color-neutral-800: #cdd5da;
+  --color-neutral-700: #9aa8b0;
+  --color-neutral-600: #748490;
+  --color-neutral-500: #586a76;
+  --color-neutral-400: #3c4e5a;
+  --color-neutral-300: #2a3840;
+  --color-neutral-200: #1e2a32;
+  --color-neutral-100: #141e26;
+  --color-amber-600: #1e7a7a;
+  --color-amber-500: #2a9696;
+  --color-amber-400: #38aeae;
+}
+
+[data-theme="sun-beach-fall"] {
+  --color-neutral-950: #f8f5ee;
+  --color-neutral-900: #f0ebe2;
+  --color-neutral-850: #e6e0d5;
+  --color-neutral-800: #dad3c6;
+  --color-neutral-700: #aea598;
+  --color-neutral-600: #8a8178;
+  --color-neutral-500: #6a6258;
+  --color-neutral-400: #4a433a;
+  --color-neutral-300: #342e28;
+  --color-neutral-200: #26201a;
+  --color-neutral-100: #1a1612;
+  --color-amber-600: #a07a18;
+  --color-amber-500: #c49520;
+  --color-amber-400: #d4a830;
+}
+
+[data-theme="sun-mountain-spring"] {
+  --color-neutral-950: #f3f5ee;
+  --color-neutral-900: #eaede4;
+  --color-neutral-850: #e0e4d8;
+  --color-neutral-800: #d3d8ca;
+  --color-neutral-700: #a2ab96;
+  --color-neutral-600: #7e8874;
+  --color-neutral-500: #606a58;
+  --color-neutral-400: #3e4838;
+  --color-neutral-300: #2a3226;
+  --color-neutral-200: #1e261a;
+  --color-neutral-100: #151c12;
+  --color-amber-600: #3c7a30;
+  --color-amber-500: #4e9440;
+  --color-amber-400: #5eaa50;
+}
+
+[data-theme="sun-mountain-fall"] {
   --color-neutral-950: #faf6f0;
   --color-neutral-900: #f0ebe3;
   --color-neutral-850: #e8e2d8;
@@ -38,16 +90,67 @@
   --color-neutral-300: #362f2a;
   --color-neutral-200: #261f1b;
   --color-neutral-100: #1a1613;
-
   --color-amber-600: #9e4a2a;
   --color-amber-500: #b85c38;
   --color-amber-400: #c46f48;
 }
 
 /* ============================================
-   THEME: The Dark Room (warm dark)
+   MOON THEMES (dark base)
    ============================================ */
-[data-theme="darkroom"] {
+
+[data-theme="moon-beach-spring"] {
+  --color-neutral-950: #0e1318;
+  --color-neutral-900: #151c22;
+  --color-neutral-850: #1b232a;
+  --color-neutral-800: #242e38;
+  --color-neutral-700: #3a4a58;
+  --color-neutral-600: #526270;
+  --color-neutral-500: #6c7e8e;
+  --color-neutral-400: #8a9cac;
+  --color-neutral-300: #aec0cc;
+  --color-neutral-200: #cddae2;
+  --color-neutral-100: #e2ecf0;
+  --color-amber-600: #1e8080;
+  --color-amber-500: #2aa0a0;
+  --color-amber-400: #38b4b4;
+}
+
+[data-theme="moon-beach-fall"] {
+  --color-neutral-950: #12100e;
+  --color-neutral-900: #1a1816;
+  --color-neutral-850: #22201c;
+  --color-neutral-800: #2c2a26;
+  --color-neutral-700: #46423c;
+  --color-neutral-600: #605a52;
+  --color-neutral-500: #7c756c;
+  --color-neutral-400: #9c9488;
+  --color-neutral-300: #beb4a8;
+  --color-neutral-200: #d8d0c4;
+  --color-neutral-100: #ece6dc;
+  --color-amber-600: #a88018;
+  --color-amber-500: #cc9c22;
+  --color-amber-400: #deb030;
+}
+
+[data-theme="moon-mountain-spring"] {
+  --color-neutral-950: #0e110d;
+  --color-neutral-900: #161a14;
+  --color-neutral-850: #1c211a;
+  --color-neutral-800: #262c22;
+  --color-neutral-700: #3e4838;
+  --color-neutral-600: #566050;
+  --color-neutral-500: #707a68;
+  --color-neutral-400: #8e9884;
+  --color-neutral-300: #aeb8a6;
+  --color-neutral-200: #ccd4c4;
+  --color-neutral-100: #e2e8dc;
+  --color-amber-600: #3c7c30;
+  --color-amber-500: #4e9642;
+  --color-amber-400: #60ae52;
+}
+
+[data-theme="moon-mountain-fall"] {
   --color-neutral-950: #15120f;
   --color-neutral-900: #1e1a16;
   --color-neutral-850: #252019;
@@ -59,11 +162,14 @@
   --color-neutral-300: #c8bdb2;
   --color-neutral-200: #ddd3c8;
   --color-neutral-100: #f0e8df;
-
   --color-amber-600: #a65e3a;
   --color-amber-500: #c47d5a;
   --color-amber-400: #d4926a;
 }
+
+/* ============================================
+   BASE LAYER
+   ============================================ */
 
 @layer base {
   html {
@@ -90,17 +196,14 @@
     opacity: 0.35;
   }
 
-  /* Newspaper: lighter, warmer noise */
-  [data-theme="newspaper"] body::after {
-    opacity: 0.15;
-  }
+  /* Sun themes: softer noise */
+  [data-theme^="sun-"] body::after { opacity: 0.12; }
 
   ::selection {
     background-color: var(--color-amber-600);
     color: var(--color-neutral-950);
   }
 
-  /* Focus-visible styles for keyboard navigation */
   :focus-visible {
     outline: 2px solid var(--color-amber-400);
     outline-offset: 2px;
@@ -113,7 +216,6 @@
     border-color: var(--color-amber-400);
   }
 
-  /* Kill browser autofill white background */
   input:-webkit-autofill,
   input:-webkit-autofill:hover,
   input:-webkit-autofill:focus,
@@ -124,42 +226,42 @@
     transition: background-color 5000s ease-in-out 0s;
   }
 
-  /* Newspaper: fix white/X borders to use dark opacity instead */
-  [data-theme="newspaper"] [class*="border-white\/"],
-  [data-theme="newspaper"] [class*="border-white/"] {
-    border-color: rgba(26, 22, 19, 0.08);
+  /* ---- SUN THEME (light mode) global overrides ---- */
+  [data-theme^="sun-"] [class*="border-white\/"],
+  [data-theme^="sun-"] [class*="border-white/"] {
+    border-color: rgba(20, 20, 16, 0.07);
   }
 
-  /* Newspaper: fix blur orbs to use warm tones */
-  [data-theme="newspaper"] [class*="bg-amber-500\/5"] {
-    background-color: rgba(184, 92, 56, 0.04);
+  [data-theme^="sun-"] nav {
+    background-color: color-mix(in srgb, var(--color-neutral-950) 88%, transparent);
+    border-bottom-color: rgba(20, 20, 16, 0.05);
   }
 
-  /* Newspaper: nav needs different backdrop */
-  [data-theme="newspaper"] nav {
-    background-color: rgba(250, 246, 240, 0.85);
-    border-bottom-color: rgba(26, 22, 19, 0.06);
+  [data-theme^="sun-"] #mobile-menu {
+    background-color: color-mix(in srgb, var(--color-neutral-950) 97%, transparent);
+    border-top-color: rgba(20, 20, 16, 0.05);
   }
 
-  [data-theme="newspaper"] #mobile-menu {
-    background-color: rgba(250, 246, 240, 0.97);
-    border-top-color: rgba(26, 22, 19, 0.06);
+  [data-theme^="sun-"] footer {
+    border-top-color: rgba(20, 20, 16, 0.06);
   }
 
-  /* Dark Room: fix blur orbs to use copper tones */
-  [data-theme="darkroom"] [class*="bg-amber-500\/5"] {
-    background-color: rgba(196, 125, 90, 0.04);
+  /* ---- MOON THEME (dark mode) global overrides ---- */
+  [data-theme^="moon-"] nav {
+    background-color: color-mix(in srgb, var(--color-neutral-950) 85%, transparent);
+    border-bottom-color: rgba(240, 232, 224, 0.04);
   }
 
-  /* Dark Room: warmer nav */
-  [data-theme="darkroom"] nav {
-    background-color: rgba(21, 18, 15, 0.85);
-    border-bottom-color: rgba(240, 232, 223, 0.04);
+  [data-theme^="moon-"] footer {
+    border-top-color: rgba(240, 232, 224, 0.04);
   }
 }
 
+/* ============================================
+   COMPONENTS
+   ============================================ */
+
 @layer components {
-  /* Scroll reveal */
   .reveal {
     opacity: 0;
     transform: translateY(1.5rem);
@@ -172,7 +274,6 @@
     transform: none;
   }
 
-  /* Staggered children */
   .reveal-stagger > .reveal {
     transition-delay: calc(var(--i, 0) * 100ms);
   }
@@ -191,24 +292,22 @@
     background: linear-gradient(to right, transparent, rgba(255,255,255,0.08), transparent);
   }
 
-  /* Newspaper: divider uses dark */
-  [data-theme="newspaper"] .gradient-divider {
-    background: linear-gradient(to right, transparent, rgba(26, 22, 19, 0.1), transparent);
+  [data-theme^="sun-"] .gradient-divider {
+    background: linear-gradient(to right, transparent, rgba(20, 20, 16, 0.1), transparent);
   }
 
-  /* Dark Room: divider uses warm tone */
-  [data-theme="darkroom"] .gradient-divider {
-    background: linear-gradient(to right, transparent, rgba(240, 232, 223, 0.06), transparent);
+  [data-theme^="moon-"] .gradient-divider {
+    background: linear-gradient(to right, transparent, rgba(240, 232, 224, 0.06), transparent);
   }
 
-  /* Card with hover glow */
+  /* Card */
   .glow-card {
     position: relative;
     overflow: hidden;
     border-radius: 1rem;
     background-color: var(--color-neutral-900);
     border: 1px solid rgba(255,255,255,0.05);
-    transition: border-color 0.3s ease;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
   }
 
   .glow-card::before {
@@ -231,32 +330,33 @@
     border-color: rgba(251,191,36,0.15);
   }
 
-  /* Newspaper: cards use shadow instead of glow */
-  [data-theme="newspaper"] .glow-card {
-    border-color: rgba(26, 22, 19, 0.06);
-    box-shadow: 0 1px 3px rgba(26, 22, 19, 0.04);
+  /* Sun: shadow cards instead of glow */
+  [data-theme^="sun-"] .glow-card {
+    border-color: rgba(20, 20, 16, 0.06);
+    box-shadow: 0 1px 3px rgba(20, 20, 16, 0.04);
   }
 
-  [data-theme="newspaper"] .glow-card::before {
-    display: none;
+  [data-theme^="sun-"] .glow-card::before { display: none; }
+
+  [data-theme^="sun-"] .glow-card:hover {
+    border-color: rgba(20, 20, 16, 0.12);
+    box-shadow: 0 4px 16px rgba(20, 20, 16, 0.06);
   }
 
-  [data-theme="newspaper"] .glow-card:hover {
-    border-color: rgba(26, 22, 19, 0.12);
-    box-shadow: 0 4px 12px rgba(26, 22, 19, 0.06);
+  /* Moon: warm accent glow */
+  [data-theme^="moon-"] .glow-card {
+    border-color: rgba(240, 232, 224, 0.04);
   }
 
-  /* Dark Room: warm copper glow */
-  [data-theme="darkroom"] .glow-card {
-    border-color: rgba(240, 232, 223, 0.04);
+  [data-theme^="moon-"] .glow-card:hover::before {
+    background: linear-gradient(135deg,
+      color-mix(in srgb, var(--color-amber-500) 8%, transparent),
+      color-mix(in srgb, var(--color-amber-600) 4%, transparent),
+      transparent);
   }
 
-  [data-theme="darkroom"] .glow-card:hover::before {
-    background: linear-gradient(135deg, rgba(196, 125, 90, 0.08), rgba(166, 94, 58, 0.04), rgba(196, 125, 90, 0));
-  }
-
-  [data-theme="darkroom"] .glow-card:hover {
-    border-color: rgba(196, 125, 90, 0.12);
+  [data-theme^="moon-"] .glow-card:hover {
+    border-color: color-mix(in srgb, var(--color-amber-500) 12%, transparent);
   }
 
   .glow-card > * {
@@ -264,7 +364,6 @@
     z-index: 1;
   }
 
-  /* Tier cards need overflow visible for the badge */
   .tier-card {
     overflow: visible;
   }
@@ -278,29 +377,26 @@
   .surface-1 { background-color: var(--color-neutral-900); }
   .surface-2 { background-color: var(--color-neutral-850); }
 
-  /* Quote font. Uses Lora which has real italics. */
   .font-quote {
     font-family: var(--font-quote);
   }
 
-  /* Dot grid background */
+  /* Dot grid */
   .dot-grid {
     background-image: radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
     background-size: 24px 24px;
   }
 
-  /* Newspaper: subtle warm dot grid */
-  [data-theme="newspaper"] .dot-grid {
-    background-image: radial-gradient(circle, rgba(26, 22, 19, 0.03) 1px, transparent 1px);
+  [data-theme^="sun-"] .dot-grid {
+    background-image: radial-gradient(circle, rgba(20, 20, 16, 0.035) 1px, transparent 1px);
   }
 
-  /* Dark Room: warm-tinted dot grid */
-  [data-theme="darkroom"] .dot-grid {
-    background-image: radial-gradient(circle, rgba(240, 232, 223, 0.025) 1px, transparent 1px);
+  [data-theme^="moon-"] .dot-grid {
+    background-image: radial-gradient(circle, rgba(240, 232, 224, 0.025) 1px, transparent 1px);
   }
 
   /* ============================================
-     Theme Switcher UI
+     Theme Switcher (dev tool, can remove later)
      ============================================ */
   .theme-switcher {
     position: fixed;
@@ -312,21 +408,16 @@
     padding: 0.25rem;
     border-radius: 0.5rem;
     background-color: var(--color-neutral-900);
-    border: 1px solid rgba(255,255,255,0.08);
+    border: 1px solid rgba(128,128,128,0.15);
     box-shadow: 0 4px 24px rgba(0,0,0,0.3);
     font-family: var(--font-mono);
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     letter-spacing: 0.05em;
     text-transform: uppercase;
   }
 
-  [data-theme="newspaper"] .theme-switcher {
-    border-color: rgba(26, 22, 19, 0.1);
-    box-shadow: 0 4px 24px rgba(26, 22, 19, 0.12);
-  }
-
   .theme-switcher button {
-    padding: 0.4rem 0.75rem;
+    padding: 0.35rem 0.6rem;
     border-radius: 0.375rem;
     color: var(--color-neutral-500);
     transition: all 0.2s ease;

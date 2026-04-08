@@ -1,0 +1,228 @@
+---
+// Quiz lightbox - shown on first visit
+// Three binary questions determine the site theme
+// Name + email captured as lead
+---
+
+<div id="quiz" class="fixed inset-0 z-[70]" style="display:none">
+  <div class="absolute inset-0 bg-[#15120f]"></div>
+  <div class="relative z-10 min-h-screen flex items-center justify-center p-6">
+    <div class="max-w-lg w-full">
+
+      <!-- Step 0: Intro -->
+      <div data-step="0" class="quiz-step text-center">
+        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-8" style="color:#d4926a">Before we start</p>
+        <h2 class="font-serif text-4xl md:text-5xl leading-tight mb-6" style="color:#f0e8df">
+          Want to personalize<br/>your experience?
+        </h2>
+        <p class="text-lg mb-12" style="color:#a69a8e">Three questions. Ten seconds. The site adapts to you.</p>
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+          <button data-action="next" class="px-8 py-4 font-semibold text-sm rounded-lg transition-all duration-300" style="background:#c47d5a;color:#15120f" onmouseover="this.style.background='#d4926a'" onmouseout="this.style.background='#c47d5a'">
+            I sure would
+          </button>
+          <button data-action="skip" class="px-8 py-4 font-medium text-sm rounded-lg border transition-all duration-300" style="border-color:#302a23;color:#847a6e" onmouseover="this.style.borderColor='#4d453c';this.style.color='#a69a8e'" onmouseout="this.style.borderColor='#302a23';this.style.color='#847a6e'">
+            Nah, I'm pretty bland
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 1: Sun or Moon -->
+      <div data-step="1" class="quiz-step text-center" style="display:none">
+        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-10" style="color:#847a6e">1 of 3</p>
+        <h2 class="font-serif text-5xl md:text-6xl mb-14" style="color:#f0e8df">Sun or moon?</h2>
+        <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
+          <button data-answer="sun" class="quiz-choice group relative p-8 rounded-xl border transition-all duration-300 cursor-pointer" style="border-color:#302a23;background:transparent" onmouseover="this.style.borderColor='#d4926a';this.style.background='rgba(196,125,90,0.05)'" onmouseout="this.style.borderColor='#302a23';this.style.background='transparent'">
+            <span class="block text-3xl mb-3">&#9728;&#65039;</span>
+            <span class="font-serif text-2xl" style="color:#f0e8df">Sun</span>
+          </button>
+          <button data-answer="moon" class="quiz-choice group relative p-8 rounded-xl border transition-all duration-300 cursor-pointer" style="border-color:#302a23;background:transparent" onmouseover="this.style.borderColor='#d4926a';this.style.background='rgba(196,125,90,0.05)'" onmouseout="this.style.borderColor='#302a23';this.style.background='transparent'">
+            <span class="block text-3xl mb-3">&#127769;</span>
+            <span class="font-serif text-2xl" style="color:#f0e8df">Moon</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 2: Beach or Mountain -->
+      <div data-step="2" class="quiz-step text-center" style="display:none">
+        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-10" style="color:#847a6e">2 of 3</p>
+        <h2 class="font-serif text-5xl md:text-6xl mb-14" style="color:#f0e8df">Beach or mountain?</h2>
+        <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
+          <button data-answer="beach" class="quiz-choice group relative p-8 rounded-xl border transition-all duration-300 cursor-pointer" style="border-color:#302a23;background:transparent" onmouseover="this.style.borderColor='#d4926a';this.style.background='rgba(196,125,90,0.05)'" onmouseout="this.style.borderColor='#302a23';this.style.background='transparent'">
+            <span class="block text-3xl mb-3">&#127958;&#65039;</span>
+            <span class="font-serif text-2xl" style="color:#f0e8df">Beach</span>
+          </button>
+          <button data-answer="mountain" class="quiz-choice group relative p-8 rounded-xl border transition-all duration-300 cursor-pointer" style="border-color:#302a23;background:transparent" onmouseover="this.style.borderColor='#d4926a';this.style.background='rgba(196,125,90,0.05)'" onmouseout="this.style.borderColor='#302a23';this.style.background='transparent'">
+            <span class="block text-3xl mb-3">&#9968;&#65039;</span>
+            <span class="font-serif text-2xl" style="color:#f0e8df">Mountain</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 3: Spring or Fall -->
+      <div data-step="3" class="quiz-step text-center" style="display:none">
+        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-10" style="color:#847a6e">3 of 3</p>
+        <h2 class="font-serif text-5xl md:text-6xl mb-14" style="color:#f0e8df">Spring or fall?</h2>
+        <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
+          <button data-answer="spring" class="quiz-choice group relative p-8 rounded-xl border transition-all duration-300 cursor-pointer" style="border-color:#302a23;background:transparent" onmouseover="this.style.borderColor='#d4926a';this.style.background='rgba(196,125,90,0.05)'" onmouseout="this.style.borderColor='#302a23';this.style.background='transparent'">
+            <span class="block text-3xl mb-3">&#127793;</span>
+            <span class="font-serif text-2xl" style="color:#f0e8df">Spring</span>
+          </button>
+          <button data-answer="fall" class="quiz-choice group relative p-8 rounded-xl border transition-all duration-300 cursor-pointer" style="border-color:#302a23;background:transparent" onmouseover="this.style.borderColor='#d4926a';this.style.background='rgba(196,125,90,0.05)'" onmouseout="this.style.borderColor='#302a23';this.style.background='transparent'">
+            <span class="block text-3xl mb-3">&#127810;</span>
+            <span class="font-serif text-2xl" style="color:#f0e8df">Fall</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 4: Lead capture -->
+      <div data-step="4" class="quiz-step text-center" style="display:none">
+        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-8" style="color:#d4926a">Almost done</p>
+        <h2 class="font-serif text-3xl md:text-4xl leading-tight mb-4" style="color:#f0e8df">
+          Now I know how to set the room.
+        </h2>
+        <p class="text-lg mb-10" style="color:#a69a8e">Who am I building this for?</p>
+        <form id="quiz-form" class="max-w-xs mx-auto space-y-5">
+          <div>
+            <input type="text" id="quiz-name" placeholder="Your name" required class="w-full bg-transparent border-b pb-3 text-lg focus:outline-none transition-colors duration-300 placeholder:opacity-40" style="border-color:#302a23;color:#f0e8df" onfocus="this.style.borderColor='#d4926a'" onblur="this.style.borderColor='#302a23'" />
+          </div>
+          <div>
+            <input type="email" id="quiz-email" placeholder="Email" required class="w-full bg-transparent border-b pb-3 text-lg focus:outline-none transition-colors duration-300 placeholder:opacity-40" style="border-color:#302a23;color:#f0e8df" onfocus="this.style.borderColor='#d4926a'" onblur="this.style.borderColor='#302a23'" />
+          </div>
+          <div class="pt-4 space-y-3">
+            <button type="submit" class="w-full px-8 py-4 font-semibold text-sm rounded-lg transition-all duration-300" style="background:#c47d5a;color:#15120f" onmouseover="this.style.background='#d4926a'" onmouseout="this.style.background='#c47d5a'">
+              Make it mine
+            </button>
+            <button type="button" data-action="skip-lead" class="w-full px-4 py-2 text-xs transition-colors duration-300" style="color:#685e54" onmouseover="this.style.color='#a69a8e'" onmouseout="this.style.color='#685e54'">
+              Skip this part
+            </button>
+          </div>
+        </form>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  function initQuiz() {
+    const quiz = document.getElementById('quiz');
+    if (!quiz) return;
+
+    // Don't show if already completed
+    if (localStorage.getItem('cs-quiz-done')) return;
+
+    // Don't show if theme already set via URL
+    if (new URLSearchParams(window.location.search).get('theme')) return;
+
+    quiz.style.display = '';
+    quiz.style.opacity = '0';
+    quiz.style.transition = 'opacity 0.5s ease';
+    requestAnimationFrame(() => { quiz.style.opacity = '1'; });
+
+    let currentStep = 0;
+    const answers: Record<string, string> = {};
+    const steps = quiz.querySelectorAll('.quiz-step');
+
+    function showStep(n: number) {
+      steps.forEach((s, i) => {
+        const el = s as HTMLElement;
+        if (i === currentStep) {
+          el.style.opacity = '0';
+          setTimeout(() => { el.style.display = 'none'; }, 200);
+        }
+      });
+      setTimeout(() => {
+        const next = steps[n] as HTMLElement;
+        if (next) {
+          next.style.display = '';
+          next.style.opacity = '0';
+          next.style.transition = 'opacity 0.4s ease';
+          requestAnimationFrame(() => { next.style.opacity = '1'; });
+        }
+        currentStep = n;
+      }, 250);
+    }
+
+    function closeQuiz() {
+      quiz.style.opacity = '0';
+      setTimeout(() => { quiz.style.display = 'none'; }, 500);
+    }
+
+    function buildThemeName(): string {
+      const base = answers['1'] || 'moon';
+      const place = answers['2'] || 'mountain';
+      const season = answers['3'] || 'fall';
+      return `${base}-${place}-${season}`;
+    }
+
+    function applyTheme(theme: string) {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('cs-theme', theme);
+      localStorage.setItem('cs-quiz-done', '1');
+      localStorage.setItem('cs-quiz-answers', JSON.stringify(answers));
+    }
+
+    // Handle all clicks in the quiz
+    quiz.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('button');
+      if (!btn) return;
+
+      const action = btn.getAttribute('data-action');
+      const answer = btn.getAttribute('data-answer');
+
+      if (action === 'next') {
+        showStep(1);
+      } else if (action === 'skip') {
+        localStorage.setItem('cs-quiz-done', '1');
+        closeQuiz();
+      } else if (action === 'skip-lead') {
+        const theme = buildThemeName();
+        applyTheme(theme);
+        closeQuiz();
+      } else if (answer) {
+        // Store answer for current step
+        answers[String(currentStep)] = answer;
+
+        // Brief highlight on the clicked button
+        btn.style.borderColor = '#d4926a';
+        btn.style.background = 'rgba(196,125,90,0.1)';
+
+        setTimeout(() => {
+          if (currentStep < 3) {
+            showStep(currentStep + 1);
+          } else {
+            // All 3 questions answered, show lead capture
+            showStep(4);
+          }
+        }, 300);
+      }
+    });
+
+    // Handle form submission
+    const form = document.getElementById('quiz-form');
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = (document.getElementById('quiz-name') as HTMLInputElement)?.value || '';
+      const email = (document.getElementById('quiz-email') as HTMLInputElement)?.value || '';
+      const theme = buildThemeName();
+
+      applyTheme(theme);
+
+      // Send lead data in background
+      try {
+        await fetch('/api/quiz', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, theme, answers }),
+        });
+      } catch {
+        // Fail silently - the theme still applies
+      }
+
+      closeQuiz();
+    });
+  }
+
+  initQuiz();
+  document.addEventListener('astro:after-swap', initQuiz);
+</script>

@@ -20,8 +20,5 @@
     "sentiment": "^5.0.2",
     "sql.js": "^1.14.1",
     "tailwindcss": "^4.2.2"
-  },
-  "devDependencies": {
-    "sharp": "^0.34.5"
   }
 }

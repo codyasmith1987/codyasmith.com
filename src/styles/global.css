@@ -157,7 +157,6 @@
   }
 
   /* Surface levels */
-  .surface-0 { background-color: var(--color-neutral-950); }
   .surface-1 { background-color: var(--color-neutral-900); }
   .surface-2 { background-color: var(--color-neutral-850); }
 

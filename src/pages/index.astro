@@ -28,6 +28,7 @@ const personSchema = JSON.stringify({
   <script type="application/ld+json" set:html={personSchema} />
   <!-- Hero -->
   <section class="relative pt-40 pb-32 px-6 overflow-hidden">
+    <!-- Ambient glow -->
     <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
 
     <div class="relative max-w-4xl mx-auto">
@@ -51,26 +52,54 @@ const personSchema = JSON.stringify({
     </div>
   </section>
 
-  <!-- What I actually do -->
+  <!-- What I do -->
   <section class="py-32 px-6 surface-1">
-    <div class="max-w-3xl mx-auto">
-      <h2 class="reveal font-serif text-3xl md:text-4xl text-neutral-100 mb-12">I help companies close the gap between the business they've built and the website representing it.</h2>
-      <div class="space-y-6 text-neutral-400 text-lg leading-relaxed">
-        <p class="reveal">
-          That means different things depending on what's broken.
-        </p>
-        <p class="reveal">
-          Sometimes the website itself is the problem. Nobody knows who hosts it. The security certificate expired and a customer mentioned the warning screen before anyone on your team noticed. I <a href="/services/web-management" class="text-amber-400 hover:text-amber-300 transition-colors">take it over</a>, move it onto my infrastructure, keep it alive, and send you proof every month that it's handled.
-        </p>
-        <p class="reveal">
-          Sometimes the site runs fine but nobody knows what to do with it. The SEO is a mystery, your competitor just showed up on page one, and your brother-in-law thinks you need TikTok. I <a href="/services/marketing-strategy" class="text-amber-400 hover:text-amber-300 transition-colors">sort through all of it</a> and tell you what to do first, second, and what to stop doing entirely.
-        </p>
-        <p class="reveal">
-          Sometimes there's a specific thing that needs to exist. A form that actually sends leads to your CRM instead of a folder nobody checks. Landing pages for a market you're entering. Analytics that measure something real. I <a href="/services/implementation" class="text-amber-400 hover:text-amber-300 transition-colors">scope it, build it, hand it over</a>.
-        </p>
-        <p class="reveal">
-          And sometimes your team just needs to learn how to use what they've already got, without sitting through another webinar where the instructor shares their screen for two hours and says "any questions?" three times. I <a href="/services/training" class="text-amber-400 hover:text-amber-300 transition-colors">build programs</a> where people learn by doing, not watching.
-        </p>
+    <div class="max-w-6xl mx-auto">
+      <div class="reveal mb-16">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">What I do</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">I close the gap between the business you've built and the website representing it.</h2>
+      </div>
+      <div class="grid md:grid-cols-2 gap-6 reveal-stagger">
+        <a href="/services/web-management" class="reveal glow-card p-8 block group cursor-pointer" style="--i:0">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="text-amber-400 font-mono text-xs">01</span>
+            <h3 class="text-neutral-100 text-lg font-medium group-hover:text-amber-400 transition-colors duration-300">Web Management</h3>
+            <svg class="w-4 h-4 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-1 transition-all duration-300 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+          </div>
+          <p class="text-neutral-400 text-sm leading-relaxed">
+            Most of my clients don't know who hosts their website. The SSL expired two months ago and a customer mentioned the warning screen before anyone on staff noticed. I take over the infrastructure, keep it alive, and send you proof every month that it's handled.
+          </p>
+        </a>
+        <a href="/services/marketing-strategy" class="reveal glow-card p-8 block group cursor-pointer" style="--i:1">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="text-amber-400 font-mono text-xs">02</span>
+            <h3 class="text-neutral-100 text-lg font-medium group-hover:text-amber-400 transition-colors duration-300">Marketing Strategy</h3>
+            <svg class="w-4 h-4 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-1 transition-all duration-300 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+          </div>
+          <p class="text-neutral-400 text-sm leading-relaxed">
+            You've got twelve opinions about what your marketing should be doing and no way to tell which ones are right. The analytics were set up wrong three years ago and your competitor just showed up on page one. I pull the data, name the priorities, and tell you what to do first. Strategy only. I steer, you execute.
+          </p>
+        </a>
+        <a href="/services/implementation" class="reveal glow-card p-8 block group cursor-pointer" style="--i:2">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="text-amber-400 font-mono text-xs">03</span>
+            <h3 class="text-neutral-100 text-lg font-medium group-hover:text-amber-400 transition-colors duration-300">Implementation</h3>
+            <svg class="w-4 h-4 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-1 transition-all duration-300 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+          </div>
+          <p class="text-neutral-400 text-sm leading-relaxed">
+            Someone fills out your contact form and the submission goes into a folder nobody checks. Your CRM doesn't know it happened. The lead calls a competitor the next day. I build the connections between your website and the tools your business actually runs on.
+          </p>
+        </a>
+        <a href="/services/training" class="reveal glow-card p-8 block group cursor-pointer" style="--i:3">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="text-amber-400 font-mono text-xs">04</span>
+            <h3 class="text-neutral-100 text-lg font-medium group-hover:text-amber-400 transition-colors duration-300">Training</h3>
+            <svg class="w-4 h-4 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-1 transition-all duration-300 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+          </div>
+          <p class="text-neutral-400 text-sm leading-relaxed">
+            Your team sat through a webinar last year. Two hours of someone sharing their screen and saying "any questions?" three times. A week later nobody remembered how to add a blog post. I build guided programs where people learn by doing real work on their own systems, not by watching someone else do it.
+          </p>
+        </a>
       </div>
     </div>
   </section>
@@ -78,6 +107,10 @@ const personSchema = JSON.stringify({
   <!-- Who I am -->
   <section class="relative py-32 px-6 dot-grid">
     <div class="max-w-3xl mx-auto">
+      <div class="reveal">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">The short version</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100 mb-12">How I got here.</h2>
+      </div>
       <div class="space-y-8 text-neutral-400 text-lg leading-relaxed">
         <p class="reveal">
           I got hired as a staff writer at a small newspaper in southern Utah. Within a year I was running their entire digital presence. The same thing happened at every job after that. Copywriting gig turned into a training program for 50,000 teachers. Creative director role turned into analytics and data strategy. "Marketing Representative" at a fiber co-op turned into being the sole strategist, web developer, and brand architect for 30,500 members across two states.
@@ -103,13 +136,14 @@ const personSchema = JSON.stringify({
     <div class="max-w-3xl mx-auto">
       <div class="reveal glow-card p-8 md:p-10 flex flex-col md:flex-row md:items-center gap-6 md:gap-10">
         <div class="flex-1">
+          <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-3">Free tool</p>
           <h3 class="text-neutral-100 text-xl font-medium mb-2">What does the internet think of your business?</h3>
           <p class="text-neutral-400 text-sm leading-relaxed">
             Type in your business name. I'll pull every mention I can find, read the sentiment, and show you what people are actually saying. Free. No login. No pitch afterward.
           </p>
         </div>
         <a href="/listener" class="inline-flex items-center justify-center px-6 py-3 border border-amber-500/30 text-amber-400 font-medium text-sm rounded-lg hover:bg-amber-500/10 hover:border-amber-500/50 transition-all duration-300 whitespace-nowrap shrink-0">
-          Try it
+          Try the scanner
         </a>
       </div>
     </div>
@@ -119,9 +153,11 @@ const personSchema = JSON.stringify({
   <section class="relative py-32 px-6 overflow-hidden">
     <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
     <div class="relative max-w-3xl mx-auto text-center">
-      <p class="reveal text-neutral-400 text-lg mb-10">If any of that sounds like your situation, tell me what's going on. No pitch deck. No discovery call. Just the version you'd tell a friend.</p>
+      <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Get started</p>
+      <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Sound familiar?</h2>
+      <p class="reveal text-neutral-400 text-lg mb-10">If you read three of those and thought "that's us," we should probably talk. No pitch deck. No discovery call theater. Just tell me what's going on.</p>
       <a href="/contact" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
-        Let's talk
+        Start a conversation
       </a>
     </div>
   </section>

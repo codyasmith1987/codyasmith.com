@@ -55,70 +55,135 @@ const faqSchema = JSON.stringify({
   <!-- Hero -->
   <section class="relative pt-40 pb-24 px-6 overflow-hidden">
     <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
-    <div class="relative max-w-3xl mx-auto">
+    <div class="relative max-w-4xl mx-auto">
       <a href="/services" class="reveal inline-flex items-center gap-2 text-neutral-500 text-sm hover:text-neutral-300 transition-colors duration-300 mb-8 group">
         <svg class="w-4 h-4 group-hover:-translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" />
         </svg>
         All services
       </a>
-      <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10">
+      <div class="flex items-center gap-4 mb-6">
+        <span class="reveal text-amber-400 font-mono text-xs tracking-[0.2em]">01</span>
+        <div class="reveal gradient-divider flex-1"></div>
+      </div>
+      <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-6">
         Web Management
       </h1>
-      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed">
+      <p class="reveal text-neutral-500 italic text-sm tracking-wide mb-10">Your site lives on my infrastructure.</p>
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl">
         I ask clients who hosts their website. Most of them don't know. They think it's GoDaddy but they're not sure. Nobody's logged in since the last developer left. The SSL certificate expired two months ago and nobody noticed until a customer mentioned the warning screen. That's the moment I usually get the call.
       </p>
     </div>
   </section>
 
-  <!-- What happens -->
+  <!-- How it works -->
   <section class="py-28 px-6 surface-1">
-    <div class="max-w-3xl mx-auto">
-      <h2 class="reveal font-serif text-3xl md:text-4xl text-neutral-100 mb-12">Here's how it works.</h2>
+    <div class="max-w-5xl mx-auto">
+      <div class="reveal mb-16">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Process</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Here's what happens.</h2>
+      </div>
 
-      <div class="space-y-10 text-neutral-400 leading-relaxed">
-        <div class="reveal">
-          <h3 class="text-neutral-100 text-xl font-medium mb-3">First, I move everything.</h3>
-          <p>
-            DNS, hosting, email routing, plugins, database. Your site comes off whatever shared box it's been sitting on and onto dedicated cloud infrastructure under my management. Zero downtime. You don't touch anything. You don't even notice it happened, except the site gets faster.
-          </p>
-        </div>
+      <div class="relative">
+        <!-- Vertical line -->
+        <div class="absolute left-6 md:left-8 top-0 bottom-0 w-px bg-gradient-to-b from-amber-500/40 via-amber-500/20 to-transparent"></div>
 
-        <div class="reveal">
-          <h3 class="text-neutral-100 text-xl font-medium mb-3">Then I take the thing apart.</h3>
-          <p>
-            Plugin conflicts, outdated dependencies, security holes, performance problems nobody told you about. Everything gets documented. This becomes your first Site Health Report and the baseline for everything that comes after.
-          </p>
-        </div>
+        <div class="space-y-16">
+          <div class="reveal relative pl-16 md:pl-20">
+            <div class="absolute left-3 md:left-5 top-1 w-6 h-6 rounded-full border-2 border-amber-500 bg-neutral-950 flex items-center justify-center">
+              <span class="text-amber-400 text-[10px] font-mono font-bold">1</span>
+            </div>
+            <h3 class="text-neutral-100 text-xl font-medium mb-3">I move everything.</h3>
+            <p class="text-neutral-400 leading-relaxed">
+              DNS, hosting, email routing, plugins, database. Your site comes off whatever shared box it's been sitting on and onto dedicated cloud infrastructure under my management. Zero downtime. You don't touch anything. You don't even notice it happened, except the site gets faster.
+            </p>
+          </div>
 
-        <div class="reveal">
-          <h3 class="text-neutral-100 text-xl font-medium mb-3">After that, it becomes invisible to you.</h3>
-          <p>
-            Updates get tested before they touch your live site. Security monitoring runs around the clock. Backups happen daily. And when something breaks, because eventually something always does, my phone buzzes. Not yours.
-          </p>
-        </div>
+          <div class="reveal relative pl-16 md:pl-20">
+            <div class="absolute left-3 md:left-5 top-1 w-6 h-6 rounded-full border-2 border-amber-500/60 bg-neutral-950 flex items-center justify-center">
+              <span class="text-amber-400/60 text-[10px] font-mono font-bold">2</span>
+            </div>
+            <h3 class="text-neutral-100 text-xl font-medium mb-3">I take the thing apart.</h3>
+            <p class="text-neutral-400 leading-relaxed">
+              Plugin conflicts, outdated dependencies, security holes, performance problems nobody told you about. Everything gets documented. This becomes your first Site Health Report and the baseline for everything that comes after.
+            </p>
+          </div>
 
-        <div class="reveal">
-          <h3 class="text-neutral-100 text-xl font-medium mb-3">First of every month, a report lands in your inbox.</h3>
-          <p>
-            Plain language. What I did, what I found, what's coming next, and how performance compares to last month. You never have to wonder if the money's doing anything. The report is the receipt.
-          </p>
+          <div class="reveal relative pl-16 md:pl-20">
+            <div class="absolute left-3 md:left-5 top-1 w-6 h-6 rounded-full border-2 border-amber-500/40 bg-neutral-950 flex items-center justify-center">
+              <span class="text-amber-400/40 text-[10px] font-mono font-bold">3</span>
+            </div>
+            <h3 class="text-neutral-100 text-xl font-medium mb-3">Then it becomes invisible to you.</h3>
+            <p class="text-neutral-400 leading-relaxed">
+              Updates get tested before they touch your live site. Security monitoring runs around the clock. Backups happen daily. And when something breaks, because eventually something always does, my phone buzzes. Not yours.
+            </p>
+          </div>
+
+          <div class="reveal relative pl-16 md:pl-20">
+            <div class="absolute left-3 md:left-5 top-1 w-6 h-6 rounded-full border-2 border-amber-500/20 bg-neutral-950 flex items-center justify-center">
+              <span class="text-amber-400/20 text-[10px] font-mono font-bold">4</span>
+            </div>
+            <h3 class="text-neutral-100 text-xl font-medium mb-3">First of every month, the report lands.</h3>
+            <p class="text-neutral-400 leading-relaxed">
+              Plain language. What I did, what I found, what's coming next, and how performance compares to last month. You never have to wonder if the money's doing anything. The report is the receipt.
+            </p>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- What's covered -->
-  <section class="py-28 px-6">
-    <div class="max-w-3xl mx-auto">
-      <h2 class="reveal font-serif text-3xl md:text-4xl text-neutral-100 mb-8">What's covered.</h2>
-      <div class="reveal text-neutral-400 leading-relaxed space-y-4">
-        <p>Dedicated cloud hosting. Not shared with hundreds of other sites. Fast, isolated, and fully under my control.</p>
-        <p>SSL certificates, firewall configuration, malware scanning, and login hardening. Problems caught before you know they exist.</p>
-        <p>WordPress core, theme, and plugin updates, tested in staging before going live. No "update all and hope" approach.</p>
-        <p>Automated daily backups with point-in-time restoration. If something goes wrong, we roll back in minutes.</p>
-        <p>Uptime monitoring every 60 seconds. If your site goes down, I know about it before your customers do.</p>
-        <p>And the monthly Site Health Report tying it all together.</p>
+  <!-- What's included -->
+  <section class="py-28 px-6 dot-grid">
+    <div class="max-w-5xl mx-auto">
+      <div class="reveal mb-16">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Coverage</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">What's covered.</h2>
+      </div>
+
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 reveal-stagger">
+        <div class="reveal glow-card p-6" style="--i:0">
+          <div class="text-amber-400 mb-4">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" /></svg>
+          </div>
+          <h3 class="text-neutral-100 font-medium mb-2">Cloud hosting</h3>
+          <p class="text-neutral-500 text-sm leading-relaxed">Dedicated cloud server. Not shared with hundreds of other sites. Fast, isolated, and fully under my control.</p>
+        </div>
+        <div class="reveal glow-card p-6" style="--i:1">
+          <div class="text-amber-400 mb-4">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+          </div>
+          <h3 class="text-neutral-100 font-medium mb-2">Security</h3>
+          <p class="text-neutral-500 text-sm leading-relaxed">SSL certificates, firewall, malware scanning, login hardening. Problems caught before you know they exist.</p>
+        </div>
+        <div class="reveal glow-card p-6" style="--i:2">
+          <div class="text-amber-400 mb-4">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+          </div>
+          <h3 class="text-neutral-100 font-medium mb-2">Updates</h3>
+          <p class="text-neutral-500 text-sm leading-relaxed">WordPress core, themes, and plugins. Tested in staging first. No "update all and pray" approach.</p>
+        </div>
+        <div class="reveal glow-card p-6" style="--i:3">
+          <div class="text-amber-400 mb-4">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" /></svg>
+          </div>
+          <h3 class="text-neutral-100 font-medium mb-2">Daily backups</h3>
+          <p class="text-neutral-500 text-sm leading-relaxed">Automated daily. Point-in-time restoration. If something goes wrong, we roll back in minutes, not days.</p>
+        </div>
+        <div class="reveal glow-card p-6" style="--i:4">
+          <div class="text-amber-400 mb-4">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+          </div>
+          <h3 class="text-neutral-100 font-medium mb-2">Uptime monitoring</h3>
+          <p class="text-neutral-500 text-sm leading-relaxed">Checked every 60 seconds. If your site goes down, I know before your customers do.</p>
+        </div>
+        <div class="reveal glow-card p-6" style="--i:5">
+          <div class="text-amber-400 mb-4">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+          </div>
+          <h3 class="text-neutral-100 font-medium mb-2">Site Health Report</h3>
+          <p class="text-neutral-500 text-sm leading-relaxed">Monthly. What happened, what's next, how performance compares. The proof that the work gets done.</p>
+        </div>
       </div>
     </div>
   </section>
@@ -126,9 +191,10 @@ const faqSchema = JSON.stringify({
   <!-- Tiers -->
   <section class="py-28 px-6 surface-1">
     <div class="max-w-5xl mx-auto">
-      <div class="reveal mb-12">
-        <h2 class="font-serif text-3xl md:text-4xl text-neutral-100 mb-4">Three tiers. Pick the one that fits.</h2>
-        <p class="text-neutral-400">Priced by site complexity. Pages, integrations, and traffic. Month-to-month after onboarding. Multi-site discounts available.</p>
+      <div class="reveal mb-16">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Pricing</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Three tiers. Pick the one that fits.</h2>
+        <p class="text-neutral-400 mt-4 max-w-2xl">Priced by site complexity. Pages, integrations, and traffic. Month-to-month after onboarding. Multi-site discounts available.</p>
       </div>
 
       <div class="grid md:grid-cols-3 gap-6 reveal-stagger" id="tier-cards">
@@ -136,7 +202,7 @@ const faqSchema = JSON.stringify({
         <div class="reveal glow-card tier-card p-8 flex flex-col hover:scale-[1.02] transition-transform duration-300" style="--i:0">
           <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-2">Good</p>
           <h3 class="text-neutral-100 text-2xl font-medium mb-1">Essentials</h3>
-          <p class="text-neutral-500 text-sm mb-6">Your site stays up, stays secure, stays updated. The basics, handled.</p>
+          <p class="text-neutral-500 text-sm mb-6">Stays up, stays secure, stays updated. The basics, handled.</p>
           <ul class="text-neutral-400 text-sm space-y-3 mb-4 flex-1">
             <li class="flex items-start gap-3">
               <span class="text-amber-400 mt-0.5">&#10003;</span>
@@ -242,8 +308,9 @@ const faqSchema = JSON.stringify({
   <!-- FAQ -->
   <section class="py-28 px-6">
     <div class="max-w-3xl mx-auto">
-      <div class="reveal mb-12">
-        <h2 class="font-serif text-3xl md:text-4xl text-neutral-100">Questions I get asked.</h2>
+      <div class="reveal mb-16">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Questions</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Things people ask.</h2>
       </div>
 
       <div class="space-y-4 reveal-stagger">
@@ -304,9 +371,10 @@ const faqSchema = JSON.stringify({
   <section class="relative py-32 px-6 surface-1 overflow-hidden">
     <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
     <div class="relative max-w-3xl mx-auto text-center">
+      <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Ready to hand it off?</h2>
       <p class="reveal text-neutral-400 text-lg mb-10">Tell me what you're running and I'll tell you what the migration looks like.</p>
-      <a href="/contact?interest=web-management" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
-        Let's talk
+      <a href="/contact" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
+        Start a conversation
       </a>
     </div>
   </section>

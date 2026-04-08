@@ -7,89 +7,187 @@ import Base from '../../layouts/Base.astro';
   <!-- Hero -->
   <section class="relative pt-40 pb-24 px-6 overflow-hidden">
     <div class="absolute top-0 right-1/4 w-[600px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
-    <div class="relative max-w-3xl mx-auto">
+    <div class="relative max-w-4xl mx-auto">
       <a href="/services" class="reveal inline-flex items-center gap-2 text-neutral-500 text-sm hover:text-neutral-300 transition-colors duration-300 mb-8 group">
         <svg class="w-4 h-4 group-hover:-translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" />
         </svg>
         All services
       </a>
-      <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10">
+      <div class="flex items-center gap-4 mb-6">
+        <span class="reveal text-amber-400 font-mono text-xs tracking-[0.2em]">02</span>
+        <div class="reveal gradient-divider flex-1"></div>
+      </div>
+      <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-6">
         Marketing Strategy
       </h1>
-      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed">
+      <p class="reveal text-neutral-500 italic text-sm tracking-wide mb-10">I direct it. You execute it.</p>
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl">
         Somebody told you to "do SEO." Somebody else said content marketing. Your brother-in-law thinks you need TikTok. You've been paying for Google Ads but you can't tell if they're working because the analytics were set up wrong in 2019 and nobody's touched them since. Meanwhile your competitor just showed up on page one for the keyword you thought was yours.
       </p>
     </div>
   </section>
 
-  <!-- What this actually is -->
+  <!-- What this is / isn't -->
   <section class="py-28 px-6 surface-1">
-    <div class="max-w-3xl mx-auto">
-      <h2 class="reveal font-serif text-3xl md:text-4xl text-neutral-100 mb-12">What I do and what I don't.</h2>
+    <div class="max-w-5xl mx-auto">
+      <div class="reveal mb-16">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Clarity</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">What this is and what it isn't.</h2>
+      </div>
 
-      <div class="space-y-8 text-neutral-400 leading-relaxed">
-        <p class="reveal">
-          I direct your marketing strategy. I don't execute it. That's an important distinction. I'm not going to run your social media, write your blog posts, or manage your ad campaigns. What I'm going to do is tell you exactly what needs to happen, in what order, and give you the tools to make it happen.
-        </p>
-        <p class="reveal">
-          That means an SEO roadmap built on real keyword data, not guesses. Competitive analysis that names your competitors and shows you exactly what they're doing differently. Content briefs your writer can actually pick up and use without a two-hour briefing call. Monthly strategy calls to keep it all on track.
-        </p>
-        <p class="reveal">
-          And it means someone telling you what to stop doing. Half the marketing spend I see is wasted on things that don't move the needle. I'll tell you which half.
-        </p>
+      <div class="grid md:grid-cols-2 gap-8">
+        <div class="reveal glow-card p-8">
+          <p class="text-amber-400 text-xs tracking-[0.15em] uppercase mb-6">What you get</p>
+          <ul class="space-y-4 text-neutral-300 text-sm leading-relaxed">
+            <li class="flex items-start gap-3">
+              <span class="text-amber-400 mt-0.5">&#10003;</span>
+              An SEO roadmap built on real keyword data
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="text-amber-400 mt-0.5">&#10003;</span>
+              Competitive analysis that names names
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="text-amber-400 mt-0.5">&#10003;</span>
+              Content briefs your writer can actually use
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="text-amber-400 mt-0.5">&#10003;</span>
+              Monthly calls to review priorities
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="text-amber-400 mt-0.5">&#10003;</span>
+              Quarterly reporting with real numbers
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="text-amber-400 mt-0.5">&#10003;</span>
+              Someone telling you what to stop doing
+            </li>
+          </ul>
+        </div>
+        <div class="reveal glow-card p-8">
+          <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-6">What I don't do</p>
+          <ul class="space-y-4 text-neutral-400 text-sm leading-relaxed">
+            <li class="flex items-start gap-3">
+              <span class="text-neutral-500 mt-0.5">&#10005;</span>
+              Run your social media
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="text-neutral-500 mt-0.5">&#10005;</span>
+              Manage your ad campaigns
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="text-neutral-500 mt-0.5">&#10005;</span>
+              Write your blog posts for you
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="text-neutral-500 mt-0.5">&#10005;</span>
+              Hand you a one-time audit and disappear
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="text-neutral-500 mt-0.5">&#10005;</span>
+              Give you vague advice you can't act on
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="text-neutral-500 mt-0.5">&#10005;</span>
+              Bill a retainer for retainer's sake
+            </li>
+          </ul>
+        </div>
       </div>
     </div>
   </section>
 
   <!-- How it works -->
-  <section class="py-28 px-6">
-    <div class="max-w-3xl mx-auto">
-      <h2 class="reveal font-serif text-3xl md:text-4xl text-neutral-100 mb-12">Here's how it works.</h2>
+  <section class="py-28 px-6 dot-grid">
+    <div class="max-w-5xl mx-auto">
+      <div class="reveal mb-16">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Process</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Here's how it works.</h2>
+      </div>
 
-      <div class="space-y-10 text-neutral-400 leading-relaxed">
-        <div class="reveal">
-          <h3 class="text-neutral-100 text-xl font-medium mb-3">I start by reading everything.</h3>
-          <p>
-            Your site, your competitors' sites, the keywords you think you own and the ones you actually rank for. I pull the data, name the gaps, and write it all down. Nothing I recommend later will come from a hunch. It comes from this.
-          </p>
-        </div>
+      <div class="relative">
+        <div class="absolute left-6 md:left-8 top-0 bottom-0 w-px bg-gradient-to-b from-amber-500/40 via-amber-500/20 to-transparent"></div>
 
-        <div class="reveal">
-          <h3 class="text-neutral-100 text-xl font-medium mb-3">The audit becomes a plan with an order.</h3>
-          <p>
-            Not everything matters equally, and some of the things you've been doing don't matter at all. I'll tell you what to do this month, what to do next quarter, and what to stop wasting money on immediately.
-          </p>
-        </div>
+        <div class="space-y-16">
+          <div class="reveal relative pl-16 md:pl-20">
+            <div class="absolute left-3 md:left-5 top-1 w-6 h-6 rounded-full border-2 border-amber-500 bg-neutral-950 flex items-center justify-center">
+              <span class="text-amber-400 text-[10px] font-mono font-bold">1</span>
+            </div>
+            <h3 class="text-neutral-100 text-xl font-medium mb-3">I read everything.</h3>
+            <p class="text-neutral-400 leading-relaxed">
+              Your site, your competitors' sites, the keywords you think you own and the ones you actually rank for. I pull the data, name the gaps, and write it all down. Nothing I recommend later will come from a hunch. It comes from this.
+            </p>
+          </div>
 
-        <div class="reveal">
-          <h3 class="text-neutral-100 text-xl font-medium mb-3">Then we talk once a month.</h3>
-          <p>
-            I show up with content briefs your writer can actually use, keyword targets worth chasing, and a clear answer to "what should we be doing right now?" You execute. I steer. When the data says the plan needs to change, I change it and tell you why.
-          </p>
-        </div>
+          <div class="reveal relative pl-16 md:pl-20">
+            <div class="absolute left-3 md:left-5 top-1 w-6 h-6 rounded-full border-2 border-amber-500/60 bg-neutral-950 flex items-center justify-center">
+              <span class="text-amber-400/60 text-[10px] font-mono font-bold">2</span>
+            </div>
+            <h3 class="text-neutral-100 text-xl font-medium mb-3">The audit becomes a plan with an order.</h3>
+            <p class="text-neutral-400 leading-relaxed">
+              Not everything matters equally, and some of the things you've been doing don't matter at all. I'll tell you what to do this month, what to do next quarter, and what to stop wasting money on immediately.
+            </p>
+          </div>
 
-        <div class="reveal">
-          <h3 class="text-neutral-100 text-xl font-medium mb-3">Every three months, the numbers go on the table.</h3>
-          <p>
-            Rankings, traffic, conversions, and what it all means. If something isn't working, I say so. You won't get a report that makes bad news sound like progress.
-          </p>
+          <div class="reveal relative pl-16 md:pl-20">
+            <div class="absolute left-3 md:left-5 top-1 w-6 h-6 rounded-full border-2 border-amber-500/40 bg-neutral-950 flex items-center justify-center">
+              <span class="text-amber-400/40 text-[10px] font-mono font-bold">3</span>
+            </div>
+            <h3 class="text-neutral-100 text-xl font-medium mb-3">Then we talk once a month.</h3>
+            <p class="text-neutral-400 leading-relaxed">
+              I show up with content briefs your writer can use, keyword targets worth chasing, and a clear answer to "what should we be doing right now?" You execute. I steer. When the data says the plan needs to change, I change it and tell you why.
+            </p>
+          </div>
+
+          <div class="reveal relative pl-16 md:pl-20">
+            <div class="absolute left-3 md:left-5 top-1 w-6 h-6 rounded-full border-2 border-amber-500/20 bg-neutral-950 flex items-center justify-center">
+              <span class="text-amber-400/20 text-[10px] font-mono font-bold">4</span>
+            </div>
+            <h3 class="text-neutral-100 text-xl font-medium mb-3">Every three months, the numbers go on the table.</h3>
+            <p class="text-neutral-400 leading-relaxed">
+              Rankings, traffic, conversions, and what it all means. If something isn't working, I say so. You won't get a report that makes bad news sound like progress.
+            </p>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- What you get -->
+  <!-- Deliverables -->
   <section class="py-28 px-6 surface-1">
-    <div class="max-w-3xl mx-auto">
-      <h2 class="reveal font-serif text-3xl md:text-4xl text-neutral-100 mb-8">What you walk away with.</h2>
-      <div class="reveal text-neutral-400 leading-relaxed space-y-4">
-        <p>Keyword research with real search volume and difficulty scores, grouped by intent. Not a spreadsheet dump. A prioritized list of opportunities.</p>
-        <p>Competitive analysis showing who's ranking for what you want, what they're doing differently, and where the gaps are.</p>
-        <p>Content briefs with target keywords, structure recommendations, and competitive context. Hand these to your writer and they can start working.</p>
-        <p>An SEO roadmap sequenced by impact and effort, updated quarterly as the data shifts.</p>
-        <p>Strategy memos when something needs your attention. A competitor move, an algorithm update, a market shift. Clear memo, recommended action.</p>
-        <p>Quarterly reports written for decision-makers, not analysts. Executive brief up front, data behind it.</p>
+    <div class="max-w-5xl mx-auto">
+      <div class="reveal mb-16">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Deliverables</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">What you walk away with.</h2>
+      </div>
+
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 reveal-stagger">
+        <div class="reveal glow-card p-6" style="--i:0">
+          <h3 class="text-neutral-100 font-medium mb-2">Keyword research</h3>
+          <p class="text-neutral-500 text-sm leading-relaxed">Real search volume, real difficulty scores, grouped by intent. Not a spreadsheet dump. A prioritized list of opportunities.</p>
+        </div>
+        <div class="reveal glow-card p-6" style="--i:1">
+          <h3 class="text-neutral-100 font-medium mb-2">Competitive analysis</h3>
+          <p class="text-neutral-500 text-sm leading-relaxed">Who's ranking for what you want, what they're doing differently, and where the gaps are you can exploit.</p>
+        </div>
+        <div class="reveal glow-card p-6" style="--i:2">
+          <h3 class="text-neutral-100 font-medium mb-2">Content briefs</h3>
+          <p class="text-neutral-500 text-sm leading-relaxed">Page-level briefs with target keywords, structure recommendations, and competitive context. Hand these to your writer.</p>
+        </div>
+        <div class="reveal glow-card p-6" style="--i:3">
+          <h3 class="text-neutral-100 font-medium mb-2">SEO roadmap</h3>
+          <p class="text-neutral-500 text-sm leading-relaxed">Technical fixes, content priorities, and link opportunities, sequenced by impact and effort. Updated quarterly.</p>
+        </div>
+        <div class="reveal glow-card p-6" style="--i:4">
+          <h3 class="text-neutral-100 font-medium mb-2">Strategy memos</h3>
+          <p class="text-neutral-500 text-sm leading-relaxed">When something needs your attention, a competitor move or an algorithm update, you get a clear memo with what to do about it.</p>
+        </div>
+        <div class="reveal glow-card p-6" style="--i:5">
+          <h3 class="text-neutral-100 font-medium mb-2">Quarterly reports</h3>
+          <p class="text-neutral-500 text-sm leading-relaxed">Rankings, traffic, conversions, and what it means. Written for decision-makers, not analysts. Executive brief up front, data behind it.</p>
+        </div>
       </div>
     </div>
   </section>
@@ -97,8 +195,9 @@ import Base from '../../layouts/Base.astro';
   <!-- Tiers -->
   <section class="py-28 px-6">
     <div class="max-w-5xl mx-auto">
-      <div class="reveal mb-12">
-        <h2 class="font-serif text-3xl md:text-4xl text-neutral-100">Three tiers. Pick the one that fits.</h2>
+      <div class="reveal mb-16">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Pricing</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Three tiers. Pick the one that fits.</h2>
       </div>
 
       <div class="grid md:grid-cols-3 gap-6 reveal-stagger">
@@ -194,9 +293,10 @@ import Base from '../../layouts/Base.astro';
   <section class="relative py-32 px-6 surface-1 overflow-hidden">
     <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
     <div class="relative max-w-3xl mx-auto text-center">
-      <p class="reveal text-neutral-400 text-lg mb-10">If the answer to "what should we be doing with our marketing?" is "not sure," that's exactly what this solves.</p>
-      <a href="/contact?interest=marketing-strategy" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
-        Let's talk
+      <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Know what you need to do next?</h2>
+      <p class="reveal text-neutral-400 text-lg mb-10">If the answer is "not really," that's exactly what this solves.</p>
+      <a href="/contact" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
+        Start a conversation
       </a>
     </div>
   </section>

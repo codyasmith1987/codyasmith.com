@@ -6,7 +6,10 @@
 ---
 
 <div id="quiz" class="fixed inset-0 z-[70]" style="display:none">
-  <div class="absolute inset-0 bg-[#15120f]"></div>
+  <!-- Frosted glass: site visible but blurred behind -->
+  <div id="quiz-backdrop" class="absolute inset-0 backdrop-blur-2xl bg-black/50 transition-all duration-700"></div>
+  <!-- Swirling formation effect -->
+  <div id="quiz-swirl" class="absolute inset-0 pointer-events-none quiz-swirl"></div>
   <div class="relative z-10 min-h-screen flex items-center justify-center p-6">
     <div class="max-w-lg w-full">
 
@@ -168,15 +171,44 @@
       }, 250);
     }
 
+    // Preview theme behind the frosted glass as answers come in
+    function previewTheme() {
+      const base = answers['1'] || 'moon';
+      const place = answers['2'] || 'mountain';
+      const season = answers['3'] || 'fall';
+      const processing = answers['4'] || 'stars';
+      const preview = `${base}-${place}-${season}-${processing}`;
+      document.documentElement.setAttribute('data-theme', preview);
+    }
+
     function closeQuiz() {
-      quiz.style.opacity = '0';
+      const backdrop = document.getElementById('quiz-backdrop');
+      const swirl = document.getElementById('quiz-swirl');
+
+      // Step 1: Lift the blur (reveal the themed site)
+      if (backdrop) {
+        backdrop.style.backdropFilter = 'blur(0px)';
+        backdrop.style.webkitBackdropFilter = 'blur(0px)';
+        backdrop.style.background = 'rgba(0,0,0,0.3)';
+      }
+
+      // Step 2: Fade the swirl
+      setTimeout(() => {
+        if (swirl) swirl.style.opacity = '0';
+      }, 300);
+
+      // Step 3: Fade the entire quiz container
+      setTimeout(() => {
+        quiz.style.opacity = '0';
+      }, 600);
+
+      // Step 4: Remove and trigger personalization
       setTimeout(() => {
         quiz.style.display = 'none';
-        // Trigger personalization now that quiz data is saved
         if (typeof (window as any).__initPersonalization === 'function') {
           (window as any).__initPersonalization();
         }
-      }, 500);
+      }, 1100);
     }
 
     function showRevealThenClose(nameStr?: string) {
@@ -224,6 +256,9 @@
       } else if (answer) {
         // Store answer for current step
         answers[String(currentStep)] = answer;
+
+        // Preview the theme behind the frosted glass
+        previewTheme();
 
         // Brief highlight on the clicked button
         btn.style.borderColor = '#d4926a';

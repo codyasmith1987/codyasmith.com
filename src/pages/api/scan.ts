@@ -62,86 +62,94 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     // Increment rate limit
     await incrementRateLimit(ip);
 
-    // Search for mentions (4 queries, 5 results each)
-    const searchResults = await searchForMentions(brand, domain, serperKey, { location, industry, exclude });
+    // Stream progress via SSE
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const emit = (step: string, status: string, detail: string, data?: any) => {
+          const event = JSON.stringify({ step, status, detail, ...(data ? { data } : {}) });
+          controller.enqueue(encoder.encode(`data: ${event}\n\n`));
+        };
 
-    if (searchResults.length === 0) {
-      await updateScan(scanId, {
-        overall_score: 50,
-        overall_label: 'Unknown',
-        mention_count: 0,
-        summary: 'No mentions found. This brand may have limited online presence, or the name may be too common. Try adding a city or industry to your search.',
-        top_positive_phrases: '[]',
-        top_negative_phrases: '[]',
-        source_breakdown: '{}',
-      });
-      return json({
-        scan_id: scanId,
-        brand,
-        domain,
-        overall_score: 50,
-        overall_label: 'Unknown',
-        mention_count: 0,
-        summary: 'No mentions found. This brand may have limited online presence.',
-        sample_mentions: [],
-        source_breakdown: {},
-        teaser_lines: [],
-      });
-    }
+        try {
+          // Step 1: Search
+          emit('search', 'active', 'Searching the web for mentions...');
+          const searchResults = await searchForMentions(brand, domain, serperKey, { location, industry, exclude });
+          emit('search', 'done', `Found ${searchResults.length} mentions across the web`);
 
-    // Scrape all found URLs in parallel (with search snippets as fallback)
-    const scraped = await scrapeAll(searchResults.map(r => ({
-      url: r.url,
-      query_type: r.query_type,
-      fallback_snippet: r.description,
-      fallback_title: r.title,
-    })));
+          if (searchResults.length === 0) {
+            await updateScan(scanId, {
+              overall_score: 50, overall_label: 'Unknown', mention_count: 0,
+              summary: 'No mentions found. This brand may have limited online presence, or the name may be too common. Try adding a city or industry to your search.',
+              top_positive_phrases: '[]', top_negative_phrases: '[]', source_breakdown: '{}',
+            });
+            emit('complete', 'done', 'Report ready', {
+              scan_id: scanId, brand, domain, overall_score: 50, overall_label: 'Unknown',
+              mention_count: 0, summary: 'No mentions found. This brand may have limited online presence.',
+              sample_mentions: [], source_breakdown: {}, teaser_lines: [],
+            });
+            controller.close();
+            return;
+          }
 
-    // Generate the full report
-    const report = generateReport(scraped);
+          // Step 2: Scrape
+          emit('scrape', 'active', `Reading ${searchResults.length} pages...`);
+          const scraped = await scrapeAll(searchResults.map(r => ({
+            url: r.url, query_type: r.query_type,
+            fallback_snippet: r.description, fallback_title: r.title,
+          })));
+          emit('scrape', 'done', `Read ${scraped.length} pages`);
 
-    // Store mentions in DB
-    for (const m of report.mentions) {
-      await insertMention({
-        scan_id: scanId,
-        url: m.url,
-        source_name: m.source_name,
-        source_type: m.source_type,
-        snippet: m.snippet,
-        sentiment_score: m.sentiment_score,
-        sentiment_label: m.sentiment_label,
-        key_phrases: JSON.stringify(m.key_phrases),
-        query_type: m.query_type,
-      });
-    }
+          // Step 3: Analyze
+          emit('analyze', 'active', `Analyzing sentiment across ${scraped.length} mentions...`);
+          const report = generateReport(scraped);
+          emit('analyze', 'done', `Sentiment analysis complete — score: ${report.overall_score}`);
 
-    // Update scan with aggregate results
-    await updateScan(scanId, {
-      overall_score: report.overall_score,
-      overall_label: report.overall_label,
-      mention_count: report.mention_count,
-      summary: report.summary,
-      top_positive_phrases: JSON.stringify(report.top_positive_phrases),
-      top_negative_phrases: JSON.stringify(report.top_negative_phrases),
-      source_breakdown: JSON.stringify(report.source_breakdown),
+          // Step 4: Report
+          emit('report', 'active', 'Building your report...');
+
+          for (const m of report.mentions) {
+            await insertMention({
+              scan_id: scanId, url: m.url, source_name: m.source_name,
+              source_type: m.source_type, snippet: m.snippet,
+              sentiment_score: m.sentiment_score, sentiment_label: m.sentiment_label,
+              key_phrases: JSON.stringify(m.key_phrases), query_type: m.query_type,
+            });
+          }
+
+          await updateScan(scanId, {
+            overall_score: report.overall_score, overall_label: report.overall_label,
+            mention_count: report.mention_count, summary: report.summary,
+            top_positive_phrases: JSON.stringify(report.top_positive_phrases),
+            top_negative_phrases: JSON.stringify(report.top_negative_phrases),
+            source_breakdown: JSON.stringify(report.source_breakdown),
+          });
+
+          const recommendation = getRecommendation(report.overall_score, report.mention_count);
+
+          emit('report', 'done', 'Report ready!');
+          emit('complete', 'done', 'Report ready', {
+            scan_id: scanId, brand, domain,
+            overall_score: report.overall_score, overall_label: report.overall_label,
+            mention_count: report.mention_count, summary: report.summary,
+            sample_mentions: report.sample_mentions,
+            source_breakdown: report.source_breakdown,
+            teaser_lines: report.teaser_lines, recommendation,
+          });
+        } catch (err: any) {
+          emit('error', 'error', err.message || 'Scan failed');
+        }
+        controller.close();
+      }
     });
 
-    // Generate smart service recommendation based on results
-    const recommendation = getRecommendation(report.overall_score, report.mention_count);
-
-    // Return Tier 1 data (ungated preview)
-    return json({
-      scan_id: scanId,
-      brand,
-      domain,
-      overall_score: report.overall_score,
-      overall_label: report.overall_label,
-      mention_count: report.mention_count,
-      summary: report.summary,
-      sample_mentions: report.sample_mentions,
-      source_breakdown: report.source_breakdown,
-      teaser_lines: report.teaser_lines,
-      recommendation,
+    return new Response(stream, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
     });
 
   } catch (err: any) {

@@ -105,6 +105,14 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
           }
         });
 
+        // Hero name: "{Name}, " before the headline
+        document.querySelectorAll('[data-personalize="hero-name"]').forEach(el => {
+          if (firstName) {
+            (el as HTMLElement).textContent = `${firstName}, `;
+            (el as HTMLElement).style.display = '';
+          }
+        });
+
         // ---- Pre-fill form inputs ----
         const nameInput = document.querySelector('[data-personalize="prefill-name"]') as HTMLInputElement;
         const emailInput = document.querySelector('[data-personalize="prefill-email"]') as HTMLInputElement;
@@ -195,6 +203,19 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
           });
         }, { threshold: 0.1 });
         document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+        // "gap" squeeze animation — compress on scroll-in, spring back
+        const squeezeObserver = new IntersectionObserver((entries) => {
+          entries.forEach(e => {
+            if (e.isIntersecting) {
+              const el = e.target as HTMLElement;
+              el.classList.add('squeezed');
+              setTimeout(() => el.classList.remove('squeezed'), 500);
+              squeezeObserver.unobserve(el);
+            }
+          });
+        }, { threshold: 0.5 });
+        document.querySelectorAll('.word-squeeze').forEach(el => squeezeObserver.observe(el));
       }
 
       function initThemeSwitcher() {

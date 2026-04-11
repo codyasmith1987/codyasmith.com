@@ -546,6 +546,55 @@
     font-family: var(--font-quote);
   }
 
+  /* Quiz swirl - slow rotating gradient that responds to theme */
+  .quiz-swirl {
+    opacity: 0.4;
+    transition: opacity 0.6s ease;
+  }
+  .quiz-swirl::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: conic-gradient(
+      from 0deg,
+      transparent 0%,
+      color-mix(in srgb, var(--color-amber-500) 8%, transparent) 15%,
+      transparent 30%,
+      color-mix(in srgb, var(--color-amber-400) 6%, transparent) 45%,
+      transparent 60%,
+      color-mix(in srgb, var(--color-amber-600) 5%, transparent) 75%,
+      transparent 100%
+    );
+    animation: quiz-swirl-rotate 16s linear infinite;
+    filter: blur(80px);
+    mix-blend-mode: soft-light;
+  }
+
+  @keyframes quiz-swirl-rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  /* Kinetic typography */
+  .word-dated {
+    color: var(--color-dated);
+    font-style: italic;
+    text-shadow: 0 0 2px color-mix(in srgb, var(--color-dated) 30%, transparent);
+  }
+
+  .word-squeeze {
+    display: inline-block;
+    transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+                letter-spacing 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .word-squeeze.squeezed {
+    transform: scaleX(0.72);
+    letter-spacing: -0.04em;
+  }
+
   /* Dot grid */
   .dot-grid {
     background-image: radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);

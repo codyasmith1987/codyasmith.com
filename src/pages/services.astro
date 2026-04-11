@@ -19,8 +19,14 @@ import Base from '../layouts/Base.astro';
         Four ways I strengthen<br />
         <span class="gradient-text">what's under the hood.</span>
       </h1>
-      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl">
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" data-frame="default">
         Monthly retainers, not hourly surprises. You pick the tier that fits. Everything is month-to-month after onboarding because if I'm not earning the next month, I shouldn't get it.
+      </p>
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="sun">
+        Monthly retainers that grow with you. You pick the tier that fits where you are now, and we adjust as the business moves. Everything is month-to-month because if I'm not earning the next month, I shouldn't get it.
+      </p>
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="moon">
+        Monthly retainers, not hourly surprises. No long-term contracts. No scope creep. You pick the tier, I do the work, and every month you see exactly what happened. If I'm not earning the next month, I shouldn't get it.
       </p>
     </div>
   </section>
@@ -217,7 +223,9 @@ import Base from '../layouts/Base.astro';
     <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
     <div class="relative max-w-3xl mx-auto text-center">
       <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Not sure where to start<span data-personalize="name-comma" style="display:none"></span>?</h2>
-      <p class="reveal text-neutral-400 text-lg mb-10">Tell me what's going on and I'll tell you which of these makes sense. Sometimes the answer is "none of them, here's what you actually need."</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" data-frame="default">Tell me what's going on and I'll tell you which of these makes sense. Sometimes the answer is "none of them, here's what you actually need."</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-frame="sun">Tell me where you're headed and I'll tell you which of these gets you there fastest. Sometimes the answer is "none of them, here's what you actually need."</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-frame="moon">Tell me what's not working and I'll tell you which of these fixes it. Sometimes the answer is "none of them, here's what you actually need."</p>
       <a href="/contact" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
         Start a conversation
       </a>

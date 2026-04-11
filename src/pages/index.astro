@@ -34,7 +34,7 @@ const personSchema = JSON.stringify({
     <div class="relative max-w-4xl mx-auto">
       <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Cedar City, Utah</p>
       <h1 class="reveal font-serif text-5xl md:text-7xl lg:text-8xl text-neutral-100 leading-[1.05] mb-10" style="--i:1">
-        Your business outgrew<br />
+        <span data-personalize="hero-name" style="display:none"></span>Your business <span class="word-dated">outgrew</span><br />
         <span class="gradient-text">its website</span><br class="hidden md:block" />
         a while ago.
       </h1>
@@ -63,7 +63,7 @@ const personSchema = JSON.stringify({
     <div class="max-w-6xl mx-auto">
       <div class="reveal mb-16">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">What I do</p>
-        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100" data-vibe="default">I close the gap between the business you've built and the website representing it.</h2>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100" data-vibe="default">I close the <span class="word-squeeze">gap</span> between the business you've built and the website representing it.</h2>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100" style="display:none" data-vibe="beach">I help businesses look as good online as they actually are.</h2>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100" style="display:none" data-vibe="mountain">I make sure the infrastructure under your business is as solid as the business itself.</h2>
       </div>
@@ -74,8 +74,14 @@ const personSchema = JSON.stringify({
             <h3 class="text-neutral-100 text-lg font-medium group-hover:text-amber-400 transition-colors duration-300">Web Management</h3>
             <svg class="w-4 h-4 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-1 transition-all duration-300 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
           </div>
-          <p class="text-neutral-400 text-sm leading-relaxed">
+          <p class="text-neutral-400 text-sm leading-relaxed" data-phase="default">
             Most of my clients don't know who hosts their website. The SSL expired two months ago and a customer mentioned the warning screen before anyone on staff noticed. I take over the infrastructure, keep it alive, and send you proof every month that it's handled.
+          </p>
+          <p class="text-neutral-400 text-sm leading-relaxed" style="display:none" data-phase="spring">
+            Your website should be the one thing you never worry about. I take over the hosting, security, updates, and monitoring so you can focus on the business itself. One less thing on your plate. Every month you get proof it's handled.
+          </p>
+          <p class="text-neutral-400 text-sm leading-relaxed" style="display:none" data-phase="fall">
+            Dedicated cloud hosting, daily backups, SSL management, uptime monitoring, core and plugin updates. Monthly plain-language reports showing exactly what happened. I take over the infrastructure so you stop finding out something broke from a customer.
           </p>
         </a>
         <a href="/services/marketing-strategy" class="reveal glow-card p-8 block group cursor-pointer" style="--i:1">
@@ -84,8 +90,14 @@ const personSchema = JSON.stringify({
             <h3 class="text-neutral-100 text-lg font-medium group-hover:text-amber-400 transition-colors duration-300">Marketing Strategy</h3>
             <svg class="w-4 h-4 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-1 transition-all duration-300 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
           </div>
-          <p class="text-neutral-400 text-sm leading-relaxed">
+          <p class="text-neutral-400 text-sm leading-relaxed" data-phase="default">
             You've got twelve opinions about what your marketing should be doing and no way to tell which ones are right. The analytics were set up wrong three years ago and your competitor just showed up on page one. I pull the data, name the priorities, and tell you what to do first. Strategy only. I steer, you execute.
+          </p>
+          <p class="text-neutral-400 text-sm leading-relaxed" style="display:none" data-phase="spring">
+            Your marketing needs direction, not more tactics. I look at where you are, where you should be, and build the roadmap to get there. You'll know what to do first and why it matters. Strategy only. I steer, you execute.
+          </p>
+          <p class="text-neutral-400 text-sm leading-relaxed" style="display:none" data-phase="fall">
+            SEO audit, competitive analysis, keyword research, content briefs, monthly strategy calls, quarterly reporting. I sort through the noise, name the priorities with data behind them, and tell you what to do first. Strategy only. I steer, you execute.
           </p>
         </a>
         <a href="/services/implementation" class="reveal glow-card p-8 block group cursor-pointer" style="--i:2">
@@ -146,8 +158,14 @@ const personSchema = JSON.stringify({
         <div class="flex-1">
           <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-3">Free tool</p>
           <h3 class="text-neutral-100 text-xl font-medium mb-2">What does the internet think of your business?</h3>
-          <p class="text-neutral-400 text-sm leading-relaxed">
+          <p class="text-neutral-400 text-sm leading-relaxed" data-processing="default">
             Type in your business name. I'll pull every mention I can find, read the sentiment, and show you what people are actually saying. Free. No login. No pitch afterward.
+          </p>
+          <p class="text-neutral-400 text-sm leading-relaxed" style="display:none" data-processing="stars">
+            Enter your brand name and get a scored sentiment report. Reviews, forums, news mentions, social — pulled from across the web, analyzed, and scored 0 to 100. Free. No login. No pitch afterward.
+          </p>
+          <p class="text-neutral-400 text-sm leading-relaxed" style="display:none" data-processing="clouds">
+            Ever wonder what people say about your business when you're not in the room? Type in your name and find out. I'll read every mention I can find and tell you the story the internet is telling about you. Free. No strings.
           </p>
         </div>
         <a href="/listener" class="inline-flex items-center justify-center px-6 py-3 border border-amber-500/30 text-amber-400 font-medium text-sm rounded-lg hover:bg-amber-500/10 hover:border-amber-500/50 transition-all duration-300 whitespace-nowrap shrink-0">
@@ -164,7 +182,9 @@ const personSchema = JSON.stringify({
       <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Get started</p>
       <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6" data-personalize="first-visit">Sound familiar<span data-personalize="name-comma" style="display:none"></span>?</h2>
       <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6" data-personalize="returning" style="display:none">Still thinking about it<span data-personalize="name-comma" style="display:none"></span>?</h2>
-      <p class="reveal text-neutral-400 text-lg mb-10" data-personalize="first-visit">If you read three of those and thought "that's us," we should probably talk. No pitch deck. No discovery call theater. Just tell me what's going on.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" data-personalize="first-visit" data-frame="default">If you read three of those and thought "that's us," we should probably talk. No pitch deck. No discovery call theater. Just tell me what's going on.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" data-personalize="first-visit" style="display:none" data-frame="sun">You've got the business. Let's get you the website it deserves. No pitch deck. No discovery call theater. Just a conversation about where you're headed.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" data-personalize="first-visit" style="display:none" data-frame="moon">If you read three of those and thought "that's us," we should probably talk. No pitch deck. No discovery call theater. Just tell me what's broken and I'll tell you what I'd do about it.</p>
       <p class="reveal text-neutral-400 text-lg mb-10" data-personalize="returning" style="display:none">No pressure. But the website isn't fixing itself. Whenever you're ready, I'm here.</p>
       <a href="/contact" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
         Start a conversation

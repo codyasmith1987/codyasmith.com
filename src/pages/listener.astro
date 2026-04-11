@@ -504,24 +504,11 @@ const recentScans = await getRecentScans(5);
           if (el) { el.classList.remove('text-amber-400', 'text-emerald-400'); el.classList.add('text-neutral-600'); el.querySelector('span')!.textContent = '-'; }
         });
 
-        // Animate steps with timing
+        // Stream real progress from the server
         setStep('search', 'active');
-        document.getElementById('loading-text')!.textContent = 'Searching the web for mentions...';
+        document.getElementById('loading-text')!.textContent = 'Starting scan...';
 
         try {
-          // Simulate progress while the real request runs
-          const progressTimer = setTimeout(() => {
-            setStep('search', 'done');
-            setStep('scrape', 'active');
-            document.getElementById('loading-text')!.textContent = 'Scraping pages...';
-          }, 3000);
-
-          const progressTimer2 = setTimeout(() => {
-            setStep('scrape', 'done');
-            setStep('analyze', 'active');
-            document.getElementById('loading-text')!.textContent = 'Analyzing sentiment...';
-          }, 8000);
-
           const res = await fetch('/api/scan', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -534,21 +521,51 @@ const recentScans = await getRecentScans(5);
             }),
           });
 
-          clearTimeout(progressTimer);
-          clearTimeout(progressTimer2);
+          if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error || 'Scan failed');
+          }
 
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Scan failed');
+          const reader = res.body!.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          let reportData: any = null;
 
-          // Complete all steps
-          ['search', 'scrape', 'analyze', 'report'].forEach(s => setStep(s, 'done'));
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            // Parse SSE events from the buffer
+            const lines = buffer.split('\n\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              const event = JSON.parse(line.slice(6));
+
+              if (event.step === 'error') {
+                throw new Error(event.detail);
+              }
+
+              if (event.step === 'complete') {
+                reportData = event.data;
+              } else {
+                // Update the step indicator and detail text
+                setStep(event.step, event.status);
+                document.getElementById('loading-text')!.textContent = event.detail;
+              }
+            }
+          }
+
+          if (!reportData) throw new Error('No report data received');
+
           document.getElementById('loading-text')!.textContent = 'Report ready!';
-
           await new Promise(r => setTimeout(r, 600));
           loading.classList.add('hidden');
 
-          currentScanId = data.scan_id;
-          renderTier1(data);
+          currentScanId = reportData.scan_id;
+          renderTier1(reportData);
           gate.classList.remove('hidden');
           tier1.scrollIntoView({ behavior: 'smooth', block: 'start' });
           input.value = '';

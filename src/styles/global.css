@@ -638,7 +638,7 @@
     font-family: var(--font-quote);
   }
 
-  /* Vortex is now canvas-based — see Quiz.astro script */
+  /* Growth field is canvas-based — see src/lib/growth-field.ts */
 
   /* ============================================
      KINETIC TYPOGRAPHY — "outgrew"

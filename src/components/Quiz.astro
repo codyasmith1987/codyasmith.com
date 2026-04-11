@@ -7,9 +7,9 @@
 
 <div id="quiz" class="fixed inset-0 z-[70]" style="display:none">
   <!-- Frosted glass: layered depth — blur + gradient vignette + grain -->
-  <div id="quiz-backdrop" class="absolute inset-0 transition-all duration-1000 ease-out" style="backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);background:radial-gradient(ellipse at 50% 40%, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.65) 100%)"></div>
-  <!-- Vortex: canvas-based particle system — real chaos, never repeats -->
-  <canvas id="quiz-vortex" class="absolute inset-0 w-full h-full pointer-events-none" style="transition:opacity 1.2s ease"></canvas>
+  <div id="quiz-backdrop" class="absolute inset-0 transition-all duration-1000 ease-out" style="backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);background:radial-gradient(ellipse at 50% 40%, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0.30) 60%, rgba(0,0,0,0.38) 100%)"></div>
+  <!-- Growth field: page-topology-distributed marks, conditioned by answers -->
+  <canvas id="quiz-vortex" class="absolute inset-0 w-full h-full pointer-events-none" style="transform:perspective(2000px) rotateX(1.5deg);transform-origin:center center"></canvas>
   <div class="relative z-10 min-h-screen flex items-center justify-center p-6">
     <div class="max-w-lg w-full">
 
@@ -176,53 +176,72 @@
       }, 300);
     }
 
-    // Preview theme behind the frosted glass as answers come in
-    function previewTheme() {
-      const base = answers['1'] || 'moon';
-      const place = answers['2'] || 'mountain';
-      const season = answers['3'] || 'fall';
-      const processing = answers['4'] || 'stars';
-      const preview = `${base}-${place}-${season}-${processing}`;
-      document.documentElement.setAttribute('data-theme', preview);
-    }
-
     function closeQuiz() {
+      const hasAnswers = ['1', '2', '3', '4'].some(k => k in answers);
       const backdrop = document.getElementById('quiz-backdrop');
       const content = quiz.querySelector('.relative.z-10') as HTMLElement;
 
-      // Start killing tracers randomly
-      if ((window as any).__vortexAccelerate) (window as any).__vortexAccelerate();
+      if (hasAnswers) {
+        // Full resolution sequence — field resolves in place
+        if ((window as any).__fieldResolve) (window as any).__fieldResolve();
 
-      // Content fades
-      if (content) {
-        content.style.transition = 'opacity 0.8s ease, transform 0.8s ease';
-        content.style.opacity = '0';
-        content.style.transform = 'scale(0.95)';
-      }
+        // Content fades
+        if (content) {
+          content.style.transition = 'opacity 0.8s ease, transform 0.8s ease';
+          content.style.opacity = '0';
+          content.style.transform = 'scale(0.98)';
+        }
 
-      // Backdrop: lift blur and darken, revealing clear page beneath
-      if (backdrop) {
-        backdrop.style.transition = 'all 3.5s ease';
+        // Backdrop clears during resolution
+        if (backdrop) {
+          backdrop.style.transition = 'all 1.8s ease-out';
+          setTimeout(() => {
+            backdrop.style.backdropFilter = 'blur(0px)';
+            (backdrop.style as any).webkitBackdropFilter = 'blur(0px)';
+            backdrop.style.background = 'transparent';
+          }, 200);
+        }
+
+        // Quiz hides after resolution completes
         setTimeout(() => {
+          quiz.style.transition = 'opacity 0.3s ease';
+          quiz.style.opacity = '0';
+        }, 2300);
+
+        setTimeout(() => {
+          quiz.style.display = 'none';
+          if (typeof (window as any).__initPersonalization === 'function') {
+            (window as any).__initPersonalization();
+          }
+        }, 2600);
+      } else {
+        // Quick close — user skipped without answering
+        if ((window as any).__fieldStop) (window as any).__fieldStop();
+
+        if (content) {
+          content.style.transition = 'opacity 0.5s ease';
+          content.style.opacity = '0';
+        }
+
+        if (backdrop) {
+          backdrop.style.transition = 'all 0.8s ease';
           backdrop.style.backdropFilter = 'blur(0px)';
           (backdrop.style as any).webkitBackdropFilter = 'blur(0px)';
           backdrop.style.background = 'transparent';
-        }, 500);
-      }
-
-      // Final clear
-      setTimeout(() => {
-        quiz.style.transition = 'opacity 0.5s ease';
-        quiz.style.opacity = '0';
-      }, 4000);
-
-      setTimeout(() => {
-        quiz.style.display = 'none';
-        if ((window as any).__vortexStop) (window as any).__vortexStop();
-        if (typeof (window as any).__initPersonalization === 'function') {
-          (window as any).__initPersonalization();
         }
-      }, 4800);
+
+        setTimeout(() => {
+          quiz.style.transition = 'opacity 0.3s ease';
+          quiz.style.opacity = '0';
+        }, 600);
+
+        setTimeout(() => {
+          quiz.style.display = 'none';
+          if (typeof (window as any).__initPersonalization === 'function') {
+            (window as any).__initPersonalization();
+          }
+        }, 900);
+      }
     }
 
     function showRevealThenClose(nameStr?: string) {
@@ -244,7 +263,18 @@
     }
 
     function applyTheme(theme: string) {
-      document.documentElement.setAttribute('data-theme', theme);
+      // Clear interpolated inline styles so CSS selector takes over
+      const root = document.documentElement;
+      const tokens = [
+        '--color-neutral-950', '--color-neutral-900', '--color-neutral-850',
+        '--color-neutral-800', '--color-neutral-700', '--color-neutral-600',
+        '--color-neutral-500', '--color-neutral-400', '--color-neutral-300',
+        '--color-neutral-200', '--color-neutral-100',
+        '--color-amber-600', '--color-amber-500', '--color-amber-400',
+        '--color-dated'
+      ];
+      for (const t of tokens) root.style.removeProperty(t);
+      root.setAttribute('data-theme', theme);
       localStorage.setItem('cs-theme', theme);
       localStorage.setItem('cs-quiz-done', '1');
       localStorage.setItem('cs-quiz-answers', JSON.stringify(answers));
@@ -271,11 +301,11 @@
         // Store answer for current step
         answers[String(currentStep)] = answer;
 
-        // Pulse the vortex FIRST — theme updates when wave completes
-        if ((window as any).__vortexPulse) (window as any).__vortexPulse();
-
-        // Delay theme change until wave has swept out (~2s for both beats)
-        setTimeout(() => { previewTheme(); }, 2000);
+        // Condition the growth field — immediate theme interpolation + change wave
+        const theme = buildThemeName();
+        if ((window as any).__fieldCondition) {
+          (window as any).__fieldCondition(currentStep, answer, theme);
+        }
 
         // Brief highlight on the clicked button using theme accent
         const accent = getComputedStyle(quiz).getPropertyValue('--quiz-accent').trim();
@@ -328,250 +358,7 @@
 </script>
 
 <script>
-  // Vortex particle system — tornado from inside, Inkheart chaos
-  // Each particle is an ink tendril spiraling inward with noise-driven turbulence
-  function initVortex() {
-    const canvas = document.getElementById('quiz-vortex') as HTMLCanvasElement;
-    if (!canvas || canvas.dataset.init === '1') return;
-    canvas.dataset.init = '1';
-
-    const ctx = canvas.getContext('2d')!;
-    let w = 0, h = 0, cx = 0, cy = 0;
-    let running = true;
-    let accelerating = false;
-    let accelStart = 0;
-
-    function resize() {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      w = canvas.clientWidth;
-      h = canvas.clientHeight;
-      canvas.width = w * dpr;
-      canvas.height = h * dpr;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      cx = w / 2;
-      cy = h / 2;
-    }
-    resize();
-    window.addEventListener('resize', resize);
-
-    // Simple noise function (no library needed)
-    function noise(x: number, y: number, t: number): number {
-      const s = Math.sin(x * 12.9898 + y * 78.233 + t * 43.4321) * 43758.5453;
-      return (s - Math.floor(s)) * 2 - 1;
-    }
-
-    // Read accent color from CSS custom properties
-    function getAccentColor(): [number, number, number] {
-      const style = getComputedStyle(document.documentElement);
-      const hex = style.getPropertyValue('--color-amber-500').trim();
-      if (hex.startsWith('#') && hex.length >= 7) {
-        return [
-          parseInt(hex.slice(1, 3), 16),
-          parseInt(hex.slice(3, 5), 16),
-          parseInt(hex.slice(5, 7), 16),
-        ];
-      }
-      return [245, 158, 11]; // fallback amber
-    }
-
-    // Ghostly vortex — noise flow field.
-    // Hundreds of tracers follow invisible spiraling currents.
-    // They leave long fading trails. The result is smoke in a whirlpool.
-    // Not arcs. Not dots. Flowing, turbulent, organic wisps.
-
-    interface Tracer {
-      x: number;
-      y: number;
-      speed: number;
-      opacity: number;
-      thickness: number;
-      trail: [number, number][]; // position history for tail rendering
-      alive: boolean;
-    }
-
-    const tracers: Tracer[] = [];
-    const COUNT = 400;
-    const TRAIL_LENGTH = 18;
-
-    function spawnTracer(): Tracer {
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 50 + Math.random() * Math.max(w, h) * 0.5;
-      const x = cx + Math.cos(angle) * dist;
-      const y = cy + Math.sin(angle) * dist;
-      return {
-        x, y,
-        speed: 75 + Math.random() * 175,
-        opacity: Math.random() < 0.2 ? (0.05 + Math.random() * 0.04) : (0.012 + Math.random() * 0.022),
-        thickness: 0.5 + Math.random() * 1,
-        trail: [[x, y]],
-        alive: true,
-      };
-    }
-
-    for (let i = 0; i < COUNT; i++) tracers.push(spawnTracer());
-
-    let time = 0;
-    let accentRGB = getAccentColor();
-    let prevAccentRGB = [...accentRGB] as [number, number, number];
-
-    // Heartbeat wave — double-pulse like a real heartbeat
-    let waveRadius = -1;
-    let waveDirection = 1;
-    let waveSpeed = 0;
-    let waveBeatCount = 0;     // 0 = first beat, 1 = second beat
-    let wavePauseUntil = 0;    // timestamp for pause between beats
-    const waveMaxR = Math.max(w, h) * 0.8;
-
-    const themeObserver = new MutationObserver(() => {
-      prevAccentRGB = [...accentRGB] as [number, number, number];
-      accentRGB = getAccentColor();
-    });
-    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-
-    function flowAngle(x: number, y: number, t: number): number {
-      const dx = x - cx, dy = y - cy;
-      const dist = Math.sqrt(dx * dx + dy * dy) + 1;
-      const toCenter = Math.atan2(dy, dx);
-      const tangent = toCenter + Math.PI * 0.5;
-      const spiral = tangent + 0.3;
-      const n1 = noise(x * 0.003, y * 0.003, t) * Math.PI;
-      const n2 = noise(x * 0.008 + 100, y * 0.008 + 100, t * 1.3) * Math.PI * 0.5;
-      const blend = Math.min(1, dist / (Math.max(w, h) * 0.3));
-      return spiral * (1 - blend * 0.4) + (n1 + n2) * blend * 0.6;
-    }
-
-    function draw() {
-      if (!running) return;
-
-      // CLEAR canvas — fully transparent. Page shows through.
-      ctx.clearRect(0, 0, w, h);
-
-      time += 0.003;
-      const now = Date.now();
-      const speedMult = accelerating ? 1 : 1; // no speed change on close
-
-      // Heartbeat wave
-      if (waveRadius >= 0 && now >= wavePauseUntil) {
-        const undulate = Math.sin(waveRadius * 0.025) * 6;
-        waveRadius += (waveSpeed + undulate * 0.3) * waveDirection;
-        if (waveRadius > waveMaxR) { waveDirection = -1; }
-        if (waveRadius < 0 && waveDirection === -1) {
-          if (waveBeatCount === 0) {
-            waveBeatCount = 1;
-            waveRadius = 0;
-            waveDirection = 1;
-            waveSpeed = 35;
-            wavePauseUntil = now + 150;
-          } else {
-            waveRadius = -1;
-            waveBeatCount = 0;
-          }
-        }
-      }
-
-      for (const t of tracers) {
-        if (!t.alive) continue;
-
-        // During close: randomly kill tracers one by one
-        if (accelerating) {
-          const elapsed = (now - accelStart) / 1000;
-          const deathChance = 0.004 + elapsed * 0.012;
-          if (Math.random() < deathChance) { t.alive = false; continue; }
-        }
-
-        const angle = flowAngle(t.x, t.y, time);
-        t.x += Math.cos(angle) * t.speed * speedMult;
-        t.y += Math.sin(angle) * t.speed * speedMult;
-
-        // Store trail
-        t.trail.push([t.x, t.y]);
-        if (t.trail.length > TRAIL_LENGTH) t.trail.shift();
-
-        const dx = t.x - cx, dy = t.y - cy;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        // Recycle or kill
-        const killRadius = 15;
-        if (t.x < -50 || t.x > w + 50 || t.y < -50 || t.y > h + 50 || dist < killRadius) {
-          if (accelerating) { t.alive = false; continue; }
-          const nt = spawnTracer();
-          t.x = nt.x; t.y = nt.y; t.speed = nt.speed;
-          t.opacity = nt.opacity; t.thickness = nt.thickness;
-          t.trail = [[t.x, t.y]];
-          continue;
-        }
-
-        const centerFade = Math.min(1, dist / (Math.max(w, h) * 0.15));
-
-        // Color: warm white with subtle 20% tint — never goes dark
-        const tint = 0.2;
-        const baseR = Math.round(235 + (accentRGB[0] - 235) * tint);
-        const baseG = Math.round(230 + (accentRGB[1] - 230) * tint);
-        const baseB = Math.round(225 + (accentRGB[2] - 225) * tint);
-        let r = baseR, g = baseG, b = baseB;
-        let waveBoost = 0;
-
-        if (waveRadius >= 0) {
-          const waveDist = Math.abs(dist - waveRadius);
-          const waveWidth = 150;
-          let colorIntensity = 0;
-          if (waveDist < waveWidth) {
-            colorIntensity = (1 - waveDist / waveWidth);
-            waveBoost = colorIntensity * 0.06;
-          }
-          const behindWave = waveDirection === 1
-            ? Math.min(1, Math.max(0, (waveRadius - dist) / 200))
-            : Math.min(1, Math.max(0, (dist - waveRadius) / 200 + 1));
-          const colorMix = Math.max(colorIntensity, behindWave * 0.7);
-          r = Math.round(baseR + (accentRGB[0] - baseR) * colorMix);
-          g = Math.round(baseG + (accentRGB[1] - baseG) * colorMix);
-          b = Math.round(baseB + (accentRGB[2] - baseB) * colorMix);
-        }
-
-        // Draw trail as a wake — thin point leads, spreads wider behind it
-        if (t.trail.length > 1) {
-          for (let i = 1; i < t.trail.length; i++) {
-            const progress = i / t.trail.length; // 0 = old/wide end, 1 = head/point
-            const segAlpha = progress * (t.opacity + waveBoost) * centerFade;
-            const segWidth = t.thickness * (0.3 + (1 - progress) * 2.5); // head is thin, wake spreads behind
-            ctx.beginPath();
-            ctx.moveTo(t.trail[i - 1][0], t.trail[i - 1][1]);
-            ctx.lineTo(t.trail[i][0], t.trail[i][1]);
-            ctx.strokeStyle = `rgba(${r},${g},${b},${Math.min(segAlpha, 0.08)})`;
-            ctx.lineWidth = segWidth;
-            ctx.lineCap = 'round';
-            ctx.stroke();
-          }
-        }
-      }
-
-      requestAnimationFrame(draw);
-    }
-
-    requestAnimationFrame(draw);
-
-    // Pulse wave — radiates color change outward and back
-    (window as any).__vortexPulse = () => {
-      waveRadius = 0;
-      waveDirection = 1;
-      waveSpeed = 22;
-      waveBeatCount = 0;
-      wavePauseUntil = 0;
-    };
-
-    // Final close — tracers die randomly one by one
-    (window as any).__vortexAccelerate = () => {
-      accelerating = true;
-      accelStart = Date.now();
-    };
-
-    (window as any).__vortexStop = () => {
-      running = false;
-      themeObserver.disconnect();
-      canvas.dataset.init = '';
-    };
-  }
-
-  initVortex();
-  document.addEventListener('astro:after-swap', initVortex);
+  import { initGrowthField } from '../lib/growth-field';
+  initGrowthField();
+  document.addEventListener('astro:after-swap', initGrowthField);
 </script>

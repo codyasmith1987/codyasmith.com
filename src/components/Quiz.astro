@@ -408,7 +408,7 @@
         x: cx + Math.cos(angle) * dist,
         y: cy + Math.sin(angle) * dist,
         speed: 75 + Math.random() * 175,
-        opacity: 0.01 + Math.random() * 0.025,
+        opacity: Math.random() < 0.2 ? (0.04 + Math.random() * 0.03) : (0.008 + Math.random() * 0.018),
         thickness: 0.5 + Math.random() * 1,
       };
     }
@@ -446,7 +446,7 @@
     function draw() {
       if (!running) return;
 
-      ctx.fillStyle = 'rgba(0,0,0,0.03)';
+      ctx.fillStyle = 'rgba(0,0,0,0.05)';
       ctx.fillRect(0, 0, w, h);
 
       time += 0.003;

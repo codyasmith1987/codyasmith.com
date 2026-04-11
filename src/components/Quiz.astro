@@ -7,7 +7,7 @@
 
 <div id="quiz" class="fixed inset-0 z-[70]" style="display:none">
   <!-- Frosted glass: layered depth — blur + gradient vignette + grain -->
-  <div id="quiz-backdrop" class="absolute inset-0 transition-all duration-1000 ease-out" style="backdrop-filter:blur(50px) saturate(1.1);-webkit-backdrop-filter:blur(50px) saturate(1.1);background:radial-gradient(ellipse at 50% 40%, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.85) 60%, rgba(0,0,0,0.92) 100%)"></div>
+  <div id="quiz-backdrop" class="absolute inset-0 transition-all duration-1000 ease-out" style="backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);background:radial-gradient(ellipse at 50% 40%, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.85) 60%, rgba(0,0,0,0.92) 100%)"></div>
   <!-- Vortex: canvas-based particle system — real chaos, never repeats -->
   <canvas id="quiz-vortex" class="absolute inset-0 w-full h-full pointer-events-none" style="transition:opacity 1.2s ease"></canvas>
   <div class="relative z-10 min-h-screen flex items-center justify-center p-6">
@@ -205,8 +205,8 @@
       setTimeout(() => {
         if (backdrop) {
           backdrop.style.transition = 'all 1.4s cubic-bezier(0.4, 0, 0.2, 1)';
-          backdrop.style.backdropFilter = 'blur(0px) saturate(1)';
-          (backdrop.style as any).webkitBackdropFilter = 'blur(0px) saturate(1)';
+          backdrop.style.backdropFilter = 'blur(0px)';
+          (backdrop.style as any).webkitBackdropFilter = 'blur(0px)';
           backdrop.style.background = 'transparent';
         }
         if (vortexCanvas) {
@@ -375,41 +375,45 @@
       return [245, 158, 11]; // fallback amber
     }
 
-    // Particle definition
+    // Particle definition — independent XY velocity for ambient drift (not orbital arcs)
     interface Particle {
-      angle: number;       // current angle in radians
-      radius: number;      // distance from center
-      baseRadius: number;  // original distance (for drift)
-      speed: number;       // angular velocity (rad/frame)
-      drift: number;       // inward/outward drift speed
-      size: number;        // length of the tendril
-      thickness: number;   // width of the tendril
+      x: number;
+      y: number;
+      vx: number;          // x velocity
+      vy: number;          // y velocity
+      size: number;        // glow radius
+      thickness: number;   // stroke width
       opacity: number;
       noiseOffsetX: number;
       noiseOffsetY: number;
-      trail: number[];     // recent angles for tail
-      hueShift: number;    // slight color variation
+      trail: [number, number][];  // recent positions for tail
+      hueShift: number;
+      turnTimer: number;   // frames until next random direction change
     }
+
+    // Apply soft blur to entire canvas for firefly glow
+    canvas.style.filter = 'blur(1.5px)';
 
     const particles: Particle[] = [];
     const COUNT = 45;
 
     for (let i = 0; i < COUNT; i++) {
-      const dist = 60 + Math.random() * Math.min(w, h) * 0.45;
-      const speed = (0.003 + Math.random() * 0.008) * (Math.random() > 0.3 ? 1 : -1);
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 60 + Math.random() * Math.min(w, h) * 0.4;
+      const speed = 0.3 + Math.random() * 0.6;
       particles.push({
-        angle: Math.random() * Math.PI * 2,
-        radius: dist,
-        baseRadius: dist,
-        speed,
-        drift: (Math.random() - 0.5) * 0.15,
-        size: 30 + Math.random() * 80,
-        thickness: 1 + Math.random() * 3,
-        opacity: 0.15 + Math.random() * 0.45,
+        x: cx + Math.cos(angle) * dist,
+        y: cy + Math.sin(angle) * dist,
+        vx: (Math.random() - 0.5) * speed,
+        vy: (Math.random() - 0.5) * speed,
+        size: 30 + Math.random() * 60,
+        thickness: 1.5 + Math.random() * 2.5,
+        opacity: 0.15 + Math.random() * 0.4,
         noiseOffsetX: Math.random() * 1000,
         noiseOffsetY: Math.random() * 1000,
         trail: [],
         hueShift: (Math.random() - 0.5) * 40,
+        turnTimer: 60 + Math.floor(Math.random() * 120),
       });
     }
 
@@ -427,84 +431,103 @@
       ctx.clearRect(0, 0, w, h);
       time += 0.008;
 
-      const speedMult = accelerating ? 3 + Math.min((Date.now() - accelStart) / 500, 5) : 1;
+      const speedMult = accelerating ? 2 + Math.min((Date.now() - accelStart) / 800, 4) : 1;
+      const damping = 0.98;
 
       for (const p of particles) {
-        // Noise-driven turbulence
-        const nx = noise(p.noiseOffsetX, time * 0.7, p.angle) * 20;
-        const ny = noise(p.noiseOffsetY, time * 0.5, p.radius * 0.01) * 20;
+        // Gentle noise displacement (±8px, slow drift)
+        const nx = noise(p.noiseOffsetX, time * 0.35, p.x * 0.01) * 8;
+        const ny = noise(p.noiseOffsetY, time * 0.25, p.y * 0.01) * 8;
 
-        // Spiral motion — faster when closer to center
-        const radiusFactor = Math.max(0.3, p.radius / p.baseRadius);
-        p.angle += (p.speed / radiusFactor) * speedMult;
-
-        // Drift inward slowly (tornado pull), with some particles drifting out
-        p.radius += p.drift * (accelerating ? -2 : 1);
-
-        // Keep particles in bounds
-        if (p.radius < 20) {
-          p.radius = 60 + Math.random() * Math.min(w, h) * 0.4;
-          p.angle = Math.random() * Math.PI * 2;
-        }
-        if (p.radius > Math.min(w, h) * 0.6) {
-          p.drift = -Math.abs(p.drift); // pull back in
-        }
-        if (p.radius < 80 && !accelerating) {
-          p.drift = Math.abs(p.drift) * 0.3; // gentle push out near center
+        // Random direction changes for organic firefly drift
+        p.turnTimer--;
+        if (p.turnTimer <= 0) {
+          const turnAngle = (Math.random() - 0.5) * Math.PI * 0.8;
+          const cos = Math.cos(turnAngle), sin = Math.sin(turnAngle);
+          const nvx = p.vx * cos - p.vy * sin;
+          const nvy = p.vx * sin + p.vy * cos;
+          p.vx = nvx;
+          p.vy = nvy;
+          p.turnTimer = 40 + Math.floor(Math.random() * 100);
         }
 
-        // Position
-        const x = cx + Math.cos(p.angle) * p.radius + nx;
-        const y = cy + Math.sin(p.angle) * p.radius + ny;
+        // Apply velocity with damping
+        p.vx *= damping;
+        p.vy *= damping;
+
+        // Gentle pull toward center (keeps particles in frame)
+        const dx = cx - p.x, dy = cy - p.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const pullStrength = accelerating ? 0.015 : 0.001;
+        p.vx += (dx / (dist + 1)) * pullStrength * speedMult;
+        p.vy += (dy / (dist + 1)) * pullStrength * speedMult;
+
+        // Maintain minimum speed so particles don't stall
+        const spd = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+        if (spd < 0.15 && !accelerating) {
+          p.vx += (Math.random() - 0.5) * 0.3;
+          p.vy += (Math.random() - 0.5) * 0.3;
+        }
+
+        // Update position
+        p.x += p.vx * speedMult + nx * 0.1;
+        p.y += p.vy * speedMult + ny * 0.1;
+
+        // Soft boundary — wrap back into view
+        const margin = 60;
+        if (p.x < -margin) p.x = w + margin * 0.5;
+        if (p.x > w + margin) p.x = -margin * 0.5;
+        if (p.y < -margin) p.y = h + margin * 0.5;
+        if (p.y > h + margin) p.y = -margin * 0.5;
 
         // Store trail
-        p.trail.push(p.angle);
-        if (p.trail.length > 8) p.trail.shift();
+        p.trail.push([p.x, p.y]);
+        if (p.trail.length > 6) p.trail.shift();
 
-        // Draw tendril as a tapered line along the orbit path
-        const tailAngle = p.trail[0] || p.angle;
-        const tx = cx + Math.cos(tailAngle) * (p.radius + 5) + nx * 0.5;
-        const ty = cy + Math.sin(tailAngle) * (p.radius + 5) + ny * 0.5;
+        // Tail position from trail history
+        const tail = p.trail[0] || [p.x, p.y];
 
         // Color with per-particle hue shift
         const r = Math.min(255, Math.max(0, accentRGB[0] + p.hueShift));
         const g = Math.min(255, Math.max(0, accentRGB[1] + p.hueShift * 0.5));
         const b = Math.min(255, Math.max(0, accentRGB[2] - p.hueShift * 0.3));
 
-        // Gradient along the tendril: bright head, fading tail
-        const grad = ctx.createLinearGradient(x, y, tx, ty);
+        // Gradient along the trail: bright head, fading tail
+        const grad = ctx.createLinearGradient(p.x, p.y, tail[0], tail[1]);
         grad.addColorStop(0, `rgba(${r},${g},${b},${p.opacity})`);
         grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
 
+        // Draw soft curved trail
         ctx.beginPath();
-        ctx.moveTo(x, y);
-
-        // Curved path through midpoints for organic shape
-        const mx = cx + Math.cos((p.angle + tailAngle) / 2) * (p.radius * 1.02) + nx * 0.7;
-        const my = cy + Math.sin((p.angle + tailAngle) / 2) * (p.radius * 1.02) + ny * 0.7;
-        ctx.quadraticCurveTo(mx, my, tx, ty);
+        ctx.moveTo(p.x, p.y);
+        if (p.trail.length > 2) {
+          const mid = p.trail[Math.floor(p.trail.length / 2)];
+          ctx.quadraticCurveTo(mid[0] + nx, mid[1] + ny, tail[0], tail[1]);
+        } else {
+          ctx.lineTo(tail[0], tail[1]);
+        }
 
         ctx.strokeStyle = grad;
         ctx.lineWidth = p.thickness * (accelerating ? 0.5 : 1);
         ctx.lineCap = 'round';
         ctx.stroke();
 
-        // Small bright dot at the head of fast particles
-        if (p.opacity > 0.35) {
+        // Soft glow dot at head
+        if (p.opacity > 0.25) {
           ctx.beginPath();
-          ctx.arc(x, y, p.thickness * 0.8, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(${r},${g},${b},${p.opacity * 0.6})`;
+          ctx.arc(p.x, p.y, p.thickness * 1.2, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(${r},${g},${b},${p.opacity * 0.4})`;
           ctx.fill();
         }
       }
 
-      // Soft glow at center (the eye)
-      const eyeGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 120);
-      eyeGrad.addColorStop(0, `rgba(${accentRGB[0]},${accentRGB[1]},${accentRGB[2]},0.06)`);
-      eyeGrad.addColorStop(0.5, `rgba(${accentRGB[0]},${accentRGB[1]},${accentRGB[2]},0.02)`);
+      // Soft ambient glow at center
+      const eyeGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 150);
+      eyeGrad.addColorStop(0, `rgba(${accentRGB[0]},${accentRGB[1]},${accentRGB[2]},0.04)`);
+      eyeGrad.addColorStop(0.5, `rgba(${accentRGB[0]},${accentRGB[1]},${accentRGB[2]},0.015)`);
       eyeGrad.addColorStop(1, 'transparent');
       ctx.fillStyle = eyeGrad;
-      ctx.fillRect(cx - 120, cy - 120, 240, 240);
+      ctx.fillRect(cx - 150, cy - 150, 300, 300);
 
       requestAnimationFrame(draw);
     }
@@ -515,10 +538,6 @@
     (window as any).__vortexAccelerate = () => {
       accelerating = true;
       accelStart = Date.now();
-      // Pull all particles inward
-      for (const p of particles) {
-        p.drift = -Math.abs(p.drift) * 3 - 0.5;
-      }
     };
     (window as any).__vortexStop = () => {
       running = false;

@@ -75,7 +75,9 @@ import Base from '../../layouts/Base.astro';
               <div class="w-2 h-2 rounded-full bg-amber-400"></div>
               <p class="text-neutral-100 text-sm font-medium">Session 1: Foundation</p>
             </div>
-            <p class="text-neutral-500 text-sm pl-5">Core concepts, live demonstration, first assignment issued.</p>
+            <p class="text-neutral-500 text-sm pl-5" data-phase="default">Core concepts, live demonstration, first assignment issued.</p>
+            <p class="text-neutral-500 text-sm pl-5" style="display:none" data-phase="spring">Your team starts seeing their tools differently. The shift from "someone else handles this" to "I can do this" begins here.</p>
+            <p class="text-neutral-500 text-sm pl-5" style="display:none" data-phase="fall">90-minute live session covering core interface, key workflows, and common pitfalls. Assignment issued: 3-5 real tasks on their own systems due before Session 2.</p>
           </div>
           <div class="glow-card p-5">
             <div class="flex items-center gap-3 mb-2">
@@ -103,7 +105,9 @@ import Base from '../../layouts/Base.astro';
               <div class="w-2 h-2 rounded-full bg-amber-400"></div>
               <p class="text-neutral-100 text-sm font-medium">Session 3: Independence</p>
             </div>
-            <p class="text-neutral-500 text-sm pl-5">Final review, edge cases, self-sufficiency check. Your team owns it.</p>
+            <p class="text-neutral-500 text-sm pl-5" data-phase="default">Final review, edge cases, self-sufficiency check. Your team owns it.</p>
+            <p class="text-neutral-500 text-sm pl-5" style="display:none" data-phase="spring">By now they're not learning anymore — they're proving they can do it. This session confirms the transfer is real.</p>
+            <p class="text-neutral-500 text-sm pl-5" style="display:none" data-phase="fall">Final review of all completed assignments, edge case troubleshooting, Q&A on real scenarios. Reference guide delivered. Self-sufficiency confirmed.</p>
           </div>
         </div>
       </div>
@@ -269,7 +273,9 @@ import Base from '../../layouts/Base.astro';
     <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
     <div class="relative max-w-3xl mx-auto text-center">
       <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Ready to upskill your team?</h2>
-      <p class="reveal text-neutral-400 text-lg mb-10">Tell me what your team needs to learn and I'll design the program around them.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" data-processing="default">Tell me what your team needs to learn and I'll design the program around them.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-processing="stars">Teams that complete the guided program retain 3-4x more than single-session training. Tell me your team size and skill level and I'll scope the program.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-processing="clouds">Three weeks from now, your team handles the website themselves. No more being the bottleneck. Tell me what they need to learn and I'll build the program around them.</p>
       <a href="/contact?interest=training" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
         Design a session
       </a>

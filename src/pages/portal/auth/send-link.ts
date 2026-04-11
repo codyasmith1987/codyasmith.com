@@ -35,7 +35,7 @@ export const POST: APIRoute = async ({ request, url, clientAddress }) => {
     // Send via Brevo
     const brevoKey = import.meta.env.BREVO_API_KEY;
     if (brevoKey) {
-      await fetch('https://api.brevo.com/v3/smtp/email', {
+      const emailRes = await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
         headers: {
           'api-key': brevoKey,
@@ -61,7 +61,10 @@ export const POST: APIRoute = async ({ request, url, clientAddress }) => {
             </div>
           `,
         }),
-      }).catch(err => console.error('Brevo magic link email error:', err));
+      }).catch(err => { console.error('Brevo magic link email error:', err); return null; });
+      if (emailRes && !emailRes.ok) {
+        console.error('Brevo magic link API error:', await emailRes.text());
+      }
     } else {
       // Dev fallback: log the link
       console.log(`\n[MAGIC LINK] ${loginUrl}\n`);

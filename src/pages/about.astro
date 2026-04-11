@@ -3,6 +3,7 @@ import Base from '../layouts/Base.astro';
 ---
 
 <Base title="About Cody Smith | Writer, Strategist, Consultant in Cedar City" description="The longer version. Writer, strategist, consultant. Cedar City, Utah.">
+  <script type="application/ld+json" set:html={JSON.stringify({"@context":"https://schema.org","@type":"Person","name":"Cody Smith","jobTitle":"Web Management & Marketing Consultant","url":"https://codyasmith.com","address":{"@type":"PostalAddress","addressLocality":"Cedar City","addressRegion":"UT","addressCountry":"US"},"email":"cody@codyasmith.com","telephone":"+1-435-868-7133","sameAs":["https://codyasmith.com"]})} />
   <!-- Hero -->
   <section class="relative pt-40 pb-16 px-6 overflow-hidden">
     <div class="absolute top-0 right-1/4 w-[500px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>

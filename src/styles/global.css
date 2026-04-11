@@ -562,6 +562,11 @@
     border-color: rgba(251,191,36,0.15);
   }
 
+  /* Disable scale effects on touch devices */
+  @media (hover: none) {
+    .tier-card { transform: none !important; }
+  }
+
   /* Sun: shadow cards instead of glow */
   [data-theme^="sun-"] .glow-card {
     border-color: rgba(20, 20, 16, 0.06);

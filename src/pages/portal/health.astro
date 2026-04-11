@@ -9,66 +9,76 @@ const clients = isAdmin ? await getAllClients() : [];
 ---
 
 <Portal title="Site Health">
+  <style>
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .health-animate { opacity: 0; animation: fadeUp 0.5s ease-out forwards; }
+  </style>
+
   <div class="max-w-4xl mx-auto">
-    <div class="flex items-center justify-between mb-4">
+    <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
       <div>
-        <h1 class="text-2xl font-semibold text-neutral-100">Site Health</h1>
-        <p class="text-sm text-neutral-500 mt-1">Technical issues that affect your search rankings and visitor experience</p>
+        <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Technical Audit</p>
+        <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Site Health</h1>
       </div>
       {isAdmin && clients.length > 0 && (
-        <select id="client-selector" class="px-3 py-2 bg-neutral-900 border border-white/10 rounded-lg text-neutral-100 text-sm">
+        <select id="client-selector" class="px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-400 text-xs focus:outline-none focus:border-amber-500/30 transition-colors duration-300">
           {clients.map(c => <option value={c.id}>{c.name}</option>)}
         </select>
       )}
     </div>
 
     <!-- Health Score -->
-    <div id="health-hero" class="mb-10 hidden">
-      <div class="bg-neutral-900/50 border border-white/5 rounded-2xl p-8">
-        <div class="flex items-start gap-6 mb-6">
+    <div id="health-hero" class="mb-10 hidden health-animate">
+      <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
+        <div class="flex items-start gap-6 mb-8">
           <div id="health-grade" class="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold shrink-0"></div>
           <div>
-            <h2 id="health-headline" class="text-lg font-medium text-neutral-100 mb-1"></h2>
+            <h2 id="health-headline" class="font-serif text-xl text-neutral-100 mb-2"></h2>
             <p id="health-description" class="text-sm text-neutral-400 leading-relaxed"></p>
           </div>
         </div>
         <!-- Issue breakdown bar -->
-        <div class="grid grid-cols-3 gap-4">
+        <div class="grid grid-cols-3 gap-6">
           <div class="text-center">
-            <p id="count-critical" class="text-2xl font-bold text-red-400">0</p>
-            <p class="text-xs text-neutral-500 mt-0.5">critical / high</p>
+            <p id="count-critical" class="text-2xl font-bold text-red-400 mb-1">0</p>
+            <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase">critical / high</p>
           </div>
           <div class="text-center">
-            <p id="count-medium" class="text-2xl font-bold text-amber-400">0</p>
-            <p class="text-xs text-neutral-500 mt-0.5">medium</p>
+            <p id="count-medium" class="text-2xl font-bold text-amber-400 mb-1">0</p>
+            <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase">medium</p>
           </div>
           <div class="text-center">
-            <p id="count-low" class="text-2xl font-bold text-neutral-500">0</p>
-            <p class="text-xs text-neutral-500 mt-0.5">low priority</p>
+            <p id="count-low" class="text-2xl font-bold text-neutral-500 mb-1">0</p>
+            <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase">low priority</p>
           </div>
         </div>
       </div>
     </div>
 
     <!-- Loading state -->
-    <div id="health-loading" class="text-center py-20">
-      <div class="inline-block w-8 h-8 border-2 border-neutral-700 border-t-amber-500 rounded-full animate-spin mb-4"></div>
-      <p class="text-sm text-neutral-500">Loading site health...</p>
+    <div id="health-loading" class="text-center py-24">
+      <div class="inline-block w-8 h-8 border-2 border-neutral-800 border-t-amber-500 rounded-full animate-spin mb-5"></div>
+      <p class="text-sm text-neutral-600">Loading site health...</p>
     </div>
 
     <!-- Error state -->
-    <div id="health-error" class="hidden text-center py-20">
-      <p class="text-red-400 text-lg mb-2">Something went wrong</p>
-      <p id="health-error-detail" class="text-sm text-neutral-600 mb-6"></p>
-      <button onclick="loadHealth()" class="px-5 py-2.5 bg-amber-500 text-neutral-950 font-medium text-sm rounded-lg hover:bg-amber-400 transition-colors">Retry</button>
+    <div id="health-error" class="hidden text-center py-24">
+      <p class="font-serif text-2xl text-neutral-100 mb-3">Something went wrong</p>
+      <p id="health-error-detail" class="text-sm text-neutral-500 mb-8"></p>
+      <button onclick="loadHealth()" class="px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.2)]">Retry</button>
     </div>
 
     <!-- Issue categories -->
     <div id="issue-groups" class="space-y-6 mb-8"></div>
 
-    <div id="health-empty" class="hidden bg-neutral-900/50 border border-white/5 rounded-xl p-12 text-center">
-      <p class="text-neutral-500">No health data yet.</p>
-      {isAdmin && <p class="text-sm text-neutral-600 mt-2">Upload a site audit CSV to see health metrics.</p>}
+    <div id="health-empty" class="hidden text-center py-24">
+      <p class="font-serif text-2xl text-neutral-100 mb-3">No health data yet</p>
+      <p class="text-sm text-neutral-500 leading-relaxed max-w-xs mx-auto">
+        {isAdmin ? 'Upload a site audit CSV to see technical health metrics.' : 'Your site health report will appear here once data is available.'}
+      </p>
     </div>
   </div>
 
@@ -83,32 +93,11 @@ const clients = isAdmin ? await getAllClients() : [];
       });
     }
 
-    // Group issues into human-readable categories
     const ISSUE_CATEGORIES = [
-      {
-        name: 'Content & Structure',
-        icon: '📝',
-        description: 'How well your pages are organized for Google and visitors',
-        match: (n) => /^(h1|h2|content|page title|meta desc)/i.test(n),
-      },
-      {
-        name: 'Images',
-        icon: '🖼',
-        description: 'Image optimization affects page speed and accessibility',
-        match: (n) => /^image/i.test(n),
-      },
-      {
-        name: 'Links',
-        icon: '🔗',
-        description: 'How pages connect to each other and the outside web',
-        match: (n) => /^(link|response code|broken)/i.test(n),
-      },
-      {
-        name: 'Security',
-        icon: '🔒',
-        description: 'Browser security settings that protect your visitors',
-        match: (n) => /^security/i.test(n),
-      },
+      { name: 'Content & Structure', description: 'How well your pages are organized for Google and visitors', match: (n) => /^(h1|h2|content|page title|meta desc)/i.test(n) },
+      { name: 'Images', description: 'Image optimization affects page speed and accessibility', match: (n) => /^image/i.test(n) },
+      { name: 'Links', description: 'How pages connect to each other and the outside web', match: (n) => /^(link|response code|broken)/i.test(n) },
+      { name: 'Security', description: 'Browser security settings that protect your visitors', match: (n) => /^security/i.test(n) },
     ];
 
     const ISSUE_EXPLAIN = {
@@ -168,93 +157,88 @@ const clients = isAdmin ? await getAllClients() : [];
 
         if (issues.length === 0) {
           document.getElementById('health-empty').classList.remove('hidden');
-          document.getElementById('health-hero').classList.add('hidden');
-          document.getElementById('issue-groups').innerHTML = '';
           return;
         }
 
         document.getElementById('health-empty').classList.add('hidden');
         document.getElementById('health-hero').classList.remove('hidden');
 
-      const high = issues.filter(i => ['critical', 'high'].includes((i.priority || '').toLowerCase())).length;
-      const medium = issues.filter(i => (i.priority || '').toLowerCase() === 'medium').length;
-      const low = issues.filter(i => (i.priority || '').toLowerCase() === 'low' || !i.priority).length;
+        const high = issues.filter(i => ['critical', 'high'].includes((i.priority || '').toLowerCase())).length;
+        const medium = issues.filter(i => (i.priority || '').toLowerCase() === 'medium').length;
+        const low = issues.filter(i => (i.priority || '').toLowerCase() === 'low' || !i.priority).length;
 
-      document.getElementById('count-critical').textContent = high;
-      document.getElementById('count-medium').textContent = medium;
-      document.getElementById('count-low').textContent = low;
+        document.getElementById('count-critical').textContent = high;
+        document.getElementById('count-medium').textContent = medium;
+        document.getElementById('count-low').textContent = low;
 
-      const grade = gradeFromIssues(high, medium, issues.length);
-      document.getElementById('health-grade').textContent = grade.grade;
-      document.getElementById('health-grade').className = `w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold shrink-0 ${grade.color}`;
+        const grade = gradeFromIssues(high, medium, issues.length);
+        document.getElementById('health-grade').textContent = grade.grade;
+        document.getElementById('health-grade').className = `w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold shrink-0 ${grade.color}`;
 
-      // Headline and description
-      const totalUrls = issues.reduce((s, i) => s + (i.affected_urls || 0), 0);
-      let headline = '', desc = '';
+        const totalUrls = issues.reduce((s, i) => s + (i.affected_urls || 0), 0);
+        let headline = '', desc = '';
 
-      if (grade.grade === 'A' || grade.grade === 'B') {
-        headline = `Site health: ${grade.label}`;
-        desc = `Your site is in good shape. ${issues.length} issues found across ${totalUrls.toLocaleString()} page instances, but nothing critical. The items below are opportunities to polish, not emergencies.`;
-      } else if (grade.grade === 'C') {
-        headline = `Site health: ${grade.label} — fixable issues`;
-        desc = `${issues.length} issues found, with ${high > 0 ? `${high} high-priority item${high !== 1 ? 's' : ''} that should be addressed soon` : `${medium} medium-priority items worth cleaning up`}. These are affecting ${totalUrls.toLocaleString()} page instances. None of this is unusual for a site that's actively being worked on.`;
-      } else {
-        headline = `Site health: ${grade.label}`;
-        desc = `${high} high-priority issue${high !== 1 ? 's' : ''} and ${medium} medium-priority issue${medium !== 1 ? 's' : ''} found. These are actively hurting your search rankings and should be addressed. The list below is ordered by impact.`;
-      }
+        if (grade.grade === 'A' || grade.grade === 'B') {
+          headline = `Site health: ${grade.label}`;
+          desc = `Your site is in good shape. ${issues.length} issues found across ${totalUrls.toLocaleString()} page instances, but nothing critical. The items below are opportunities to polish, not emergencies.`;
+        } else if (grade.grade === 'C') {
+          headline = `Site health: ${grade.label} — fixable issues`;
+          desc = `${issues.length} issues found, with ${high > 0 ? `${high} high-priority item${high !== 1 ? 's' : ''} that should be addressed soon` : `${medium} medium-priority items worth cleaning up`}. These are affecting ${totalUrls.toLocaleString()} page instances. None of this is unusual for a site that's actively being worked on.`;
+        } else {
+          headline = `Site health: ${grade.label}`;
+          desc = `${high} high-priority issue${high !== 1 ? 's' : ''} and ${medium} medium-priority issue${medium !== 1 ? 's' : ''} found. These are actively hurting your search rankings and should be addressed. The list below is ordered by impact.`;
+        }
 
-      document.getElementById('health-headline').textContent = headline;
-      document.getElementById('health-description').textContent = desc;
+        document.getElementById('health-headline').textContent = headline;
+        document.getElementById('health-description').textContent = desc;
 
-      // Group issues by category
-      const grouped = ISSUE_CATEGORIES.map(cat => ({
-        ...cat,
-        issues: issues.filter(i => cat.match(i.issue_name)),
-      })).filter(g => g.issues.length > 0);
+        const grouped = ISSUE_CATEGORIES.map(cat => ({
+          ...cat,
+          issues: issues.filter(i => cat.match(i.issue_name)),
+        })).filter(g => g.issues.length > 0);
 
-      // Ungrouped
-      const groupedNames = new Set(grouped.flatMap(g => g.issues.map(i => i.issue_name)));
-      const ungrouped = issues.filter(i => !groupedNames.has(i.issue_name));
-      if (ungrouped.length > 0) {
-        grouped.push({ name: 'Other', icon: '📋', description: 'Additional items from the site audit', issues: ungrouped });
-      }
+        const groupedNames = new Set(grouped.flatMap(g => g.issues.map(i => i.issue_name)));
+        const ungrouped = issues.filter(i => !groupedNames.has(i.issue_name));
+        if (ungrouped.length > 0) {
+          grouped.push({ name: 'Other', description: 'Additional items from the site audit', issues: ungrouped });
+        }
 
-      document.getElementById('issue-groups').innerHTML = grouped.map(group => `
-        <div class="bg-neutral-900/50 border border-white/5 rounded-xl overflow-hidden">
-          <div class="p-5 border-b border-white/5">
-            <div class="flex items-center gap-3">
-              <span class="text-lg">${group.icon}</span>
-              <div>
-                <h3 class="text-sm font-medium text-neutral-200">${group.name}</h3>
-                <p class="text-xs text-neutral-500">${group.description}</p>
+        document.getElementById('issue-groups').innerHTML = grouped.map((group, gi) => `
+          <div class="health-animate bg-neutral-900/30 border border-white/5 rounded-2xl overflow-hidden" style="animation-delay:${0.1 + gi * 0.1}s">
+            <div class="px-6 py-5 border-b border-white/5">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3 class="text-sm font-medium text-neutral-200">${group.name}</h3>
+                  <p class="text-xs text-neutral-600 mt-0.5">${group.description}</p>
+                </div>
+                <span class="text-[10px] font-mono text-neutral-700 tracking-wide">${group.issues.length} issue${group.issues.length !== 1 ? 's' : ''}</span>
               </div>
-              <span class="ml-auto text-xs text-neutral-600">${group.issues.length} issue${group.issues.length !== 1 ? 's' : ''}</span>
             </div>
-          </div>
-          <div class="divide-y divide-white/5">
-            ${group.issues.map(i => {
-              const p = (i.priority || 'low').toLowerCase();
-              const dotColor = ['critical', 'high'].includes(p) ? 'bg-red-500' : p === 'medium' ? 'bg-amber-500' : 'bg-neutral-600';
-              const explanation = ISSUE_EXPLAIN[i.issue_name.toLowerCase()] || i.description || '';
-              return `
-                <div class="p-4">
-                  <div class="flex items-start gap-3">
-                    <div class="w-2 h-2 rounded-full ${dotColor} mt-1.5 shrink-0"></div>
-                    <div class="flex-1 min-w-0">
-                      <div class="flex items-center justify-between gap-4">
-                        <span class="text-sm text-neutral-200">${i.issue_name}</span>
-                        <span class="text-xs text-neutral-500 shrink-0">${i.affected_urls || 0} pages</span>
+            <div class="divide-y divide-white/[0.03]">
+              ${group.issues.map(i => {
+                const p = (i.priority || 'low').toLowerCase();
+                const dotColor = ['critical', 'high'].includes(p) ? 'bg-red-500' : p === 'medium' ? 'bg-amber-500' : 'bg-neutral-600';
+                const dotLabel = ['critical', 'high'].includes(p) ? 'High priority' : p === 'medium' ? 'Medium priority' : 'Low priority';
+                const explanation = ISSUE_EXPLAIN[i.issue_name.toLowerCase()] || i.description || '';
+                return `
+                  <div class="px-6 py-4 hover:bg-white/[0.01] transition-colors duration-300">
+                    <div class="flex items-start gap-3">
+                      <div class="w-2 h-2 rounded-full ${dotColor} mt-1.5 shrink-0" title="${dotLabel}" aria-label="${dotLabel}"></div>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between gap-4">
+                          <span class="text-sm text-neutral-200">${i.issue_name}</span>
+                          <span class="text-[10px] font-mono text-neutral-700 shrink-0">${i.affected_urls || 0} pages</span>
+                        </div>
+                        ${explanation ? `<p class="text-xs text-neutral-500 mt-1.5 leading-relaxed">${explanation}</p>` : ''}
+                        ${i.how_to_fix ? `<p class="text-xs text-amber-500/40 mt-1">Fix: ${i.how_to_fix}</p>` : ''}
                       </div>
-                      ${explanation ? `<p class="text-xs text-neutral-500 mt-1 leading-relaxed">${explanation}</p>` : ''}
-                      ${i.how_to_fix ? `<p class="text-xs text-amber-500/50 mt-1">Fix: ${i.how_to_fix}</p>` : ''}
                     </div>
                   </div>
-                </div>
-              `;
-            }).join('')}
+                `;
+              }).join('')}
+            </div>
           </div>
-        </div>
-      `).join('');
+        `).join('');
       } catch (err) {
         loadingEl.classList.add('hidden');
         document.getElementById('health-error-detail').textContent = err.message || 'Could not connect to the server.';

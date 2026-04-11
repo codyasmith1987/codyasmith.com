@@ -43,34 +43,34 @@ function categoryLabel(cat: string): string {
 
 <Portal title="Files">
   <div class="max-w-4xl mx-auto">
-    <div class="flex items-center justify-between mb-8">
+    <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
       <div>
-        <h1 class="text-2xl font-semibold text-neutral-100">Files</h1>
-        <p class="text-sm text-neutral-500 mt-1">Reports, invoices, and deliverables</p>
+        <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Deliverables</p>
+        <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Files</h1>
       </div>
     </div>
 
     {/* Admin upload form */}
     {isAdmin && (
-      <form id="upload-form" class="bg-neutral-900/50 border border-white/5 rounded-xl p-6 mb-8">
-        <h2 class="text-sm font-medium text-neutral-300 mb-4">Upload file</h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <form id="upload-form" class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-10">
+        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">Upload file</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div>
-            <label class="block text-xs text-neutral-500 mb-1">Client</label>
-            <select id="upload-client" name="client_id" required class="w-full px-3 py-2 bg-neutral-900 border border-white/10 rounded-lg text-neutral-100 text-sm focus:outline-none focus:border-amber-500/40">
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Client</label>
+            <select id="upload-client" name="client_id" required class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-300 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300">
               <option value="">Select...</option>
               {clients.map(c => <option value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div>
-            <label class="block text-xs text-neutral-500 mb-1">Month</label>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Month</label>
             <input type="month" id="upload-month" name="month" required
               value={new Date().toISOString().slice(0, 7)}
-              class="w-full px-3 py-2 bg-neutral-900 border border-white/10 rounded-lg text-neutral-100 text-sm focus:outline-none focus:border-amber-500/40" />
+              class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-300 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300" />
           </div>
           <div>
-            <label class="block text-xs text-neutral-500 mb-1">Category</label>
-            <select id="upload-category" name="category" class="w-full px-3 py-2 bg-neutral-900 border border-white/10 rounded-lg text-neutral-100 text-sm focus:outline-none focus:border-amber-500/40">
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Category</label>
+            <select id="upload-category" name="category" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-300 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300">
               <option value="report">Report</option>
               <option value="invoice">Invoice</option>
               <option value="spreadsheet">Spreadsheet</option>
@@ -78,14 +78,14 @@ function categoryLabel(cat: string): string {
             </select>
           </div>
           <div>
-            <label class="block text-xs text-neutral-500 mb-1">File</label>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">File</label>
             <input type="file" id="upload-file" name="file" required
               accept=".pdf,.docx,.xlsx,.xls,.csv,.png,.jpg,.jpeg,.webp"
-              class="w-full text-sm text-neutral-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-amber-500 file:text-neutral-950 hover:file:bg-amber-400 file:cursor-pointer" />
+              class="w-full text-sm text-neutral-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-amber-500 file:text-neutral-950 hover:file:bg-amber-400 file:cursor-pointer file:transition-colors file:duration-300" />
           </div>
         </div>
-        <div class="mt-4 flex items-center gap-4">
-          <button type="submit" id="upload-btn" class="px-4 py-2 bg-amber-500 text-neutral-950 font-medium text-sm rounded-lg hover:bg-amber-400 transition-colors disabled:opacity-50">
+        <div class="mt-6 flex items-center gap-4">
+          <button type="submit" id="upload-btn" class="px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.2)] disabled:opacity-50 disabled:hover:shadow-none">
             Upload
           </button>
           <p id="upload-msg" class="text-sm hidden"></p>
@@ -96,34 +96,34 @@ function categoryLabel(cat: string): string {
     {/* File list grouped by month */}
     {months.length > 0 ? (
       months.map(month => (
-        <div class="mb-8">
-          <h2 class="text-sm font-medium text-neutral-400 mb-3">
+        <div class="mb-10">
+          <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-4">
             {new Date(month + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}
-          </h2>
+          </p>
           <div class="space-y-2">
             {byMonth.get(month)!.map(f => (
-              <div class="bg-neutral-900/30 border border-white/5 rounded-lg p-4 flex items-center justify-between group">
+              <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 flex items-center justify-between group hover:border-white/10 transition-all duration-300">
                 <div class="flex items-center gap-4 min-w-0">
                   <div class="min-w-0">
                     <p class="text-sm font-medium text-neutral-200 truncate">{f.original_name}</p>
-                    <div class="flex items-center gap-3 mt-0.5">
-                      <span class="text-xs text-neutral-500">{formatBytes(f.size_bytes)}</span>
-                      <span class="text-xs text-neutral-600">{categoryLabel(f.category)}</span>
-                      {'client_name' in f && <span class="text-xs text-neutral-600">{f.client_name}</span>}
+                    <div class="flex items-center gap-3 mt-1">
+                      <span class="text-[10px] font-mono text-neutral-600">{formatBytes(f.size_bytes)}</span>
+                      <span class="text-[10px] text-neutral-700">{categoryLabel(f.category)}</span>
+                      {'client_name' in f && <span class="text-[10px] text-neutral-700">{f.client_name}</span>}
                     </div>
                   </div>
                 </div>
                 <div class="flex items-center gap-2">
                   <a
                     href={`/portal/api/files/download?id=${f.id}`}
-                    class="px-3 py-1.5 text-xs font-medium text-amber-400 border border-amber-500/20 rounded-lg hover:bg-amber-500/10 transition-colors"
+                    class="px-4 py-2 text-xs font-medium text-amber-400 border border-amber-500/20 rounded-lg hover:bg-amber-500/10 transition-all duration-300"
                   >
                     Download
                   </a>
                   {isAdmin && (
                     <button
                       data-delete-file={f.id}
-                      class="px-3 py-1.5 text-xs text-neutral-500 border border-white/5 rounded-lg hover:text-red-400 hover:border-red-500/20 transition-colors opacity-0 group-hover:opacity-100"
+                      class="px-4 py-2 text-xs text-neutral-600 border border-white/5 rounded-lg hover:text-red-400 hover:border-red-500/20 transition-all duration-300 opacity-0 group-hover:opacity-100"
                     >
                       Delete
                     </button>
@@ -135,9 +135,11 @@ function categoryLabel(cat: string): string {
         </div>
       ))
     ) : (
-      <div class="bg-neutral-900/50 border border-white/5 rounded-xl p-12 text-center">
-        <p class="text-neutral-500">No files yet.</p>
-        {isAdmin && <p class="text-sm text-neutral-600 mt-2">Use the form above to upload deliverables.</p>}
+      <div class="text-center py-24">
+        <p class="font-serif text-2xl text-neutral-100 mb-3">No files yet</p>
+        <p class="text-sm text-neutral-500 leading-relaxed max-w-xs mx-auto">
+          {isAdmin ? 'Use the form above to upload reports, invoices, and deliverables.' : 'Your files and deliverables will appear here.'}
+        </p>
       </div>
     )}
   </div>
@@ -187,14 +189,22 @@ function categoryLabel(cat: string): string {
     // Delete handlers
     document.querySelectorAll('[data-delete-file]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (!confirm('Delete this file?')) return;
+        if (!confirm('Delete this file? This cannot be undone.')) return;
         const fileId = (btn as HTMLElement).dataset.deleteFile;
         const res = await fetch('/portal/api/files/delete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ file_id: fileId }),
         });
-        if (res.ok) location.reload();
+        if (res.ok) {
+          const row = (btn as HTMLElement).closest('.group');
+          if (row) {
+            row.style.opacity = '0';
+            row.style.transform = 'translateY(-8px)';
+            row.style.transition = 'all 0.3s ease';
+            setTimeout(() => row.remove(), 300);
+          }
+        }
       });
     });
   </script>

@@ -21,33 +21,42 @@ if (token) {
     <title>Log In — Client Portal</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   </head>
-  <body class="min-h-screen bg-neutral-950 text-neutral-300 font-sans flex items-center justify-center">
-    <div class="w-full max-w-sm mx-auto px-6">
-      <div class="text-center mb-8">
-        <h1 class="text-2xl font-semibold text-neutral-100">Client Portal</h1>
-        <p class="text-sm text-neutral-500 mt-2">codyasmith.com</p>
+  <body class="min-h-screen bg-neutral-950 text-neutral-300 font-sans flex items-center justify-center relative overflow-hidden">
+    <!-- Ambient glow -->
+    <div class="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[400px] bg-amber-500/[0.04] rounded-full blur-3xl pointer-events-none"></div>
+
+    <div class="relative w-full max-w-sm mx-auto px-6">
+      <!-- Back link -->
+      <a href="/" class="inline-flex items-center gap-2 text-xs text-neutral-600 hover:text-amber-400 transition-colors duration-300 mb-12">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+        codyasmith.com
+      </a>
+
+      <div class="text-center mb-10">
+        <h1 class="font-serif text-4xl text-neutral-100 mb-3">Client Portal</h1>
+        <p class="text-sm text-neutral-500 leading-relaxed">Sign in with your email. We'll send a link — no password needed.</p>
       </div>
 
       <div id="login-form-container">
-        <form id="login-form" class="space-y-4">
+        <form id="login-form" class="space-y-5">
           <div>
-            <label for="email" class="block text-sm font-medium text-neutral-400 mb-1.5">Email address</label>
+            <label for="email" class="block text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-2">Email address</label>
             <input
               type="email"
               id="email"
               name="email"
               required
               autocomplete="email"
-              class="w-full px-3 py-2.5 bg-neutral-900 border border-white/10 rounded-lg text-neutral-100 placeholder-neutral-600 text-sm focus:outline-none focus:border-amber-500/40 focus:ring-1 focus:ring-amber-500/20"
+              class="w-full px-4 py-3 bg-neutral-900/50 border border-white/10 rounded-lg text-neutral-100 placeholder-neutral-700 text-sm focus:outline-none focus:border-amber-500/40 focus:ring-1 focus:ring-amber-500/20 transition-all duration-300"
               placeholder="you@company.com"
             />
           </div>
           <button
             type="submit"
             id="submit-btn"
-            class="w-full py-2.5 bg-amber-500 text-neutral-950 font-medium text-sm rounded-lg hover:bg-amber-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            class="w-full py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.2)] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none"
           >
             Send login link
           </button>
@@ -55,19 +64,19 @@ if (token) {
       </div>
 
       <div id="success-message" class="hidden text-center">
-        <div class="w-12 h-12 mx-auto mb-4 rounded-full bg-emerald-500/10 flex items-center justify-center">
+        <div class="w-14 h-14 mx-auto mb-6 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
           </svg>
         </div>
-        <h2 class="text-lg font-medium text-neutral-100 mb-2">Check your email</h2>
-        <p class="text-sm text-neutral-400">If an account exists for that email, we sent a login link. It expires in 15 minutes.</p>
+        <h2 class="font-serif text-2xl text-neutral-100 mb-3">Check your email</h2>
+        <p class="text-sm text-neutral-500 leading-relaxed">If an account exists for that address, we sent a login link.<br />It expires in 15 minutes.</p>
       </div>
 
-      <div id="error-message" class="hidden mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400"></div>
+      <div id="error-message" class="hidden mt-6 p-4 bg-red-500/5 border border-red-500/15 rounded-lg text-sm text-red-400 leading-relaxed"></div>
 
-      <p class="text-center text-xs text-neutral-600 mt-8">
-        Need access? Contact <a href="mailto:cody@codyasmith.com" class="text-amber-500/60 hover:text-amber-400">cody@codyasmith.com</a>
+      <p class="text-center text-xs text-neutral-700 mt-12">
+        Need access? <a href="mailto:cody@codyasmith.com" class="text-neutral-500 hover:text-amber-400 transition-colors duration-300">cody@codyasmith.com</a>
       </p>
     </div>
 
@@ -81,7 +90,7 @@ if (token) {
       // Show error from redirect (e.g. expired magic link)
       const urlError = new URLSearchParams(window.location.search).get('error');
       if (urlError === 'expired') {
-        errorEl.textContent = 'That login link has expired. Please request a new one.';
+        errorEl.textContent = 'That login link has expired. Request a new one below.';
         errorEl.classList.remove('hidden');
       }
 

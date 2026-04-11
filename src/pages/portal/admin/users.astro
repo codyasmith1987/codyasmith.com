@@ -9,46 +9,47 @@ const clients = await getAllClients();
 
 <Portal title="Manage Users">
   <div class="max-w-3xl mx-auto">
-    <div class="flex items-center justify-between mb-8">
-      <h1 class="text-2xl font-semibold text-neutral-100">Users</h1>
+    <div class="mb-10">
+      <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin</p>
+      <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Users</h1>
     </div>
 
     <!-- Create user form -->
-    <form id="create-user-form" class="bg-neutral-900/50 border border-white/5 rounded-xl p-6 mb-8">
-      <h2 class="text-sm font-medium text-neutral-300 mb-4">Invite new user</h2>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <form id="create-user-form" class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-10">
+      <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">Invite new user</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div>
-          <label for="user-name" class="block text-xs text-neutral-500 mb-1">Full name</label>
+          <label for="user-name" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Full name</label>
           <input
             type="text"
             id="user-name"
             name="name"
             required
-            class="w-full px-3 py-2 bg-neutral-900 border border-white/10 rounded-lg text-neutral-100 text-sm focus:outline-none focus:border-amber-500/40"
+            class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
             placeholder="Sven Johnson"
           />
         </div>
         <div>
-          <label for="user-email" class="block text-xs text-neutral-500 mb-1">Email</label>
+          <label for="user-email" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Email</label>
           <input
             type="email"
             id="user-email"
             name="email"
             required
-            class="w-full px-3 py-2 bg-neutral-900 border border-white/10 rounded-lg text-neutral-100 text-sm focus:outline-none focus:border-amber-500/40"
+            class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
             placeholder="sven@zipkithomes.com"
           />
         </div>
         <div>
-          <label for="user-role" class="block text-xs text-neutral-500 mb-1">Role</label>
-          <select id="user-role" name="role" class="w-full px-3 py-2 bg-neutral-900 border border-white/10 rounded-lg text-neutral-100 text-sm focus:outline-none focus:border-amber-500/40">
+          <label for="user-role" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Role</label>
+          <select id="user-role" name="role" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-300 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300">
             <option value="client">Client</option>
             <option value="admin">Admin</option>
           </select>
         </div>
         <div>
-          <label for="user-client" class="block text-xs text-neutral-500 mb-1">Client (for client role)</label>
-          <select id="user-client" name="client_id" class="w-full px-3 py-2 bg-neutral-900 border border-white/10 rounded-lg text-neutral-100 text-sm focus:outline-none focus:border-amber-500/40">
+          <label for="user-client" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Client (for client role)</label>
+          <select id="user-client" name="client_id" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-300 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300">
             <option value="">— None —</option>
             {clients.map(c => (
               <option value={c.id}>{c.name}</option>
@@ -56,53 +57,51 @@ const clients = await getAllClients();
           </select>
         </div>
       </div>
-      <div class="mt-4 flex items-center gap-4">
-        <button type="submit" class="px-4 py-2 bg-amber-500 text-neutral-950 font-medium text-sm rounded-lg hover:bg-amber-400 transition-colors">
+      <div class="mt-6 flex items-center gap-5">
+        <button type="submit" class="px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.2)]">
           Create & send invite
         </button>
-        <label class="flex items-center gap-2 text-xs text-neutral-500">
-          <input type="checkbox" id="send-invite" checked class="rounded border-white/10 bg-neutral-900" />
+        <label class="flex items-center gap-2 text-xs text-neutral-600 cursor-pointer">
+          <input type="checkbox" id="send-invite" checked class="rounded border-white/10 bg-neutral-900 accent-amber-500" />
           Send magic link email
         </label>
       </div>
-      <p id="user-msg" class="mt-3 text-sm hidden"></p>
+      <p id="user-msg" class="mt-4 text-sm hidden"></p>
     </form>
 
     <!-- User list -->
     {users.length > 0 ? (
       <div class="space-y-3">
         {users.map(u => (
-          <div class="bg-neutral-900/30 border border-white/5 rounded-lg p-4 flex items-center justify-between group" data-user-row={u.id}>
+          <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 flex items-center justify-between group hover:border-white/10 transition-all duration-300" data-user-row={u.id}>
             <div>
               <p class="text-sm font-medium text-neutral-200">{u.name}</p>
-              <p class="text-xs text-neutral-500">{u.email}</p>
-              {u.client_name && <p class="text-xs text-neutral-600 mt-0.5">{u.client_name}</p>}
+              <p class="text-xs text-neutral-600">{u.email}</p>
+              {u.client_name && <p class="text-xs text-neutral-700 mt-0.5">{u.client_name}</p>}
             </div>
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-4">
               <span class:list={[
-                'text-xs px-2 py-0.5 rounded-full',
-                u.role === 'admin' ? 'bg-amber-500/10 text-amber-400' : 'bg-neutral-700/50 text-neutral-400',
+                'text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full',
+                u.role === 'admin' ? 'bg-amber-500/10 text-amber-400' : 'bg-neutral-800 text-neutral-500',
               ]}>
                 {u.role}
               </span>
               {u.last_login_at && (
-                <span class="text-xs text-neutral-600">
-                  Last login: {new Date(u.last_login_at).toLocaleDateString()}
+                <span class="text-[10px] text-neutral-700">
+                  {new Date(u.last_login_at).toLocaleDateString()}
                 </span>
               )}
-              <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                 <button
                   data-revoke-user={u.id}
-                  class="text-xs text-neutral-500 hover:text-amber-400 transition-colors"
-                  title="Force logout"
+                  class="text-xs text-neutral-600 hover:text-amber-400 transition-colors duration-300"
                 >
                   Revoke sessions
                 </button>
                 <button
                   data-delete-user={u.id}
                   data-user-name={u.name}
-                  class="text-xs text-neutral-500 hover:text-red-400 transition-colors"
-                  title="Delete user"
+                  class="text-xs text-neutral-600 hover:text-red-400 transition-colors duration-300"
                 >
                   Delete
                 </button>
@@ -112,7 +111,10 @@ const clients = await getAllClients();
         ))}
       </div>
     ) : (
-      <p class="text-sm text-neutral-500">No users yet. Create one above.</p>
+      <div class="text-center py-16">
+        <p class="font-serif text-xl text-neutral-100 mb-2">No users yet</p>
+        <p class="text-sm text-neutral-500">Invite your first user above.</p>
+      </div>
     )}
   </div>
 
@@ -151,8 +153,13 @@ const clients = await getAllClients();
           body: JSON.stringify({ user_id: userId }),
         });
         if (res.ok) {
-          const row = document.querySelector(`[data-user-row="${userId}"]`);
-          if (row) row.remove();
+          const row = document.querySelector(`[data-user-row="${userId}"]`) as HTMLElement;
+          if (row) {
+            row.style.opacity = '0';
+            row.style.transform = 'translateY(-8px)';
+            row.style.transition = 'all 0.3s ease';
+            setTimeout(() => row.remove(), 300);
+          }
         } else {
           const data = await res.json();
           alert(data.error || 'Failed to delete user');
@@ -184,13 +191,13 @@ const clients = await getAllClients();
         msg.textContent = data.invite_sent
           ? `Created "${name}" — invite sent to ${email}`
           : `Created "${name}" — no invite sent`;
-        msg.className = 'mt-3 text-sm text-emerald-400';
+        msg.className = 'mt-4 text-sm text-emerald-400';
         msg.classList.remove('hidden');
         form.reset();
         setTimeout(() => location.reload(), 1000);
       } else {
         msg.textContent = data.error || 'Failed';
-        msg.className = 'mt-3 text-sm text-red-400';
+        msg.className = 'mt-4 text-sm text-red-400';
         msg.classList.remove('hidden');
       }
     });

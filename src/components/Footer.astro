@@ -23,9 +23,12 @@ const year = new Date().getFullYear();
       <p class="text-neutral-700 text-xs">
         &copy; {year} Cody Smith. All rights reserved.
       </p>
-      <button id="repersonalize-btn" class="text-neutral-700 hover:text-amber-400 text-xs transition-colors duration-300 cursor-pointer" style="display:none">
-        Repersonalize
-      </button>
+      <div class="flex items-center gap-4">
+        <a href="/portal/login" class="text-neutral-700 hover:text-amber-400 text-xs transition-colors duration-300">Client Portal</a>
+        <button id="repersonalize-btn" class="text-neutral-700 hover:text-amber-400 text-xs transition-colors duration-300 cursor-pointer" style="display:none">
+          Repersonalize
+        </button>
+      </div>
     </div>
   </div>
 </footer>

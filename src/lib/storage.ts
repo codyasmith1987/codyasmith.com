@@ -4,17 +4,25 @@ import { nanoid } from 'nanoid';
 import turso from './turso';
 import { ensurePortalTables } from './auth';
 
-const s3 = new S3Client({
-  endpoint: import.meta.env.DO_SPACES_ENDPOINT,
-  region: import.meta.env.DO_SPACES_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId: import.meta.env.DO_SPACES_KEY,
-    secretAccessKey: import.meta.env.DO_SPACES_SECRET,
-  },
-  forcePathStyle: false,
-});
+let _s3: S3Client | null = null;
+function getS3(): S3Client {
+  if (!_s3) {
+    _s3 = new S3Client({
+      endpoint: import.meta.env.DO_SPACES_ENDPOINT,
+      region: import.meta.env.DO_SPACES_REGION || 'us-east-1',
+      credentials: {
+        accessKeyId: import.meta.env.DO_SPACES_KEY,
+        secretAccessKey: import.meta.env.DO_SPACES_SECRET,
+      },
+      forcePathStyle: false,
+    });
+  }
+  return _s3;
+}
 
-const BUCKET = import.meta.env.DO_SPACES_BUCKET;
+function getBucket(): string {
+  return import.meta.env.DO_SPACES_BUCKET || '';
+}
 
 const ALLOWED_TYPES = new Set([
   'application/pdf',
@@ -52,8 +60,8 @@ export async function uploadFile(
   const filename = `${nanoid(12)}.${ext}`;
   const s3Key = `clients/${clientSlug}/${month}/${filename}`;
 
-  await s3.send(new PutObjectCommand({
-    Bucket: BUCKET,
+  await getS3().send(new PutObjectCommand({
+    Bucket: getBucket(),
     Key: s3Key,
     Body: buffer,
     ContentType: mimeType,
@@ -71,15 +79,15 @@ export async function uploadFile(
 }
 
 export async function getSignedDownloadUrl(s3Key: string): Promise<string> {
-  const command = new GetObjectCommand({ Bucket: BUCKET, Key: s3Key });
-  return getSignedUrl(s3, command, { expiresIn: 3600 }); // 1 hour
+  const command = new GetObjectCommand({ Bucket: getBucket(), Key: s3Key });
+  return getSignedUrl(getS3(), command, { expiresIn: 3600 }); // 1 hour
 }
 
 export async function deleteFileFromStorage(s3Key: string, fileId: string): Promise<void> {
   // Delete DB record first — if S3 delete fails, orphaned S3 object is harmless
   // but orphaned DB record pointing to deleted S3 object causes download errors
   await turso.execute({ sql: 'DELETE FROM files WHERE id = ?', args: [fileId] });
-  await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: s3Key }));
+  await getS3().send(new DeleteObjectCommand({ Bucket: getBucket(), Key: s3Key }));
 }
 
 export async function getFilesForClient(clientId: string): Promise<any[]> {

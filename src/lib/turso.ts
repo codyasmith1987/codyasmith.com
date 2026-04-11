@@ -1,8 +1,23 @@
-import { createClient } from '@libsql/client';
+import { createClient, type Client } from '@libsql/client';
 
-const turso = createClient({
-  url: import.meta.env.TURSO_DATABASE_URL,
-  authToken: import.meta.env.TURSO_AUTH_TOKEN,
+let client: Client | null = null;
+
+function getTurso(): Client {
+  if (!client) {
+    const url = import.meta.env.TURSO_DATABASE_URL;
+    const authToken = import.meta.env.TURSO_AUTH_TOKEN;
+    if (!url) {
+      throw new Error('TURSO_DATABASE_URL is not set');
+    }
+    client = createClient({ url, authToken });
+  }
+  return client;
+}
+
+export default new Proxy({} as Client, {
+  get(_target, prop) {
+    const turso = getTurso();
+    const value = (turso as any)[prop];
+    return typeof value === 'function' ? value.bind(turso) : value;
+  },
 });
-
-export default turso;

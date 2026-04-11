@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { createUser, createMagicLink, getUserByEmail } from '../../../../lib/auth';
+import { logActivity } from '../../../../lib/activity';
 import { logger } from '../../../../lib/logger';
 
 export const prerender = false;
@@ -31,6 +32,15 @@ export const POST: APIRoute = async ({ locals, request, url }) => {
     }
 
     const userId = await createUser(email.trim(), name.trim(), role, client_id || null);
+
+    await logActivity({
+      clientId: client_id || null,
+      userId: locals.user!.id,
+      action: 'created',
+      entityType: 'user',
+      entityId: userId,
+      summary: `${locals.user!.name} created user "${name.trim()}" (${role})`,
+    });
 
     let invite_sent = false;
 

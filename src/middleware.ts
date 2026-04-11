@@ -65,8 +65,19 @@ async function handleRequest(context: Parameters<Parameters<typeof defineMiddlew
   context.locals.session = result.session;
   context.locals.csrfToken = generateCsrfToken(result.session!.id);
 
-  // CSRF validation for authenticated POST requests to portal API routes
-  if (context.request.method === 'POST' && context.url.pathname.startsWith('/portal/api/')) {
+  // Reject oversized request bodies (1MB limit) on portal API routes
+  const MAX_BODY_SIZE = 1024 * 1024; // 1MB
+  const contentLength = parseInt(context.request.headers.get('content-length') || '0', 10);
+  if (contentLength > MAX_BODY_SIZE && context.url.pathname.startsWith('/portal/api/')) {
+    return new Response(JSON.stringify({ error: 'Request body too large' }), {
+      status: 413,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  // CSRF validation for all state-mutating requests to portal API routes
+  const mutating = ['POST', 'PUT', 'DELETE', 'PATCH'];
+  if (mutating.includes(context.request.method) && context.url.pathname.startsWith('/portal/api/')) {
     const csrfToken = context.request.headers.get('X-CSRF-Token');
     if (!validateCsrfToken(result.session!.id, csrfToken || '')) {
       return new Response(JSON.stringify({ error: 'Invalid or missing CSRF token' }), {

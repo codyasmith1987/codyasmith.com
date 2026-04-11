@@ -39,7 +39,7 @@ export const POST: APIRoute = async ({ locals, request, url }) => {
       action: 'created',
       entityType: 'user',
       entityId: userId,
-      summary: `${locals.user!.name} created ${role} user "${name.trim()}"`,
+      summary: `${locals.user!.name} created user "${name.trim()}" (${role})`,
     });
 
     let invite_sent = false;

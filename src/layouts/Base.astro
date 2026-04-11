@@ -122,53 +122,23 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
         // ---- Personality-aware copy (composable variant system) ----
         // Each axis swaps its own data-attribute independently
 
-        // Vibe axis: beach/mountain (Cialdini - social proof vs authority)
-        if (place) {
-          document.querySelectorAll('[data-vibe]').forEach(el => {
-            const vibe = (el as HTMLElement).dataset.vibe;
-            if (vibe === place) {
-              (el as HTMLElement).style.display = '';
-            } else if (vibe === 'default') {
+        // Generic swap helper — shows matching variant, hides default
+        function swapAxis(attr: string, value: string) {
+          if (!value) return;
+          document.querySelectorAll(`[data-${attr}]`).forEach(el => {
+            const v = (el as HTMLElement).dataset[attr];
+            if (v === value) {
+              (el as HTMLElement).style.removeProperty('display');
+            } else if (v === 'default') {
               (el as HTMLElement).style.display = 'none';
             }
           });
         }
 
-        // Frame axis: sun/moon (Regulatory Focus - gain vs loss framing)
-        if (frame) {
-          document.querySelectorAll('[data-frame]').forEach(el => {
-            const f = (el as HTMLElement).dataset.frame;
-            if (f === frame) {
-              (el as HTMLElement).style.display = '';
-            } else if (f === 'default') {
-              (el as HTMLElement).style.display = 'none';
-            }
-          });
-        }
-
-        // Phase axis: spring/fall (Construal Level - abstract/why vs concrete/how)
-        if (season) {
-          document.querySelectorAll('[data-phase]').forEach(el => {
-            const p = (el as HTMLElement).dataset.phase;
-            if (p === season) {
-              (el as HTMLElement).style.display = '';
-            } else if (p === 'default') {
-              (el as HTMLElement).style.display = 'none';
-            }
-          });
-        }
-
-        // Processing axis: stars/clouds (ELM - central/data vs peripheral/story)
-        if (processing) {
-          document.querySelectorAll('[data-processing]').forEach(el => {
-            const proc = (el as HTMLElement).dataset.processing;
-            if (proc === processing) {
-              (el as HTMLElement).style.display = '';
-            } else if (proc === 'default') {
-              (el as HTMLElement).style.display = 'none';
-            }
-          });
-        }
+        swapAxis('vibe', place);       // Beach/Mountain (Cialdini)
+        swapAxis('frame', frame);      // Sun/Moon (Regulatory Focus)
+        swapAxis('phase', season);     // Spring/Fall (Construal Level)
+        swapAxis('processing', processing); // Stars/Clouds (ELM)
 
         // ---- Returning visitor detection ----
         const visitCount = parseInt(localStorage.getItem('cs-visit-count') || '0', 10);
@@ -251,6 +221,9 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
       initPersonalization();
       initThemeSwitcher();
       document.addEventListener('astro:after-swap', () => {
+        // Re-apply theme from localStorage after view transition swap
+        var saved = localStorage.getItem('cs-theme');
+        if (saved) document.documentElement.setAttribute('data-theme', saved);
         initReveals();
         initPersonalization();
         initThemeSwitcher();

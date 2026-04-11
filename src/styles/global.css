@@ -21,150 +21,308 @@
   --color-amber-600: #d97706;
   --color-amber-500: #f59e0b;
   --color-amber-400: #fbbf24;
+
+  --color-dated: #8a6840;
 }
 
 /* ============================================
    SUN THEMES (light base)
+   Stars = sharper, more precise, cooler undertone
+   Clouds = softer, more atmospheric, warmer undertone
    ============================================ */
 
-[data-theme="sun-beach-spring"] {
-  --color-neutral-950: #f2f6f7;
-  --color-neutral-900: #e8eef0;
-  --color-neutral-850: #dde4e8;
-  --color-neutral-800: #cdd5da;
-  --color-neutral-700: #9aa8b0;
-  --color-neutral-600: #748490;
-  --color-neutral-500: #586a76;
-  --color-neutral-400: #3c4e5a;
-  --color-neutral-300: #2a3840;
-  --color-neutral-200: #1e2a32;
-  --color-neutral-100: #141e26;
-  --color-amber-600: #1e7a7a;
-  --color-amber-500: #2a9696;
-  --color-amber-400: #38aeae;
+/* --- Sun + Beach + Spring --- */
+[data-theme="sun-beach-spring-stars"] {
+  --color-neutral-950: #f0f5f8;
+  --color-neutral-900: #e5edf2;
+  --color-neutral-850: #dae3ea;
+  --color-neutral-800: #c9d4dc;
+  --color-neutral-700: #96a6b2;
+  --color-neutral-600: #708494;
+  --color-neutral-500: #546a78;
+  --color-neutral-400: #384e5c;
+  --color-neutral-300: #283842;
+  --color-neutral-200: #1c2a34;
+  --color-neutral-100: #121e28;
+  --color-amber-600: #1a7e86;
+  --color-amber-500: #24a0aa;
+  --color-amber-400: #30bcc8;
+  --color-dated: #6a8a7a;
+}
+[data-theme="sun-beach-spring-clouds"] {
+  --color-neutral-950: #f4f7f5;
+  --color-neutral-900: #ebf0ed;
+  --color-neutral-850: #e0e6e2;
+  --color-neutral-800: #d0d8d4;
+  --color-neutral-700: #9eaaa4;
+  --color-neutral-600: #78868e;
+  --color-neutral-500: #5c6c72;
+  --color-neutral-400: #405058;
+  --color-neutral-300: #2c3a3e;
+  --color-neutral-200: #202c30;
+  --color-neutral-100: #161e22;
+  --color-amber-600: #228078;
+  --color-amber-500: #2e9690;
+  --color-amber-400: #40aaa2;
+  --color-dated: #7a9486;
 }
 
-[data-theme="sun-beach-fall"] {
-  --color-neutral-950: #f8f5ee;
-  --color-neutral-900: #f0ebe2;
-  --color-neutral-850: #e6e0d5;
-  --color-neutral-800: #dad3c6;
-  --color-neutral-700: #aea598;
-  --color-neutral-600: #8a8178;
-  --color-neutral-500: #6a6258;
-  --color-neutral-400: #4a433a;
-  --color-neutral-300: #342e28;
-  --color-neutral-200: #26201a;
-  --color-neutral-100: #1a1612;
-  --color-amber-600: #a07a18;
-  --color-amber-500: #c49520;
-  --color-amber-400: #d4a830;
+/* --- Sun + Beach + Fall --- */
+[data-theme="sun-beach-fall-stars"] {
+  --color-neutral-950: #f7f4ec;
+  --color-neutral-900: #eee9df;
+  --color-neutral-850: #e4ded2;
+  --color-neutral-800: #d8d0c2;
+  --color-neutral-700: #aaa296;
+  --color-neutral-600: #867e74;
+  --color-neutral-500: #665e54;
+  --color-neutral-400: #484038;
+  --color-neutral-300: #322c26;
+  --color-neutral-200: #241e18;
+  --color-neutral-100: #181410;
+  --color-amber-600: #a67c12;
+  --color-amber-500: #ca981c;
+  --color-amber-400: #dcae28;
+  --color-dated: #8a7040;
 }
-
-[data-theme="sun-mountain-spring"] {
-  --color-neutral-950: #f3f5ee;
-  --color-neutral-900: #eaede4;
-  --color-neutral-850: #e0e4d8;
-  --color-neutral-800: #d3d8ca;
-  --color-neutral-700: #a2ab96;
-  --color-neutral-600: #7e8874;
-  --color-neutral-500: #606a58;
-  --color-neutral-400: #3e4838;
-  --color-neutral-300: #2a3226;
-  --color-neutral-200: #1e261a;
-  --color-neutral-100: #151c12;
-  --color-amber-600: #3c7a30;
-  --color-amber-500: #4e9440;
-  --color-amber-400: #5eaa50;
-}
-
-[data-theme="sun-mountain-fall"] {
+[data-theme="sun-beach-fall-clouds"] {
   --color-neutral-950: #faf6f0;
-  --color-neutral-900: #f0ebe3;
+  --color-neutral-900: #f2ece4;
   --color-neutral-850: #e8e2d8;
-  --color-neutral-800: #ddd5ca;
-  --color-neutral-700: #b0a79c;
-  --color-neutral-600: #8a8178;
-  --color-neutral-500: #6d645b;
-  --color-neutral-400: #4a433c;
-  --color-neutral-300: #362f2a;
-  --color-neutral-200: #261f1b;
-  --color-neutral-100: #1a1613;
-  --color-amber-600: #9e4a2a;
-  --color-amber-500: #b85c38;
-  --color-amber-400: #c46f48;
+  --color-neutral-800: #dcd6cc;
+  --color-neutral-700: #b2aa9c;
+  --color-neutral-600: #8e867c;
+  --color-neutral-500: #6e665e;
+  --color-neutral-400: #4c463e;
+  --color-neutral-300: #36302a;
+  --color-neutral-200: #28221c;
+  --color-neutral-100: #1c1814;
+  --color-amber-600: #9a7c20;
+  --color-amber-500: #be9428;
+  --color-amber-400: #cea436;
+  --color-dated: #947a4a;
+}
+
+/* --- Sun + Mountain + Spring --- */
+[data-theme="sun-mountain-spring-stars"] {
+  --color-neutral-950: #f1f4ec;
+  --color-neutral-900: #e8ece2;
+  --color-neutral-850: #dee2d6;
+  --color-neutral-800: #d0d6c6;
+  --color-neutral-700: #9ea894;
+  --color-neutral-600: #7a8670;
+  --color-neutral-500: #5c6854;
+  --color-neutral-400: #3c4636;
+  --color-neutral-300: #283024;
+  --color-neutral-200: #1c2418;
+  --color-neutral-100: #131a10;
+  --color-amber-600: #368230;
+  --color-amber-500: #489c3c;
+  --color-amber-400: #56b44c;
+  --color-dated: #6a7a3a;
+}
+[data-theme="sun-mountain-spring-clouds"] {
+  --color-neutral-950: #f5f6f0;
+  --color-neutral-900: #ecefe6;
+  --color-neutral-850: #e2e6da;
+  --color-neutral-800: #d6dace;
+  --color-neutral-700: #a6ae98;
+  --color-neutral-600: #828c78;
+  --color-neutral-500: #646e5c;
+  --color-neutral-400: #424a3c;
+  --color-neutral-300: #2e3428;
+  --color-neutral-200: #20281c;
+  --color-neutral-100: #171e14;
+  --color-amber-600: #427832;
+  --color-amber-500: #569044;
+  --color-amber-400: #66a656;
+  --color-dated: #7a8250;
+}
+
+/* --- Sun + Mountain + Fall --- */
+[data-theme="sun-mountain-fall-stars"] {
+  --color-neutral-950: #f8f4ee;
+  --color-neutral-900: #eee9e0;
+  --color-neutral-850: #e6e0d4;
+  --color-neutral-800: #dad2c6;
+  --color-neutral-700: #aca498;
+  --color-neutral-600: #867e74;
+  --color-neutral-500: #6a6258;
+  --color-neutral-400: #48403a;
+  --color-neutral-300: #342e28;
+  --color-neutral-200: #241e1a;
+  --color-neutral-100: #181412;
+  --color-amber-600: #a24626;
+  --color-amber-500: #be5832;
+  --color-amber-400: #cc6c42;
+  --color-dated: #8a5038;
+}
+[data-theme="sun-mountain-fall-clouds"] {
+  --color-neutral-950: #fcf8f2;
+  --color-neutral-900: #f2ede6;
+  --color-neutral-850: #eae4dc;
+  --color-neutral-800: #e0d8d0;
+  --color-neutral-700: #b4aaa0;
+  --color-neutral-600: #8e847c;
+  --color-neutral-500: #70685e;
+  --color-neutral-400: #4e4640;
+  --color-neutral-300: #38322c;
+  --color-neutral-200: #28221e;
+  --color-neutral-100: #1c1816;
+  --color-amber-600: #984e2e;
+  --color-amber-500: #b2623e;
+  --color-amber-400: #c07450;
+  --color-dated: #946048;
 }
 
 /* ============================================
    MOON THEMES (dark base)
+   Stars = sharper, higher contrast, cooler precision
+   Clouds = softer, warmer, more atmospheric
    ============================================ */
 
-[data-theme="moon-beach-spring"] {
-  --color-neutral-950: #0e1318;
-  --color-neutral-900: #151c22;
-  --color-neutral-850: #1b232a;
-  --color-neutral-800: #242e38;
-  --color-neutral-700: #3a4a58;
-  --color-neutral-600: #526270;
-  --color-neutral-500: #6c7e8e;
-  --color-neutral-400: #8a9cac;
-  --color-neutral-300: #aec0cc;
-  --color-neutral-200: #cddae2;
-  --color-neutral-100: #e2ecf0;
-  --color-amber-600: #1e8080;
-  --color-amber-500: #2aa0a0;
-  --color-amber-400: #38b4b4;
+/* --- Moon + Beach + Spring --- */
+[data-theme="moon-beach-spring-stars"] {
+  --color-neutral-950: #0c1218;
+  --color-neutral-900: #131a22;
+  --color-neutral-850: #19222c;
+  --color-neutral-800: #222c38;
+  --color-neutral-700: #38485a;
+  --color-neutral-600: #4e6274;
+  --color-neutral-500: #688092;
+  --color-neutral-400: #869eb0;
+  --color-neutral-300: #aac2ce;
+  --color-neutral-200: #cadce6;
+  --color-neutral-100: #e0eef4;
+  --color-amber-600: #188a8a;
+  --color-amber-500: #22aaaa;
+  --color-amber-400: #30c0c0;
+  --color-dated: #4a7a72;
+}
+[data-theme="moon-beach-spring-clouds"] {
+  --color-neutral-950: #10141a;
+  --color-neutral-900: #181e24;
+  --color-neutral-850: #1e262c;
+  --color-neutral-800: #283038;
+  --color-neutral-700: #3e4e58;
+  --color-neutral-600: #56646e;
+  --color-neutral-500: #727e88;
+  --color-neutral-400: #8e9aa4;
+  --color-neutral-300: #b2bec6;
+  --color-neutral-200: #d0d8de;
+  --color-neutral-100: #e4eaee;
+  --color-amber-600: #24807a;
+  --color-amber-500: #329a92;
+  --color-amber-400: #42aca2;
+  --color-dated: #5a847c;
 }
 
-[data-theme="moon-beach-fall"] {
-  --color-neutral-950: #12100e;
-  --color-neutral-900: #1a1816;
-  --color-neutral-850: #22201c;
-  --color-neutral-800: #2c2a26;
-  --color-neutral-700: #46423c;
-  --color-neutral-600: #605a52;
-  --color-neutral-500: #7c756c;
-  --color-neutral-400: #9c9488;
-  --color-neutral-300: #beb4a8;
-  --color-neutral-200: #d8d0c4;
-  --color-neutral-100: #ece6dc;
-  --color-amber-600: #a88018;
-  --color-amber-500: #cc9c22;
-  --color-amber-400: #deb030;
+/* --- Moon + Beach + Fall --- */
+[data-theme="moon-beach-fall-stars"] {
+  --color-neutral-950: #100e0c;
+  --color-neutral-900: #181614;
+  --color-neutral-850: #201e1a;
+  --color-neutral-800: #2a2824;
+  --color-neutral-700: #44403a;
+  --color-neutral-600: #5c5850;
+  --color-neutral-500: #78726a;
+  --color-neutral-400: #989286;
+  --color-neutral-300: #bcb4a6;
+  --color-neutral-200: #d6cec0;
+  --color-neutral-100: #eae4d8;
+  --color-amber-600: #ae8414;
+  --color-amber-500: #d4a01e;
+  --color-amber-400: #e6b42a;
+  --color-dated: #8a6830;
+}
+[data-theme="moon-beach-fall-clouds"] {
+  --color-neutral-950: #141210;
+  --color-neutral-900: #1c1a18;
+  --color-neutral-850: #24221e;
+  --color-neutral-800: #2e2c28;
+  --color-neutral-700: #4a4640;
+  --color-neutral-600: #645e56;
+  --color-neutral-500: #807870;
+  --color-neutral-400: #a0988c;
+  --color-neutral-300: #c0b8ac;
+  --color-neutral-200: #dad2c8;
+  --color-neutral-100: #eee8e0;
+  --color-amber-600: #a27c1e;
+  --color-amber-500: #c49626;
+  --color-amber-400: #d6aa34;
+  --color-dated: #947640;
 }
 
-[data-theme="moon-mountain-spring"] {
-  --color-neutral-950: #0e110d;
-  --color-neutral-900: #161a14;
-  --color-neutral-850: #1c211a;
-  --color-neutral-800: #262c22;
-  --color-neutral-700: #3e4838;
-  --color-neutral-600: #566050;
-  --color-neutral-500: #707a68;
-  --color-neutral-400: #8e9884;
-  --color-neutral-300: #aeb8a6;
-  --color-neutral-200: #ccd4c4;
-  --color-neutral-100: #e2e8dc;
-  --color-amber-600: #3c7c30;
-  --color-amber-500: #4e9642;
-  --color-amber-400: #60ae52;
+/* --- Moon + Mountain + Spring --- */
+[data-theme="moon-mountain-spring-stars"] {
+  --color-neutral-950: #0c100c;
+  --color-neutral-900: #141812;
+  --color-neutral-850: #1a1e18;
+  --color-neutral-800: #242a20;
+  --color-neutral-700: #3c4636;
+  --color-neutral-600: #525e4c;
+  --color-neutral-500: #6c7864;
+  --color-neutral-400: #8a967e;
+  --color-neutral-300: #acb8a0;
+  --color-neutral-200: #cad4c0;
+  --color-neutral-100: #e0e8d8;
+  --color-amber-600: #368430;
+  --color-amber-500: #48a03c;
+  --color-amber-400: #58b84c;
+  --color-dated: #587830;
+}
+[data-theme="moon-mountain-spring-clouds"] {
+  --color-neutral-950: #10130e;
+  --color-neutral-900: #181c16;
+  --color-neutral-850: #1e241c;
+  --color-neutral-800: #283026;
+  --color-neutral-700: #404c3c;
+  --color-neutral-600: #5a6454;
+  --color-neutral-500: #747e6e;
+  --color-neutral-400: #929c8a;
+  --color-neutral-300: #b2baac;
+  --color-neutral-200: #ced6c8;
+  --color-neutral-100: #e4eade;
+  --color-amber-600: #427632;
+  --color-amber-500: #568e48;
+  --color-amber-400: #68a458;
+  --color-dated: #6a8242;
 }
 
-[data-theme="moon-mountain-fall"] {
-  --color-neutral-950: #15120f;
-  --color-neutral-900: #1e1a16;
-  --color-neutral-850: #252019;
-  --color-neutral-800: #302a23;
-  --color-neutral-700: #4d453c;
-  --color-neutral-600: #685e54;
-  --color-neutral-500: #847a6e;
-  --color-neutral-400: #a69a8e;
-  --color-neutral-300: #c8bdb2;
-  --color-neutral-200: #ddd3c8;
-  --color-neutral-100: #f0e8df;
-  --color-amber-600: #a65e3a;
-  --color-amber-500: #c47d5a;
-  --color-amber-400: #d4926a;
+/* --- Moon + Mountain + Fall --- */
+[data-theme="moon-mountain-fall-stars"] {
+  --color-neutral-950: #13100c;
+  --color-neutral-900: #1c1814;
+  --color-neutral-850: #231e17;
+  --color-neutral-800: #2e2820;
+  --color-neutral-700: #4a423a;
+  --color-neutral-600: #645c52;
+  --color-neutral-500: #80786c;
+  --color-neutral-400: #a2988c;
+  --color-neutral-300: #c6bab0;
+  --color-neutral-200: #dbd0c6;
+  --color-neutral-100: #ede6dc;
+  --color-amber-600: #ac5a34;
+  --color-amber-500: #cc7a56;
+  --color-amber-400: #da8e66;
+  --color-dated: #8a5430;
+}
+[data-theme="moon-mountain-fall-clouds"] {
+  --color-neutral-950: #171412;
+  --color-neutral-900: #201c18;
+  --color-neutral-850: #28221c;
+  --color-neutral-800: #322c26;
+  --color-neutral-700: #504840;
+  --color-neutral-600: #6c6258;
+  --color-neutral-500: #887c72;
+  --color-neutral-400: #aa9e92;
+  --color-neutral-300: #cac0b6;
+  --color-neutral-200: #e0d6cc;
+  --color-neutral-100: #f2ebe4;
+  --color-amber-600: #a06240;
+  --color-amber-500: #bc8060;
+  --color-amber-400: #cc9472;
+  --color-dated: #946850;
 }
 
 /* ============================================
@@ -226,6 +384,11 @@
     transition: background-color 5000s ease-in-out 0s;
   }
 
+  /* ---- Default nav separation (no theme set) ---- */
+  nav {
+    box-shadow: 0 1px 10px rgba(0, 0, 0, 0.2), 0 0 1px rgba(255, 255, 255, 0.03);
+  }
+
   /* ---- SUN THEME (light mode) global overrides ---- */
   [data-theme^="sun-"] [class*="border-white\/"],
   [data-theme^="sun-"] [class*="border-white/"] {
@@ -235,6 +398,7 @@
   [data-theme^="sun-"] nav {
     background-color: color-mix(in srgb, var(--color-neutral-950) 88%, transparent);
     border-bottom-color: rgba(20, 20, 16, 0.05);
+    box-shadow: 0 1px 8px rgba(20, 20, 16, 0.06), 0 0 1px rgba(20, 20, 16, 0.08);
   }
 
   [data-theme^="sun-"] #mobile-menu {
@@ -250,6 +414,7 @@
   [data-theme^="moon-"] nav {
     background-color: color-mix(in srgb, var(--color-neutral-950) 85%, transparent);
     border-bottom-color: rgba(240, 232, 224, 0.04);
+    box-shadow: 0 1px 12px rgba(0, 0, 0, 0.3), 0 1px 4px color-mix(in srgb, var(--color-amber-600) 6%, transparent);
   }
 
   [data-theme^="moon-"] footer {

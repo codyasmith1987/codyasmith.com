@@ -1,6 +1,7 @@
 ---
 // Quiz lightbox - shown on first visit
-// Three binary questions determine the site theme
+// Four binary questions determine the site theme and persona
+// Sun/Moon (energy) + Beach/Mountain (orientation) + Spring/Fall (phase) + Stars/Clouds (processing)
 // Name + email captured as lead
 ---
 
@@ -15,7 +16,7 @@
         <h2 class="font-serif text-4xl md:text-5xl leading-tight mb-6" style="color:#f0e8df">
           Want to personalize<br/>your experience?
         </h2>
-        <p class="text-lg mb-12" style="color:#a69a8e">Three questions. Ten seconds. The site adapts to you.</p>
+        <p class="text-lg mb-12" style="color:#a69a8e">Four questions. Fifteen seconds. The site adapts to you.</p>
         <div class="flex flex-col sm:flex-row gap-4 justify-center">
           <button data-action="next" class="px-8 py-4 font-semibold text-sm rounded-lg transition-all duration-300" style="background:#c47d5a;color:#15120f" onmouseover="this.style.background='#d4926a'" onmouseout="this.style.background='#c47d5a'">
             I sure would
@@ -28,7 +29,7 @@
 
       <!-- Step 1: Sun or Moon -->
       <div data-step="1" class="quiz-step text-center" style="display:none">
-        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-10" style="color:#847a6e">1 of 3</p>
+        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-10" style="color:#847a6e">1 of 4</p>
         <h2 class="font-serif text-5xl md:text-6xl mb-14" style="color:#f0e8df">Sun or moon?</h2>
         <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
           <button data-answer="sun" class="quiz-choice group relative p-8 rounded-xl border transition-all duration-300 cursor-pointer" style="border-color:#302a23;background:transparent" onmouseover="this.style.borderColor='#d4926a';this.style.background='rgba(196,125,90,0.05)'" onmouseout="this.style.borderColor='#302a23';this.style.background='transparent'">
@@ -44,7 +45,7 @@
 
       <!-- Step 2: Beach or Mountain -->
       <div data-step="2" class="quiz-step text-center" style="display:none">
-        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-10" style="color:#847a6e">2 of 3</p>
+        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-10" style="color:#847a6e">2 of 4</p>
         <h2 class="font-serif text-5xl md:text-6xl mb-14" style="color:#f0e8df">Beach or mountain?</h2>
         <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
           <button data-answer="beach" class="quiz-choice group relative p-8 rounded-xl border transition-all duration-300 cursor-pointer" style="border-color:#302a23;background:transparent" onmouseover="this.style.borderColor='#d4926a';this.style.background='rgba(196,125,90,0.05)'" onmouseout="this.style.borderColor='#302a23';this.style.background='transparent'">
@@ -60,7 +61,7 @@
 
       <!-- Step 3: Spring or Fall -->
       <div data-step="3" class="quiz-step text-center" style="display:none">
-        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-10" style="color:#847a6e">3 of 3</p>
+        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-10" style="color:#847a6e">3 of 4</p>
         <h2 class="font-serif text-5xl md:text-6xl mb-14" style="color:#f0e8df">Spring or fall?</h2>
         <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
           <button data-answer="spring" class="quiz-choice group relative p-8 rounded-xl border transition-all duration-300 cursor-pointer" style="border-color:#302a23;background:transparent" onmouseover="this.style.borderColor='#d4926a';this.style.background='rgba(196,125,90,0.05)'" onmouseout="this.style.borderColor='#302a23';this.style.background='transparent'">
@@ -74,8 +75,24 @@
         </div>
       </div>
 
-      <!-- Step 4: Lead capture -->
+      <!-- Step 4: Stars or Clouds -->
       <div data-step="4" class="quiz-step text-center" style="display:none">
+        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-10" style="color:#847a6e">4 of 4</p>
+        <h2 class="font-serif text-5xl md:text-6xl mb-14" style="color:#f0e8df">Stars or clouds?</h2>
+        <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
+          <button data-answer="stars" class="quiz-choice group relative p-8 rounded-xl border transition-all duration-300 cursor-pointer" style="border-color:#302a23;background:transparent" onmouseover="this.style.borderColor='#d4926a';this.style.background='rgba(196,125,90,0.05)'" onmouseout="this.style.borderColor='#302a23';this.style.background='transparent'">
+            <span class="block text-3xl mb-3">&#10024;</span>
+            <span class="font-serif text-2xl" style="color:#f0e8df">Stars</span>
+          </button>
+          <button data-answer="clouds" class="quiz-choice group relative p-8 rounded-xl border transition-all duration-300 cursor-pointer" style="border-color:#302a23;background:transparent" onmouseover="this.style.borderColor='#d4926a';this.style.background='rgba(196,125,90,0.05)'" onmouseout="this.style.borderColor='#302a23';this.style.background='transparent'">
+            <span class="block text-3xl mb-3">&#9729;&#65039;</span>
+            <span class="font-serif text-2xl" style="color:#f0e8df">Clouds</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 5: Lead capture -->
+      <div data-step="5" class="quiz-step text-center" style="display:none">
 
         <p class="font-mono text-xs tracking-[0.2em] uppercase mb-8" style="color:#d4926a">Almost done</p>
         <h2 class="font-serif text-3xl md:text-4xl leading-tight mb-4" style="color:#f0e8df">
@@ -100,8 +117,8 @@
         </form>
       </div>
 
-      <!-- Step 5: Reveal interstitial -->
-      <div data-step="5" class="quiz-step text-center" style="display:none">
+      <!-- Step 6: Reveal interstitial -->
+      <div data-step="6" class="quiz-step text-center" style="display:none">
         <p class="font-quote italic text-3xl md:text-4xl leading-snug" style="color:#f0e8df">
           Setting the room<span id="reveal-name"></span>...
         </p>
@@ -168,7 +185,7 @@
       if (revealName && nameStr) {
         revealName.textContent = ` for ${nameStr.split(' ')[0]}`;
       }
-      showStep(5);
+      showStep(6);
       setTimeout(closeQuiz, 1400);
     }
 
@@ -176,7 +193,8 @@
       const base = answers['1'] || 'moon';
       const place = answers['2'] || 'mountain';
       const season = answers['3'] || 'fall';
-      return `${base}-${place}-${season}`;
+      const processing = answers['4'] || 'stars';
+      return `${base}-${place}-${season}-${processing}`;
     }
 
     function applyTheme(theme: string) {
@@ -212,11 +230,11 @@
         btn.style.background = 'rgba(196,125,90,0.1)';
 
         setTimeout(() => {
-          if (currentStep < 3) {
+          if (currentStep < 4) {
             showStep(currentStep + 1);
           } else {
-            // All 3 questions answered, show lead capture
-            showStep(4);
+            // All 4 questions answered, show lead capture
+            showStep(5);
           }
         }, 300);
       }

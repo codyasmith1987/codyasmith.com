@@ -25,11 +25,13 @@ export const POST: APIRoute = async ({ request }) => {
       sun: 'Sun', moon: 'Moon',
       beach: 'Beach', mountain: 'Mountain',
       spring: 'Spring', fall: 'Fall',
+      stars: 'Stars', clouds: 'Clouds',
     };
 
     const q1 = labels[answers?.['1']] || '?';
     const q2 = labels[answers?.['2']] || '?';
     const q3 = labels[answers?.['3']] || '?';
+    const q4 = labels[answers?.['4']] || '?';
 
     await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
@@ -42,12 +44,12 @@ export const POST: APIRoute = async ({ request }) => {
         sender: { name: 'codyasmith.com', email: 'cody@codyasmith.com' },
         to: [{ email: 'cody@codyasmith.com', name: 'Cody Smith' }],
         replyTo: { email, name },
-        subject: `New visitor: ${name} (${q1} / ${q2} / ${q3})`,
+        subject: `New visitor: ${name} (${q1} / ${q2} / ${q3} / ${q4})`,
         htmlContent: `
           <h2>Someone personalized the site</h2>
           <p><strong>Name:</strong> ${name}</p>
           <p><strong>Email:</strong> ${email}</p>
-          <p><strong>Choices:</strong> ${q1} / ${q2} / ${q3}</p>
+          <p><strong>Persona:</strong> ${q1} / ${q2} / ${q3} / ${q4}</p>
           <p><strong>Theme:</strong> ${theme}</p>
         `,
       }),

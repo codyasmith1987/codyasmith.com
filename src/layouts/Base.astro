@@ -49,6 +49,11 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
         var t = new URLSearchParams(window.location.search).get('theme');
         if (t) localStorage.setItem('cs-theme', t);
         var saved = localStorage.getItem('cs-theme');
+        // Migrate 3-part theme names from before Q4 was added
+        if (saved && saved.split('-').length === 3) {
+          saved = saved + '-stars';
+          localStorage.setItem('cs-theme', saved);
+        }
         if (saved) document.documentElement.setAttribute('data-theme', saved);
       })();
     </script>
@@ -66,11 +71,13 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
 
     <!-- Dev theme switcher (remove before final launch) -->
     <div class="theme-switcher" id="theme-switcher">
-      <button data-set-theme="" title="Original">Orig</button>
-      <button data-set-theme="sun-mountain-fall" title="Sun+Mountain+Fall (Newspaper)">SMF</button>
-      <button data-set-theme="moon-mountain-fall" title="Moon+Mountain+Fall (Dark Room)">MMF</button>
-      <button data-set-theme="sun-beach-spring" title="Sun+Beach+Spring">SBS</button>
-      <button data-set-theme="moon-beach-spring" title="Moon+Beach+Spring">MBS</button>
+      <button data-set-theme="" title="Original (no theme)">Orig</button>
+      <button data-set-theme="sun-mountain-fall-stars" title="Sun+Mtn+Fall+Stars">SmFs</button>
+      <button data-set-theme="sun-mountain-fall-clouds" title="Sun+Mtn+Fall+Clouds">SmFc</button>
+      <button data-set-theme="moon-mountain-fall-stars" title="Moon+Mtn+Fall+Stars">MmFs</button>
+      <button data-set-theme="moon-mountain-fall-clouds" title="Moon+Mtn+Fall+Clouds">MmFc</button>
+      <button data-set-theme="moon-beach-spring-stars" title="Moon+Beach+Spring+Stars">MbSs</button>
+      <button data-set-theme="sun-beach-spring-clouds" title="Sun+Beach+Spring+Clouds">SbSc</button>
     </div>
 
     <script>
@@ -83,8 +90,10 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
         const name = quizData.name || '';
         const email = quizData.email || '';
         const firstName = name.split(' ')[0] || '';
-        const place = quizData['2'] || '';   // beach or mountain
-        const season = quizData['3'] || '';  // spring or fall
+        const frame = quizData['1'] || '';   // sun or moon (regulatory focus)
+        const place = quizData['2'] || '';   // beach or mountain (Cialdini)
+        const season = quizData['3'] || '';  // spring or fall (construal level)
+        const processing = quizData['4'] || ''; // stars or clouds (ELM)
 
         // ---- Name injections ----
         document.querySelectorAll('[data-personalize="name-comma"]').forEach(el => {
@@ -102,10 +111,11 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
         if (nameInput && name && !nameInput.value) nameInput.value = name;
         if (emailInput && email && !emailInput.value) emailInput.value = email;
 
-        // ---- Personality-aware copy (vibe variants) ----
-        // If quiz was taken and place preference exists, swap copy
+        // ---- Personality-aware copy (composable variant system) ----
+        // Each axis swaps its own data-attribute independently
+
+        // Vibe axis: beach/mountain (Cialdini - social proof vs authority)
         if (place) {
-          // Show the matching vibe, hide default
           document.querySelectorAll('[data-vibe]').forEach(el => {
             const vibe = (el as HTMLElement).dataset.vibe;
             if (vibe === place) {
@@ -113,7 +123,42 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
             } else if (vibe === 'default') {
               (el as HTMLElement).style.display = 'none';
             }
-            // Other vibes stay hidden
+          });
+        }
+
+        // Frame axis: sun/moon (Regulatory Focus - gain vs loss framing)
+        if (frame) {
+          document.querySelectorAll('[data-frame]').forEach(el => {
+            const f = (el as HTMLElement).dataset.frame;
+            if (f === frame) {
+              (el as HTMLElement).style.display = '';
+            } else if (f === 'default') {
+              (el as HTMLElement).style.display = 'none';
+            }
+          });
+        }
+
+        // Phase axis: spring/fall (Construal Level - abstract/why vs concrete/how)
+        if (season) {
+          document.querySelectorAll('[data-phase]').forEach(el => {
+            const p = (el as HTMLElement).dataset.phase;
+            if (p === season) {
+              (el as HTMLElement).style.display = '';
+            } else if (p === 'default') {
+              (el as HTMLElement).style.display = 'none';
+            }
+          });
+        }
+
+        // Processing axis: stars/clouds (ELM - central/data vs peripheral/story)
+        if (processing) {
+          document.querySelectorAll('[data-processing]').forEach(el => {
+            const proc = (el as HTMLElement).dataset.processing;
+            if (proc === processing) {
+              (el as HTMLElement).style.display = '';
+            } else if (proc === 'default') {
+              (el as HTMLElement).style.display = 'none';
+            }
           });
         }
 

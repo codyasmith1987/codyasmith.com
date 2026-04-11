@@ -406,7 +406,7 @@
         drift: -0.015 - Math.random() * 0.06,
         length: 0.1 + Math.random() * 0.8,
         thickness: 0.3 + layer * 1.2,
-        opacity: 0.012 + layer * 0.035,
+        opacity: 0.006 + layer * 0.018,
         noiseOffset: Math.random() * 1000,
       });
     }
@@ -422,7 +422,7 @@
       if (!running) return;
 
       // Long motion trails — very slow fade = ghostly persistence
-      ctx.fillStyle = 'rgba(0,0,0,0.035)';
+      ctx.fillStyle = 'rgba(0,0,0,0.018)';
       ctx.fillRect(0, 0, w, h);
 
       time += 0.004;
@@ -465,7 +465,7 @@
 
         ctx.beginPath();
         ctx.arc(cx, cy, Math.max(1, r0), startAngle, endAngle, s.speed < 0);
-        ctx.strokeStyle = `rgba(${accentRGB[0]},${accentRGB[1]},${accentRGB[2]},${Math.min(alpha, 0.1)})`;
+        ctx.strokeStyle = `rgba(${accentRGB[0]},${accentRGB[1]},${accentRGB[2]},${Math.min(alpha, 0.05)})`;
         ctx.lineWidth = s.thickness;
         ctx.lineCap = 'round';
         ctx.stroke();

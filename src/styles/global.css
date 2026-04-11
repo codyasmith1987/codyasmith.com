@@ -646,6 +646,7 @@
      ============================================ */
   .word-dated {
     position: relative;
+    display: inline-block;
     color: var(--color-dated);
     font-style: italic;
     letter-spacing: -0.02em;

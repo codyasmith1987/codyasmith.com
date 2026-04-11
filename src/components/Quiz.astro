@@ -8,9 +8,15 @@
 <div id="quiz" class="fixed inset-0 z-[70]" style="display:none">
   <!-- Frosted glass: layered depth — blur + gradient vignette + grain -->
   <div id="quiz-backdrop" class="absolute inset-0 transition-all duration-1000 ease-out" style="backdrop-filter:blur(40px) saturate(1.2);-webkit-backdrop-filter:blur(40px) saturate(1.2);background:radial-gradient(ellipse at 50% 40%, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.65) 70%, rgba(0,0,0,0.8) 100%)"></div>
-  <!-- Swirl: two CSS pseudo-layers + one extra DOM layer for depth -->
-  <div id="quiz-swirl" class="absolute inset-0 pointer-events-none quiz-swirl"></div>
-  <div id="quiz-swirl-drift" class="absolute pointer-events-none" style="inset:-20%;width:140%;height:140%;background:radial-gradient(ellipse at 30% 60%, color-mix(in srgb, var(--color-amber-500) 12%, transparent) 0%, transparent 50%);animation:swirl-drift 20s ease-in-out infinite;filter:blur(80px);opacity:0.5;transition:opacity 1.2s ease"></div>
+  <!-- Vortex: multiple tendrils spiraling inward like a tornado from above -->
+  <div id="quiz-swirl" class="absolute inset-0 pointer-events-none quiz-vortex" style="transition:opacity 1.2s ease">
+    <div class="vortex-tendril vortex-t1"></div>
+    <div class="vortex-tendril vortex-t2"></div>
+    <div class="vortex-tendril vortex-t3"></div>
+    <div class="vortex-tendril vortex-t4"></div>
+    <div class="vortex-tendril vortex-t5"></div>
+    <div class="vortex-eye"></div>
+  </div>
   <div class="relative z-10 min-h-screen flex items-center justify-center p-6">
     <div class="max-w-lg w-full">
 
@@ -185,7 +191,6 @@
     function closeQuiz() {
       const backdrop = document.getElementById('quiz-backdrop');
       const swirl = document.getElementById('quiz-swirl');
-      const drift = document.getElementById('quiz-swirl-drift');
       const content = quiz.querySelector('.relative.z-10') as HTMLElement;
 
       // Phase 1: Content fades, swirl intensifies briefly (the final "set")
@@ -211,8 +216,13 @@
           swirl.style.transition = 'opacity 1s ease';
           swirl.style.opacity = '0';
         }
-        if (drift) {
-          drift.style.opacity = '0';
+        // Vortex accelerates briefly during reveal — the final pull
+        if (swirl) {
+          swirl.classList.add('vortex-accelerate');
+          setTimeout(() => {
+            swirl.style.transition = 'opacity 0.8s ease';
+            swirl.style.opacity = '0';
+          }, 400);
         }
       }, 500);
 

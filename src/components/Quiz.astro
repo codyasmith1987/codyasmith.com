@@ -528,12 +528,12 @@
           b = Math.round(baseB + (accentRGB[2] - baseB) * colorMix);
         }
 
-        // Draw trail as a narrow wake — tapers from thick at head to hairline at tail
+        // Draw trail as a wake — thin point leads, spreads wider behind it
         if (t.trail.length > 1) {
           for (let i = 1; i < t.trail.length; i++) {
-            const progress = i / t.trail.length; // 0 = tail, 1 = head
+            const progress = i / t.trail.length; // 0 = old/wide end, 1 = head/point
             const segAlpha = progress * (t.opacity + waveBoost) * centerFade;
-            const segWidth = t.thickness * (0.1 + progress * 0.9); // tapers to 10% at tail
+            const segWidth = t.thickness * (0.3 + (1 - progress) * 2.5); // head is thin, wake spreads behind
             ctx.beginPath();
             ctx.moveTo(t.trail[i - 1][0], t.trail[i - 1][1]);
             ctx.lineTo(t.trail[i][0], t.trail[i][1]);

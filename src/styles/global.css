@@ -646,11 +646,9 @@
      ============================================ */
   .word-dated {
     position: relative;
-    display: inline-block;
     color: var(--color-dated);
     font-style: italic;
     letter-spacing: -0.02em;
-    overflow: hidden;
     /* Layered shadow: glow underneath + eroded edge */
     text-shadow:
       0 0 8px color-mix(in srgb, var(--color-dated) 20%, transparent),
@@ -669,28 +667,6 @@
     -webkit-text-fill-color: transparent;
     /* Roughen the edges slightly */
     filter: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='r'%3E%3CfeTurbulence baseFrequency='0.04' numOctaves='3' seed='1'/%3E%3CfeDisplacementMap in='SourceGraphic' scale='1.5'/%3E%3C/filter%3E%3C/svg%3E#r");
-  }
-
-  /* Subtle tarnish animation — inset: 0 keeps it inside the filter bounding box */
-  .word-dated::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      120deg,
-      transparent 30%,
-      color-mix(in srgb, var(--color-dated) 8%, transparent) 50%,
-      transparent 70%
-    );
-    background-size: 200% 100%;
-    animation: tarnish-shimmer 8s ease-in-out infinite;
-    pointer-events: none;
-    mix-blend-mode: overlay;
-  }
-
-  @keyframes tarnish-shimmer {
-    0%, 100% { background-position: 200% center; }
-    50% { background-position: -200% center; }
   }
 
   /* ============================================

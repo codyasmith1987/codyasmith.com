@@ -37,14 +37,22 @@ async function clearPreviousData(clientId: string, month: string, format: string
 
   const prevIds = prevUploads.rows.map(r => r[0] as string);
 
-  for (const prevId of prevIds) {
-    for (const table of config.tables) {
-      await turso.execute({
-        sql: `DELETE FROM ${table} WHERE client_id = ? AND month = ? AND csv_upload_id = ?`,
-        args: [clientId, month, prevId],
-      });
-    }
+  // Only clear data from the MOST RECENT previous upload of this format,
+  // not ALL previous uploads. This prevents accumulating stale data while
+  // preserving intentional multi-file uploads within the same month.
+  const latestPrevId = prevIds[prevIds.length - 1];
+  for (const table of config.tables) {
+    await turso.execute({
+      sql: `DELETE FROM ${table} WHERE client_id = ? AND month = ? AND csv_upload_id = ?`,
+      args: [clientId, month, latestPrevId],
+    });
   }
+
+  // Mark old upload records as superseded (keep for history, don't delete)
+  await turso.execute({
+    sql: 'UPDATE csv_uploads SET error = ? WHERE id = ?',
+    args: ['Superseded by newer upload', latestPrevId],
+  });
 }
 
 export interface IngestResult {

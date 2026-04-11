@@ -1,0 +1,85 @@
+---
+import Base from '../../layouts/Base.astro';
+---
+
+<Base title="Services — Cody Smith | Web Management & Marketing Consulting" description="Web management, marketing strategy, implementation, and training for businesses that have outgrown their website.">
+  <!-- Hero -->
+  <section class="relative pt-40 pb-16 px-6 overflow-hidden">
+    <div class="absolute top-0 left-1/3 w-[400px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative max-w-4xl mx-auto">
+      <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Services</p>
+      <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10">
+        Four ways I help.
+      </h1>
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl">
+        Most of my clients need more than one of these. That's fine — they're designed to work together. Pick the one that sounds most like your situation and we'll figure out the rest.
+      </p>
+    </div>
+  </section>
+
+  <!-- Services Grid -->
+  <section class="pb-32 px-6">
+    <div class="max-w-6xl mx-auto">
+      <div class="grid md:grid-cols-2 gap-6 reveal-stagger">
+
+        <a href="/services/web-management" class="reveal glow-card p-8 block group cursor-pointer" style="--i:0">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="text-amber-400 font-mono text-xs">01</span>
+            <h2 class="text-neutral-100 text-lg font-medium group-hover:text-amber-400 transition-colors duration-300">Web Management</h2>
+            <svg class="w-4 h-4 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-1 transition-all duration-300 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+          </div>
+          <p class="text-neutral-400 text-sm leading-relaxed">
+            Hosting, security, updates, backups, and monthly reporting. I take over the infrastructure so you stop worrying about the thing that keeps the lights on.
+          </p>
+        </a>
+
+        <a href="/services/marketing-strategy" class="reveal glow-card p-8 block group cursor-pointer" style="--i:1">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="text-amber-400 font-mono text-xs">02</span>
+            <h2 class="text-neutral-100 text-lg font-medium group-hover:text-amber-400 transition-colors duration-300">Marketing Strategy</h2>
+            <svg class="w-4 h-4 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-1 transition-all duration-300 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+          </div>
+          <p class="text-neutral-400 text-sm leading-relaxed">
+            SEO, content strategy, competitive analysis, and local search. I figure out what your audience is searching for and make sure they find you.
+          </p>
+        </a>
+
+        <a href="/services/implementation" class="reveal glow-card p-8 block group cursor-pointer" style="--i:2">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="text-amber-400 font-mono text-xs">03</span>
+            <h2 class="text-neutral-100 text-lg font-medium group-hover:text-amber-400 transition-colors duration-300">Implementation</h2>
+            <svg class="w-4 h-4 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-1 transition-all duration-300 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+          </div>
+          <p class="text-neutral-400 text-sm leading-relaxed">
+            Landing pages, integrations, tracking setup, and the technical work that turns strategy into something real. I build the things that make everything else work.
+          </p>
+        </a>
+
+        <a href="/services/training" class="reveal glow-card p-8 block group cursor-pointer" style="--i:3">
+          <div class="flex items-center gap-3 mb-4">
+            <span class="text-amber-400 font-mono text-xs">04</span>
+            <h2 class="text-neutral-100 text-lg font-medium group-hover:text-amber-400 transition-colors duration-300">Training</h2>
+            <svg class="w-4 h-4 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-1 transition-all duration-300 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+          </div>
+          <p class="text-neutral-400 text-sm leading-relaxed">
+            WordPress, SEO, AI workflows, and the tools your team actually uses. Hands-on sessions tailored to your stack, not a webinar you'll forget next week.
+          </p>
+        </a>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="pb-32 px-6">
+    <div class="max-w-4xl mx-auto text-center reveal">
+      <h2 class="font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Not sure which you need?</h2>
+      <p class="text-neutral-400 text-lg leading-relaxed max-w-lg mx-auto mb-10">
+        That's the most common starting point. Tell me what's going on and we'll figure it out together.
+      </p>
+      <a href="/contact?interest=not-sure" class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
+        Start a conversation
+      </a>
+    </div>
+  </section>
+</Base>

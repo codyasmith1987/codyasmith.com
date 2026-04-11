@@ -2,6 +2,10 @@ export const prerender = false;
 
 import type { APIRoute } from 'astro';
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 export const POST: APIRoute = async ({ request }) => {
   try {
     const data = await request.formData();
@@ -53,12 +57,12 @@ export const POST: APIRoute = async ({ request }) => {
         subject: `New inquiry from ${name}: ${interestList}${quizTheme ? ` [${quizTheme}]` : ''}`,
         htmlContent: `
           <h2>New contact form submission</h2>
-          <p><strong>Name:</strong> ${name}</p>
-          <p><strong>Email:</strong> ${email}</p>
-          <p><strong>Interested in:</strong> ${interestList}</p>
-          ${quizTheme ? `<p><strong>Quiz theme:</strong> ${quizTheme}</p>` : ''}
+          <p><strong>Name:</strong> ${escapeHtml(name)}</p>
+          <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+          <p><strong>Interested in:</strong> ${escapeHtml(interestList)}</p>
+          ${quizTheme ? `<p><strong>Quiz theme:</strong> ${escapeHtml(quizTheme)}</p>` : ''}
           <p><strong>Message:</strong></p>
-          <p>${message.replace(/\n/g, '<br>')}</p>
+          <p>${escapeHtml(message).replace(/\n/g, '<br>')}</p>
         `,
       }),
     });
@@ -86,7 +90,7 @@ export const POST: APIRoute = async ({ request }) => {
           to: [{ email: email, name: name }],
           subject: 'Got your message',
           htmlContent: `
-            <p>Hey ${name},</p>
+            <p>Hey ${escapeHtml(name)},</p>
             <p>Got your message. I'll take a look and get back to you within one business day. Usually faster.</p>
             <p>If anything changes or you want to add context, just reply to this email.</p>
             <p>Talk soon,<br>Cody</p>

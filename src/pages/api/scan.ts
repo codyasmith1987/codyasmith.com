@@ -14,21 +14,26 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
 
   try {
     const body = await request.json();
-    const input = body.input?.trim();
-    const timestamp = body.timestamp;
-    const location = body.location?.trim() || null;
-    const industry = body.industry?.trim() || null;
-    const exclude = body.exclude?.trim() || null;
+    const input = typeof body.input === 'string' ? body.input.trim() : '';
+    const timestamp = typeof body.timestamp === 'number' ? body.timestamp : 0;
+    const location = typeof body.location === 'string' ? body.location.trim() || null : null;
+    const industry = typeof body.industry === 'string' ? body.industry.trim() || null : null;
+    const exclude = typeof body.exclude === 'string' ? body.exclude.trim() || null : null;
 
-    if (!input) return json({ error: 'Enter a brand name or URL' }, 400);
+    if (!input || input.length > 200) {
+      return json({ error: 'Enter a brand name or URL (200 characters max)' }, 400);
+    }
 
     // Bot protection: require at least 2 seconds between page load and submission
-    if (timestamp && Date.now() - timestamp < 2000) {
+    if (!timestamp || timestamp > Date.now() || Date.now() - timestamp < 2000) {
       return json({ error: 'Please wait a moment before scanning' }, 429);
     }
 
     // Rate limiting: 3 scans per day per IP
-    const ip = clientAddress || request.headers.get('x-forwarded-for') || 'unknown';
+    const ip = clientAddress || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    if (ip === 'unknown') {
+      return json({ error: 'Could not verify your request' }, 400);
+    }
     const rateCheck = await checkRateLimit(ip);
     if (!rateCheck.allowed) {
       return json({
@@ -56,11 +61,11 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     // Parse input
     const { brand, domain, inputType } = parseInput(input);
 
+    // Increment rate limit BEFORE creating scan to avoid orphaned records
+    await incrementRateLimit(ip);
+
     // Create scan record
     const scanId = await createScan(brand, domain, inputType);
-
-    // Increment rate limit
-    await incrementRateLimit(ip);
 
     // Stream progress via SSE
     const encoder = new TextEncoder();

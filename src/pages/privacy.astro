@@ -1,0 +1,75 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="Privacy Policy — Cody Smith" description="How codyasmith.com handles your data.">
+  <section class="relative pt-40 pb-16 px-6">
+    <div class="relative max-w-3xl mx-auto">
+      <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Legal</p>
+      <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10">Privacy Policy</h1>
+      <p class="reveal text-neutral-500 text-sm">Last updated: April 10, 2026</p>
+    </div>
+  </section>
+
+  <section class="pb-32 px-6">
+    <div class="max-w-3xl mx-auto prose-custom">
+      <div class="space-y-12 text-neutral-400 text-sm leading-relaxed">
+
+        <div class="reveal">
+          <h2 class="text-neutral-100 font-serif text-2xl mb-4">The short version</h2>
+          <p>I collect only what I need to do the thing you asked me to do. I don't sell your data. I don't share it with anyone except the services required to deliver what you requested (email delivery, file storage). If you want your data deleted, email me and I'll do it.</p>
+        </div>
+
+        <div class="reveal">
+          <h2 class="text-neutral-100 font-serif text-2xl mb-4">What I collect and why</h2>
+
+          <h3 class="text-neutral-200 font-medium text-base mt-6 mb-2">Contact form</h3>
+          <p>Your name, email, message, and which services you're interested in. I use this to reply to you. Your message is sent to me via <a href="https://www.brevo.com/legal/privacypolicy/" class="text-amber-400/60 hover:text-amber-400 transition-colors">Brevo</a> (transactional email). You also receive a confirmation email. I don't add you to any mailing list.</p>
+
+          <h3 class="text-neutral-200 font-medium text-base mt-6 mb-2">Personality quiz</h3>
+          <p>If you take the quiz and choose to share your name and email, those are stored locally in your browser (localStorage) and optionally sent to me via Brevo. Your quiz answers are used only to personalize the site's appearance for you. They're stored in your browser, not on my server. If you clear your browser data, they're gone.</p>
+
+          <h3 class="text-neutral-200 font-medium text-base mt-6 mb-2">Sentiment scanner</h3>
+          <p>When you use the free scanner tool, I store the brand name you searched and the results. If you unlock the full report by providing your email, that email is stored and used to send you the report via Brevo. Your IP address is used for rate limiting (3 scans per day) and is not stored permanently.</p>
+
+          <h3 class="text-neutral-200 font-medium text-base mt-6 mb-2">Client portal</h3>
+          <p>If you're a client with portal access, I store your name, email, and the files and data associated with your account. Authentication uses magic links — no passwords are stored. Session tokens are hashed. Files are stored on DigitalOcean Spaces (S3-compatible storage) and access is restricted to your account.</p>
+        </div>
+
+        <div class="reveal">
+          <h2 class="text-neutral-100 font-serif text-2xl mb-4">Third-party services</h2>
+          <ul class="list-disc list-inside space-y-2">
+            <li><strong class="text-neutral-200">Brevo</strong> — transactional email delivery (contact form, magic links, scanner reports)</li>
+            <li><strong class="text-neutral-200">DigitalOcean Spaces</strong> — file storage for client portal documents</li>
+            <li><strong class="text-neutral-200">Turso</strong> — database hosting for portal data</li>
+            <li><strong class="text-neutral-200">Serper</strong> — web search API used by the sentiment scanner</li>
+            <li><strong class="text-neutral-200">Google Fonts</strong> — font loading (Inter, Instrument Serif, Lora, JetBrains Mono)</li>
+            <li><strong class="text-neutral-200">jsDelivr</strong> — CDN for Chart.js (portal dashboard)</li>
+          </ul>
+          <p class="mt-4">I don't use Google Analytics, Facebook Pixel, or any tracking/advertising scripts.</p>
+        </div>
+
+        <div class="reveal">
+          <h2 class="text-neutral-100 font-serif text-2xl mb-4">Cookies</h2>
+          <p>The only cookie this site sets is <code class="text-amber-400/60 text-xs bg-neutral-900 px-1.5 py-0.5 rounded">portal_session</code>, used to keep you logged into the client portal. It's httpOnly, secure, SameSite=lax, and expires after 30 days. No tracking cookies. No third-party cookies.</p>
+        </div>
+
+        <div class="reveal">
+          <h2 class="text-neutral-100 font-serif text-2xl mb-4">Your rights</h2>
+          <p>You can ask me to delete any data I have about you. Email <a href="mailto:cody@codyasmith.com" class="text-amber-400/60 hover:text-amber-400 transition-colors">cody@codyasmith.com</a> and I'll handle it within 5 business days. If you're a portal client, I'll export your data before deletion if you want it.</p>
+        </div>
+
+        <div class="reveal">
+          <h2 class="text-neutral-100 font-serif text-2xl mb-4">Changes</h2>
+          <p>If I change this policy in a meaningful way, I'll update the date at the top. I won't email you about it unless you're a portal client and the change affects how your data is stored.</p>
+        </div>
+
+        <div class="reveal">
+          <h2 class="text-neutral-100 font-serif text-2xl mb-4">Questions</h2>
+          <p>Email me: <a href="mailto:cody@codyasmith.com" class="text-amber-400/60 hover:text-amber-400 transition-colors">cody@codyasmith.com</a></p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+</Base>

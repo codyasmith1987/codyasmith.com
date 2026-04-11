@@ -88,6 +88,15 @@ const faqSchema = JSON.stringify({
       <div class="reveal mb-16">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Process</p>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Here's what happens.</h2>
+        <p class="text-neutral-400 mt-4 max-w-2xl" data-vibe="default">
+          Your site moves to my infrastructure. I take over the hosting, the security, the updates, and the monitoring. You stop thinking about it.
+        </p>
+        <p class="text-neutral-400 mt-4 max-w-2xl" style="display:none" data-vibe="beach">
+          Your competitors' sites are faster, more secure, and better maintained. That's not a guess — it's what I see every time I audit a new client's hosting. This is how you close that gap.
+        </p>
+        <p class="text-neutral-400 mt-4 max-w-2xl" style="display:none" data-vibe="mountain">
+          I take over the infrastructure, keep it alive, and send you proof every month that it's handled. Server configuration, security hardening, update testing, backup verification — all documented, all mine.
+        </p>
       </div>
 
       <div class="relative">
@@ -153,14 +162,18 @@ const faqSchema = JSON.stringify({
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" /></svg>
           </div>
           <h3 class="text-neutral-100 font-medium mb-2">Cloud hosting</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed">Dedicated cloud server. Not shared with hundreds of other sites. Fast, isolated, and fully under my control.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">Dedicated cloud server. Not shared with hundreds of other sites. Fast, isolated, and fully under my control.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">Your site gets its own server — fast, stable, and built to grow with your business.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">Dedicated VPS with isolated resources, SSD storage, server-level caching, and manual configuration. No shared hosting neighbors.</p>
         </div>
         <div class="reveal glow-card p-6" style="--i:1">
           <div class="text-amber-400 mb-4">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
           </div>
           <h3 class="text-neutral-100 font-medium mb-2">Security</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed">SSL certificates, firewall, malware scanning, login hardening. Problems caught before you know they exist.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">SSL certificates, firewall, malware scanning, login hardening. Problems caught before you know they exist.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">Layered security that keeps threats out so you never have to think about them.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">SSL provisioning, WAF rules, brute-force protection, file integrity monitoring, and weekly malware scans with automated alerting.</p>
         </div>
         <div class="reveal glow-card p-6" style="--i:2">
           <div class="text-amber-400 mb-4">
@@ -388,7 +401,9 @@ const faqSchema = JSON.stringify({
     <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
     <div class="relative max-w-3xl mx-auto text-center">
       <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Ready to hand it off?</h2>
-      <p class="reveal text-neutral-400 text-lg mb-10">Tell me what you're running and I'll tell you what the migration looks like.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" data-processing="default">Tell me what you're running and I'll tell you what the migration looks like.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-processing="stars">Clients average 99.9% uptime after migration. Page load times drop by 40-60%. Tell me what you're running and I'll show you the numbers.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-processing="clouds">You shouldn't have to worry about whether your site is up. Tell me what you're running and let's make it something you never think about again.</p>
       <a href="/contact?interest=web-management" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
         Tell me about your site
       </a>

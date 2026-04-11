@@ -111,6 +111,15 @@ import Base from '../../layouts/Base.astro';
       <div class="reveal mb-16">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Process</p>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Here's how it works.</h2>
+        <p class="text-neutral-400 mt-4 max-w-2xl" data-vibe="default">
+          I start with the data, build the plan, and stay in the loop to adjust it as the market moves.
+        </p>
+        <p class="text-neutral-400 mt-4 max-w-2xl" style="display:none" data-vibe="beach">
+          First I show you where you rank against the competition — who's outranking you, what they're doing, and where the openings are. Then we build the plan to take those positions.
+        </p>
+        <p class="text-neutral-400 mt-4 max-w-2xl" style="display:none" data-vibe="mountain">
+          I build the foundation that makes everything else work. Keyword research, site structure, content architecture — the systems-level decisions that compound over time.
+        </p>
       </div>
 
       <div class="relative">
@@ -172,11 +181,15 @@ import Base from '../../layouts/Base.astro';
       <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 reveal-stagger">
         <div class="reveal glow-card p-6" style="--i:0">
           <h3 class="text-neutral-100 font-medium mb-2">Keyword research</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed">Real search volume, real difficulty scores, grouped by intent. Not a spreadsheet dump. A prioritized list of opportunities.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">Real search volume, real difficulty scores, grouped by intent. Not a spreadsheet dump. A prioritized list of opportunities.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">The keywords that define where your business shows up — and where it should. Prioritized by the opportunities that move the needle most.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">Search volume, keyword difficulty, intent mapping, and SERP feature analysis. Grouped by topic cluster with monthly search estimates and ranking probability.</p>
         </div>
         <div class="reveal glow-card p-6" style="--i:1">
           <h3 class="text-neutral-100 font-medium mb-2">Competitive analysis</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed">Who's ranking for what you want, what they're doing differently, and where the gaps are you can exploit.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">Who's ranking for what you want, what they're doing differently, and where the gaps are you can exploit.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">A clear picture of who owns the search results you want and what it takes to overtake them.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">Domain authority comparisons, backlink gap analysis, content overlap mapping, and ranked list of exploitable keyword gaps with difficulty scores.</p>
         </div>
         <div class="reveal glow-card p-6" style="--i:2">
           <h3 class="text-neutral-100 font-medium mb-2">Content briefs</h3>
@@ -310,7 +323,9 @@ import Base from '../../layouts/Base.astro';
     <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
     <div class="relative max-w-3xl mx-auto text-center">
       <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Know what you need to do next?</h2>
-      <p class="reveal text-neutral-400 text-lg mb-10">If the answer is "not really," that's exactly what this solves.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" data-processing="default">If the answer is "not really," that's exactly what this solves.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-processing="stars">Here's what the data says about your visibility: most businesses in your market are leaving 60-80% of their organic search potential on the table. I'll show you exactly where yours stands.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-processing="clouds">Let's figure out where people should find you — and make sure they actually do. No jargon, no dashboards you'll never check. Just clear direction.</p>
       <a href="/contact?interest=marketing-strategy" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
         Build your roadmap
       </a>

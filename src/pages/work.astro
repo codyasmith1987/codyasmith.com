@@ -132,8 +132,10 @@ import Base from '../layouts/Base.astro';
   <section class="relative py-32 px-6 surface-1 overflow-hidden">
     <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
     <div class="relative max-w-3xl mx-auto text-center">
-      <p class="reveal text-neutral-400 text-lg mb-10">Want to know more about a specific project or see writing samples? Just ask.</p>
-      <a href="/contact" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
+      <p class="reveal text-neutral-400 text-lg mb-10" data-frame="default">Want to know more about a specific project or see writing samples? Just ask.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-frame="sun">See something here that matches where you're headed? Let's talk about how that pattern applies to your business.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-frame="moon">If any of this sounds like what your situation needs, tell me what's going on. I'll tell you if I can help.</p>
+      <a href="/contact?interest=not-sure" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
         Get in touch
       </a>
     </div>

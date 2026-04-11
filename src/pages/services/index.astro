@@ -12,8 +12,14 @@ import Base from '../../layouts/Base.astro';
       <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10">
         Four ways I help.
       </h1>
-      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl">
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" data-frame="default">
         Most of my clients need more than one of these. That's fine — they're designed to work together. Pick the one that sounds most like your situation and we'll figure out the rest.
+      </p>
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="sun">
+        Most of my clients start with one of these and add another within six months. That's by design — they build on each other. Pick the one that matches where you're headed.
+      </p>
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="moon">
+        Most of my clients need more than one of these, but you don't have to figure out which right now. Pick the one that sounds most like the problem you're dealing with. We'll sort out the rest.
       </p>
     </div>
   </section>
@@ -75,8 +81,14 @@ import Base from '../../layouts/Base.astro';
   <section class="pb-32 px-6">
     <div class="max-w-4xl mx-auto text-center reveal">
       <h2 class="font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Not sure which you need?</h2>
-      <p class="text-neutral-400 text-lg leading-relaxed max-w-lg mx-auto mb-10">
+      <p class="text-neutral-400 text-lg leading-relaxed max-w-lg mx-auto mb-10" data-vibe="default">
         That's the most common starting point. Tell me what's going on and we'll figure it out together.
+      </p>
+      <p class="text-neutral-400 text-lg leading-relaxed max-w-lg mx-auto mb-10" style="display:none" data-vibe="beach">
+        That's where most people start. Tell me what your competitors are doing better and I'll tell you how to close the gap.
+      </p>
+      <p class="text-neutral-400 text-lg leading-relaxed max-w-lg mx-auto mb-10" style="display:none" data-vibe="mountain">
+        That's the most common starting point. Tell me what the infrastructure looks like right now and I'll tell you what needs to change.
       </p>
       <a href="/contact?interest=not-sure" class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
         Start a conversation

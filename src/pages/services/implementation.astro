@@ -40,6 +40,15 @@ import Base from '../../layouts/Base.astro';
       <div class="reveal mb-16">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Project types</p>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">The kinds of things I build.</h2>
+        <p class="text-neutral-400 mt-4 max-w-2xl" data-vibe="default">
+          Integrations, page builds, and analytics setup. Scoped projects with clear deliverables.
+        </p>
+        <p class="text-neutral-400 mt-4 max-w-2xl" style="display:none" data-vibe="beach">
+          Your competitors already have their CRM connected, their analytics tracking conversions, and their landing pages converting. These are the projects that close that gap.
+        </p>
+        <p class="text-neutral-400 mt-4 max-w-2xl" style="display:none" data-vibe="mountain">
+          This is the engineering that makes everything reliable. Proper integrations, correct analytics, pages built on solid architecture. Every connection tested, documented, and handed over working.
+        </p>
       </div>
 
       <div class="space-y-8 reveal-stagger">
@@ -165,28 +174,36 @@ import Base from '../../layouts/Base.astro';
             <span class="text-amber-400 text-sm font-mono font-bold">1</span>
           </div>
           <h3 class="text-neutral-100 font-medium mb-2">Scope</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed">You describe the problem. I define exactly what's included, what's not, and what it costs.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">You describe the problem. I define exactly what's included, what's not, and what it costs.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">You tell me what outcome you need. I define what it takes to get there.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">Written scope document listing every deliverable, integration point, testing criteria, and exclusion. Nothing ambiguous.</p>
         </div>
         <div class="reveal glow-card p-6 text-center" style="--i:1">
           <div class="w-10 h-10 rounded-full border-2 border-amber-500/70 flex items-center justify-center mx-auto mb-4">
             <span class="text-amber-400/70 text-sm font-mono font-bold">2</span>
           </div>
           <h3 class="text-neutral-100 font-medium mb-2">Quote</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed">Fixed price. No hourly surprises. You approve the quote, pay at signing, and work begins.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">Fixed price. No hourly surprises. You approve the quote, pay at signing, and work begins.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">One price, agreed upfront. No surprises on either side.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">Fixed-price quote based on the scope document. Payment at signing. Change orders quoted separately before any additional work begins.</p>
         </div>
         <div class="reveal glow-card p-6 text-center" style="--i:2">
           <div class="w-10 h-10 rounded-full border-2 border-amber-500/50 flex items-center justify-center mx-auto mb-4">
             <span class="text-amber-400/50 text-sm font-mono font-bold">3</span>
           </div>
           <h3 class="text-neutral-100 font-medium mb-2">Build</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed">I build it. You get updates. If scope changes, we discuss it before the price does.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">I build it. You get updates. If scope changes, we discuss it before the price does.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">I build it and keep you in the loop. You focus on your business.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">Development with progress updates at each milestone. Staging environment for review. Scope changes documented and quoted before execution.</p>
         </div>
         <div class="reveal glow-card p-6 text-center" style="--i:3">
           <div class="w-10 h-10 rounded-full border-2 border-amber-500/30 flex items-center justify-center mx-auto mb-4">
             <span class="text-amber-400/30 text-sm font-mono font-bold">4</span>
           </div>
           <h3 class="text-neutral-100 font-medium mb-2">Deliver</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed">You review, I revise if needed, it goes live. Documentation included so your team knows what changed.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">You review, I revise if needed, it goes live. Documentation included so your team knows what changed.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">You review, approve, and it's live. Your team gets documentation so they can own it going forward.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">Client review, revision round, production deployment, and written handoff documentation covering configuration, credentials, and maintenance procedures.</p>
         </div>
       </div>
     </div>
@@ -226,7 +243,9 @@ import Base from '../../layouts/Base.astro';
     <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
     <div class="relative max-w-3xl mx-auto text-center">
       <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Have a project in mind?</h2>
-      <p class="reveal text-neutral-400 text-lg mb-10">Tell me what needs to happen and I'll tell you what it takes.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" data-processing="default">Tell me what needs to happen and I'll tell you what it takes.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-processing="stars">Most projects scope in 1-2 weeks and deliver in 2-4. You'll get a fixed quote, a timeline, and a written scope before any work begins.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-processing="clouds">Tell me what needs to happen and I'll figure out the cleanest way to make it work. No jargon, no mystery — just a conversation about what you need.</p>
       <a href="/contact?interest=implementation" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
         Scope it out
       </a>

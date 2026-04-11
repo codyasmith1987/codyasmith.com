@@ -1,0 +1,232 @@
+---
+import '../styles/global.css';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+import Quiz from '../components/Quiz.astro';
+import { ClientRouter } from 'astro:transitions';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = "Cody Smith — web management, marketing strategy, and consulting for small businesses in Cedar City, Utah and beyond." } = Astro.props;
+const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
+---
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="/favicon.ico?v=2" sizes="32x32" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalURL.href} />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonicalURL.href} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:site_name" content="Cody Smith" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+
+    <title>{title}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Lora:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+    <ClientRouter />
+    <script is:inline>
+      (function() {
+        var t = new URLSearchParams(window.location.search).get('theme');
+        if (t) localStorage.setItem('cs-theme', t);
+        var saved = localStorage.getItem('cs-theme');
+        // Migrate 3-part theme names from before Q4 was added
+        if (saved && saved.split('-').length === 3) {
+          saved = saved + '-stars';
+          localStorage.setItem('cs-theme', saved);
+        }
+        if (saved) document.documentElement.setAttribute('data-theme', saved);
+      })();
+    </script>
+  </head>
+  <body class="min-h-screen flex flex-col">
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:px-4 focus:py-2 focus:bg-amber-500 focus:text-neutral-950 focus:text-sm focus:font-semibold focus:rounded-lg">
+      Skip to content
+    </a>
+    <Nav />
+    <main id="main-content" class="flex-1">
+      <slot />
+    </main>
+    <Footer />
+    <Quiz />
+
+    {import.meta.env.DEV && (
+      <div class="theme-switcher" id="theme-switcher">
+        <button data-set-theme="" title="Original (no theme)">Orig</button>
+        <button data-set-theme="sun-mountain-fall-stars" title="Sun+Mtn+Fall+Stars">SmFs</button>
+        <button data-set-theme="sun-mountain-fall-clouds" title="Sun+Mtn+Fall+Clouds">SmFc</button>
+        <button data-set-theme="moon-mountain-fall-stars" title="Moon+Mtn+Fall+Stars">MmFs</button>
+        <button data-set-theme="moon-mountain-fall-clouds" title="Moon+Mtn+Fall+Clouds">MmFc</button>
+        <button data-set-theme="moon-beach-spring-stars" title="Moon+Beach+Spring+Stars">MbSs</button>
+        <button data-set-theme="sun-beach-spring-clouds" title="Sun+Beach+Spring+Clouds">SbSc</button>
+      </div>
+    )}
+
+    <script>
+      function initPersonalization() {
+        let quizData: Record<string, string> = {};
+        try {
+          quizData = JSON.parse(localStorage.getItem('cs-quiz-answers') || '{}');
+        } catch { /* empty */ }
+
+        const name = quizData.name || '';
+        const email = quizData.email || '';
+        const firstName = name.split(' ')[0] || '';
+        const frame = quizData['1'] || '';   // sun or moon (regulatory focus)
+        const place = quizData['2'] || '';   // beach or mountain (Cialdini)
+        const season = quizData['3'] || '';  // spring or fall (construal level)
+        const processing = quizData['4'] || ''; // stars or clouds (ELM)
+
+        // ---- Name injections ----
+        document.querySelectorAll('[data-personalize="name-comma"]').forEach(el => {
+          if (firstName) {
+            (el as HTMLElement).textContent = `, ${firstName}`;
+            (el as HTMLElement).style.display = '';
+          } else {
+            (el as HTMLElement).style.display = 'none';
+          }
+        });
+
+        // Hero name: "{Name}, " before the headline
+        document.querySelectorAll('[data-personalize="hero-name"]').forEach(el => {
+          if (firstName) {
+            (el as HTMLElement).textContent = `${firstName}, `;
+            (el as HTMLElement).style.display = '';
+          }
+        });
+
+        // ---- Pre-fill form inputs ----
+        const nameInput = document.querySelector('[data-personalize="prefill-name"]') as HTMLInputElement;
+        const emailInput = document.querySelector('[data-personalize="prefill-email"]') as HTMLInputElement;
+        if (nameInput && name && !nameInput.value) nameInput.value = name;
+        if (emailInput && email && !emailInput.value) emailInput.value = email;
+
+        // ---- Personality-aware copy (composable variant system) ----
+        // Each axis swaps its own data-attribute independently
+
+        // Generic swap helper — shows matching variant, hides default
+        function swapAxis(attr: string, value: string) {
+          if (!value) return;
+          document.querySelectorAll(`[data-${attr}]`).forEach(el => {
+            const v = (el as HTMLElement).dataset[attr];
+            if (v === value) {
+              (el as HTMLElement).style.removeProperty('display');
+            } else if (v === 'default') {
+              (el as HTMLElement).style.display = 'none';
+            }
+          });
+        }
+
+        swapAxis('vibe', place);       // Beach/Mountain (Cialdini)
+        swapAxis('frame', frame);      // Sun/Moon (Regulatory Focus)
+        swapAxis('phase', season);     // Spring/Fall (Construal Level)
+        swapAxis('processing', processing); // Stars/Clouds (ELM)
+
+        // ---- Returning visitor detection ----
+        const visitCount = parseInt(localStorage.getItem('cs-visit-count') || '0', 10);
+        const isReturning = visitCount > 1;
+
+        if (visitCount > 0) {
+          localStorage.setItem('cs-visit-count', String(visitCount + 1));
+        } else {
+          localStorage.setItem('cs-visit-count', '1');
+        }
+
+        if (isReturning && localStorage.getItem('cs-quiz-done')) {
+          // Show returning visitor elements, hide first-visit ones
+          document.querySelectorAll('[data-personalize="returning"]').forEach(el => {
+            (el as HTMLElement).style.display = '';
+          });
+          document.querySelectorAll('[data-personalize="first-visit"]').forEach(el => {
+            (el as HTMLElement).style.display = 'none';
+          });
+        }
+      }
+
+      // Expose for quiz to call after completion
+      (window as any).__initPersonalization = initPersonalization;
+
+      function initReveals() {
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach(e => {
+            if (e.isIntersecting) {
+              e.target.classList.add('in-view');
+            }
+          });
+        }, { threshold: 0.1 });
+        document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+        // "gap" squeeze — spring animation triggered once on scroll-in
+        const squeezeObserver = new IntersectionObserver((entries) => {
+          entries.forEach(e => {
+            if (e.isIntersecting) {
+              (e.target as HTMLElement).classList.add('squeezed');
+              squeezeObserver.unobserve(e.target);
+            }
+          });
+        }, { threshold: 0.5 });
+        document.querySelectorAll('.word-squeeze').forEach(el => squeezeObserver.observe(el));
+      }
+
+      function initThemeSwitcher() {
+        const switcher = document.getElementById('theme-switcher');
+        if (!switcher) return;
+
+        function setActive() {
+          const current = document.documentElement.getAttribute('data-theme') || '';
+          switcher.querySelectorAll('button').forEach(btn => {
+            const theme = (btn as HTMLButtonElement).dataset.setTheme || '';
+            btn.classList.toggle('active', theme === current);
+          });
+        }
+
+        switcher.addEventListener('click', (e) => {
+          const btn = (e.target as HTMLElement).closest('button');
+          if (!btn) return;
+          const theme = (btn as HTMLButtonElement).dataset.setTheme || '';
+          if (theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('cs-theme', theme);
+          } else {
+            document.documentElement.removeAttribute('data-theme');
+            localStorage.removeItem('cs-theme');
+          }
+          setActive();
+        });
+
+        setActive();
+      }
+
+      initReveals();
+      initPersonalization();
+      initThemeSwitcher();
+      document.addEventListener('astro:after-swap', () => {
+        // Re-apply theme from localStorage after view transition swap
+        var saved = localStorage.getItem('cs-theme');
+        if (saved) document.documentElement.setAttribute('data-theme', saved);
+        initReveals();
+        initPersonalization();
+        initThemeSwitcher();
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,577 @@
+---
+// Quiz lightbox - shown on first visit
+// Four binary questions determine the site theme and persona
+// Sun/Moon (energy) + Beach/Mountain (orientation) + Spring/Fall (phase) + Stars/Clouds (processing)
+// Name + email captured as lead
+---
+
+<div id="quiz" class="fixed inset-0 z-[70]" style="display:none">
+  <!-- Frosted glass: layered depth — blur + gradient vignette + grain -->
+  <div id="quiz-backdrop" class="absolute inset-0 transition-all duration-1000 ease-out" style="backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);background:radial-gradient(ellipse at 50% 40%, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.65) 100%)"></div>
+  <!-- Vortex: canvas-based particle system — real chaos, never repeats -->
+  <canvas id="quiz-vortex" class="absolute inset-0 w-full h-full pointer-events-none" style="transition:opacity 1.2s ease"></canvas>
+  <div class="relative z-10 min-h-screen flex items-center justify-center p-6">
+    <div class="max-w-lg w-full">
+
+      <!-- Step 0: Intro -->
+      <div data-step="0" class="quiz-step text-center">
+        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-8" class="quiz-label">Before we start</p>
+        <h2 class="quiz-heading font-serif text-4xl md:text-5xl leading-tight mb-6">
+          Want to personalize<br/>your experience?
+        </h2>
+        <p class="text-lg mb-12" class="quiz-body">Four questions. Fifteen seconds. The site adapts to you.</p>
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+          <button data-action="next" class="quiz-btn-primary px-8 py-4 font-semibold text-sm rounded-lg">
+            I sure would
+          </button>
+          <button data-action="skip" class="quiz-btn-secondary px-8 py-4 font-medium text-sm rounded-lg border">
+            Nah, I'm pretty bland
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 1: Sun or Moon -->
+      <div data-step="1" class="quiz-step text-center" style="display:none">
+        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-10" class="quiz-step-count">1 of 4</p>
+        <h2 class="quiz-heading font-serif text-5xl md:text-6xl mb-14">Sun or moon?</h2>
+        <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
+          <button data-answer="sun" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
+            <span class="block text-3xl mb-3" role="img" aria-hidden="true">&#9728;&#65039;</span>
+            <span class="quiz-answer-text font-serif text-2xl">Sun</span>
+          </button>
+          <button data-answer="moon" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
+            <span class="block text-3xl mb-3" role="img" aria-hidden="true">&#127769;</span>
+            <span class="quiz-answer-text font-serif text-2xl">Moon</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 2: Beach or Mountain -->
+      <div data-step="2" class="quiz-step text-center" style="display:none">
+        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-10" class="quiz-step-count">2 of 4</p>
+        <h2 class="quiz-heading font-serif text-5xl md:text-6xl mb-14">Beach or mountain?</h2>
+        <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
+          <button data-answer="beach" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
+            <span class="block text-3xl mb-3" role="img" aria-hidden="true">&#127958;&#65039;</span>
+            <span class="quiz-answer-text font-serif text-2xl">Beach</span>
+          </button>
+          <button data-answer="mountain" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
+            <span class="block text-3xl mb-3" role="img" aria-hidden="true">&#9968;&#65039;</span>
+            <span class="quiz-answer-text font-serif text-2xl">Mountain</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 3: Spring or Fall -->
+      <div data-step="3" class="quiz-step text-center" style="display:none">
+        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-10" class="quiz-step-count">3 of 4</p>
+        <h2 class="quiz-heading font-serif text-5xl md:text-6xl mb-14">Spring or fall?</h2>
+        <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
+          <button data-answer="spring" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
+            <span class="block text-3xl mb-3" role="img" aria-hidden="true">&#127793;</span>
+            <span class="quiz-answer-text font-serif text-2xl">Spring</span>
+          </button>
+          <button data-answer="fall" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
+            <span class="block text-3xl mb-3" role="img" aria-hidden="true">&#127810;</span>
+            <span class="quiz-answer-text font-serif text-2xl">Fall</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 4: Stars or Clouds -->
+      <div data-step="4" class="quiz-step text-center" style="display:none">
+        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-10" class="quiz-step-count">4 of 4</p>
+        <h2 class="quiz-heading font-serif text-5xl md:text-6xl mb-14">Stars or clouds?</h2>
+        <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
+          <button data-answer="stars" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
+            <span class="block text-3xl mb-3" role="img" aria-hidden="true">&#10024;</span>
+            <span class="quiz-answer-text font-serif text-2xl">Stars</span>
+          </button>
+          <button data-answer="clouds" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
+            <span class="block text-3xl mb-3" role="img" aria-hidden="true">&#9729;&#65039;</span>
+            <span class="quiz-answer-text font-serif text-2xl">Clouds</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Step 5: Lead capture -->
+      <div data-step="5" class="quiz-step text-center" style="display:none">
+
+        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-8" class="quiz-label">Almost done</p>
+        <h2 class="quiz-heading font-serif text-3xl md:text-4xl leading-tight mb-4">
+          Now I know how to set the room.
+        </h2>
+        <p class="text-lg mb-10" class="quiz-body">Who am I building this for?</p>
+        <form id="quiz-form" class="max-w-xs mx-auto space-y-5">
+          <div>
+            <input type="text" id="quiz-name" placeholder="Your name" required class="quiz-input w-full bg-transparent border-b pb-3 text-lg focus:outline-none transition-colors duration-300 placeholder:opacity-40" />
+          </div>
+          <div>
+            <input type="email" id="quiz-email" placeholder="Email" required class="quiz-input w-full bg-transparent border-b pb-3 text-lg focus:outline-none transition-colors duration-300 placeholder:opacity-40" />
+          </div>
+          <div class="pt-4 space-y-3">
+            <button type="submit" class="quiz-btn-primary w-full px-8 py-4 font-semibold text-sm rounded-lg">
+              Make it mine
+            </button>
+            <button type="button" data-action="skip-lead" class="quiz-skip w-full px-4 py-2 text-xs">
+              Skip this part
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Step 6: Reveal interstitial -->
+      <div data-step="6" class="quiz-step text-center" style="display:none">
+        <p class="quiz-heading font-quote italic text-3xl md:text-4xl leading-snug">
+          Setting the room<span id="reveal-name"></span>...
+        </p>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  function initQuiz() {
+    const quiz = document.getElementById('quiz');
+    if (!quiz) return;
+
+    // Don't show if already completed
+    if (localStorage.getItem('cs-quiz-done')) return;
+
+    // Don't show if theme already set via URL
+    if (new URLSearchParams(window.location.search).get('theme')) return;
+
+    quiz.style.display = '';
+    quiz.style.opacity = '0';
+    quiz.style.transition = 'opacity 0.5s ease';
+    requestAnimationFrame(() => { quiz.style.opacity = '1'; });
+
+    let currentStep = 0;
+    let transitioning = false;
+    const answers: Record<string, string> = {};
+    const steps = quiz.querySelectorAll('.quiz-step');
+
+    function showStep(n: number) {
+      if (transitioning || n === currentStep) return;
+      transitioning = true;
+
+      steps.forEach((s, i) => {
+        const el = s as HTMLElement;
+        if (i === currentStep) {
+          el.style.opacity = '0';
+          setTimeout(() => { el.style.display = 'none'; }, 200);
+        }
+      });
+      setTimeout(() => {
+        const next = steps[n] as HTMLElement;
+        if (next) {
+          next.style.display = '';
+          next.style.opacity = '0';
+          next.style.transition = 'opacity 0.4s ease';
+          requestAnimationFrame(() => { next.style.opacity = '1'; });
+        }
+        currentStep = n;
+        transitioning = false;
+      }, 300);
+    }
+
+    // Preview theme behind the frosted glass as answers come in
+    function previewTheme() {
+      const base = answers['1'] || 'moon';
+      const place = answers['2'] || 'mountain';
+      const season = answers['3'] || 'fall';
+      const processing = answers['4'] || 'stars';
+      const preview = `${base}-${place}-${season}-${processing}`;
+      document.documentElement.setAttribute('data-theme', preview);
+    }
+
+    function closeQuiz() {
+      const backdrop = document.getElementById('quiz-backdrop');
+      const content = quiz.querySelector('.relative.z-10') as HTMLElement;
+
+      // Start killing tracers randomly
+      if ((window as any).__vortexAccelerate) (window as any).__vortexAccelerate();
+
+      // Content fades
+      if (content) {
+        content.style.transition = 'opacity 0.8s ease, transform 0.8s ease';
+        content.style.opacity = '0';
+        content.style.transform = 'scale(0.95)';
+      }
+
+      // Backdrop: lift blur and darken, revealing clear page beneath
+      if (backdrop) {
+        backdrop.style.transition = 'all 3.5s ease';
+        setTimeout(() => {
+          backdrop.style.backdropFilter = 'blur(0px)';
+          (backdrop.style as any).webkitBackdropFilter = 'blur(0px)';
+          backdrop.style.background = 'transparent';
+        }, 500);
+      }
+
+      // Final clear
+      setTimeout(() => {
+        quiz.style.transition = 'opacity 0.5s ease';
+        quiz.style.opacity = '0';
+      }, 4000);
+
+      setTimeout(() => {
+        quiz.style.display = 'none';
+        if ((window as any).__vortexStop) (window as any).__vortexStop();
+        if (typeof (window as any).__initPersonalization === 'function') {
+          (window as any).__initPersonalization();
+        }
+      }, 4800);
+    }
+
+    function showRevealThenClose(nameStr?: string) {
+      // Set the name in the reveal text
+      const revealName = document.getElementById('reveal-name');
+      if (revealName && nameStr) {
+        revealName.textContent = ` for ${nameStr.split(' ')[0]}`;
+      }
+      showStep(6);
+      setTimeout(closeQuiz, 2000);
+    }
+
+    function buildThemeName(): string {
+      const base = answers['1'] || 'moon';
+      const place = answers['2'] || 'mountain';
+      const season = answers['3'] || 'fall';
+      const processing = answers['4'] || 'stars';
+      return `${base}-${place}-${season}-${processing}`;
+    }
+
+    function applyTheme(theme: string) {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('cs-theme', theme);
+      localStorage.setItem('cs-quiz-done', '1');
+      localStorage.setItem('cs-quiz-answers', JSON.stringify(answers));
+    }
+
+    // Handle all clicks in the quiz
+    quiz.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('button');
+      if (!btn) return;
+
+      const action = btn.getAttribute('data-action');
+      const answer = btn.getAttribute('data-answer');
+
+      if (action === 'next') {
+        showStep(1);
+      } else if (action === 'skip') {
+        localStorage.setItem('cs-quiz-done', '1');
+        closeQuiz();
+      } else if (action === 'skip-lead') {
+        const theme = buildThemeName();
+        applyTheme(theme);
+        showRevealThenClose();
+      } else if (answer) {
+        // Store answer for current step
+        answers[String(currentStep)] = answer;
+
+        // Pulse the vortex FIRST — theme updates when wave completes
+        if ((window as any).__vortexPulse) (window as any).__vortexPulse();
+
+        // Delay theme change until wave has swept out (~2s for both beats)
+        setTimeout(() => { previewTheme(); }, 2000);
+
+        // Brief highlight on the clicked button using theme accent
+        const accent = getComputedStyle(quiz).getPropertyValue('--quiz-accent').trim();
+        btn.style.borderColor = accent;
+        btn.style.background = `color-mix(in srgb, ${accent} 10%, transparent)`;
+
+        setTimeout(() => {
+          if (currentStep < 4) {
+            showStep(currentStep + 1);
+          } else {
+            // All 4 questions answered, show lead capture
+            showStep(5);
+          }
+        }, 300);
+      }
+    });
+
+    // Handle form submission
+    const form = document.getElementById('quiz-form');
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = (document.getElementById('quiz-name') as HTMLInputElement)?.value.trim() || '';
+      const email = (document.getElementById('quiz-email') as HTMLInputElement)?.value.trim() || '';
+      if (name.length < 2) return;
+      const theme = buildThemeName();
+
+      // Save name and email for personalization across the site
+      answers['name'] = name;
+      answers['email'] = email;
+
+      applyTheme(theme);
+
+      // Send lead data in background
+      try {
+        fetch('/api/quiz', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, theme, answers }),
+        });
+      } catch {
+        // Fail silently - the theme still applies
+      }
+
+      showRevealThenClose(name);
+    });
+  }
+
+  initQuiz();
+  document.addEventListener('astro:after-swap', initQuiz);
+</script>
+
+<script>
+  // Vortex particle system — tornado from inside, Inkheart chaos
+  // Each particle is an ink tendril spiraling inward with noise-driven turbulence
+  function initVortex() {
+    const canvas = document.getElementById('quiz-vortex') as HTMLCanvasElement;
+    if (!canvas || canvas.dataset.init === '1') return;
+    canvas.dataset.init = '1';
+
+    const ctx = canvas.getContext('2d')!;
+    let w = 0, h = 0, cx = 0, cy = 0;
+    let running = true;
+    let accelerating = false;
+    let accelStart = 0;
+
+    function resize() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = canvas.clientWidth;
+      h = canvas.clientHeight;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      cx = w / 2;
+      cy = h / 2;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // Simple noise function (no library needed)
+    function noise(x: number, y: number, t: number): number {
+      const s = Math.sin(x * 12.9898 + y * 78.233 + t * 43.4321) * 43758.5453;
+      return (s - Math.floor(s)) * 2 - 1;
+    }
+
+    // Read accent color from CSS custom properties
+    function getAccentColor(): [number, number, number] {
+      const style = getComputedStyle(document.documentElement);
+      const hex = style.getPropertyValue('--color-amber-500').trim();
+      if (hex.startsWith('#') && hex.length >= 7) {
+        return [
+          parseInt(hex.slice(1, 3), 16),
+          parseInt(hex.slice(3, 5), 16),
+          parseInt(hex.slice(5, 7), 16),
+        ];
+      }
+      return [245, 158, 11]; // fallback amber
+    }
+
+    // Ghostly vortex — noise flow field.
+    // Hundreds of tracers follow invisible spiraling currents.
+    // They leave long fading trails. The result is smoke in a whirlpool.
+    // Not arcs. Not dots. Flowing, turbulent, organic wisps.
+
+    interface Tracer {
+      x: number;
+      y: number;
+      speed: number;
+      opacity: number;
+      thickness: number;
+      trail: [number, number][]; // position history for tail rendering
+      alive: boolean;
+    }
+
+    const tracers: Tracer[] = [];
+    const COUNT = 400;
+    const TRAIL_LENGTH = 18;
+
+    function spawnTracer(): Tracer {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 50 + Math.random() * Math.max(w, h) * 0.5;
+      const x = cx + Math.cos(angle) * dist;
+      const y = cy + Math.sin(angle) * dist;
+      return {
+        x, y,
+        speed: 75 + Math.random() * 175,
+        opacity: Math.random() < 0.2 ? (0.05 + Math.random() * 0.04) : (0.012 + Math.random() * 0.022),
+        thickness: 0.5 + Math.random() * 1,
+        trail: [[x, y]],
+        alive: true,
+      };
+    }
+
+    for (let i = 0; i < COUNT; i++) tracers.push(spawnTracer());
+
+    let time = 0;
+    let accentRGB = getAccentColor();
+    let prevAccentRGB = [...accentRGB] as [number, number, number];
+
+    // Heartbeat wave — double-pulse like a real heartbeat
+    let waveRadius = -1;
+    let waveDirection = 1;
+    let waveSpeed = 0;
+    let waveBeatCount = 0;     // 0 = first beat, 1 = second beat
+    let wavePauseUntil = 0;    // timestamp for pause between beats
+    const waveMaxR = Math.max(w, h) * 0.8;
+
+    const themeObserver = new MutationObserver(() => {
+      prevAccentRGB = [...accentRGB] as [number, number, number];
+      accentRGB = getAccentColor();
+    });
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    function flowAngle(x: number, y: number, t: number): number {
+      const dx = x - cx, dy = y - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy) + 1;
+      const toCenter = Math.atan2(dy, dx);
+      const tangent = toCenter + Math.PI * 0.5;
+      const spiral = tangent + 0.3;
+      const n1 = noise(x * 0.003, y * 0.003, t) * Math.PI;
+      const n2 = noise(x * 0.008 + 100, y * 0.008 + 100, t * 1.3) * Math.PI * 0.5;
+      const blend = Math.min(1, dist / (Math.max(w, h) * 0.3));
+      return spiral * (1 - blend * 0.4) + (n1 + n2) * blend * 0.6;
+    }
+
+    function draw() {
+      if (!running) return;
+
+      // CLEAR canvas — fully transparent. Page shows through.
+      ctx.clearRect(0, 0, w, h);
+
+      time += 0.003;
+      const now = Date.now();
+      const speedMult = accelerating ? 1 : 1; // no speed change on close
+
+      // Heartbeat wave
+      if (waveRadius >= 0 && now >= wavePauseUntil) {
+        const undulate = Math.sin(waveRadius * 0.025) * 6;
+        waveRadius += (waveSpeed + undulate * 0.3) * waveDirection;
+        if (waveRadius > waveMaxR) { waveDirection = -1; }
+        if (waveRadius < 0 && waveDirection === -1) {
+          if (waveBeatCount === 0) {
+            waveBeatCount = 1;
+            waveRadius = 0;
+            waveDirection = 1;
+            waveSpeed = 35;
+            wavePauseUntil = now + 150;
+          } else {
+            waveRadius = -1;
+            waveBeatCount = 0;
+          }
+        }
+      }
+
+      for (const t of tracers) {
+        if (!t.alive) continue;
+
+        // During close: randomly kill tracers one by one
+        if (accelerating) {
+          const elapsed = (now - accelStart) / 1000;
+          const deathChance = 0.004 + elapsed * 0.012;
+          if (Math.random() < deathChance) { t.alive = false; continue; }
+        }
+
+        const angle = flowAngle(t.x, t.y, time);
+        t.x += Math.cos(angle) * t.speed * speedMult;
+        t.y += Math.sin(angle) * t.speed * speedMult;
+
+        // Store trail
+        t.trail.push([t.x, t.y]);
+        if (t.trail.length > TRAIL_LENGTH) t.trail.shift();
+
+        const dx = t.x - cx, dy = t.y - cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        // Recycle or kill
+        const killRadius = 15;
+        if (t.x < -50 || t.x > w + 50 || t.y < -50 || t.y > h + 50 || dist < killRadius) {
+          if (accelerating) { t.alive = false; continue; }
+          const nt = spawnTracer();
+          t.x = nt.x; t.y = nt.y; t.speed = nt.speed;
+          t.opacity = nt.opacity; t.thickness = nt.thickness;
+          t.trail = [[t.x, t.y]];
+          continue;
+        }
+
+        const centerFade = Math.min(1, dist / (Math.max(w, h) * 0.15));
+
+        // Color: warm white with subtle 20% tint — never goes dark
+        const tint = 0.2;
+        const baseR = Math.round(235 + (accentRGB[0] - 235) * tint);
+        const baseG = Math.round(230 + (accentRGB[1] - 230) * tint);
+        const baseB = Math.round(225 + (accentRGB[2] - 225) * tint);
+        let r = baseR, g = baseG, b = baseB;
+        let waveBoost = 0;
+
+        if (waveRadius >= 0) {
+          const waveDist = Math.abs(dist - waveRadius);
+          const waveWidth = 150;
+          let colorIntensity = 0;
+          if (waveDist < waveWidth) {
+            colorIntensity = (1 - waveDist / waveWidth);
+            waveBoost = colorIntensity * 0.06;
+          }
+          const behindWave = waveDirection === 1
+            ? Math.min(1, Math.max(0, (waveRadius - dist) / 200))
+            : Math.min(1, Math.max(0, (dist - waveRadius) / 200 + 1));
+          const colorMix = Math.max(colorIntensity, behindWave * 0.7);
+          r = Math.round(baseR + (accentRGB[0] - baseR) * colorMix);
+          g = Math.round(baseG + (accentRGB[1] - baseG) * colorMix);
+          b = Math.round(baseB + (accentRGB[2] - baseB) * colorMix);
+        }
+
+        // Draw trail as a wake — thin point leads, spreads wider behind it
+        if (t.trail.length > 1) {
+          for (let i = 1; i < t.trail.length; i++) {
+            const progress = i / t.trail.length; // 0 = old/wide end, 1 = head/point
+            const segAlpha = progress * (t.opacity + waveBoost) * centerFade;
+            const segWidth = t.thickness * (0.3 + (1 - progress) * 2.5); // head is thin, wake spreads behind
+            ctx.beginPath();
+            ctx.moveTo(t.trail[i - 1][0], t.trail[i - 1][1]);
+            ctx.lineTo(t.trail[i][0], t.trail[i][1]);
+            ctx.strokeStyle = `rgba(${r},${g},${b},${Math.min(segAlpha, 0.08)})`;
+            ctx.lineWidth = segWidth;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+          }
+        }
+      }
+
+      requestAnimationFrame(draw);
+    }
+
+    requestAnimationFrame(draw);
+
+    // Pulse wave — radiates color change outward and back
+    (window as any).__vortexPulse = () => {
+      waveRadius = 0;
+      waveDirection = 1;
+      waveSpeed = 22;
+      waveBeatCount = 0;
+      wavePauseUntil = 0;
+    };
+
+    // Final close — tracers die randomly one by one
+    (window as any).__vortexAccelerate = () => {
+      accelerating = true;
+      accelStart = Date.now();
+    };
+
+    (window as any).__vortexStop = () => {
+      running = false;
+      themeObserver.disconnect();
+      canvas.dataset.init = '';
+    };
+  }
+
+  initVortex();
+  document.addEventListener('astro:after-swap', initVortex);
+</script>

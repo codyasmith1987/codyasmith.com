@@ -1,0 +1,766 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-serif: "Instrument Serif", Georgia, serif;
+  --font-quote: "Lora", Georgia, serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+
+  --color-neutral-950: #0a0a0a;
+  --color-neutral-900: #171717;
+  --color-neutral-850: #1f1f1f;
+  --color-neutral-800: #262626;
+  --color-neutral-700: #404040;
+  --color-neutral-600: #525252;
+  --color-neutral-500: #737373;
+  --color-neutral-400: #a3a3a3;
+  --color-neutral-300: #d4d4d4;
+  --color-neutral-200: #e5e5e5;
+  --color-neutral-100: #f5f5f5;
+
+  --color-amber-600: #d97706;
+  --color-amber-500: #f59e0b;
+  --color-amber-400: #fbbf24;
+
+  --color-dated: #8a6840;
+}
+
+/* ============================================
+   SUN THEMES (light base)
+   Stars = sharper, more precise, cooler undertone
+   Clouds = softer, more atmospheric, warmer undertone
+   ============================================ */
+
+/* --- Sun + Beach + Spring --- */
+[data-theme="sun-beach-spring-stars"] {
+  --color-neutral-950: #f0f5f8;
+  --color-neutral-900: #e5edf2;
+  --color-neutral-850: #dae3ea;
+  --color-neutral-800: #c9d4dc;
+  --color-neutral-700: #96a6b2;
+  --color-neutral-600: #6a7e8e;
+  --color-neutral-500: #4a5f6e;
+  --color-neutral-400: #384e5c;
+  --color-neutral-300: #283842;
+  --color-neutral-200: #1c2a34;
+  --color-neutral-100: #121e28;
+  --color-amber-600: #1a7e86;
+  --color-amber-500: #24a0aa;
+  --color-amber-400: #30bcc8;
+  --color-dated: #6a8a7a;
+}
+[data-theme="sun-beach-spring-clouds"] {
+  --color-neutral-950: #f4f7f5;
+  --color-neutral-900: #ebf0ed;
+  --color-neutral-850: #e0e6e2;
+  --color-neutral-800: #d0d8d4;
+  --color-neutral-700: #9eaaa4;
+  --color-neutral-600: #6e7e84;
+  --color-neutral-500: #506068;
+  --color-neutral-400: #405058;
+  --color-neutral-300: #2c3a3e;
+  --color-neutral-200: #202c30;
+  --color-neutral-100: #161e22;
+  --color-amber-600: #228078;
+  --color-amber-500: #2e9690;
+  --color-amber-400: #40aaa2;
+  --color-dated: #7a9486;
+}
+
+/* --- Sun + Beach + Fall --- */
+[data-theme="sun-beach-fall-stars"] {
+  --color-neutral-950: #f7f4ec;
+  --color-neutral-900: #eee9df;
+  --color-neutral-850: #e4ded2;
+  --color-neutral-800: #d8d0c2;
+  --color-neutral-700: #aaa296;
+  --color-neutral-600: #867e74;
+  --color-neutral-500: #665e54;
+  --color-neutral-400: #484038;
+  --color-neutral-300: #322c26;
+  --color-neutral-200: #241e18;
+  --color-neutral-100: #181410;
+  --color-amber-600: #a67c12;
+  --color-amber-500: #ca981c;
+  --color-amber-400: #dcae28;
+  --color-dated: #8a7040;
+}
+[data-theme="sun-beach-fall-clouds"] {
+  --color-neutral-950: #faf6f0;
+  --color-neutral-900: #f2ece4;
+  --color-neutral-850: #e8e2d8;
+  --color-neutral-800: #dcd6cc;
+  --color-neutral-700: #b2aa9c;
+  --color-neutral-600: #8e867c;
+  --color-neutral-500: #6e665e;
+  --color-neutral-400: #4c463e;
+  --color-neutral-300: #36302a;
+  --color-neutral-200: #28221c;
+  --color-neutral-100: #1c1814;
+  --color-amber-600: #9a7c20;
+  --color-amber-500: #be9428;
+  --color-amber-400: #cea436;
+  --color-dated: #947a4a;
+}
+
+/* --- Sun + Mountain + Spring --- */
+[data-theme="sun-mountain-spring-stars"] {
+  --color-neutral-950: #f1f4ec;
+  --color-neutral-900: #e8ece2;
+  --color-neutral-850: #dee2d6;
+  --color-neutral-800: #d0d6c6;
+  --color-neutral-700: #9ea894;
+  --color-neutral-600: #6e7a64;
+  --color-neutral-500: #505c48;
+  --color-neutral-400: #3c4636;
+  --color-neutral-300: #283024;
+  --color-neutral-200: #1c2418;
+  --color-neutral-100: #131a10;
+  --color-amber-600: #368230;
+  --color-amber-500: #489c3c;
+  --color-amber-400: #56b44c;
+  --color-dated: #6a7a3a;
+}
+[data-theme="sun-mountain-spring-clouds"] {
+  --color-neutral-950: #f5f6f0;
+  --color-neutral-900: #ecefe6;
+  --color-neutral-850: #e2e6da;
+  --color-neutral-800: #d6dace;
+  --color-neutral-700: #a6ae98;
+  --color-neutral-600: #768068;
+  --color-neutral-500: #586250;
+  --color-neutral-400: #424a3c;
+  --color-neutral-300: #2e3428;
+  --color-neutral-200: #20281c;
+  --color-neutral-100: #171e14;
+  --color-amber-600: #427832;
+  --color-amber-500: #569044;
+  --color-amber-400: #66a656;
+  --color-dated: #7a8250;
+}
+
+/* --- Sun + Mountain + Fall --- */
+[data-theme="sun-mountain-fall-stars"] {
+  --color-neutral-950: #f8f4ee;
+  --color-neutral-900: #eee9e0;
+  --color-neutral-850: #e6e0d4;
+  --color-neutral-800: #dad2c6;
+  --color-neutral-700: #aca498;
+  --color-neutral-600: #867e74;
+  --color-neutral-500: #6a6258;
+  --color-neutral-400: #48403a;
+  --color-neutral-300: #342e28;
+  --color-neutral-200: #241e1a;
+  --color-neutral-100: #181412;
+  --color-amber-600: #a24626;
+  --color-amber-500: #be5832;
+  --color-amber-400: #cc6c42;
+  --color-dated: #8a5038;
+}
+[data-theme="sun-mountain-fall-clouds"] {
+  --color-neutral-950: #fcf8f2;
+  --color-neutral-900: #f2ede6;
+  --color-neutral-850: #eae4dc;
+  --color-neutral-800: #e0d8d0;
+  --color-neutral-700: #b4aaa0;
+  --color-neutral-600: #8e847c;
+  --color-neutral-500: #70685e;
+  --color-neutral-400: #4e4640;
+  --color-neutral-300: #38322c;
+  --color-neutral-200: #28221e;
+  --color-neutral-100: #1c1816;
+  --color-amber-600: #984e2e;
+  --color-amber-500: #b2623e;
+  --color-amber-400: #c07450;
+  --color-dated: #946048;
+}
+
+/* ============================================
+   MOON THEMES (dark base)
+   Stars = sharper, higher contrast, cooler precision
+   Clouds = softer, warmer, more atmospheric
+   ============================================ */
+
+/* --- Moon + Beach + Spring --- */
+[data-theme="moon-beach-spring-stars"] {
+  --color-neutral-950: #0c1218;
+  --color-neutral-900: #131a22;
+  --color-neutral-850: #19222c;
+  --color-neutral-800: #222c38;
+  --color-neutral-700: #38485a;
+  --color-neutral-600: #4e6274;
+  --color-neutral-500: #688092;
+  --color-neutral-400: #869eb0;
+  --color-neutral-300: #aac2ce;
+  --color-neutral-200: #cadce6;
+  --color-neutral-100: #e0eef4;
+  --color-amber-600: #188a8a;
+  --color-amber-500: #22aaaa;
+  --color-amber-400: #30c0c0;
+  --color-dated: #4a7a72;
+}
+[data-theme="moon-beach-spring-clouds"] {
+  --color-neutral-950: #10141a;
+  --color-neutral-900: #181e24;
+  --color-neutral-850: #1e262c;
+  --color-neutral-800: #283038;
+  --color-neutral-700: #3e4e58;
+  --color-neutral-600: #56646e;
+  --color-neutral-500: #727e88;
+  --color-neutral-400: #8e9aa4;
+  --color-neutral-300: #b2bec6;
+  --color-neutral-200: #d0d8de;
+  --color-neutral-100: #e4eaee;
+  --color-amber-600: #24807a;
+  --color-amber-500: #329a92;
+  --color-amber-400: #42aca2;
+  --color-dated: #5a847c;
+}
+
+/* --- Moon + Beach + Fall --- */
+[data-theme="moon-beach-fall-stars"] {
+  --color-neutral-950: #100e0c;
+  --color-neutral-900: #181614;
+  --color-neutral-850: #201e1a;
+  --color-neutral-800: #2a2824;
+  --color-neutral-700: #44403a;
+  --color-neutral-600: #5c5850;
+  --color-neutral-500: #78726a;
+  --color-neutral-400: #989286;
+  --color-neutral-300: #bcb4a6;
+  --color-neutral-200: #d6cec0;
+  --color-neutral-100: #eae4d8;
+  --color-amber-600: #ae8414;
+  --color-amber-500: #d4a01e;
+  --color-amber-400: #e6b42a;
+  --color-dated: #8a6830;
+}
+[data-theme="moon-beach-fall-clouds"] {
+  --color-neutral-950: #141210;
+  --color-neutral-900: #1c1a18;
+  --color-neutral-850: #24221e;
+  --color-neutral-800: #2e2c28;
+  --color-neutral-700: #4a4640;
+  --color-neutral-600: #645e56;
+  --color-neutral-500: #807870;
+  --color-neutral-400: #a0988c;
+  --color-neutral-300: #c0b8ac;
+  --color-neutral-200: #dad2c8;
+  --color-neutral-100: #eee8e0;
+  --color-amber-600: #a27c1e;
+  --color-amber-500: #c49626;
+  --color-amber-400: #d6aa34;
+  --color-dated: #947640;
+}
+
+/* --- Moon + Mountain + Spring --- */
+[data-theme="moon-mountain-spring-stars"] {
+  --color-neutral-950: #0c100c;
+  --color-neutral-900: #141812;
+  --color-neutral-850: #1a1e18;
+  --color-neutral-800: #242a20;
+  --color-neutral-700: #3c4636;
+  --color-neutral-600: #525e4c;
+  --color-neutral-500: #6c7864;
+  --color-neutral-400: #8a967e;
+  --color-neutral-300: #acb8a0;
+  --color-neutral-200: #cad4c0;
+  --color-neutral-100: #e0e8d8;
+  --color-amber-600: #368430;
+  --color-amber-500: #48a03c;
+  --color-amber-400: #58b84c;
+  --color-dated: #587830;
+}
+[data-theme="moon-mountain-spring-clouds"] {
+  --color-neutral-950: #10130e;
+  --color-neutral-900: #181c16;
+  --color-neutral-850: #1e241c;
+  --color-neutral-800: #283026;
+  --color-neutral-700: #404c3c;
+  --color-neutral-600: #5a6454;
+  --color-neutral-500: #747e6e;
+  --color-neutral-400: #929c8a;
+  --color-neutral-300: #b2baac;
+  --color-neutral-200: #ced6c8;
+  --color-neutral-100: #e4eade;
+  --color-amber-600: #427632;
+  --color-amber-500: #568e48;
+  --color-amber-400: #68a458;
+  --color-dated: #6a8242;
+}
+
+/* --- Moon + Mountain + Fall --- */
+[data-theme="moon-mountain-fall-stars"] {
+  --color-neutral-950: #13100c;
+  --color-neutral-900: #1c1814;
+  --color-neutral-850: #231e17;
+  --color-neutral-800: #2e2820;
+  --color-neutral-700: #4a423a;
+  --color-neutral-600: #645c52;
+  --color-neutral-500: #80786c;
+  --color-neutral-400: #a2988c;
+  --color-neutral-300: #c6bab0;
+  --color-neutral-200: #dbd0c6;
+  --color-neutral-100: #ede6dc;
+  --color-amber-600: #ac5a34;
+  --color-amber-500: #cc7a56;
+  --color-amber-400: #da8e66;
+  --color-dated: #8a5430;
+}
+[data-theme="moon-mountain-fall-clouds"] {
+  --color-neutral-950: #171412;
+  --color-neutral-900: #201c18;
+  --color-neutral-850: #28221c;
+  --color-neutral-800: #322c26;
+  --color-neutral-700: #504840;
+  --color-neutral-600: #6c6258;
+  --color-neutral-500: #887c72;
+  --color-neutral-400: #aa9e92;
+  --color-neutral-300: #cac0b6;
+  --color-neutral-200: #e0d6cc;
+  --color-neutral-100: #f2ebe4;
+  --color-amber-600: #a06240;
+  --color-amber-500: #bc8060;
+  --color-amber-400: #cc9472;
+  --color-dated: #946850;
+}
+
+/* ============================================
+   BASE LAYER
+   ============================================ */
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--color-neutral-950);
+    color: var(--color-neutral-300);
+    font-family: var(--font-sans);
+    line-height: 1.7;
+  }
+
+  /* Noise texture overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 60;
+    opacity: 0.18;
+  }
+
+  /* Sun themes: softer noise */
+  [data-theme^="sun-"] body::after { opacity: 0.10; }
+
+  ::selection {
+    background-color: var(--color-amber-600);
+    color: var(--color-neutral-950);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-amber-400);
+    outline-offset: 2px;
+  }
+
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: none;
+    border-color: var(--color-amber-400);
+  }
+
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    -webkit-text-fill-color: var(--color-neutral-100);
+    -webkit-box-shadow: 0 0 0px 1000px var(--color-neutral-950) inset;
+    transition: background-color 5000s ease-in-out 0s;
+  }
+
+  /* ---- Default nav separation (no theme set) ---- */
+  nav {
+    box-shadow: 0 1px 10px rgba(0, 0, 0, 0.2), 0 0 1px rgba(255, 255, 255, 0.03);
+  }
+
+  /* ---- SUN THEME (light mode) global overrides ---- */
+  [data-theme^="sun-"] [class*="border-white\/"],
+  [data-theme^="sun-"] [class*="border-white/"] {
+    border-color: rgba(20, 20, 16, 0.07);
+  }
+
+  [data-theme^="sun-"] nav {
+    background-color: color-mix(in srgb, var(--color-neutral-950) 95%, transparent);
+    border-bottom-color: rgba(20, 20, 16, 0.05);
+    box-shadow: 0 1px 8px rgba(20, 20, 16, 0.06), 0 0 1px rgba(20, 20, 16, 0.08);
+  }
+
+  [data-theme^="sun-"] #mobile-menu {
+    background-color: color-mix(in srgb, var(--color-neutral-950) 97%, transparent);
+    border-top-color: rgba(20, 20, 16, 0.05);
+  }
+
+  [data-theme^="sun-"] footer {
+    border-top-color: rgba(20, 20, 16, 0.06);
+  }
+
+  /* ---- MOON THEME (dark mode) global overrides ---- */
+  [data-theme^="moon-"] nav {
+    background-color: color-mix(in srgb, var(--color-neutral-950) 85%, transparent);
+    border-bottom-color: rgba(240, 232, 224, 0.04);
+    box-shadow: 0 1px 12px rgba(0, 0, 0, 0.3), 0 1px 4px color-mix(in srgb, var(--color-amber-600) 6%, transparent);
+  }
+
+  [data-theme^="moon-"] footer {
+    border-top-color: rgba(240, 232, 224, 0.04);
+  }
+}
+
+/* ============================================
+   COMPONENTS
+   ============================================ */
+
+@layer components {
+  /* Focus indicators — accessible keyboard navigation */
+  :focus-visible {
+    outline: 2px solid var(--color-amber-400);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Quiz — theme-aware via CSS custom properties
+     The quiz sits over a dark frosted backdrop, so text stays light.
+     Accents adapt to the active theme as the user answers questions. */
+  #quiz {
+    --quiz-accent: var(--color-amber-500, #c47d5a);
+    --quiz-accent-hover: var(--color-amber-400, #d4926a);
+    --quiz-text: #f0e8df;
+    --quiz-text-muted: #a69a8e;
+    --quiz-text-dim: #847a6e;
+    --quiz-border: rgba(255,255,255,0.08);
+    --quiz-border-hover: rgba(255,255,255,0.15);
+  }
+
+  .quiz-label { color: var(--quiz-accent); }
+  .quiz-heading { color: var(--quiz-text); }
+  .quiz-body { color: var(--quiz-text-muted); }
+  .quiz-step-count { color: var(--quiz-text-dim); }
+  .quiz-answer-text { color: var(--quiz-text); }
+
+  .quiz-btn-primary {
+    background: var(--quiz-accent);
+    color: #15120f;
+    transition: all 0.3s;
+  }
+  .quiz-btn-primary:hover, .quiz-btn-primary:focus-visible {
+    background: var(--quiz-accent-hover);
+  }
+
+  .quiz-btn-secondary {
+    border-color: var(--quiz-border);
+    color: var(--quiz-text-dim);
+    transition: all 0.3s;
+  }
+  .quiz-btn-secondary:hover, .quiz-btn-secondary:focus-visible {
+    border-color: var(--quiz-border-hover);
+    color: var(--quiz-text-muted);
+  }
+
+  .quiz-choice {
+    border-color: var(--quiz-border);
+    background: transparent;
+    transition: all 0.3s;
+  }
+  .quiz-choice:hover, .quiz-choice:focus-visible {
+    border-color: var(--quiz-accent);
+    background: color-mix(in srgb, var(--quiz-accent) 5%, transparent);
+  }
+
+  .quiz-input {
+    border-color: var(--quiz-border);
+    color: var(--quiz-text);
+    transition: border-color 0.3s;
+  }
+  .quiz-input:focus { border-color: var(--quiz-accent); }
+
+  .quiz-skip {
+    color: var(--quiz-text-dim);
+    transition: color 0.3s;
+  }
+  .quiz-skip:hover, .quiz-skip:focus-visible { color: var(--quiz-text-muted); }
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(1.5rem);
+    will-change: transform, opacity;
+    transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .reveal.in-view {
+    opacity: 1;
+    transform: none;
+    will-change: auto;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal {
+      transition: none;
+      opacity: 1;
+      transform: none;
+      will-change: auto;
+    }
+    .word-squeeze { animation: none; }
+    .word-dated::after { animation: none; }
+    #quiz-vortex { display: none !important; }
+    .story-section, .trophy-row, .sim-result, .checkup-card,
+    .kw-animate, .health-animate, .csv-result {
+      opacity: 1 !important;
+      animation: none !important;
+    }
+  }
+
+  .reveal-stagger > .reveal {
+    transition-delay: calc(var(--i, 0) * 100ms);
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    background: linear-gradient(to right, var(--color-neutral-100), var(--color-neutral-400));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Gradient divider */
+  .gradient-divider {
+    height: 1px;
+    background: linear-gradient(to right, transparent, rgba(255,255,255,0.08), transparent);
+  }
+
+  [data-theme^="sun-"] .gradient-divider {
+    background: linear-gradient(to right, transparent, rgba(20, 20, 16, 0.1), transparent);
+  }
+
+  [data-theme^="moon-"] .gradient-divider {
+    background: linear-gradient(to right, transparent, rgba(240, 232, 224, 0.06), transparent);
+  }
+
+  /* Card */
+  .glow-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1rem;
+    background-color: var(--color-neutral-900);
+    border: 1px solid rgba(255,255,255,0.05);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  .glow-card::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: 1rem;
+    background: linear-gradient(135deg, rgba(251,191,36,0), rgba(251,191,36,0));
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    z-index: 0;
+  }
+
+  .glow-card:hover::before {
+    background: linear-gradient(135deg, rgba(251,191,36,0.1), rgba(217,119,6,0.05), rgba(251,191,36,0));
+    opacity: 1;
+  }
+
+  .glow-card:hover {
+    border-color: rgba(251,191,36,0.15);
+  }
+
+  /* Disable scale effects on touch devices */
+  @media (hover: none) {
+    .tier-card { transform: none !important; }
+  }
+
+  /* Sun: shadow cards instead of glow */
+  [data-theme^="sun-"] .glow-card {
+    border-color: rgba(20, 20, 16, 0.06);
+    box-shadow: 0 1px 3px rgba(20, 20, 16, 0.04);
+  }
+
+  [data-theme^="sun-"] .glow-card::before { display: none; }
+
+  [data-theme^="sun-"] .glow-card:hover {
+    border-color: rgba(20, 20, 16, 0.12);
+    box-shadow: 0 4px 16px rgba(20, 20, 16, 0.06);
+  }
+
+  /* Moon: warm accent glow */
+  [data-theme^="moon-"] .glow-card {
+    border-color: rgba(240, 232, 224, 0.04);
+  }
+
+  [data-theme^="moon-"] .glow-card:hover::before {
+    background: linear-gradient(135deg,
+      color-mix(in srgb, var(--color-amber-500) 8%, transparent),
+      color-mix(in srgb, var(--color-amber-600) 4%, transparent),
+      transparent);
+  }
+
+  [data-theme^="moon-"] .glow-card:hover {
+    border-color: color-mix(in srgb, var(--color-amber-500) 12%, transparent);
+  }
+
+  .glow-card > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .tier-card {
+    overflow: visible;
+  }
+
+  .tier-card::before {
+    border-radius: 1rem;
+    overflow: hidden;
+  }
+
+  /* Surface levels */
+  .surface-1 { background-color: var(--color-neutral-900); }
+  .surface-2 { background-color: var(--color-neutral-850); }
+
+  .font-quote {
+    font-family: var(--font-quote);
+  }
+
+  /* Vortex is now canvas-based — see Quiz.astro script */
+
+  /* ============================================
+     KINETIC TYPOGRAPHY — "outgrew"
+     Layered color treatment with grain and erosion
+     ============================================ */
+  .word-dated {
+    position: relative;
+    color: var(--color-dated);
+    font-style: italic;
+    letter-spacing: -0.02em;
+    /* Layered shadow: glow underneath + eroded edge */
+    text-shadow:
+      0 0 8px color-mix(in srgb, var(--color-dated) 20%, transparent),
+      0 1px 0 color-mix(in srgb, var(--color-dated) 40%, transparent),
+      0 -1px 0 color-mix(in srgb, var(--color-neutral-950) 60%, transparent);
+    /* Subtle horizontal lines through the text like weathering */
+    background: repeating-linear-gradient(
+      0deg,
+      var(--color-dated) 0px,
+      var(--color-dated) 2px,
+      color-mix(in srgb, var(--color-dated) 50%, var(--color-neutral-950)) 2px,
+      color-mix(in srgb, var(--color-dated) 50%, var(--color-neutral-950)) 3px
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    /* Roughen the edges slightly */
+    filter: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='r'%3E%3CfeTurbulence baseFrequency='0.04' numOctaves='3' seed='1'/%3E%3CfeDisplacementMap in='SourceGraphic' scale='1.5'/%3E%3C/filter%3E%3C/svg%3E#r");
+  }
+
+  /* ============================================
+     KINETIC TYPOGRAPHY — "gap" squeeze
+     Spring physics with overshoot
+     ============================================ */
+  .word-squeeze {
+    display: inline-block;
+    transform-origin: center;
+    will-change: transform;
+  }
+
+  .word-squeeze.squeezed {
+    animation: gap-squeeze 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  @keyframes gap-squeeze {
+    0% {
+      transform: scaleX(1) scaleY(1);
+      letter-spacing: 0em;
+    }
+    /* Compress hard */
+    25% {
+      transform: scaleX(0.55) scaleY(1.12);
+      letter-spacing: -0.08em;
+    }
+    /* Overshoot wide */
+    50% {
+      transform: scaleX(1.08) scaleY(0.96);
+      letter-spacing: 0.02em;
+    }
+    /* Settle slightly compressed */
+    70% {
+      transform: scaleX(0.92) scaleY(1.02);
+      letter-spacing: -0.01em;
+    }
+    /* Rest at natural */
+    100% {
+      transform: scaleX(1) scaleY(1);
+      letter-spacing: 0em;
+    }
+  }
+
+  /* Dot grid */
+  .dot-grid {
+    background-image: radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  [data-theme^="sun-"] .dot-grid {
+    background-image: radial-gradient(circle, rgba(20, 20, 16, 0.035) 1px, transparent 1px);
+  }
+
+  [data-theme^="moon-"] .dot-grid {
+    background-image: radial-gradient(circle, rgba(240, 232, 224, 0.025) 1px, transparent 1px);
+  }
+
+  /* ============================================
+     Theme Switcher (dev tool, can remove later)
+     ============================================ */
+  .theme-switcher {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 55;
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    border-radius: 0.5rem;
+    background-color: var(--color-neutral-900);
+    border: 1px solid rgba(128,128,128,0.15);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .theme-switcher button {
+    padding: 0.35rem 0.6rem;
+    border-radius: 0.375rem;
+    color: var(--color-neutral-500);
+    transition: all 0.2s ease;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+  }
+
+  .theme-switcher button:hover {
+    color: var(--color-neutral-100);
+  }
+
+  .theme-switcher button.active {
+    background-color: var(--color-amber-500);
+    color: var(--color-neutral-950);
+  }
+}

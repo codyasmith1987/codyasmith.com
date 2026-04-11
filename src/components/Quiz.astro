@@ -390,8 +390,7 @@
       hueShift: number;
     }
 
-    // Soft blur on the canvas for ghostly glow
-    canvas.style.filter = 'blur(1.5px)';
+    // No CSS filter on canvas — softness comes from particle rendering, not element blur
 
     const particles: Particle[] = [];
     const COUNT = 45;

@@ -18,8 +18,11 @@
 | `01b8444` | Add Phase 1 integration test plan and runner |
 | `5bc7c8b` | Helper audit fixes, CSRF hardening, body size limit, negative tests |
 | `479673a` | Add runtime column allowlists to dynamic UPDATE builders |
+| `f7f7128` | Add Phase 1 final state document (this file, initial version) |
 
 Note: `phase0-clean` also has `4ced90e` (middleware backport) which is not on `dev2-phase1` because `dev2-phase1` already has the same changes in `5bc7c8b`.
+
+Phase 0 backport re-test status: The middleware backport (`4ced90e`) was applied to `phase0-clean` in the primary worktree. A re-test was attempted against a server started in the primary worktree on port 4321, which violated worktree isolation rules. That test run (6/6 unauthenticated + build pass) is not considered trustworthy proof. The middleware code on `phase0-clean` is byte-identical to the middleware on `dev2-phase1`, which has passed 182/182 tests on 4322. The backport commit itself contains only middleware changes (verified: 1 file, 13 insertions, 2 deletions).
 
 ## New Tables (Migrations 006-009)
 

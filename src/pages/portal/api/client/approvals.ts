@@ -59,11 +59,15 @@ export const POST: APIRoute = async ({ locals, request }) => {
       return json({ error: 'Forbidden' }, 403);
     }
 
-    await respondToApproval(id, {
+    const accepted = await respondToApproval(id, {
       status,
       responded_by: locals.user.id,
       response_note: response_note?.trim() || undefined,
     });
+
+    if (!accepted) {
+      return json({ error: 'Approval has already been resolved' }, 409);
+    }
 
     await logActivity({
       clientId: locals.user.client_id,

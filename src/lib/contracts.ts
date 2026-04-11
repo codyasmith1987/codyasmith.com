@@ -100,7 +100,14 @@ export async function updateContract(id: string, data: Partial<Pick<Contract,
   });
 }
 
+// Cascade delete: removes all projects, milestones, tasks, and artifacts under this contract.
+// Call only after confirming the user intends to delete the entire contract tree.
 export async function deleteContract(id: string): Promise<void> {
+  // Get all projects under this contract
+  const projects = await getProjectsByContract(id);
+  for (const project of projects) {
+    await deleteProject(project.id);
+  }
   await turso.execute({ sql: 'DELETE FROM contracts WHERE id = ?', args: [id] });
 }
 
@@ -154,9 +161,10 @@ export async function getProjectsByClient(clientId: string): Promise<Project[]> 
   return queryAll('SELECT * FROM projects WHERE client_id = ? ORDER BY sort_order, created_at', [clientId]);
 }
 
-export async function getClientVisibleProjects(clientId: string): Promise<Project[]> {
+// Client-safe: excludes sort_order, contract_id (admin context)
+export async function getClientVisibleProjects(clientId: string): Promise<Pick<Project, 'id' | 'title' | 'description' | 'status' | 'created_at' | 'updated_at'>[]> {
   return queryAll(
-    'SELECT * FROM projects WHERE client_id = ? AND client_visible = 1 ORDER BY sort_order, created_at',
+    'SELECT id, title, description, status, created_at, updated_at FROM projects WHERE client_id = ? AND client_visible = 1 ORDER BY sort_order, created_at',
     [clientId]
   );
 }
@@ -181,7 +189,12 @@ export async function updateProject(id: string, data: Partial<Pick<Project,
   });
 }
 
+// Cascade delete: removes all milestones, tasks, and artifacts under this project.
 export async function deleteProject(id: string): Promise<void> {
+  const milestones = await getMilestonesByProject(id);
+  for (const ms of milestones) {
+    await deleteMilestone(ms.id);
+  }
   await turso.execute({ sql: 'DELETE FROM projects WHERE id = ?', args: [id] });
 }
 
@@ -235,9 +248,10 @@ export async function getMilestonesByProject(projectId: string): Promise<Milesto
   return queryAll('SELECT * FROM milestones WHERE project_id = ? ORDER BY sort_order, created_at', [projectId]);
 }
 
-export async function getClientVisibleMilestones(projectId: string): Promise<Milestone[]> {
+// Client-safe: excludes sort_order, internal description kept (client needs context), adds client_update_text
+export async function getClientVisibleMilestones(projectId: string): Promise<Pick<Milestone, 'id' | 'title' | 'description' | 'status' | 'due_date' | 'completed_at' | 'client_update_text'>[]> {
   return queryAll(
-    'SELECT * FROM milestones WHERE project_id = ? AND client_visible = 1 ORDER BY sort_order, created_at',
+    'SELECT id, title, description, status, due_date, completed_at, client_update_text FROM milestones WHERE project_id = ? AND client_visible = 1 ORDER BY sort_order, created_at',
     [projectId]
   );
 }
@@ -262,7 +276,12 @@ export async function updateMilestone(id: string, data: Partial<Pick<Milestone,
   });
 }
 
+// Cascade delete: removes all tasks and artifacts under this milestone.
 export async function deleteMilestone(id: string): Promise<void> {
+  const tasks = await getTasksByMilestone(id);
+  for (const task of tasks) {
+    await deleteTask(task.id);
+  }
   await turso.execute({ sql: 'DELETE FROM milestones WHERE id = ?', args: [id] });
 }
 
@@ -332,9 +351,10 @@ export async function getTasksByAssignee(userId: string): Promise<Task[]> {
   );
 }
 
-export async function getClientVisibleTasks(milestoneId: string): Promise<Task[]> {
+// Client-safe: excludes estimated_hours, actual_hours, assigned_to, priority, sort_order, internal description
+export async function getClientVisibleTasks(milestoneId: string): Promise<Pick<Task, 'id' | 'title' | 'status' | 'client_update_text'>[]> {
   return queryAll(
-    'SELECT * FROM tasks WHERE milestone_id = ? AND client_visible = 1 ORDER BY sort_order, created_at',
+    'SELECT id, title, status, client_update_text FROM tasks WHERE milestone_id = ? AND client_visible = 1 ORDER BY sort_order, created_at',
     [milestoneId]
   );
 }
@@ -360,7 +380,9 @@ export async function updateTask(id: string, data: Partial<Pick<Task,
   });
 }
 
+// Cascade delete: removes all artifacts under this task.
 export async function deleteTask(id: string): Promise<void> {
+  await turso.execute({ sql: 'DELETE FROM task_artifacts WHERE task_id = ?', args: [id] });
   await turso.execute({ sql: 'DELETE FROM tasks WHERE id = ?', args: [id] });
 }
 
@@ -406,9 +428,10 @@ export async function getArtifactsByTask(taskId: string): Promise<TaskArtifact[]
   return queryAll('SELECT * FROM task_artifacts WHERE task_id = ? ORDER BY created_at', [taskId]);
 }
 
-export async function getClientVisibleArtifacts(taskId: string): Promise<TaskArtifact[]> {
+// Client-safe: excludes file_id (internal reference)
+export async function getClientVisibleArtifacts(taskId: string): Promise<Pick<TaskArtifact, 'id' | 'label' | 'artifact_type' | 'url' | 'created_at'>[]> {
   return queryAll(
-    'SELECT * FROM task_artifacts WHERE task_id = ? AND client_visible = 1 ORDER BY created_at',
+    'SELECT id, label, artifact_type, url, created_at FROM task_artifacts WHERE task_id = ? AND client_visible = 1 ORDER BY created_at',
     [taskId]
   );
 }

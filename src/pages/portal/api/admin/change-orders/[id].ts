@@ -32,7 +32,10 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
 
     // Handle approval action
     if (body.action === 'approve') {
-      await approveChangeOrder(params.id!, locals.user!.id);
+      const accepted = await approveChangeOrder(params.id!, locals.user!.id);
+      if (!accepted) {
+        return json({ error: 'Change order is already approved' }, 409);
+      }
 
       await logActivity({
         userId: locals.user!.id,

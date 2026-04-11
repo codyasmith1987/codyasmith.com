@@ -92,9 +92,10 @@ export async function getInvoicesByContract(contractId: string): Promise<Invoice
   return queryAll('SELECT * FROM invoices WHERE contract_id = ? ORDER BY created_at DESC', [contractId]);
 }
 
-export async function getClientVisibleInvoices(clientId: string): Promise<Invoice[]> {
+// Client-safe: excludes created_by, contract_id, milestone_id (admin context)
+export async function getClientVisibleInvoices(clientId: string): Promise<Pick<Invoice, 'id' | 'invoice_number' | 'status' | 'issued_date' | 'due_date' | 'total' | 'amount_paid' | 'notes'>[]> {
   return queryAll(
-    'SELECT * FROM invoices WHERE client_id = ? AND client_visible = 1 ORDER BY created_at DESC',
+    'SELECT id, invoice_number, status, issued_date, due_date, total, amount_paid, notes FROM invoices WHERE client_id = ? AND client_visible = 1 ORDER BY created_at DESC',
     [clientId]
   );
 }
@@ -119,6 +120,9 @@ export async function updateInvoice(id: string, data: Partial<Pick<Invoice,
   });
 }
 
+// Non-atomic: reads items, reads invoice, writes totals in 3 separate operations.
+// A concurrent item write between getInvoiceItems and updateInvoice could produce stale totals.
+// Acceptable for single-admin portal. If multi-admin support is added, wrap in a transaction.
 export async function recalculateInvoiceTotals(invoiceId: string): Promise<void> {
   const items = await getInvoiceItems(invoiceId);
   const subtotal = items.reduce((sum, item) => sum + item.amount, 0);
@@ -227,6 +231,8 @@ export interface Payment {
   created_at: string;
 }
 
+// Overpayment policy: allowed. Admin may record payments exceeding invoice total (e.g. credit, prepayment).
+// Status is set to 'paid' when totalPaid >= total. Caller should validate amount if rejection is desired.
 export async function recordPayment(data: {
   invoice_id: string;
   amount: number;
@@ -338,15 +344,19 @@ export async function getPendingApprovals(contractId?: string): Promise<Approval
   return queryAll("SELECT * FROM approvals WHERE status = 'pending' ORDER BY created_at");
 }
 
+// Rejects if approval is already resolved (not pending). Returns false if blocked.
 export async function respondToApproval(id: string, data: {
   status: 'approved' | 'rejected' | 'revision_requested';
   responded_by: string;
   response_note?: string;
-}): Promise<void> {
+}): Promise<boolean> {
+  const existing = await getApproval(id);
+  if (!existing || existing.status !== 'pending') return false;
   await turso.execute({
     sql: `UPDATE approvals SET status = ?, responded_by = ?, responded_at = datetime('now'), response_note = ?, updated_at = datetime('now') WHERE id = ?`,
     args: [data.status, data.responded_by, data.response_note ?? null, id],
   });
+  return true;
 }
 
 // ============================================================
@@ -418,9 +428,13 @@ export async function updateChangeOrder(id: string, data: Partial<Pick<ChangeOrd
   });
 }
 
-export async function approveChangeOrder(id: string, approvedBy: string): Promise<void> {
+// Rejects if change order is already approved. Returns false if blocked.
+export async function approveChangeOrder(id: string, approvedBy: string): Promise<boolean> {
+  const existing = await getChangeOrder(id);
+  if (!existing || existing.status === 'approved') return false;
   await turso.execute({
     sql: `UPDATE change_orders SET status = 'approved', approved_by = ?, approved_at = datetime('now'), updated_at = datetime('now') WHERE id = ?`,
     args: [approvedBy, id],
   });
+  return true;
 }

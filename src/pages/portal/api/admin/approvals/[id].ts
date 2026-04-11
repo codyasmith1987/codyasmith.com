@@ -35,11 +35,15 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
       return json({ error: 'status must be approved, rejected, or revision_requested' }, 400);
     }
 
-    await respondToApproval(params.id!, {
+    const accepted = await respondToApproval(params.id!, {
       status,
       responded_by: locals.user!.id,
       response_note: response_note?.trim() || undefined,
     });
+
+    if (!accepted) {
+      return json({ error: 'Approval has already been resolved' }, 409);
+    }
 
     await logActivity({
       userId: locals.user!.id,

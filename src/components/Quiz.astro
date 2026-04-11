@@ -36,11 +36,11 @@
         <h2 class="font-serif text-5xl md:text-6xl mb-14" style="color:#f0e8df">Sun or moon?</h2>
         <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
           <button data-answer="sun" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
-            <span class="block text-3xl mb-3">&#9728;&#65039;</span>
+            <span class="block text-3xl mb-3" role="img" aria-hidden="true">&#9728;&#65039;</span>
             <span class="font-serif text-2xl" style="color:#f0e8df">Sun</span>
           </button>
           <button data-answer="moon" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
-            <span class="block text-3xl mb-3">&#127769;</span>
+            <span class="block text-3xl mb-3" role="img" aria-hidden="true">&#127769;</span>
             <span class="font-serif text-2xl" style="color:#f0e8df">Moon</span>
           </button>
         </div>
@@ -52,11 +52,11 @@
         <h2 class="font-serif text-5xl md:text-6xl mb-14" style="color:#f0e8df">Beach or mountain?</h2>
         <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
           <button data-answer="beach" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
-            <span class="block text-3xl mb-3">&#127958;&#65039;</span>
+            <span class="block text-3xl mb-3" role="img" aria-hidden="true">&#127958;&#65039;</span>
             <span class="font-serif text-2xl" style="color:#f0e8df">Beach</span>
           </button>
           <button data-answer="mountain" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
-            <span class="block text-3xl mb-3">&#9968;&#65039;</span>
+            <span class="block text-3xl mb-3" role="img" aria-hidden="true">&#9968;&#65039;</span>
             <span class="font-serif text-2xl" style="color:#f0e8df">Mountain</span>
           </button>
         </div>
@@ -68,11 +68,11 @@
         <h2 class="font-serif text-5xl md:text-6xl mb-14" style="color:#f0e8df">Spring or fall?</h2>
         <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
           <button data-answer="spring" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
-            <span class="block text-3xl mb-3">&#127793;</span>
+            <span class="block text-3xl mb-3" role="img" aria-hidden="true">&#127793;</span>
             <span class="font-serif text-2xl" style="color:#f0e8df">Spring</span>
           </button>
           <button data-answer="fall" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
-            <span class="block text-3xl mb-3">&#127810;</span>
+            <span class="block text-3xl mb-3" role="img" aria-hidden="true">&#127810;</span>
             <span class="font-serif text-2xl" style="color:#f0e8df">Fall</span>
           </button>
         </div>
@@ -84,11 +84,11 @@
         <h2 class="font-serif text-5xl md:text-6xl mb-14" style="color:#f0e8df">Stars or clouds?</h2>
         <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
           <button data-answer="stars" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
-            <span class="block text-3xl mb-3">&#10024;</span>
+            <span class="block text-3xl mb-3" role="img" aria-hidden="true">&#10024;</span>
             <span class="font-serif text-2xl" style="color:#f0e8df">Stars</span>
           </button>
           <button data-answer="clouds" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
-            <span class="block text-3xl mb-3">&#9729;&#65039;</span>
+            <span class="block text-3xl mb-3" role="img" aria-hidden="true">&#9729;&#65039;</span>
             <span class="font-serif text-2xl" style="color:#f0e8df">Clouds</span>
           </button>
         </div>
@@ -104,10 +104,10 @@
         <p class="text-lg mb-10" style="color:#a69a8e">Who am I building this for?</p>
         <form id="quiz-form" class="max-w-xs mx-auto space-y-5">
           <div>
-            <input type="text" id="quiz-name" placeholder="Your name" required class="w-full bg-transparent border-b pb-3 text-lg focus:outline-none transition-colors duration-300 placeholder:opacity-40" class="quiz-input" />
+            <input type="text" id="quiz-name" placeholder="Your name" required class="quiz-input w-full bg-transparent border-b pb-3 text-lg focus:outline-none transition-colors duration-300 placeholder:opacity-40" />
           </div>
           <div>
-            <input type="email" id="quiz-email" placeholder="Email" required class="w-full bg-transparent border-b pb-3 text-lg focus:outline-none transition-colors duration-300 placeholder:opacity-40" class="quiz-input" />
+            <input type="email" id="quiz-email" placeholder="Email" required class="quiz-input w-full bg-transparent border-b pb-3 text-lg focus:outline-none transition-colors duration-300 placeholder:opacity-40" />
           </div>
           <div class="pt-4 space-y-3">
             <button type="submit" class="quiz-btn-primary w-full px-8 py-4 font-semibold text-sm rounded-lg">

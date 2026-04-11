@@ -14,8 +14,13 @@ export const GET: APIRoute = async ({ locals, url }) => {
     return new Response('File not found', { status: 404 });
   }
 
+  // Auth check — defense in depth (middleware should catch this, but verify)
+  if (!locals.user) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
   // Clients can only download their own files
-  if (locals.user?.role !== 'admin' && locals.user?.client_id !== file.client_id) {
+  if (locals.user.role !== 'admin' && locals.user.client_id !== file.client_id) {
     return new Response('Forbidden', { status: 403 });
   }
 

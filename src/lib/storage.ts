@@ -76,8 +76,10 @@ export async function getSignedDownloadUrl(s3Key: string): Promise<string> {
 }
 
 export async function deleteFileFromStorage(s3Key: string, fileId: string): Promise<void> {
-  await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: s3Key }));
+  // Delete DB record first — if S3 delete fails, orphaned S3 object is harmless
+  // but orphaned DB record pointing to deleted S3 object causes download errors
   await turso.execute({ sql: 'DELETE FROM files WHERE id = ?', args: [fileId] });
+  await s3.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: s3Key }));
 }
 
 export async function getFilesForClient(clientId: string): Promise<any[]> {

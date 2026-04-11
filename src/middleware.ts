@@ -1,5 +1,5 @@
 import { defineMiddleware } from 'astro:middleware';
-import { validateSession, SESSION_COOKIE } from './lib/auth';
+import { validateSession, SESSION_COOKIE, isClientActive } from './lib/auth';
 
 export const onRequest = defineMiddleware(async (context, next) => {
   // Add security headers to all responses
@@ -50,6 +50,15 @@ async function handleRequest(context: Parameters<Parameters<typeof defineMiddlew
 
   context.locals.user = result.user;
   context.locals.session = result.session;
+
+  // Block users on inactive clients
+  if (result.user?.client_id && result.user.role !== 'admin') {
+    const active = await isClientActive(result.user.client_id);
+    if (!active) {
+      context.cookies.delete(SESSION_COOKIE, { path: '/portal' });
+      return context.redirect('/portal/login?error=inactive');
+    }
+  }
 
   // Block non-admin users from admin routes — redirect to dashboard instead of blank 403
   if (context.url.pathname.startsWith('/portal/admin') && result.user?.role !== 'admin') {

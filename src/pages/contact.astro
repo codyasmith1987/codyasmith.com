@@ -45,6 +45,7 @@ import Base from '../layouts/Base.astro';
                 name="name"
                 required
                 aria-required="true"
+                maxlength="100"
                 data-personalize="prefill-name"
                 class="w-full bg-transparent border-b border-white/10 pb-3 text-neutral-100 text-lg focus:border-amber-400 focus:outline-none transition-colors duration-300 placeholder:text-neutral-700"
                 placeholder="Your name"
@@ -58,6 +59,7 @@ import Base from '../layouts/Base.astro';
                 name="email"
                 required
                 aria-required="true"
+                maxlength="254"
                 data-personalize="prefill-email"
                 class="w-full bg-transparent border-b border-white/10 pb-3 text-neutral-100 text-lg focus:border-amber-400 focus:outline-none transition-colors duration-300 placeholder:text-neutral-700"
                 placeholder="you@company.com"
@@ -132,6 +134,7 @@ import Base from '../layouts/Base.astro';
                 rows="4"
                 required
                 aria-required="true"
+                maxlength="2000"
                 class="w-full bg-transparent border-b border-white/10 pb-3 text-neutral-100 text-lg focus:border-amber-400 focus:outline-none transition-colors duration-300 placeholder:text-neutral-700 resize-none"
                 placeholder="Tell me about the problem you're trying to solve..."
               ></textarea>
@@ -144,7 +147,7 @@ import Base from '../layouts/Base.astro';
               >
                 Send it
               </button>
-              <p id="form-status" role="alert" aria-live="polite" class="text-sm transition-opacity duration-300 opacity-0"></p>
+              <p id="form-status" role="status" aria-live="polite" class="text-sm transition-opacity duration-300 opacity-0"></p>
             </div>
           </form>
         </div>

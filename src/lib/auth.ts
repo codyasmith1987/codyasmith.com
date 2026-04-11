@@ -300,6 +300,16 @@ export async function getAllClients() {
   }));
 }
 
+export async function isClientActive(clientId: string): Promise<boolean> {
+  await ensurePortalTables();
+  const result = await turso.execute({
+    sql: 'SELECT active FROM clients WHERE id = ?',
+    args: [clientId],
+  });
+  if (result.rows.length === 0) return false;
+  return (result.rows[0][0] as number) === 1;
+}
+
 export async function toggleClientActive(clientId: string): Promise<boolean> {
   await ensurePortalTables();
   const result = await turso.execute({

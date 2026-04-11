@@ -38,8 +38,8 @@
   --color-neutral-850: #dae3ea;
   --color-neutral-800: #c9d4dc;
   --color-neutral-700: #96a6b2;
-  --color-neutral-600: #708494;
-  --color-neutral-500: #546a78;
+  --color-neutral-600: #6a7e8e;
+  --color-neutral-500: #4a5f6e;
   --color-neutral-400: #384e5c;
   --color-neutral-300: #283842;
   --color-neutral-200: #1c2a34;
@@ -55,8 +55,8 @@
   --color-neutral-850: #e0e6e2;
   --color-neutral-800: #d0d8d4;
   --color-neutral-700: #9eaaa4;
-  --color-neutral-600: #78868e;
-  --color-neutral-500: #5c6c72;
+  --color-neutral-600: #6e7e84;
+  --color-neutral-500: #506068;
   --color-neutral-400: #405058;
   --color-neutral-300: #2c3a3e;
   --color-neutral-200: #202c30;
@@ -110,8 +110,8 @@
   --color-neutral-850: #dee2d6;
   --color-neutral-800: #d0d6c6;
   --color-neutral-700: #9ea894;
-  --color-neutral-600: #7a8670;
-  --color-neutral-500: #5c6854;
+  --color-neutral-600: #6e7a64;
+  --color-neutral-500: #505c48;
   --color-neutral-400: #3c4636;
   --color-neutral-300: #283024;
   --color-neutral-200: #1c2418;
@@ -127,8 +127,8 @@
   --color-neutral-850: #e2e6da;
   --color-neutral-800: #d6dace;
   --color-neutral-700: #a6ae98;
-  --color-neutral-600: #828c78;
-  --color-neutral-500: #646e5c;
+  --color-neutral-600: #768068;
+  --color-neutral-500: #586250;
   --color-neutral-400: #424a3c;
   --color-neutral-300: #2e3428;
   --color-neutral-200: #20281c;
@@ -396,7 +396,7 @@
   }
 
   [data-theme^="sun-"] nav {
-    background-color: color-mix(in srgb, var(--color-neutral-950) 88%, transparent);
+    background-color: color-mix(in srgb, var(--color-neutral-950) 95%, transparent);
     border-bottom-color: rgba(20, 20, 16, 0.05);
     box-shadow: 0 1px 8px rgba(20, 20, 16, 0.06), 0 0 1px rgba(20, 20, 16, 0.08);
   }
@@ -486,6 +486,24 @@
   .reveal.in-view {
     opacity: 1;
     transform: none;
+    will-change: auto;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .reveal {
+      transition: none;
+      opacity: 1;
+      transform: none;
+      will-change: auto;
+    }
+    .word-squeeze { animation: none; }
+    .word-dated::after { animation: none; }
+    #quiz-vortex { display: none !important; }
+    .story-section, .trophy-row, .sim-result, .checkup-card,
+    .kw-animate, .health-animate, .csv-result {
+      opacity: 1 !important;
+      animation: none !important;
+    }
   }
 
   .reveal-stagger > .reveal {

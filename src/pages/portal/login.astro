@@ -92,6 +92,9 @@ if (token) {
       if (urlError === 'expired') {
         errorEl.textContent = 'That login link has expired. Request a new one below.';
         errorEl.classList.remove('hidden');
+      } else if (urlError === 'inactive') {
+        errorEl.textContent = 'Your account is currently inactive. Contact Cody if you think this is a mistake.';
+        errorEl.classList.remove('hidden');
       }
 
       form.addEventListener('submit', async (e) => {

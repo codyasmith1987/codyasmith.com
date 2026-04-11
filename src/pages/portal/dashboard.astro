@@ -62,7 +62,7 @@ const clients = isAdmin ? await getAllClients() : [];
       <section class="story-section mb-20">
         <div class="flex flex-col items-center text-center">
           <div id="score-wrap" class="relative w-44 h-44 mb-8 score-glow rounded-full" style="--glow-color: rgba(16,185,129,0);">
-            <canvas id="score-ring"></canvas>
+            <canvas id="score-ring" role="img" aria-label="Website health score"></canvas>
             <div class="absolute inset-0 flex flex-col items-center justify-center">
               <span id="score-number" class="text-5xl font-bold tracking-tight" style="animation: countUp 0.8s ease-out 0.6s both;"></span>
             </div>
@@ -150,7 +150,7 @@ const clients = isAdmin ? await getAllClients() : [];
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js" crossorigin="anonymous"></script>
   <script define:vars={{ clientId: user.client_id, isAdmin, firstClientId: clients[0]?.id || '' }}>
     let activeClientId = isAdmin ? firstClientId : clientId;
     let scoreChart = null;
@@ -256,9 +256,11 @@ const clients = isAdmin ? await getAllClients() : [];
         document.getElementById('story').classList.remove('hidden');
 
       const month = summary.current_month || kwData.month;
+      const dateEl = document.getElementById('data-date');
       if (month) {
-        document.getElementById('data-date').textContent =
-          new Date(month + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+        dateEl.textContent = new Date(month + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+      } else {
+        dateEl.textContent = 'Date unavailable';
       }
 
       const score = computeScore(kws, issues);
@@ -271,6 +273,7 @@ const clients = isAdmin ? await getAllClients() : [];
       const sn = document.getElementById('score-number');
       sn.textContent = score;
       sn.style.color = color;
+      document.getElementById('score-ring').setAttribute('aria-label', `Website health score: ${score} out of 100`);
 
       // Glow color
       const wrap = document.getElementById('score-wrap');
@@ -297,7 +300,8 @@ const clients = isAdmin ? await getAllClients() : [];
       document.getElementById('score-explain').textContent = `Score based on: ${page1} of ${kws.length} keywords on page 1, ${top3} in top 3, ${highIss} high-priority site issues.`;
 
       const ctx = document.getElementById('score-ring');
-      if (scoreChart) scoreChart.destroy();
+      try { if (scoreChart) scoreChart.destroy(); } catch {}
+      scoreChart = null;
       scoreChart = new Chart(ctx, {
         type: 'doughnut',
         data: { datasets: [{ data: [score, 100 - score], backgroundColor: [color, 'rgba(38,38,38,0.3)'], borderWidth: 0 }] },

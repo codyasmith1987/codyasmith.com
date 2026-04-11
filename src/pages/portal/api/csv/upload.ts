@@ -23,6 +23,11 @@ export const POST: APIRoute = async ({ locals, request }) => {
       return json({ error: 'Only CSV files are accepted' }, 400);
     }
 
+    // 10MB size limit for CSV files
+    if (file.size > 10 * 1024 * 1024) {
+      return json({ error: 'CSV file must be under 10MB' }, 400);
+    }
+
     const raw = await file.text();
     const result = await ingestCSV(raw, clientId, month, file.name, locals.user.id);
 

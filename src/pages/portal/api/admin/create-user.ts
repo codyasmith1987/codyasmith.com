@@ -35,7 +35,7 @@ export const POST: APIRoute = async ({ locals, request, url }) => {
 
     if (send_invite) {
       const token = await createMagicLink(userId);
-      const origin = url.origin.includes('localhost') ? url.origin : 'https://codyasmith.com';
+      const origin = import.meta.env.SITE || url.origin;
       const loginUrl = `${origin}/portal/auth/verify?token=${token}`;
 
       const brevoKey = import.meta.env.BREVO_API_KEY;

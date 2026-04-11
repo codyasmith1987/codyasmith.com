@@ -1,6 +1,7 @@
 ---
 import Base from '../layouts/Base.astro';
 import { getRecentScans } from '../lib/db';
+export const prerender = false;
 
 const recentScans = await getRecentScans(5);
 ---

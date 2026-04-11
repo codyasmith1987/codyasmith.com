@@ -6,10 +6,7 @@
 ---
 
 <div id="quiz" class="fixed inset-0 z-[70]" style="display:none">
-  <!-- Frosted glass: layered depth — blur + gradient vignette + grain -->
-  <div id="quiz-backdrop" class="absolute inset-0 transition-all duration-1000 ease-out" style="backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);background:radial-gradient(ellipse at 50% 40%, rgba(0,0,0,0.22) 0%, rgba(0,0,0,0.30) 60%, rgba(0,0,0,0.38) 100%)"></div>
-  <!-- Growth field: page-topology-distributed marks, conditioned by answers -->
-  <canvas id="quiz-vortex" class="absolute inset-0 w-full h-full pointer-events-none" style="transform:perspective(2000px) rotateX(1.5deg);transform-origin:center center"></canvas>
+  <div id="quiz-backdrop" class="absolute inset-0" style="backdrop-filter:blur(20px) brightness(0.70) contrast(0.88) saturate(0.65);-webkit-backdrop-filter:blur(20px) brightness(0.70) contrast(0.88) saturate(0.65);background:radial-gradient(ellipse at 50% 40%, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.24) 60%, rgba(0,0,0,0.30) 100%)"></div>
   <div class="relative z-10 min-h-screen flex items-center justify-center p-6">
     <div class="max-w-lg w-full">
 
@@ -145,6 +142,7 @@
     quiz.style.display = '';
     quiz.style.opacity = '0';
     quiz.style.transition = 'opacity 0.5s ease';
+    document.documentElement.classList.add('quiz-active');
     requestAnimationFrame(() => { quiz.style.opacity = '1'; });
 
     let currentStep = 0;
@@ -178,69 +176,50 @@
 
     function closeQuiz() {
       const hasAnswers = ['1', '2', '3', '4'].some(k => k in answers);
-      const backdrop = document.getElementById('quiz-backdrop');
       const content = quiz.querySelector('.relative.z-10') as HTMLElement;
 
       if (hasAnswers) {
-        // Full resolution sequence — field resolves in place
+        // Resolution — backdrop-filter releases via CSS transition in __fieldResolve
         if ((window as any).__fieldResolve) (window as any).__fieldResolve();
 
-        // Content fades
         if (content) {
-          content.style.transition = 'opacity 0.8s ease, transform 0.8s ease';
+          content.style.transition = 'opacity 0.6s ease';
           content.style.opacity = '0';
-          content.style.transform = 'scale(0.98)';
         }
 
-        // Backdrop clears during resolution
-        if (backdrop) {
-          backdrop.style.transition = 'all 1.8s ease-out';
-          setTimeout(() => {
-            backdrop.style.backdropFilter = 'blur(0px)';
-            (backdrop.style as any).webkitBackdropFilter = 'blur(0px)';
-            backdrop.style.background = 'transparent';
-          }, 200);
-        }
-
-        // Quiz hides after resolution completes
         setTimeout(() => {
           quiz.style.transition = 'opacity 0.3s ease';
           quiz.style.opacity = '0';
-        }, 2300);
+        }, 1600);
 
         setTimeout(() => {
           quiz.style.display = 'none';
+          document.documentElement.classList.remove('quiz-active');
           if (typeof (window as any).__initPersonalization === 'function') {
             (window as any).__initPersonalization();
           }
-        }, 2600);
+        }, 1900);
       } else {
-        // Quick close — user skipped without answering
+        // Quick close — user skipped
         if ((window as any).__fieldStop) (window as any).__fieldStop();
 
         if (content) {
-          content.style.transition = 'opacity 0.5s ease';
+          content.style.transition = 'opacity 0.4s ease';
           content.style.opacity = '0';
-        }
-
-        if (backdrop) {
-          backdrop.style.transition = 'all 0.8s ease';
-          backdrop.style.backdropFilter = 'blur(0px)';
-          (backdrop.style as any).webkitBackdropFilter = 'blur(0px)';
-          backdrop.style.background = 'transparent';
         }
 
         setTimeout(() => {
           quiz.style.transition = 'opacity 0.3s ease';
           quiz.style.opacity = '0';
-        }, 600);
+        }, 400);
 
         setTimeout(() => {
           quiz.style.display = 'none';
+          document.documentElement.classList.remove('quiz-active');
           if (typeof (window as any).__initPersonalization === 'function') {
             (window as any).__initPersonalization();
           }
-        }, 900);
+        }, 700);
       }
     }
 

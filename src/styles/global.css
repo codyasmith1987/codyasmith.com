@@ -509,6 +509,11 @@
     will-change: auto;
   }
 
+  /* Suppress competing page textures while quiz overlay is active */
+  html.quiz-active body::after { opacity: 0 !important; }
+  html.quiz-active .dot-grid { background-image: none !important; }
+  html.quiz-active .blur-3xl { opacity: 0 !important; }
+
   @media (prefers-reduced-motion: reduce) {
     .reveal {
       transition: none;
@@ -518,7 +523,6 @@
     }
     .word-squeeze { animation: none; }
     .word-dated::after { animation: none; }
-    #quiz-vortex { display: none !important; }
     .story-section, .trophy-row, .sim-result, .checkup-card,
     .kw-animate, .health-animate, .csv-result {
       opacity: 1 !important;
@@ -638,7 +642,7 @@
     font-family: var(--font-quote);
   }
 
-  /* Growth field is canvas-based — see src/lib/growth-field.ts */
+  /* Growth field uses backdrop-filter — see src/lib/growth-field.ts */
 
   /* ============================================
      KINETIC TYPOGRAPHY — "outgrew"

@@ -23,6 +23,10 @@ function getBucket(): string {
   return import.meta.env.DO_SPACES_BUCKET || '';
 }
 
+function getKeyPrefix(): string {
+  return import.meta.env.STORAGE_KEY_PREFIX || '';
+}
+
 const ALLOWED_TYPES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -55,7 +59,8 @@ export async function uploadFile(
 
   const ext = originalName.split('.').pop() || 'bin';
   const filename = `${nanoid(12)}.${ext}`;
-  const s3Key = `clients/${clientSlug}/${month}/${filename}`;
+  const prefix = getKeyPrefix();
+  const s3Key = `${prefix}clients/${clientSlug}/${month}/${filename}`;
 
   await getS3().send(new PutObjectCommand({
     Bucket: getBucket(),

@@ -36,13 +36,12 @@ if (token) {
 
       <div class="text-center mb-10">
         <h1 class="font-serif text-4xl text-neutral-100 mb-3">Client Portal</h1>
-        <p class="text-sm text-neutral-500 leading-relaxed">Sign in with your email. We'll send a link — no password needed.</p>
       </div>
 
       <div id="login-form-container">
         <form id="login-form" class="space-y-5">
           <div>
-            <label for="email" class="block text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-2">Email address</label>
+            <label for="email" class="block text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-2">Email</label>
             <input
               type="email"
               id="email"
@@ -53,24 +52,26 @@ if (token) {
               placeholder="you@company.com"
             />
           </div>
+          <div>
+            <label for="password" class="block text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-2">Password</label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              required
+              autocomplete="current-password"
+              class="w-full px-4 py-3 bg-neutral-900/50 border border-white/10 rounded-lg text-neutral-100 placeholder-neutral-700 text-sm focus:outline-none focus:border-amber-500/40 focus:ring-1 focus:ring-amber-500/20 transition-all duration-300"
+              placeholder="Your password"
+            />
+          </div>
           <button
             type="submit"
             id="submit-btn"
             class="w-full py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.2)] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none"
           >
-            Send login link
+            Log in
           </button>
         </form>
-      </div>
-
-      <div id="success-message" class="hidden text-center">
-        <div class="w-14 h-14 mx-auto mb-6 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-          </svg>
-        </div>
-        <h2 class="font-serif text-2xl text-neutral-100 mb-3">Check your email</h2>
-        <p class="text-sm text-neutral-500 leading-relaxed">If an account exists for that address, we sent a login link.<br />It expires in 15 minutes.</p>
       </div>
 
       <div id="error-message" class="hidden mt-6 p-4 bg-red-500/5 border border-red-500/15 rounded-lg text-sm text-red-400 leading-relaxed"></div>
@@ -83,14 +84,12 @@ if (token) {
     <script>
       const form = document.getElementById('login-form') as HTMLFormElement;
       const btn = document.getElementById('submit-btn') as HTMLButtonElement;
-      const formContainer = document.getElementById('login-form-container')!;
-      const success = document.getElementById('success-message')!;
       const errorEl = document.getElementById('error-message')!;
 
-      // Show error from redirect (e.g. expired magic link)
+      // Show error from redirect (e.g. expired session, inactive account)
       const urlError = new URLSearchParams(window.location.search).get('error');
       if (urlError === 'expired') {
-        errorEl.textContent = 'That login link has expired. Request a new one below.';
+        errorEl.textContent = 'Your session has expired. Please log in again.';
         errorEl.classList.remove('hidden');
       } else if (urlError === 'inactive') {
         errorEl.textContent = 'Your account is currently inactive. Contact Cody if you think this is a mistake.';
@@ -100,30 +99,34 @@ if (token) {
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         btn.disabled = true;
-        btn.textContent = 'Sending...';
+        btn.textContent = 'Logging in...';
         errorEl.classList.add('hidden');
 
         const email = (form.querySelector('#email') as HTMLInputElement).value;
+        const password = (form.querySelector('#password') as HTMLInputElement).value;
 
         try {
-          const res = await fetch('/portal/auth/send-link', {
+          const res = await fetch('/portal/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email }),
+            body: JSON.stringify({ email, password }),
           });
 
-          if (!res.ok) {
-            const data = await res.json();
-            throw new Error(data.error || 'Something went wrong');
-          }
+          const data = await res.json();
 
-          formContainer.classList.add('hidden');
-          success.classList.remove('hidden');
+          if (res.ok) {
+            window.location.href = '/portal/dashboard';
+          } else {
+            errorEl.textContent = data.error || 'Login failed';
+            errorEl.classList.remove('hidden');
+            btn.disabled = false;
+            btn.textContent = 'Log in';
+          }
         } catch (err: any) {
-          errorEl.textContent = err.message;
+          errorEl.textContent = 'Connection error. Try again.';
           errorEl.classList.remove('hidden');
           btn.disabled = false;
-          btn.textContent = 'Send login link';
+          btn.textContent = 'Log in';
         }
       });
     </script>

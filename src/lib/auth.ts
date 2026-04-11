@@ -27,6 +27,7 @@ export async function ensurePortalTables(): Promise<void> {
       id TEXT PRIMARY KEY,
       email TEXT NOT NULL UNIQUE,
       name TEXT NOT NULL,
+      password_hash TEXT,
       role TEXT NOT NULL DEFAULT 'client',
       client_id TEXT REFERENCES clients(id),
       created_at TEXT DEFAULT (datetime('now')),
@@ -119,6 +120,36 @@ export async function ensurePortalTables(): Promise<void> {
 function hashToken(token: string): string {
   const encoded = new TextEncoder().encode(token);
   return encodeHexLowerCase(sha256(encoded));
+}
+
+// --- Passwords ---
+
+function hashPassword(password: string): string {
+  const encoded = new TextEncoder().encode(password);
+  return encodeHexLowerCase(sha256(encoded));
+}
+
+export async function setPassword(userId: string, password: string): Promise<void> {
+  await ensurePortalTables();
+  const hash = hashPassword(password);
+  await turso.execute({
+    sql: 'UPDATE users SET password_hash = ? WHERE id = ?',
+    args: [hash, userId],
+  });
+}
+
+export async function verifyPassword(email: string, password: string): Promise<string | null> {
+  await ensurePortalTables();
+  const result = await turso.execute({
+    sql: 'SELECT id, password_hash FROM users WHERE email = ?',
+    args: [email.toLowerCase().trim()],
+  });
+  if (result.rows.length === 0) return null;
+  const storedHash = result.rows[0][1] as string | null;
+  if (!storedHash) return null;
+  const inputHash = hashPassword(password);
+  if (storedHash !== inputHash) return null;
+  return result.rows[0][0] as string;
 }
 
 // --- Sessions ---

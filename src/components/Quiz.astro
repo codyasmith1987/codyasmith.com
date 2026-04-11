@@ -6,10 +6,11 @@
 ---
 
 <div id="quiz" class="fixed inset-0 z-[70]" style="display:none">
-  <!-- Frosted glass: site visible but blurred behind -->
-  <div id="quiz-backdrop" class="absolute inset-0 backdrop-blur-2xl bg-black/50 transition-all duration-700"></div>
-  <!-- Swirling formation effect -->
+  <!-- Frosted glass: layered depth — blur + gradient vignette + grain -->
+  <div id="quiz-backdrop" class="absolute inset-0 transition-all duration-1000 ease-out" style="backdrop-filter:blur(40px) saturate(1.2);-webkit-backdrop-filter:blur(40px) saturate(1.2);background:radial-gradient(ellipse at 50% 40%, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.65) 70%, rgba(0,0,0,0.8) 100%)"></div>
+  <!-- Swirl: two CSS pseudo-layers + one extra DOM layer for depth -->
   <div id="quiz-swirl" class="absolute inset-0 pointer-events-none quiz-swirl"></div>
+  <div id="quiz-swirl-drift" class="absolute pointer-events-none" style="inset:-20%;width:140%;height:140%;background:radial-gradient(ellipse at 30% 60%, color-mix(in srgb, var(--color-amber-500) 12%, transparent) 0%, transparent 50%);animation:swirl-drift 20s ease-in-out infinite;filter:blur(80px);opacity:0.5;transition:opacity 1.2s ease"></div>
   <div class="relative z-10 min-h-screen flex items-center justify-center p-6">
     <div class="max-w-lg w-full">
 
@@ -184,31 +185,49 @@
     function closeQuiz() {
       const backdrop = document.getElementById('quiz-backdrop');
       const swirl = document.getElementById('quiz-swirl');
+      const drift = document.getElementById('quiz-swirl-drift');
+      const content = quiz.querySelector('.relative.z-10') as HTMLElement;
 
-      // Step 1: Lift the blur (reveal the themed site)
-      if (backdrop) {
-        backdrop.style.backdropFilter = 'blur(0px)';
-        backdrop.style.webkitBackdropFilter = 'blur(0px)';
-        backdrop.style.background = 'rgba(0,0,0,0.3)';
+      // Phase 1: Content fades, swirl intensifies briefly (the final "set")
+      if (content) {
+        content.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+        content.style.opacity = '0';
+        content.style.transform = 'scale(0.98)';
+      }
+      if (swirl) {
+        swirl.style.transition = 'opacity 0.8s ease';
+        swirl.style.opacity = '0.8';
       }
 
-      // Step 2: Fade the swirl
+      // Phase 2: Blur lifts gradually — the curtain draws back
       setTimeout(() => {
-        if (swirl) swirl.style.opacity = '0';
-      }, 300);
+        if (backdrop) {
+          backdrop.style.transition = 'all 1.2s cubic-bezier(0.4, 0, 0.2, 1)';
+          backdrop.style.backdropFilter = 'blur(0px) saturate(1)';
+          (backdrop.style as any).webkitBackdropFilter = 'blur(0px) saturate(1)';
+          backdrop.style.background = 'transparent';
+        }
+        if (swirl) {
+          swirl.style.transition = 'opacity 1s ease';
+          swirl.style.opacity = '0';
+        }
+        if (drift) {
+          drift.style.opacity = '0';
+        }
+      }, 500);
 
-      // Step 3: Fade the entire quiz container
+      // Phase 3: Full clear
       setTimeout(() => {
+        quiz.style.transition = 'opacity 0.3s ease';
         quiz.style.opacity = '0';
-      }, 600);
+      }, 1500);
 
-      // Step 4: Remove and trigger personalization
       setTimeout(() => {
         quiz.style.display = 'none';
         if (typeof (window as any).__initPersonalization === 'function') {
           (window as any).__initPersonalization();
         }
-      }, 1100);
+      }, 1800);
     }
 
     function showRevealThenClose(nameStr?: string) {

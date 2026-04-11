@@ -174,14 +174,12 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
         }, { threshold: 0.1 });
         document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
 
-        // "gap" squeeze animation — compress on scroll-in, spring back
+        // "gap" squeeze — spring animation triggered once on scroll-in
         const squeezeObserver = new IntersectionObserver((entries) => {
           entries.forEach(e => {
             if (e.isIntersecting) {
-              const el = e.target as HTMLElement;
-              el.classList.add('squeezed');
-              setTimeout(() => el.classList.remove('squeezed'), 500);
-              squeezeObserver.unobserve(el);
+              (e.target as HTMLElement).classList.add('squeezed');
+              squeezeObserver.unobserve(e.target);
             }
           });
         }, { threshold: 0.5 });

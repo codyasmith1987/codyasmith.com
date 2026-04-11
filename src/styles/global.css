@@ -546,53 +546,183 @@
     font-family: var(--font-quote);
   }
 
-  /* Quiz swirl - slow rotating gradient that responds to theme */
+  /* ============================================
+     QUIZ SWIRL — layered nebula formation
+     Three layers at different speeds/scales
+     create depth and organic movement
+     ============================================ */
   .quiz-swirl {
-    opacity: 0.4;
-    transition: opacity 0.6s ease;
+    opacity: 1;
+    transition: opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
+
+  /* Layer 1: Slow, large-scale color wash */
   .quiz-swirl::before {
     content: '';
     position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
+    top: -60%;
+    left: -60%;
+    width: 220%;
+    height: 220%;
     background: conic-gradient(
-      from 0deg,
+      from 0deg at 40% 50%,
       transparent 0%,
-      color-mix(in srgb, var(--color-amber-500) 8%, transparent) 15%,
-      transparent 30%,
-      color-mix(in srgb, var(--color-amber-400) 6%, transparent) 45%,
-      transparent 60%,
-      color-mix(in srgb, var(--color-amber-600) 5%, transparent) 75%,
+      color-mix(in srgb, var(--color-amber-500) 18%, transparent) 12%,
+      transparent 25%,
+      color-mix(in srgb, var(--color-amber-600) 12%, transparent) 38%,
+      transparent 50%,
+      color-mix(in srgb, var(--color-amber-400) 15%, transparent) 62%,
+      transparent 75%,
+      color-mix(in srgb, var(--color-amber-500) 10%, transparent) 88%,
       transparent 100%
     );
-    animation: quiz-swirl-rotate 16s linear infinite;
-    filter: blur(80px);
-    mix-blend-mode: soft-light;
+    animation: swirl-slow 24s linear infinite;
+    filter: blur(100px);
+    mix-blend-mode: screen;
+    opacity: 0.6;
   }
 
-  @keyframes quiz-swirl-rotate {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+  /* Layer 2: Faster, tighter rotation — counter-direction */
+  .quiz-swirl::after {
+    content: '';
+    position: absolute;
+    top: -30%;
+    left: -30%;
+    width: 160%;
+    height: 160%;
+    background: conic-gradient(
+      from 180deg at 60% 50%,
+      transparent 0%,
+      color-mix(in srgb, var(--color-amber-400) 22%, transparent) 18%,
+      transparent 35%,
+      color-mix(in srgb, var(--color-amber-600) 16%, transparent) 55%,
+      transparent 70%,
+      color-mix(in srgb, var(--color-amber-500) 14%, transparent) 85%,
+      transparent 100%
+    );
+    animation: swirl-fast 14s linear infinite reverse;
+    filter: blur(60px);
+    mix-blend-mode: screen;
+    opacity: 0.45;
   }
 
-  /* Kinetic typography */
+  @keyframes swirl-slow {
+    from { transform: rotate(0deg) scale(1); }
+    50% { transform: rotate(180deg) scale(1.08); }
+    to { transform: rotate(360deg) scale(1); }
+  }
+
+  @keyframes swirl-fast {
+    from { transform: rotate(0deg) scale(1.02); }
+    33% { transform: rotate(120deg) scale(0.96); }
+    66% { transform: rotate(240deg) scale(1.04); }
+    to { transform: rotate(360deg) scale(1.02); }
+  }
+
+  @keyframes swirl-drift {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    25% { transform: translate(8%, -5%) scale(1.05); }
+    50% { transform: translate(-5%, 8%) scale(0.97); }
+    75% { transform: translate(3%, 3%) scale(1.03); }
+  }
+
+  /* Sun themes: use lighter blend for light backgrounds */
+  [data-theme^="sun-"] .quiz-swirl::before,
+  [data-theme^="sun-"] .quiz-swirl::after {
+    mix-blend-mode: multiply;
+    opacity: 0.35;
+  }
+
+  /* ============================================
+     KINETIC TYPOGRAPHY — "outgrew"
+     Layered color treatment with grain and erosion
+     ============================================ */
   .word-dated {
+    position: relative;
     color: var(--color-dated);
     font-style: italic;
-    text-shadow: 0 0 2px color-mix(in srgb, var(--color-dated) 30%, transparent);
+    letter-spacing: -0.02em;
+    /* Layered shadow: glow underneath + eroded edge */
+    text-shadow:
+      0 0 8px color-mix(in srgb, var(--color-dated) 20%, transparent),
+      0 1px 0 color-mix(in srgb, var(--color-dated) 40%, transparent),
+      0 -1px 0 color-mix(in srgb, var(--color-neutral-950) 60%, transparent);
+    /* Subtle horizontal lines through the text like weathering */
+    background: repeating-linear-gradient(
+      0deg,
+      var(--color-dated) 0px,
+      var(--color-dated) 2px,
+      color-mix(in srgb, var(--color-dated) 50%, var(--color-neutral-950)) 2px,
+      color-mix(in srgb, var(--color-dated) 50%, var(--color-neutral-950)) 3px
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    /* Roughen the edges slightly */
+    filter: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='r'%3E%3CfeTurbulence baseFrequency='0.04' numOctaves='3' seed='1'/%3E%3CfeDisplacementMap in='SourceGraphic' scale='1.5'/%3E%3C/filter%3E%3C/svg%3E#r");
   }
 
+  /* Subtle tarnish animation on hover */
+  .word-dated::after {
+    content: '';
+    position: absolute;
+    inset: -2px -4px;
+    background: linear-gradient(
+      120deg,
+      transparent 30%,
+      color-mix(in srgb, var(--color-dated) 8%, transparent) 50%,
+      transparent 70%
+    );
+    background-size: 200% 100%;
+    animation: tarnish-shimmer 8s ease-in-out infinite;
+    pointer-events: none;
+    mix-blend-mode: overlay;
+  }
+
+  @keyframes tarnish-shimmer {
+    0%, 100% { background-position: 200% center; }
+    50% { background-position: -200% center; }
+  }
+
+  /* ============================================
+     KINETIC TYPOGRAPHY — "gap" squeeze
+     Spring physics with overshoot
+     ============================================ */
   .word-squeeze {
     display: inline-block;
-    transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1),
-                letter-spacing 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    transform-origin: center;
+    will-change: transform;
   }
+
   .word-squeeze.squeezed {
-    transform: scaleX(0.72);
-    letter-spacing: -0.04em;
+    animation: gap-squeeze 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  @keyframes gap-squeeze {
+    0% {
+      transform: scaleX(1) scaleY(1);
+      letter-spacing: 0em;
+    }
+    /* Compress hard */
+    25% {
+      transform: scaleX(0.55) scaleY(1.12);
+      letter-spacing: -0.08em;
+    }
+    /* Overshoot wide */
+    50% {
+      transform: scaleX(1.08) scaleY(0.96);
+      letter-spacing: 0.02em;
+    }
+    /* Settle slightly compressed */
+    70% {
+      transform: scaleX(0.92) scaleY(1.02);
+      letter-spacing: -0.01em;
+    }
+    /* Rest at natural */
+    100% {
+      transform: scaleX(1) scaleY(1);
+      letter-spacing: 0em;
+    }
   }
 
   /* Dot grid */

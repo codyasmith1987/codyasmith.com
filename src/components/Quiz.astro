@@ -375,146 +375,117 @@
       return [245, 158, 11]; // fallback amber
     }
 
-    // Particle definition — orbital motion for tornado/vortex feel
-    interface Particle {
+    // Vortex — hundreds of wispy strands spiraling inward like a ghost tornado.
+    // Not particles. Not fireflies. A dense, flowing funnel that fills the screen.
+    interface Strand {
       angle: number;
       radius: number;
-      baseRadius: number;
-      speed: number;
-      drift: number;
+      speed: number;       // angular velocity
+      drift: number;       // radial drift (inward pull)
+      length: number;      // arc length in radians
       thickness: number;
       opacity: number;
-      noiseOffsetX: number;
-      noiseOffsetY: number;
-      trail: number[];
-      hueShift: number;
+      layer: number;       // 0-1, affects speed and opacity for depth
     }
 
-    // No CSS filter on canvas — softness comes from particle rendering, not element blur
-
-    const particles: Particle[] = [];
-    const COUNT = 45;
+    const strands: Strand[] = [];
+    const COUNT = 200;
+    const maxR = Math.max(w, h) * 0.7;
 
     for (let i = 0; i < COUNT; i++) {
-      const dist = 60 + Math.random() * Math.min(w, h) * 0.45;
-      const speed = (0.003 + Math.random() * 0.008) * (Math.random() > 0.3 ? 1 : -1);
-      particles.push({
+      const layer = Math.random();
+      strands.push({
         angle: Math.random() * Math.PI * 2,
-        radius: dist,
-        baseRadius: dist,
-        speed,
-        drift: (Math.random() - 0.5) * 0.15,
-        thickness: 1 + Math.random() * 3,
-        opacity: 0.1 + Math.random() * 0.3,
-        noiseOffsetX: Math.random() * 1000,
-        noiseOffsetY: Math.random() * 1000,
-        trail: [],
-        hueShift: (Math.random() - 0.5) * 40,
+        radius: 20 + Math.random() * maxR,
+        speed: (0.002 + layer * 0.006) * (Math.random() > 0.15 ? 1 : -1),
+        drift: -0.02 - Math.random() * 0.08,
+        length: 0.15 + Math.random() * 0.6,
+        thickness: 0.5 + layer * 2,
+        opacity: 0.02 + layer * 0.06,
+        layer,
       });
     }
 
     let time = 0;
     let accentRGB = getAccentColor();
 
-    // Re-read accent color when theme changes
-    const themeObserver = new MutationObserver(() => {
-      accentRGB = getAccentColor();
-    });
+    const themeObserver = new MutationObserver(() => { accentRGB = getAccentColor(); });
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
     function draw() {
       if (!running) return;
-      ctx.clearRect(0, 0, w, h);
-      time += 0.008;
 
-      const speedMult = accelerating ? 3 + Math.min((Date.now() - accelStart) / 500, 5) : 1;
+      // Fade previous frame instead of clearing — creates motion trails
+      ctx.fillStyle = 'rgba(0,0,0,0.08)';
+      ctx.fillRect(0, 0, w, h);
 
-      for (const p of particles) {
-        // Smooth noise displacement (±8px, slow drift — no jitter)
-        const nx = noise(p.noiseOffsetX, time * 0.35, p.angle) * 8;
-        const ny = noise(p.noiseOffsetY, time * 0.25, p.radius * 0.01) * 8;
+      time += 0.003;
+      const speedMult = accelerating ? 4 + Math.min((Date.now() - accelStart) / 400, 8) : 1;
 
-        // Spiral motion — faster when closer to center (tornado pull)
-        const radiusFactor = Math.max(0.3, p.radius / p.baseRadius);
-        p.angle += (p.speed / radiusFactor) * speedMult;
+      for (const s of strands) {
+        // Rotate
+        s.angle += s.speed * speedMult;
 
-        // Drift inward slowly, with some particles drifting out
-        p.radius += p.drift * (accelerating ? -2 : 1);
+        // Drift inward (tornado pull)
+        s.radius += s.drift * (accelerating ? 3 : 1);
 
-        // Keep particles in bounds
-        if (p.radius < 20) {
-          p.radius = 60 + Math.random() * Math.min(w, h) * 0.4;
-          p.angle = Math.random() * Math.PI * 2;
+        // Recycle when too close to center or too far out
+        if (s.radius < 10 || (accelerating && s.radius < 5)) {
+          s.radius = maxR * (0.5 + Math.random() * 0.5);
+          s.angle = Math.random() * Math.PI * 2;
         }
-        if (p.radius > Math.min(w, h) * 0.6) {
-          p.drift = -Math.abs(p.drift);
-        }
-        if (p.radius < 80 && !accelerating) {
-          p.drift = Math.abs(p.drift) * 0.3;
+        if (s.radius > maxR) {
+          s.radius = maxR;
+          s.drift = -Math.abs(s.drift);
         }
 
-        // Position from orbital coordinates
-        const x = cx + Math.cos(p.angle) * p.radius + nx;
-        const y = cy + Math.sin(p.angle) * p.radius + ny;
+        // Draw arc — each strand is a curved wisp along its orbital path
+        const startAngle = s.angle;
+        const endAngle = s.angle + s.length * (s.speed > 0 ? 1 : -1);
 
-        // Store trail angles
-        p.trail.push(p.angle);
-        if (p.trail.length > 8) p.trail.shift();
+        // Funnel shape: strands closer to center are closer together (tornado narrowing)
+        const funnelRadius = s.radius;
 
-        // Tail from trail history
-        const tailAngle = p.trail[0] || p.angle;
-        const tx = cx + Math.cos(tailAngle) * (p.radius + 5) + nx * 0.5;
-        const ty = cy + Math.sin(tailAngle) * (p.radius + 5) + ny * 0.5;
+        const x1 = cx + Math.cos(startAngle) * funnelRadius;
+        const y1 = cy + Math.sin(startAngle) * funnelRadius;
+        const x2 = cx + Math.cos(endAngle) * funnelRadius;
+        const y2 = cy + Math.sin(endAngle) * funnelRadius;
 
-        // Color
-        const r = Math.min(255, Math.max(0, accentRGB[0] + p.hueShift));
-        const g = Math.min(255, Math.max(0, accentRGB[1] + p.hueShift * 0.5));
-        const b = Math.min(255, Math.max(0, accentRGB[2] - p.hueShift * 0.3));
-
-        // Gradient tendril: bright head, fading tail
-        const grad = ctx.createLinearGradient(x, y, tx, ty);
-        grad.addColorStop(0, `rgba(${r},${g},${b},${p.opacity})`);
-        grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+        // Color — inner strands brighter, outer strands dimmer
+        const brightness = Math.max(0, 1 - s.radius / maxR);
+        const alpha = s.opacity * (0.5 + brightness * 0.5) * (accelerating ? 1.5 : 1);
+        const r = accentRGB[0], g = accentRGB[1], b = accentRGB[2];
 
         ctx.beginPath();
-        ctx.moveTo(x, y);
-        const mx = cx + Math.cos((p.angle + tailAngle) / 2) * (p.radius * 1.02) + nx * 0.7;
-        const my = cy + Math.sin((p.angle + tailAngle) / 2) * (p.radius * 1.02) + ny * 0.7;
-        ctx.quadraticCurveTo(mx, my, tx, ty);
-
-        ctx.strokeStyle = grad;
-        ctx.lineWidth = p.thickness * (accelerating ? 0.5 : 1);
+        ctx.arc(cx, cy, funnelRadius, startAngle, endAngle, s.speed < 0);
+        ctx.strokeStyle = `rgba(${r},${g},${b},${Math.min(alpha, 0.15)})`;
+        ctx.lineWidth = s.thickness;
         ctx.lineCap = 'round';
         ctx.stroke();
-
-        // Soft glow dot at head
-        if (p.opacity > 0.2) {
-          ctx.beginPath();
-          ctx.arc(x, y, p.thickness * 0.8, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(${r},${g},${b},${p.opacity * 0.4})`;
-          ctx.fill();
-        }
       }
 
-      // Soft glow at center (the eye of the vortex)
-      const eyeGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 120);
-      eyeGrad.addColorStop(0, `rgba(${accentRGB[0]},${accentRGB[1]},${accentRGB[2]},0.05)`);
-      eyeGrad.addColorStop(0.5, `rgba(${accentRGB[0]},${accentRGB[1]},${accentRGB[2]},0.02)`);
+      // Soft glow at center (eye of the vortex)
+      const eyeGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 80);
+      eyeGrad.addColorStop(0, `rgba(${accentRGB[0]},${accentRGB[1]},${accentRGB[2]},0.06)`);
       eyeGrad.addColorStop(1, 'transparent');
       ctx.fillStyle = eyeGrad;
-      ctx.fillRect(cx - 120, cy - 120, 240, 240);
+      ctx.beginPath();
+      ctx.arc(cx, cy, 80, 0, Math.PI * 2);
+      ctx.fill();
 
       requestAnimationFrame(draw);
     }
 
+    // Clear canvas fully before first frame
+    ctx.fillStyle = 'rgba(0,0,0,1)';
+    ctx.fillRect(0, 0, w, h);
     requestAnimationFrame(draw);
 
-    // Expose controls for the reveal transition
     (window as any).__vortexAccelerate = () => {
       accelerating = true;
       accelStart = Date.now();
-      for (const p of particles) {
-        p.drift = -Math.abs(p.drift) * 3 - 0.5;
+      for (const s of strands) {
+        s.drift = -Math.abs(s.drift) * 4 - 0.3;
       }
     };
     (window as any).__vortexStop = () => {

@@ -3,6 +3,30 @@
 import { nanoid } from 'nanoid';
 import turso from './turso';
 
+// --- Column allowlists for dynamic UPDATE builders ---
+const UPDATABLE_COLUMNS: Record<string, Set<string>> = {
+  invoices: new Set(['status', 'issued_date', 'due_date', 'subtotal', 'tax', 'total', 'amount_paid', 'notes', 'client_visible']),
+  invoice_items: new Set(['description', 'quantity', 'unit_price', 'amount', 'sort_order']),
+  change_orders: new Set(['title', 'description', 'status', 'cost_impact', 'time_impact_days']),
+};
+
+function buildSafeUpdate(table: string, id: string, data: Record<string, any>): { sql: string; args: any[] } | null {
+  const allowed = UPDATABLE_COLUMNS[table];
+  if (!allowed) throw new Error(`No allowlist defined for table: ${table}`);
+  const fields: string[] = [];
+  const args: any[] = [];
+  for (const [key, val] of Object.entries(data)) {
+    if (val === undefined) continue;
+    if (!allowed.has(key)) throw new Error(`Invalid column "${key}" for table "${table}"`);
+    fields.push(`${key} = ?`);
+    args.push(val);
+  }
+  if (fields.length === 0) return null;
+  fields.push("updated_at = datetime('now')");
+  args.push(id);
+  return { sql: `UPDATE ${table} SET ${fields.join(', ')} WHERE id = ?`, args };
+}
+
 // --- Query helpers ---
 
 async function queryOne(sql: string, args: any[] = []): Promise<any | undefined> {
@@ -103,21 +127,9 @@ export async function getClientVisibleInvoices(clientId: string): Promise<Pick<I
 export async function updateInvoice(id: string, data: Partial<Pick<Invoice,
   'status' | 'issued_date' | 'due_date' | 'subtotal' | 'tax' | 'total' | 'amount_paid' | 'notes' | 'client_visible'
 >>): Promise<void> {
-  const fields: string[] = [];
-  const args: any[] = [];
-  for (const [key, val] of Object.entries(data)) {
-    if (val !== undefined) {
-      fields.push(`${key} = ?`);
-      args.push(val);
-    }
-  }
-  if (fields.length === 0) return;
-  fields.push("updated_at = datetime('now')");
-  args.push(id);
-  await turso.execute({
-    sql: `UPDATE invoices SET ${fields.join(', ')} WHERE id = ?`,
-    args,
-  });
+  const update = buildSafeUpdate('invoices', id, data);
+  if (!update) return;
+  await turso.execute(update);
 }
 
 // Non-atomic: reads items, reads invoice, writes totals in 3 separate operations.
@@ -177,17 +189,18 @@ export async function getInvoiceItems(invoiceId: string): Promise<InvoiceItem[]>
 export async function updateInvoiceItem(id: string, data: Partial<Pick<InvoiceItem,
   'description' | 'quantity' | 'unit_price' | 'sort_order'
 >>): Promise<void> {
+  const allowed = UPDATABLE_COLUMNS.invoice_items;
   const fields: string[] = [];
   const args: any[] = [];
   for (const [key, val] of Object.entries(data)) {
-    if (val !== undefined) {
-      fields.push(`${key} = ?`);
-      args.push(val);
-    }
+    if (val === undefined) continue;
+    if (!allowed.has(key)) throw new Error(`Invalid column "${key}" for table "invoice_items"`);
+    fields.push(`${key} = ?`);
+    args.push(val);
   }
   if (fields.length === 0) return;
 
-  // Recalculate amount if quantity or unit_price changed
+  // Recalculate amount if quantity or unit_price changed (computed field, not user-supplied)
   if (data.quantity !== undefined || data.unit_price !== undefined) {
     const existing = await queryOne('SELECT * FROM invoice_items WHERE id = ?', [id]);
     if (existing) {
@@ -411,21 +424,9 @@ export async function getChangeOrdersByContract(contractId: string): Promise<Cha
 export async function updateChangeOrder(id: string, data: Partial<Pick<ChangeOrder,
   'title' | 'description' | 'status' | 'cost_impact' | 'time_impact_days'
 >>): Promise<void> {
-  const fields: string[] = [];
-  const args: any[] = [];
-  for (const [key, val] of Object.entries(data)) {
-    if (val !== undefined) {
-      fields.push(`${key} = ?`);
-      args.push(val);
-    }
-  }
-  if (fields.length === 0) return;
-  fields.push("updated_at = datetime('now')");
-  args.push(id);
-  await turso.execute({
-    sql: `UPDATE change_orders SET ${fields.join(', ')} WHERE id = ?`,
-    args,
-  });
+  const update = buildSafeUpdate('change_orders', id, data);
+  if (!update) return;
+  await turso.execute(update);
 }
 
 // Rejects if change order is already approved. Returns false if blocked.

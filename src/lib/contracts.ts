@@ -3,6 +3,34 @@
 import { nanoid } from 'nanoid';
 import turso from './turso';
 
+// --- Column allowlists for dynamic UPDATE builders ---
+// Runtime guard against SQL column injection. TypeScript types disappear at runtime;
+// these allowlists enforce valid column names regardless of caller.
+
+const UPDATABLE_COLUMNS: Record<string, Set<string>> = {
+  contracts: new Set(['title', 'description', 'status', 'type', 'total_value', 'start_date', 'end_date', 'signed_at']),
+  projects: new Set(['title', 'description', 'status', 'sort_order', 'client_visible']),
+  milestones: new Set(['title', 'description', 'status', 'due_date', 'completed_at', 'sort_order', 'client_visible', 'client_update_text']),
+  tasks: new Set(['title', 'description', 'status', 'priority', 'assigned_to', 'estimated_hours', 'actual_hours', 'due_date', 'completed_at', 'sort_order', 'client_visible', 'client_update_text']),
+};
+
+function buildSafeUpdate(table: string, id: string, data: Record<string, any>): { sql: string; args: any[] } | null {
+  const allowed = UPDATABLE_COLUMNS[table];
+  if (!allowed) throw new Error(`No allowlist defined for table: ${table}`);
+  const fields: string[] = [];
+  const args: any[] = [];
+  for (const [key, val] of Object.entries(data)) {
+    if (val === undefined) continue;
+    if (!allowed.has(key)) throw new Error(`Invalid column "${key}" for table "${table}"`);
+    fields.push(`${key} = ?`);
+    args.push(val);
+  }
+  if (fields.length === 0) return null;
+  fields.push("updated_at = datetime('now')");
+  args.push(id);
+  return { sql: `UPDATE ${table} SET ${fields.join(', ')} WHERE id = ?`, args };
+}
+
 // --- Query helpers (same pattern as db.ts) ---
 
 async function queryOne(sql: string, args: any[] = []): Promise<any | undefined> {
@@ -83,21 +111,9 @@ export async function getAllContracts(): Promise<Contract[]> {
 export async function updateContract(id: string, data: Partial<Pick<Contract,
   'title' | 'description' | 'status' | 'type' | 'total_value' | 'start_date' | 'end_date' | 'signed_at'
 >>): Promise<void> {
-  const fields: string[] = [];
-  const args: any[] = [];
-  for (const [key, val] of Object.entries(data)) {
-    if (val !== undefined) {
-      fields.push(`${key} = ?`);
-      args.push(val);
-    }
-  }
-  if (fields.length === 0) return;
-  fields.push("updated_at = datetime('now')");
-  args.push(id);
-  await turso.execute({
-    sql: `UPDATE contracts SET ${fields.join(', ')} WHERE id = ?`,
-    args,
-  });
+  const update = buildSafeUpdate('contracts', id, data);
+  if (!update) return;
+  await turso.execute(update);
 }
 
 // Cascade delete: removes all projects, milestones, tasks, and artifacts under this contract.
@@ -172,21 +188,9 @@ export async function getClientVisibleProjects(clientId: string): Promise<Pick<P
 export async function updateProject(id: string, data: Partial<Pick<Project,
   'title' | 'description' | 'status' | 'sort_order' | 'client_visible'
 >>): Promise<void> {
-  const fields: string[] = [];
-  const args: any[] = [];
-  for (const [key, val] of Object.entries(data)) {
-    if (val !== undefined) {
-      fields.push(`${key} = ?`);
-      args.push(val);
-    }
-  }
-  if (fields.length === 0) return;
-  fields.push("updated_at = datetime('now')");
-  args.push(id);
-  await turso.execute({
-    sql: `UPDATE projects SET ${fields.join(', ')} WHERE id = ?`,
-    args,
-  });
+  const update = buildSafeUpdate('projects', id, data);
+  if (!update) return;
+  await turso.execute(update);
 }
 
 // Cascade delete: removes all milestones, tasks, and artifacts under this project.
@@ -259,21 +263,9 @@ export async function getClientVisibleMilestones(projectId: string): Promise<Pic
 export async function updateMilestone(id: string, data: Partial<Pick<Milestone,
   'title' | 'description' | 'status' | 'due_date' | 'completed_at' | 'sort_order' | 'client_visible' | 'client_update_text'
 >>): Promise<void> {
-  const fields: string[] = [];
-  const args: any[] = [];
-  for (const [key, val] of Object.entries(data)) {
-    if (val !== undefined) {
-      fields.push(`${key} = ?`);
-      args.push(val);
-    }
-  }
-  if (fields.length === 0) return;
-  fields.push("updated_at = datetime('now')");
-  args.push(id);
-  await turso.execute({
-    sql: `UPDATE milestones SET ${fields.join(', ')} WHERE id = ?`,
-    args,
-  });
+  const update = buildSafeUpdate('milestones', id, data);
+  if (!update) return;
+  await turso.execute(update);
 }
 
 // Cascade delete: removes all tasks and artifacts under this milestone.
@@ -363,21 +355,9 @@ export async function updateTask(id: string, data: Partial<Pick<Task,
   'title' | 'description' | 'status' | 'priority' | 'assigned_to' | 'estimated_hours' | 'actual_hours' |
   'due_date' | 'completed_at' | 'sort_order' | 'client_visible' | 'client_update_text'
 >>): Promise<void> {
-  const fields: string[] = [];
-  const args: any[] = [];
-  for (const [key, val] of Object.entries(data)) {
-    if (val !== undefined) {
-      fields.push(`${key} = ?`);
-      args.push(val);
-    }
-  }
-  if (fields.length === 0) return;
-  fields.push("updated_at = datetime('now')");
-  args.push(id);
-  await turso.execute({
-    sql: `UPDATE tasks SET ${fields.join(', ')} WHERE id = ?`,
-    args,
-  });
+  const update = buildSafeUpdate('tasks', id, data);
+  if (!update) return;
+  await turso.execute(update);
 }
 
 // Cascade delete: removes all artifacts under this task.

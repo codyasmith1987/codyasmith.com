@@ -66,12 +66,24 @@ export function initGrowthField(): void {
   let intensity = 0;
   let themeTarget = '';
 
+  // Per-token interpolation curves. Deep neutrals (background/surface) lag behind
+  // accent and lighter tokens. This prevents Q1 from dumping a luminance shift
+  // while still letting accent/hue changes register as perceptible.
+  // Indices 0-3 = neutral-950 through neutral-800 (the deep background stack).
+  // These get t^1.8 curve — at 20% intensity they move only ~5% instead of 20%.
+  // Everything else gets linear t — full responsiveness.
+  function tokenT(globalT: number, tokenIndex: number): number {
+    if (tokenIndex <= 3) return Math.pow(globalT, 1.8); // deep neutrals lag
+    return globalT;
+  }
+
   function applyInterp(t: number, key: string) {
     const tv = _themes.get(key);
     if (!tv) return;
     const root = document.documentElement;
     for (let i = 0; i < TOKENS.length; i++) {
-      root.style.setProperty(TOKENS[i], r2h(lrgb(defaultPalette[i], tv[i], t)));
+      const tt = tokenT(t, i);
+      root.style.setProperty(TOKENS[i], r2h(lrgb(defaultPalette[i], tv[i], tt)));
     }
   }
 
@@ -89,10 +101,27 @@ export function initGrowthField(): void {
     const f = `blur(${blur.toFixed(1)}px) brightness(${brightness.toFixed(3)}) contrast(${contrast.toFixed(3)}) saturate(${saturate.toFixed(3)})`;
     backdrop.style.backdropFilter = f;
     (backdrop.style as any).webkitBackdropFilter = f;
-    const g = 0.18 * (1 - i * 0.85);
+
+    // Dark overlay: top-weighted linear gradient, not centered ellipse.
+    // Keeps quiz text readable without creating a circular focus structure.
+    const g = i >= 0.99 ? 0 : Math.max(0.12, 0.26 * (1 - i * 0.70));
     backdrop.style.background = i >= 0.99
       ? 'transparent'
-      : `radial-gradient(ellipse at 50% 40%, rgba(0,0,0,${g.toFixed(3)}) 0%, rgba(0,0,0,${(g + 0.07).toFixed(3)}) 60%, rgba(0,0,0,${(g + 0.14).toFixed(3)}) 100%)`;
+      : `linear-gradient(to bottom, rgba(0,0,0,${(g * 1.1).toFixed(3)}) 0%, rgba(0,0,0,${g.toFixed(3)}) 35%, rgba(0,0,0,${(g * 0.7).toFixed(3)}) 65%, rgba(0,0,0,${(g * 0.3).toFixed(3)}) 100%)`;
+
+    // Regional release: top-biased linear mask, not centered radial.
+    // Upper content area (hero/heading) clears faster than lower page.
+    if (i > 0.01 && i < 0.99) {
+      const clarity = i * 0.25;
+      const top = (1 - clarity * 1.2).toFixed(3);
+      const mid = (1 - clarity * 0.6).toFixed(3);
+      const m = `linear-gradient(to bottom, rgba(0,0,0,${top}) 0%, rgba(0,0,0,${mid}) 50%, black 100%)`;
+      backdrop.style.maskImage = m;
+      (backdrop.style as any).webkitMaskImage = m;
+    } else {
+      backdrop.style.maskImage = 'none';
+      (backdrop.style as any).webkitMaskImage = 'none';
+    }
   }
 
   (window as any).__fieldCondition = (questionIdx: number, _answer: string, theme: string) => {
@@ -122,6 +151,8 @@ export function initGrowthField(): void {
     backdrop.style.backdropFilter = 'none';
     (backdrop.style as any).webkitBackdropFilter = 'none';
     backdrop.style.background = 'transparent';
+    backdrop.style.maskImage = 'none';
+    (backdrop.style as any).webkitMaskImage = 'none';
     backdrop.dataset.fieldInit = '';
   };
 }

@@ -49,12 +49,19 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
         var t = new URLSearchParams(window.location.search).get('theme');
         if (t) localStorage.setItem('cs-theme', t);
         var saved = localStorage.getItem('cs-theme');
-        // Migrate 3-part theme names from before Q4 was added
         if (saved && saved.split('-').length === 3) {
           saved = saved + '-stars';
           localStorage.setItem('cs-theme', saved);
         }
         if (saved) document.documentElement.setAttribute('data-theme', saved);
+        // Quiz: if already completed or theme set via URL, mark for skip.
+        // Otherwise, activate quiz-active class before first paint to suppress
+        // competing textures and ensure the obscuration is present from frame one.
+        if (localStorage.getItem('cs-quiz-done') || t) {
+          document.documentElement.dataset.quizSkip = '1';
+        } else {
+          document.documentElement.classList.add('quiz-active');
+        }
       })();
     </script>
   </head>

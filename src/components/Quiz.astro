@@ -5,9 +5,9 @@
 // Name + email captured as lead
 ---
 
-<div id="quiz" class="fixed inset-0 z-[70]" style="display:none">
-  <div id="quiz-backdrop" class="absolute inset-0" style="backdrop-filter:blur(20px) brightness(0.70) contrast(0.88) saturate(0.65);-webkit-backdrop-filter:blur(20px) brightness(0.70) contrast(0.88) saturate(0.65);background:radial-gradient(ellipse at 50% 40%, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.24) 60%, rgba(0,0,0,0.30) 100%)"></div>
-  <div class="relative z-10 min-h-screen flex items-center justify-center p-6">
+<div id="quiz" class="fixed inset-0 z-[70]">
+  <div id="quiz-backdrop" class="absolute inset-0" style="backdrop-filter:blur(20px) brightness(0.70) contrast(0.88) saturate(0.65);-webkit-backdrop-filter:blur(20px) brightness(0.70) contrast(0.88) saturate(0.65);background:linear-gradient(to bottom, rgba(0,0,0,0.29) 0%, rgba(0,0,0,0.26) 35%, rgba(0,0,0,0.18) 65%, rgba(0,0,0,0.08) 100%)"></div>
+  <div class="relative z-10 min-h-screen flex items-center justify-center p-6" style="opacity:0">
     <div class="max-w-lg w-full">
 
       <!-- Step 0: Intro -->
@@ -133,17 +133,17 @@
     const quiz = document.getElementById('quiz');
     if (!quiz) return;
 
-    // Don't show if already completed
-    if (localStorage.getItem('cs-quiz-done')) return;
+    // Don't run if quiz is already hidden (returning visitor or URL theme)
+    if (localStorage.getItem('cs-quiz-done')) { quiz.style.display = 'none'; return; }
+    if (new URLSearchParams(window.location.search).get('theme')) { quiz.style.display = 'none'; return; }
 
-    // Don't show if theme already set via URL
-    if (new URLSearchParams(window.location.search).get('theme')) return;
-
-    quiz.style.display = '';
-    quiz.style.opacity = '0';
-    quiz.style.transition = 'opacity 0.5s ease';
-    document.documentElement.classList.add('quiz-active');
-    requestAnimationFrame(() => { quiz.style.opacity = '1'; });
+    // Quiz backdrop is already visible from first paint (no display:none).
+    // Fade in the quiz content on top of the obscured page.
+    const quizContent = quiz.querySelector('.relative.z-10') as HTMLElement;
+    if (quizContent) {
+      quizContent.style.transition = 'opacity 0.6s ease';
+      requestAnimationFrame(() => { quizContent.style.opacity = '1'; });
+    }
 
     let currentStep = 0;
     let transitioning = false;

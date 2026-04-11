@@ -509,6 +509,9 @@
     will-change: auto;
   }
 
+  /* Hide quiz entirely for returning visitors (set by head script) */
+  html[data-quiz-skip] #quiz { display: none !important; }
+
   /* Suppress competing page textures while quiz overlay is active */
   html.quiz-active body::after { opacity: 0 !important; }
   html.quiz-active .dot-grid { background-image: none !important; }

@@ -69,6 +69,7 @@ const clients = isAdmin ? await getAllClients() : [];
           </div>
           <h1 id="verdict" class="text-2xl md:text-3xl font-serif text-neutral-100 leading-snug mb-4 max-w-md"></h1>
           <p id="verdict-sub" class="text-sm text-neutral-500 leading-relaxed max-w-sm"></p>
+          <p id="score-explain" class="text-[10px] text-neutral-700 mt-4 max-w-sm"></p>
         </div>
       </section>
 
@@ -149,7 +150,7 @@ const clients = isAdmin ? await getAllClients() : [];
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
   <script define:vars={{ clientId: user.client_id, isAdmin, firstClientId: clients[0]?.id || '' }}>
     let activeClientId = isAdmin ? firstClientId : clientId;
     let scoreChart = null;
@@ -293,6 +294,7 @@ const clients = isAdmin ? await getAllClients() : [];
       }
       document.getElementById('verdict').textContent = verdict;
       document.getElementById('verdict-sub').textContent = sub;
+      document.getElementById('score-explain').textContent = `Score based on: ${page1} of ${kws.length} keywords on page 1, ${top3} in top 3, ${highIss} high-priority site issues.`;
 
       const ctx = document.getElementById('score-ring');
       if (scoreChart) scoreChart.destroy();

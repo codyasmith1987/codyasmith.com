@@ -93,6 +93,11 @@ const clients = isAdmin ? await getAllClients() : [];
 
     <!-- Keyword list -->
     <div id="kw-list" class="space-y-1"></div>
+    <div id="kw-load-more" class="hidden text-center mt-6">
+      <button onclick="showMore()" class="px-6 py-3 border border-white/5 text-neutral-400 text-sm rounded-lg hover:border-amber-500/20 hover:text-amber-400 transition-all duration-300">
+        Show more
+      </button>
+    </div>
     <p id="kw-count" class="mt-6 text-[10px] font-mono text-neutral-700 tracking-wide uppercase"></p>
 
     <div id="kw-empty" class="hidden text-center py-24">
@@ -107,6 +112,7 @@ const clients = isAdmin ? await getAllClients() : [];
     let activeClientId = isAdmin ? firstClientId : clientId;
     let allKeywords = [];
     let searchTimeout;
+    let visibleCount = 100;
 
     const selector = document.getElementById('client-selector');
     if (selector) {
@@ -192,6 +198,7 @@ const clients = isAdmin ? await getAllClients() : [];
         }
         document.getElementById('kw-narrative').textContent = narr;
 
+        visibleCount = 100;
         renderList();
       } catch (err) {
         loadingEl.classList.add('hidden');
@@ -212,7 +219,11 @@ const clients = isAdmin ? await getAllClients() : [];
         return;
       }
 
-      list.innerHTML = filtered.slice(0, 100).map((k, i) => {
+      const showing = filtered.slice(0, visibleCount);
+      const loadMoreEl = document.getElementById('kw-load-more');
+      loadMoreEl.classList.toggle('hidden', filtered.length <= visibleCount);
+
+      list.innerHTML = showing.map((k, i) => {
         const pos = k.position;
         let posColor = 'text-neutral-600';
         let posBg = 'bg-neutral-800/50';
@@ -241,14 +252,20 @@ const clients = isAdmin ? await getAllClients() : [];
         `;
       }).join('');
 
-      count.textContent = filtered.length > 100
-        ? `Showing 100 of ${filtered.length} keywords`
+      count.textContent = filtered.length > visibleCount
+        ? `Showing ${visibleCount} of ${filtered.length} keywords`
         : `${filtered.length} keyword${filtered.length !== 1 ? 's' : ''}`;
+    }
+
+    function showMore() {
+      visibleCount += 100;
+      renderList();
     }
 
     // Debounced search
     document.getElementById('kw-search').addEventListener('input', () => {
       clearTimeout(searchTimeout);
+      visibleCount = 100;
       searchTimeout = setTimeout(renderList, 200);
     });
     document.getElementById('kw-source').addEventListener('change', loadKeywords);

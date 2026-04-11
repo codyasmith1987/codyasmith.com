@@ -122,12 +122,12 @@ const clients = isAdmin ? await getAllClients() : [];
       'links: non-descriptive anchor text in internal outlinks': 'Links that say things like "click here" instead of describing the destination. Google prefers descriptive link text.',
     };
 
-    function gradeFromIssues(high, medium, total) {
-      if (high === 0 && medium <= 2) return { grade: 'A', color: 'bg-emerald-500/20 text-emerald-400', label: 'Excellent' };
-      if (high <= 1 && medium <= 5) return { grade: 'B', color: 'bg-emerald-500/10 text-emerald-400', label: 'Good' };
-      if (high <= 3 && medium <= 10) return { grade: 'C', color: 'bg-amber-500/15 text-amber-400', label: 'Fair' };
-      if (high <= 5) return { grade: 'D', color: 'bg-red-500/10 text-red-400', label: 'Needs work' };
-      return { grade: 'F', color: 'bg-red-500/20 text-red-400', label: 'Critical' };
+    function gradeFromIssues(high, medium) {
+      if (high === 0 && medium <= 2) return { icon: '✓', color: 'bg-emerald-500/20 text-emerald-400', label: 'Excellent' };
+      if (high <= 1 && medium <= 5) return { icon: '✓', color: 'bg-emerald-500/10 text-emerald-400', label: 'Good' };
+      if (high <= 3 && medium <= 10) return { icon: '!', color: 'bg-amber-500/15 text-amber-400', label: 'Fair' };
+      if (high <= 5) return { icon: '!', color: 'bg-red-500/10 text-red-400', label: 'Needs work' };
+      return { icon: '!!', color: 'bg-red-500/20 text-red-400', label: 'Critical' };
     }
 
     async function loadHealth() {
@@ -171,17 +171,17 @@ const clients = isAdmin ? await getAllClients() : [];
         document.getElementById('count-medium').textContent = medium;
         document.getElementById('count-low').textContent = low;
 
-        const grade = gradeFromIssues(high, medium, issues.length);
-        document.getElementById('health-grade').textContent = grade.grade;
+        const grade = gradeFromIssues(high, medium);
+        document.getElementById('health-grade').textContent = grade.icon;
         document.getElementById('health-grade').className = `w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold shrink-0 ${grade.color}`;
 
         const totalUrls = issues.reduce((s, i) => s + (i.affected_urls || 0), 0);
         let headline = '', desc = '';
 
-        if (grade.grade === 'A' || grade.grade === 'B') {
+        if (grade.label === 'Excellent' || grade.label === 'Good') {
           headline = `Site health: ${grade.label}`;
           desc = `Your site is in good shape. ${issues.length} issues found across ${totalUrls.toLocaleString()} page instances, but nothing critical. The items below are opportunities to polish, not emergencies.`;
-        } else if (grade.grade === 'C') {
+        } else if (grade.label === 'Fair') {
           headline = `Site health: ${grade.label} — fixable issues`;
           desc = `${issues.length} issues found, with ${high > 0 ? `${high} high-priority item${high !== 1 ? 's' : ''} that should be addressed soon` : `${medium} medium-priority items worth cleaning up`}. These are affecting ${totalUrls.toLocaleString()} page instances. None of this is unusual for a site that's actively being worked on.`;
         } else {

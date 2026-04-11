@@ -20,6 +20,10 @@ export const POST: APIRoute = async ({ locals, request, url }) => {
       return json({ error: 'Role must be "admin" or "client"' }, 400);
     }
 
+    if (role === 'client' && !client_id) {
+      return json({ error: 'Client role requires a client assignment' }, 400);
+    }
+
     const existing = await getUserByEmail(email);
     if (existing) {
       return json({ error: 'A user with that email already exists' }, 409);

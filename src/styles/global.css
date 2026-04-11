@@ -427,9 +427,58 @@
    ============================================ */
 
 @layer components {
+  /* Focus indicators — accessible keyboard navigation */
+  :focus-visible {
+    outline: 2px solid var(--color-amber-400);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Quiz button styles — extracted from inline handlers */
+  .quiz-btn-primary {
+    background: #c47d5a;
+    color: #15120f;
+    transition: all 0.3s;
+  }
+  .quiz-btn-primary:hover, .quiz-btn-primary:focus-visible { background: #d4926a; }
+
+  .quiz-btn-secondary {
+    border-color: #302a23;
+    color: #847a6e;
+    transition: all 0.3s;
+  }
+  .quiz-btn-secondary:hover, .quiz-btn-secondary:focus-visible {
+    border-color: #4d453c;
+    color: #a69a8e;
+  }
+
+  .quiz-choice {
+    border-color: #302a23;
+    background: transparent;
+    transition: all 0.3s;
+  }
+  .quiz-choice:hover, .quiz-choice:focus-visible {
+    border-color: #d4926a;
+    background: rgba(196,125,90,0.05);
+  }
+
+  .quiz-input {
+    border-color: #302a23;
+    color: #f0e8df;
+    transition: border-color 0.3s;
+  }
+  .quiz-input:focus { border-color: #d4926a; }
+
+  .quiz-skip {
+    color: #685e54;
+    transition: color 0.3s;
+  }
+  .quiz-skip:hover, .quiz-skip:focus-visible { color: #a69a8e; }
+
   .reveal {
     opacity: 0;
     transform: translateY(1.5rem);
+    will-change: transform, opacity;
     transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
                 transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
   }

@@ -76,9 +76,11 @@ const links = [
       if (path === href) {
         link.classList.remove('text-neutral-500');
         link.classList.add('text-amber-400');
+        link.setAttribute('aria-current', 'page');
       } else {
         link.classList.remove('text-amber-400');
         link.classList.add('text-neutral-500');
+        link.removeAttribute('aria-current');
       }
     });
 
@@ -103,6 +105,21 @@ const links = [
     btn?.addEventListener('click', () => {
       const isOpen = btn.getAttribute('aria-expanded') === 'true';
       setMenuState(!isOpen);
+    });
+
+    // Close on Escape
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && btn?.getAttribute('aria-expanded') === 'true') {
+        setMenuState(false);
+        btn?.focus();
+      }
+    });
+
+    // Close on click outside
+    document.addEventListener('click', (e) => {
+      if (btn?.getAttribute('aria-expanded') === 'true' && menu && !menu.contains(e.target as Node) && !btn.contains(e.target as Node)) {
+        setMenuState(false);
+      }
     });
   }
 

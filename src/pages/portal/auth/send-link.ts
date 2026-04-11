@@ -1,12 +1,17 @@
 import type { APIRoute } from 'astro';
 import { getUserByEmail, createMagicLink } from '../../../lib/auth';
+import { rateLimit } from '../../../lib/rate-limit';
 
 export const prerender = false;
 
 const json = (data: any, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 
-export const POST: APIRoute = async ({ request, url }) => {
+export const POST: APIRoute = async ({ request, url, clientAddress }) => {
+  const ip = clientAddress || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  if (!rateLimit(`login:${ip}`, 10, 15 * 60 * 1000)) {
+    return json({ error: 'Too many login attempts. Please wait a few minutes.' }, 429);
+  }
   try {
     const { email } = await request.json();
     if (!email || typeof email !== 'string') {

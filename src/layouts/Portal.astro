@@ -174,18 +174,20 @@ const adminItems = [
 
       if (btn && nav) {
         let isOpen = false;
-        btn.addEventListener('click', () => {
-          isOpen = !isOpen;
-          btn.setAttribute('aria-expanded', String(isOpen));
+        function setMenu(open: boolean) {
+          isOpen = open;
+          btn!.setAttribute('aria-expanded', String(isOpen));
           iconOpen?.classList.toggle('hidden', isOpen);
           iconClose?.classList.toggle('hidden', !isOpen);
-          if (isOpen) {
-            nav.style.maxHeight = nav.scrollHeight + 'px';
-            nav.style.opacity = '1';
-          } else {
-            nav.style.maxHeight = '0';
-            nav.style.opacity = '0';
-          }
+          nav!.style.maxHeight = isOpen ? nav!.scrollHeight + 'px' : '0';
+          nav!.style.opacity = isOpen ? '1' : '0';
+        }
+        btn.addEventListener('click', () => setMenu(!isOpen));
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && isOpen) { setMenu(false); btn!.focus(); }
+        });
+        document.addEventListener('click', (e) => {
+          if (isOpen && !nav!.contains(e.target as Node) && !btn!.contains(e.target as Node)) setMenu(false);
         });
       }
     </script>

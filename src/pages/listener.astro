@@ -25,15 +25,19 @@ const recentScans = await getRecentScans(5);
     <div class="max-w-4xl mx-auto">
       <form id="scan-form" class="reveal flex gap-3">
         <!-- Honeypot field for bots -->
-        <input type="text" name="website" style="display:none" tabindex="-1" autocomplete="off" />
-        <input
-          type="text"
-          id="brand-input"
-          name="brand"
-          required
-          placeholder="Your brand name or website URL"
-          class="flex-1 bg-transparent border-b border-white/10 pb-3 text-neutral-100 text-lg focus:border-amber-400 focus:outline-none transition-colors duration-300 placeholder:text-neutral-700"
-        />
+        <input type="text" name="website" style="display:none" tabindex="-1" autocomplete="off" aria-hidden="true" />
+        <div class="flex-1">
+          <label for="brand-input" class="sr-only">Brand name or website URL</label>
+          <input
+            type="text"
+            id="brand-input"
+            name="brand"
+            required
+            aria-required="true"
+            placeholder="Your brand name or website URL"
+            class="w-full bg-transparent border-b border-white/10 pb-3 text-neutral-100 text-lg focus:border-amber-400 focus:outline-none transition-colors duration-300 placeholder:text-neutral-700"
+          />
+        </div>
         <button
           type="submit"
           id="scan-btn"

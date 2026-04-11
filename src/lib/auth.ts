@@ -224,21 +224,29 @@ export async function validateMagicLink(token: string): Promise<string | null> {
     args: [tokenHash],
   });
 
-  if (result.rows.length === 0) return null;
-
+  // Constant-time validation: always perform the same work regardless of whether
+  // the token exists, to prevent timing attacks that detect valid token hashes
   const row = result.rows[0];
-  const expiresAt = new Date(row[2] as string);
-  const used = row[3] as number;
+  const expiresAt = row ? new Date(row[2] as string) : new Date(0);
+  const used = row ? (row[3] as number) : 1;
+  const linkId = row ? (row[0] as string) : '';
+  const userId = row ? (row[1] as string) : '';
 
-  if (used || expiresAt <= new Date()) return null;
+  if (!row || used || expiresAt <= new Date()) {
+    // Always do a write operation to keep timing consistent
+    if (linkId) {
+      await turso.execute({ sql: 'UPDATE magic_links SET used = 1 WHERE id = ?', args: [linkId] });
+    }
+    return null;
+  }
 
   // Mark as used
   await turso.execute({
     sql: 'UPDATE magic_links SET used = 1 WHERE id = ?',
-    args: [row[0] as string],
+    args: [linkId],
   });
 
-  return row[1] as string; // userId
+  return userId;
 }
 
 // --- User/Client helpers ---

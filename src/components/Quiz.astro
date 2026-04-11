@@ -21,10 +21,10 @@
         </h2>
         <p class="text-lg mb-12" style="color:#a69a8e">Four questions. Fifteen seconds. The site adapts to you.</p>
         <div class="flex flex-col sm:flex-row gap-4 justify-center">
-          <button data-action="next" class="px-8 py-4 font-semibold text-sm rounded-lg transition-all duration-300" style="background:#c47d5a;color:#15120f" onmouseover="this.style.background='#d4926a'" onmouseout="this.style.background='#c47d5a'">
+          <button data-action="next" class="quiz-btn-primary px-8 py-4 font-semibold text-sm rounded-lg">
             I sure would
           </button>
-          <button data-action="skip" class="px-8 py-4 font-medium text-sm rounded-lg border transition-all duration-300" style="border-color:#302a23;color:#847a6e" onmouseover="this.style.borderColor='#4d453c';this.style.color='#a69a8e'" onmouseout="this.style.borderColor='#302a23';this.style.color='#847a6e'">
+          <button data-action="skip" class="quiz-btn-secondary px-8 py-4 font-medium text-sm rounded-lg border">
             Nah, I'm pretty bland
           </button>
         </div>
@@ -35,11 +35,11 @@
         <p class="font-mono text-xs tracking-[0.2em] uppercase mb-10" style="color:#847a6e">1 of 4</p>
         <h2 class="font-serif text-5xl md:text-6xl mb-14" style="color:#f0e8df">Sun or moon?</h2>
         <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
-          <button data-answer="sun" class="quiz-choice group relative p-8 rounded-xl border transition-all duration-300 cursor-pointer" style="border-color:#302a23;background:transparent" onmouseover="this.style.borderColor='#d4926a';this.style.background='rgba(196,125,90,0.05)'" onmouseout="this.style.borderColor='#302a23';this.style.background='transparent'">
+          <button data-answer="sun" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
             <span class="block text-3xl mb-3">&#9728;&#65039;</span>
             <span class="font-serif text-2xl" style="color:#f0e8df">Sun</span>
           </button>
-          <button data-answer="moon" class="quiz-choice group relative p-8 rounded-xl border transition-all duration-300 cursor-pointer" style="border-color:#302a23;background:transparent" onmouseover="this.style.borderColor='#d4926a';this.style.background='rgba(196,125,90,0.05)'" onmouseout="this.style.borderColor='#302a23';this.style.background='transparent'">
+          <button data-answer="moon" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
             <span class="block text-3xl mb-3">&#127769;</span>
             <span class="font-serif text-2xl" style="color:#f0e8df">Moon</span>
           </button>
@@ -51,11 +51,11 @@
         <p class="font-mono text-xs tracking-[0.2em] uppercase mb-10" style="color:#847a6e">2 of 4</p>
         <h2 class="font-serif text-5xl md:text-6xl mb-14" style="color:#f0e8df">Beach or mountain?</h2>
         <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
-          <button data-answer="beach" class="quiz-choice group relative p-8 rounded-xl border transition-all duration-300 cursor-pointer" style="border-color:#302a23;background:transparent" onmouseover="this.style.borderColor='#d4926a';this.style.background='rgba(196,125,90,0.05)'" onmouseout="this.style.borderColor='#302a23';this.style.background='transparent'">
+          <button data-answer="beach" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
             <span class="block text-3xl mb-3">&#127958;&#65039;</span>
             <span class="font-serif text-2xl" style="color:#f0e8df">Beach</span>
           </button>
-          <button data-answer="mountain" class="quiz-choice group relative p-8 rounded-xl border transition-all duration-300 cursor-pointer" style="border-color:#302a23;background:transparent" onmouseover="this.style.borderColor='#d4926a';this.style.background='rgba(196,125,90,0.05)'" onmouseout="this.style.borderColor='#302a23';this.style.background='transparent'">
+          <button data-answer="mountain" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
             <span class="block text-3xl mb-3">&#9968;&#65039;</span>
             <span class="font-serif text-2xl" style="color:#f0e8df">Mountain</span>
           </button>
@@ -67,11 +67,11 @@
         <p class="font-mono text-xs tracking-[0.2em] uppercase mb-10" style="color:#847a6e">3 of 4</p>
         <h2 class="font-serif text-5xl md:text-6xl mb-14" style="color:#f0e8df">Spring or fall?</h2>
         <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
-          <button data-answer="spring" class="quiz-choice group relative p-8 rounded-xl border transition-all duration-300 cursor-pointer" style="border-color:#302a23;background:transparent" onmouseover="this.style.borderColor='#d4926a';this.style.background='rgba(196,125,90,0.05)'" onmouseout="this.style.borderColor='#302a23';this.style.background='transparent'">
+          <button data-answer="spring" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
             <span class="block text-3xl mb-3">&#127793;</span>
             <span class="font-serif text-2xl" style="color:#f0e8df">Spring</span>
           </button>
-          <button data-answer="fall" class="quiz-choice group relative p-8 rounded-xl border transition-all duration-300 cursor-pointer" style="border-color:#302a23;background:transparent" onmouseover="this.style.borderColor='#d4926a';this.style.background='rgba(196,125,90,0.05)'" onmouseout="this.style.borderColor='#302a23';this.style.background='transparent'">
+          <button data-answer="fall" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
             <span class="block text-3xl mb-3">&#127810;</span>
             <span class="font-serif text-2xl" style="color:#f0e8df">Fall</span>
           </button>
@@ -83,11 +83,11 @@
         <p class="font-mono text-xs tracking-[0.2em] uppercase mb-10" style="color:#847a6e">4 of 4</p>
         <h2 class="font-serif text-5xl md:text-6xl mb-14" style="color:#f0e8df">Stars or clouds?</h2>
         <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
-          <button data-answer="stars" class="quiz-choice group relative p-8 rounded-xl border transition-all duration-300 cursor-pointer" style="border-color:#302a23;background:transparent" onmouseover="this.style.borderColor='#d4926a';this.style.background='rgba(196,125,90,0.05)'" onmouseout="this.style.borderColor='#302a23';this.style.background='transparent'">
+          <button data-answer="stars" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
             <span class="block text-3xl mb-3">&#10024;</span>
             <span class="font-serif text-2xl" style="color:#f0e8df">Stars</span>
           </button>
-          <button data-answer="clouds" class="quiz-choice group relative p-8 rounded-xl border transition-all duration-300 cursor-pointer" style="border-color:#302a23;background:transparent" onmouseover="this.style.borderColor='#d4926a';this.style.background='rgba(196,125,90,0.05)'" onmouseout="this.style.borderColor='#302a23';this.style.background='transparent'">
+          <button data-answer="clouds" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
             <span class="block text-3xl mb-3">&#9729;&#65039;</span>
             <span class="font-serif text-2xl" style="color:#f0e8df">Clouds</span>
           </button>
@@ -104,16 +104,16 @@
         <p class="text-lg mb-10" style="color:#a69a8e">Who am I building this for?</p>
         <form id="quiz-form" class="max-w-xs mx-auto space-y-5">
           <div>
-            <input type="text" id="quiz-name" placeholder="Your name" required class="w-full bg-transparent border-b pb-3 text-lg focus:outline-none transition-colors duration-300 placeholder:opacity-40" style="border-color:#302a23;color:#f0e8df" onfocus="this.style.borderColor='#d4926a'" onblur="this.style.borderColor='#302a23'" />
+            <input type="text" id="quiz-name" placeholder="Your name" required class="w-full bg-transparent border-b pb-3 text-lg focus:outline-none transition-colors duration-300 placeholder:opacity-40" class="quiz-input" />
           </div>
           <div>
-            <input type="email" id="quiz-email" placeholder="Email" required class="w-full bg-transparent border-b pb-3 text-lg focus:outline-none transition-colors duration-300 placeholder:opacity-40" style="border-color:#302a23;color:#f0e8df" onfocus="this.style.borderColor='#d4926a'" onblur="this.style.borderColor='#302a23'" />
+            <input type="email" id="quiz-email" placeholder="Email" required class="w-full bg-transparent border-b pb-3 text-lg focus:outline-none transition-colors duration-300 placeholder:opacity-40" class="quiz-input" />
           </div>
           <div class="pt-4 space-y-3">
-            <button type="submit" class="w-full px-8 py-4 font-semibold text-sm rounded-lg transition-all duration-300" style="background:#c47d5a;color:#15120f" onmouseover="this.style.background='#d4926a'" onmouseout="this.style.background='#c47d5a'">
+            <button type="submit" class="quiz-btn-primary w-full px-8 py-4 font-semibold text-sm rounded-lg">
               Make it mine
             </button>
-            <button type="button" data-action="skip-lead" class="w-full px-4 py-2 text-xs transition-colors duration-300" style="color:#685e54" onmouseover="this.style.color='#a69a8e'" onmouseout="this.style.color='#685e54'">
+            <button type="button" data-action="skip-lead" class="quiz-skip w-full px-4 py-2 text-xs">
               Skip this part
             </button>
           </div>
@@ -148,10 +148,14 @@
     requestAnimationFrame(() => { quiz.style.opacity = '1'; });
 
     let currentStep = 0;
+    let transitioning = false;
     const answers: Record<string, string> = {};
     const steps = quiz.querySelectorAll('.quiz-step');
 
     function showStep(n: number) {
+      if (transitioning || n === currentStep) return;
+      transitioning = true;
+
       steps.forEach((s, i) => {
         const el = s as HTMLElement;
         if (i === currentStep) {
@@ -168,7 +172,8 @@
           requestAnimationFrame(() => { next.style.opacity = '1'; });
         }
         currentStep = n;
-      }, 250);
+        transitioning = false;
+      }, 300);
     }
 
     // Preview theme behind the frosted glass as answers come in
@@ -292,8 +297,9 @@
     const form = document.getElementById('quiz-form');
     form?.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const name = (document.getElementById('quiz-name') as HTMLInputElement)?.value || '';
-      const email = (document.getElementById('quiz-email') as HTMLInputElement)?.value || '';
+      const name = (document.getElementById('quiz-name') as HTMLInputElement)?.value.trim() || '';
+      const email = (document.getElementById('quiz-email') as HTMLInputElement)?.value.trim() || '';
+      if (name.length < 2) return;
       const theme = buildThemeName();
 
       // Save name and email for personalization across the site

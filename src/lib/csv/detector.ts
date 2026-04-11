@@ -52,7 +52,7 @@ export function detectFormat(raw: string, filename: string): { format: CsvFormat
 
   // Try to parse first few rows to get headers
   const preview = Papa.parse(raw, { preview: 3, header: false, skipEmptyLines: true });
-  if (!preview.data || preview.data.length === 0) {
+  if (!preview.data || preview.data.length === 0 || (preview.errors && preview.errors.length > 0 && preview.data.length < 2)) {
     return { format: 'unknown', headers: [] };
   }
 
@@ -61,7 +61,7 @@ export function detectFormat(raw: string, filename: string): { format: CsvFormat
   // Check each signature
   for (const sig of SIGNATURES) {
     const allMatch = sig.requiredColumns.every(req =>
-      headers.some(h => h.includes(req))
+      headers.some(h => h === req)
     );
     if (allMatch) {
       return { format: sig.format, headers };

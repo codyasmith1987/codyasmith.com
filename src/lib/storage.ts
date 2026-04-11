@@ -72,7 +72,7 @@ export async function uploadFile(
 
 export async function getSignedDownloadUrl(s3Key: string): Promise<string> {
   const command = new GetObjectCommand({ Bucket: BUCKET, Key: s3Key });
-  return getSignedUrl(s3, command, { expiresIn: 900 }); // 15 minutes
+  return getSignedUrl(s3, command, { expiresIn: 3600 }); // 1 hour
 }
 
 export async function deleteFileFromStorage(s3Key: string, fileId: string): Promise<void> {

@@ -44,6 +44,7 @@ import Base from '../layouts/Base.astro';
                 id="name"
                 name="name"
                 required
+                aria-required="true"
                 data-personalize="prefill-name"
                 class="w-full bg-transparent border-b border-white/10 pb-3 text-neutral-100 text-lg focus:border-amber-400 focus:outline-none transition-colors duration-300 placeholder:text-neutral-700"
                 placeholder="Your name"
@@ -56,6 +57,7 @@ import Base from '../layouts/Base.astro';
                 id="email"
                 name="email"
                 required
+                aria-required="true"
                 data-personalize="prefill-email"
                 class="w-full bg-transparent border-b border-white/10 pb-3 text-neutral-100 text-lg focus:border-amber-400 focus:outline-none transition-colors duration-300 placeholder:text-neutral-700"
                 placeholder="you@company.com"
@@ -129,6 +131,7 @@ import Base from '../layouts/Base.astro';
                 name="message"
                 rows="4"
                 required
+                aria-required="true"
                 class="w-full bg-transparent border-b border-white/10 pb-3 text-neutral-100 text-lg focus:border-amber-400 focus:outline-none transition-colors duration-300 placeholder:text-neutral-700 resize-none"
                 placeholder="Tell me about the problem you're trying to solve..."
               ></textarea>

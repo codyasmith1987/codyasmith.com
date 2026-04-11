@@ -1,8 +1,20 @@
 export const prerender = false;
 
 import type { APIRoute } from 'astro';
+import { rateLimit } from '../../lib/rate-limit';
 
-export const POST: APIRoute = async ({ request }) => {
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+export const POST: APIRoute = async ({ request, clientAddress }) => {
+  const ip = clientAddress || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  if (!rateLimit(`quiz:${ip}`, 5, 60 * 60 * 1000)) {
+    return new Response(JSON.stringify({ error: 'Too many requests' }), {
+      status: 429, headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   try {
     const { name, email, theme, answers } = await request.json();
 
@@ -47,10 +59,10 @@ export const POST: APIRoute = async ({ request }) => {
         subject: `New visitor: ${name} (${q1} / ${q2} / ${q3} / ${q4})`,
         htmlContent: `
           <h2>Someone personalized the site</h2>
-          <p><strong>Name:</strong> ${name}</p>
-          <p><strong>Email:</strong> ${email}</p>
-          <p><strong>Persona:</strong> ${q1} / ${q2} / ${q3} / ${q4}</p>
-          <p><strong>Theme:</strong> ${theme}</p>
+          <p><strong>Name:</strong> ${escapeHtml(name)}</p>
+          <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+          <p><strong>Persona:</strong> ${escapeHtml(q1)} / ${escapeHtml(q2)} / ${escapeHtml(q3)} / ${escapeHtml(q4)}</p>
+          <p><strong>Theme:</strong> ${escapeHtml(theme || '')}</p>
         `,
       }),
     });

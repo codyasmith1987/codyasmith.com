@@ -401,7 +401,7 @@
       return {
         x: cx + Math.cos(angle) * dist,
         y: cy + Math.sin(angle) * dist,
-        speed: 4 + Math.random() * 6,
+        speed: 200 + Math.random() * 400,
         opacity: 0.01 + Math.random() * 0.025,
         thickness: 0.5 + Math.random() * 1,
       };
@@ -441,7 +441,7 @@
       if (!running) return;
 
       // Very slow fade = extremely long trails (ghostly)
-      ctx.fillStyle = 'rgba(0,0,0,0.012)';
+      ctx.fillStyle = 'rgba(0,0,0,0.06)';
       ctx.fillRect(0, 0, w, h);
 
       time += 0.003;
@@ -469,17 +469,18 @@
         const dx = t.x - cx, dy = t.y - cy;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
-        // Recycle if out of bounds or sucked into center
-        if (t.x < -50 || t.x > w + 50 || t.y < -50 || t.y > h + 50 || dist < 8) {
+        // Recycle if out of bounds or near center
+        const killRadius = 60;
+        if (t.x < -50 || t.x > w + 50 || t.y < -50 || t.y > h + 50 || dist < killRadius) {
           const nt = spawnTracer();
           t.x = nt.x; t.y = nt.y; t.speed = nt.speed;
           t.opacity = nt.opacity; t.thickness = nt.thickness;
           continue;
         }
 
-        // Inner = slightly brighter
-        const depthAlpha = 1 + Math.max(0, 1 - dist / (Math.max(w, h) * 0.4)) * 0.5;
-        const alpha = t.opacity * depthAlpha * (accelerating ? 1.5 : 1);
+        // Fade out near center — no stacking, no bright core
+        const centerFade = Math.min(1, (dist - killRadius) / (Math.max(w, h) * 0.25));
+        const alpha = t.opacity * centerFade * (accelerating ? 1.5 : 1);
 
         // Draw line from previous to current position
         ctx.beginPath();

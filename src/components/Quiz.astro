@@ -8,15 +8,8 @@
 <div id="quiz" class="fixed inset-0 z-[70]" style="display:none">
   <!-- Frosted glass: layered depth — blur + gradient vignette + grain -->
   <div id="quiz-backdrop" class="absolute inset-0 transition-all duration-1000 ease-out" style="backdrop-filter:blur(50px) saturate(1.1);-webkit-backdrop-filter:blur(50px) saturate(1.1);background:radial-gradient(ellipse at 50% 40%, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.85) 60%, rgba(0,0,0,0.92) 100%)"></div>
-  <!-- Vortex: multiple tendrils spiraling inward like a tornado from above -->
-  <div id="quiz-swirl" class="absolute inset-0 pointer-events-none quiz-vortex" style="transition:opacity 1.2s ease">
-    <div class="vortex-tendril vortex-t1"></div>
-    <div class="vortex-tendril vortex-t2"></div>
-    <div class="vortex-tendril vortex-t3"></div>
-    <div class="vortex-tendril vortex-t4"></div>
-    <div class="vortex-tendril vortex-t5"></div>
-    <div class="vortex-eye"></div>
-  </div>
+  <!-- Vortex: canvas-based particle system — real chaos, never repeats -->
+  <canvas id="quiz-vortex" class="absolute inset-0 w-full h-full pointer-events-none" style="transition:opacity 1.2s ease"></canvas>
   <div class="relative z-10 min-h-screen flex items-center justify-center p-6">
     <div class="max-w-lg w-full">
 
@@ -190,54 +183,45 @@
 
     function closeQuiz() {
       const backdrop = document.getElementById('quiz-backdrop');
-      const swirl = document.getElementById('quiz-swirl');
+      const vortexCanvas = document.getElementById('quiz-vortex');
       const content = quiz.querySelector('.relative.z-10') as HTMLElement;
 
-      // Phase 1: Content fades, swirl intensifies briefly (the final "set")
+      // Signal vortex to accelerate (final pull-in)
+      if ((window as any).__vortexAccelerate) (window as any).__vortexAccelerate();
+
+      // Phase 1: Content fades
       if (content) {
         content.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
         content.style.opacity = '0';
-        content.style.transform = 'scale(0.98)';
-      }
-      if (swirl) {
-        swirl.style.transition = 'opacity 0.8s ease';
-        swirl.style.opacity = '0.8';
+        content.style.transform = 'scale(0.97)';
       }
 
-      // Phase 2: Blur lifts gradually — the curtain draws back
+      // Phase 2: Blur lifts, vortex fades
       setTimeout(() => {
         if (backdrop) {
-          backdrop.style.transition = 'all 1.2s cubic-bezier(0.4, 0, 0.2, 1)';
+          backdrop.style.transition = 'all 1.4s cubic-bezier(0.4, 0, 0.2, 1)';
           backdrop.style.backdropFilter = 'blur(0px) saturate(1)';
           (backdrop.style as any).webkitBackdropFilter = 'blur(0px) saturate(1)';
           backdrop.style.background = 'transparent';
         }
-        if (swirl) {
-          swirl.style.transition = 'opacity 1s ease';
-          swirl.style.opacity = '0';
+        if (vortexCanvas) {
+          vortexCanvas.style.opacity = '0';
         }
-        // Vortex accelerates briefly during reveal — the final pull
-        if (swirl) {
-          swirl.classList.add('vortex-accelerate');
-          setTimeout(() => {
-            swirl.style.transition = 'opacity 0.8s ease';
-            swirl.style.opacity = '0';
-          }, 400);
-        }
-      }, 500);
+      }, 600);
 
       // Phase 3: Full clear
       setTimeout(() => {
         quiz.style.transition = 'opacity 0.3s ease';
         quiz.style.opacity = '0';
-      }, 1500);
+      }, 1800);
 
       setTimeout(() => {
         quiz.style.display = 'none';
+        if ((window as any).__vortexStop) (window as any).__vortexStop();
         if (typeof (window as any).__initPersonalization === 'function') {
           (window as any).__initPersonalization();
         }
-      }, 1800);
+      }, 2100);
     }
 
     function showRevealThenClose(nameStr?: string) {
@@ -335,4 +319,207 @@
 
   initQuiz();
   document.addEventListener('astro:after-swap', initQuiz);
+</script>
+
+<script>
+  // Vortex particle system — tornado from inside, Inkheart chaos
+  // Each particle is an ink tendril spiraling inward with noise-driven turbulence
+  function initVortex() {
+    const canvas = document.getElementById('quiz-vortex') as HTMLCanvasElement;
+    if (!canvas || canvas.dataset.init === '1') return;
+    canvas.dataset.init = '1';
+
+    const ctx = canvas.getContext('2d')!;
+    let w = 0, h = 0, cx = 0, cy = 0;
+    let running = true;
+    let accelerating = false;
+    let accelStart = 0;
+
+    function resize() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = canvas.clientWidth;
+      h = canvas.clientHeight;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      cx = w / 2;
+      cy = h / 2;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // Simple noise function (no library needed)
+    function noise(x: number, y: number, t: number): number {
+      const s = Math.sin(x * 12.9898 + y * 78.233 + t * 43.4321) * 43758.5453;
+      return (s - Math.floor(s)) * 2 - 1;
+    }
+
+    // Read accent color from CSS custom properties
+    function getAccentColor(): [number, number, number] {
+      const style = getComputedStyle(document.documentElement);
+      const hex = style.getPropertyValue('--color-amber-500').trim();
+      if (hex.startsWith('#') && hex.length >= 7) {
+        return [
+          parseInt(hex.slice(1, 3), 16),
+          parseInt(hex.slice(3, 5), 16),
+          parseInt(hex.slice(5, 7), 16),
+        ];
+      }
+      return [245, 158, 11]; // fallback amber
+    }
+
+    // Particle definition
+    interface Particle {
+      angle: number;       // current angle in radians
+      radius: number;      // distance from center
+      baseRadius: number;  // original distance (for drift)
+      speed: number;       // angular velocity (rad/frame)
+      drift: number;       // inward/outward drift speed
+      size: number;        // length of the tendril
+      thickness: number;   // width of the tendril
+      opacity: number;
+      noiseOffsetX: number;
+      noiseOffsetY: number;
+      trail: number[];     // recent angles for tail
+      hueShift: number;    // slight color variation
+    }
+
+    const particles: Particle[] = [];
+    const COUNT = 45;
+
+    for (let i = 0; i < COUNT; i++) {
+      const dist = 60 + Math.random() * Math.min(w, h) * 0.45;
+      const speed = (0.003 + Math.random() * 0.008) * (Math.random() > 0.3 ? 1 : -1);
+      particles.push({
+        angle: Math.random() * Math.PI * 2,
+        radius: dist,
+        baseRadius: dist,
+        speed,
+        drift: (Math.random() - 0.5) * 0.15,
+        size: 30 + Math.random() * 80,
+        thickness: 1 + Math.random() * 3,
+        opacity: 0.15 + Math.random() * 0.45,
+        noiseOffsetX: Math.random() * 1000,
+        noiseOffsetY: Math.random() * 1000,
+        trail: [],
+        hueShift: (Math.random() - 0.5) * 40,
+      });
+    }
+
+    let time = 0;
+    let accentRGB = getAccentColor();
+
+    // Re-read accent color when theme changes
+    const themeObserver = new MutationObserver(() => {
+      accentRGB = getAccentColor();
+    });
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    function draw() {
+      if (!running) return;
+      ctx.clearRect(0, 0, w, h);
+      time += 0.008;
+
+      const speedMult = accelerating ? 3 + Math.min((Date.now() - accelStart) / 500, 5) : 1;
+
+      for (const p of particles) {
+        // Noise-driven turbulence
+        const nx = noise(p.noiseOffsetX, time * 0.7, p.angle) * 20;
+        const ny = noise(p.noiseOffsetY, time * 0.5, p.radius * 0.01) * 20;
+
+        // Spiral motion — faster when closer to center
+        const radiusFactor = Math.max(0.3, p.radius / p.baseRadius);
+        p.angle += (p.speed / radiusFactor) * speedMult;
+
+        // Drift inward slowly (tornado pull), with some particles drifting out
+        p.radius += p.drift * (accelerating ? -2 : 1);
+
+        // Keep particles in bounds
+        if (p.radius < 20) {
+          p.radius = 60 + Math.random() * Math.min(w, h) * 0.4;
+          p.angle = Math.random() * Math.PI * 2;
+        }
+        if (p.radius > Math.min(w, h) * 0.6) {
+          p.drift = -Math.abs(p.drift); // pull back in
+        }
+        if (p.radius < 80 && !accelerating) {
+          p.drift = Math.abs(p.drift) * 0.3; // gentle push out near center
+        }
+
+        // Position
+        const x = cx + Math.cos(p.angle) * p.radius + nx;
+        const y = cy + Math.sin(p.angle) * p.radius + ny;
+
+        // Store trail
+        p.trail.push(p.angle);
+        if (p.trail.length > 8) p.trail.shift();
+
+        // Draw tendril as a tapered line along the orbit path
+        const tailAngle = p.trail[0] || p.angle;
+        const tx = cx + Math.cos(tailAngle) * (p.radius + 5) + nx * 0.5;
+        const ty = cy + Math.sin(tailAngle) * (p.radius + 5) + ny * 0.5;
+
+        // Color with per-particle hue shift
+        const r = Math.min(255, Math.max(0, accentRGB[0] + p.hueShift));
+        const g = Math.min(255, Math.max(0, accentRGB[1] + p.hueShift * 0.5));
+        const b = Math.min(255, Math.max(0, accentRGB[2] - p.hueShift * 0.3));
+
+        // Gradient along the tendril: bright head, fading tail
+        const grad = ctx.createLinearGradient(x, y, tx, ty);
+        grad.addColorStop(0, `rgba(${r},${g},${b},${p.opacity})`);
+        grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+
+        // Curved path through midpoints for organic shape
+        const mx = cx + Math.cos((p.angle + tailAngle) / 2) * (p.radius * 1.02) + nx * 0.7;
+        const my = cy + Math.sin((p.angle + tailAngle) / 2) * (p.radius * 1.02) + ny * 0.7;
+        ctx.quadraticCurveTo(mx, my, tx, ty);
+
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = p.thickness * (accelerating ? 0.5 : 1);
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        // Small bright dot at the head of fast particles
+        if (p.opacity > 0.35) {
+          ctx.beginPath();
+          ctx.arc(x, y, p.thickness * 0.8, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(${r},${g},${b},${p.opacity * 0.6})`;
+          ctx.fill();
+        }
+      }
+
+      // Soft glow at center (the eye)
+      const eyeGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 120);
+      eyeGrad.addColorStop(0, `rgba(${accentRGB[0]},${accentRGB[1]},${accentRGB[2]},0.06)`);
+      eyeGrad.addColorStop(0.5, `rgba(${accentRGB[0]},${accentRGB[1]},${accentRGB[2]},0.02)`);
+      eyeGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = eyeGrad;
+      ctx.fillRect(cx - 120, cy - 120, 240, 240);
+
+      requestAnimationFrame(draw);
+    }
+
+    requestAnimationFrame(draw);
+
+    // Expose controls for the reveal transition
+    (window as any).__vortexAccelerate = () => {
+      accelerating = true;
+      accelStart = Date.now();
+      // Pull all particles inward
+      for (const p of particles) {
+        p.drift = -Math.abs(p.drift) * 3 - 0.5;
+      }
+    };
+    (window as any).__vortexStop = () => {
+      running = false;
+      themeObserver.disconnect();
+      canvas.dataset.init = '';
+    };
+  }
+
+  initVortex();
+  document.addEventListener('astro:after-swap', initVortex);
 </script>

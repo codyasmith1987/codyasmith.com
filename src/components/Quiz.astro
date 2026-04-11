@@ -408,7 +408,7 @@
         x: cx + Math.cos(angle) * dist,
         y: cy + Math.sin(angle) * dist,
         speed: 75 + Math.random() * 175,
-        opacity: Math.random() < 0.2 ? (0.04 + Math.random() * 0.03) : (0.008 + Math.random() * 0.018),
+        opacity: Math.random() < 0.2 ? (0.05 + Math.random() * 0.04) : (0.012 + Math.random() * 0.022),
         thickness: 0.5 + Math.random() * 1,
       };
     }
@@ -419,10 +419,12 @@
     let accentRGB = getAccentColor();
     let prevAccentRGB = [...accentRGB] as [number, number, number];
 
-    // Pulse wave state — radiates out from center and back on each quiz choice
-    let waveRadius = -1;       // -1 = no wave active
-    let waveDirection = 1;     // 1 = expanding, -1 = contracting
+    // Heartbeat wave — double-pulse like a real heartbeat
+    let waveRadius = -1;
+    let waveDirection = 1;
     let waveSpeed = 0;
+    let waveBeatCount = 0;     // 0 = first beat, 1 = second beat
+    let wavePauseUntil = 0;    // timestamp for pause between beats
     const waveMaxR = Math.max(w, h) * 0.8;
 
     const themeObserver = new MutationObserver(() => {
@@ -453,16 +455,37 @@
       const now = Date.now();
       const speedMult = accelerating ? 8 + Math.min((now - accelStart) / 200, 20) : 1;
 
-      // Advance wave with undulation — it breathes as it travels
-      if (waveRadius >= 0) {
-        const undulate = Math.sin(waveRadius * 0.02) * 8; // oscillates ±8px
+      // Heartbeat wave — two quick pulses out and back, then done
+      if (waveRadius >= 0 && now >= wavePauseUntil) {
+        const undulate = Math.sin(waveRadius * 0.025) * 6;
         waveRadius += (waveSpeed + undulate * 0.3) * waveDirection;
         if (waveRadius > waveMaxR) { waveDirection = -1; }
-        if (waveRadius < 0 && waveDirection === -1) { waveRadius = -1; waveDirection = 1; }
+        if (waveRadius < 0 && waveDirection === -1) {
+          if (waveBeatCount === 0) {
+            // First beat done — pause briefly, then second beat (faster, stronger)
+            waveBeatCount = 1;
+            waveRadius = 0;
+            waveDirection = 1;
+            waveSpeed = 35;
+            wavePauseUntil = now + 150; // short pause between beats
+          } else {
+            // Second beat done
+            waveRadius = -1;
+            waveBeatCount = 0;
+          }
+        }
       }
 
       for (const t of tracers) {
         if (t.opacity <= 0) continue; // dead tracer
+
+        // During close: randomly kill tracers — they just vanish, one by one
+        if (accelerating) {
+          const elapsed = (now - accelStart) / 1000; // seconds since close started
+          const deathChance = 0.003 + elapsed * 0.008; // starts slow, accelerates
+          if (Math.random() < deathChance) { t.opacity = 0; continue; }
+        }
+
         const prevX = t.x, prevY = t.y;
         const angle = flowAngle(t.x, t.y, time);
 
@@ -496,7 +519,7 @@
           const waveDist = Math.abs(dist - waveRadius);
           const waveWidth = 120;
           if (waveDist < waveWidth) {
-            waveBoost = (1 - waveDist / waveWidth) * 0.03; // brighten at wavefront
+            waveBoost = (1 - waveDist / waveWidth) * 0.05; // brighten at wavefront
           }
           // Behind wave = new color, ahead = old color
           const colorBlend = waveDirection === 1
@@ -514,7 +537,7 @@
         ctx.beginPath();
         ctx.moveTo(prevX, prevY);
         ctx.lineTo(t.x, t.y);
-        ctx.strokeStyle = `rgba(${r},${g},${b},${Math.min(alpha, 0.06)})`;
+        ctx.strokeStyle = `rgba(${r},${g},${b},${Math.min(alpha, 0.08)})`;
         ctx.lineWidth = t.thickness;
         ctx.stroke();
       }
@@ -530,14 +553,26 @@
     (window as any).__vortexPulse = () => {
       waveRadius = 0;
       waveDirection = 1;
-      waveSpeed = 25;
+      waveSpeed = 22;
+      waveBeatCount = 0;
+      wavePauseUntil = 0;
     };
 
-    // Final close — tracers stop spawning and fade away naturally
+    // Final close — tracers die randomly one by one, backdrop lifts gradually
     (window as any).__vortexAccelerate = () => {
       accelerating = true;
       accelStart = Date.now();
-      // Kill all tracers gradually — they fly off screen or hit center and don't respawn
+
+      // Gradually lift the backdrop blur to reveal the page beneath
+      const backdrop = document.getElementById('quiz-backdrop');
+      if (backdrop) {
+        backdrop.style.transition = 'backdrop-filter 3.5s ease, -webkit-backdrop-filter 3.5s ease, background 3.5s ease';
+        setTimeout(() => {
+          backdrop.style.backdropFilter = 'blur(0px)';
+          (backdrop.style as any).webkitBackdropFilter = 'blur(0px)';
+          backdrop.style.background = 'transparent';
+        }, 200);
+      }
     };
 
     (window as any).__vortexStop = () => {

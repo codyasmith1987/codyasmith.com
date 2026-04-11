@@ -191,34 +191,40 @@
       const vortexCanvas = document.getElementById('quiz-vortex');
       const content = quiz.querySelector('.relative.z-10') as HTMLElement;
 
-      // Signal vortex to accelerate (final pull-in)
+      // Detect if destination is a light (sun) theme
+      const theme = document.documentElement.getAttribute('data-theme') || '';
+      const isSunTheme = theme.startsWith('sun-');
+
+      // Signal vortex to twist and collapse
       if ((window as any).__vortexAccelerate) (window as any).__vortexAccelerate();
 
-      // Phase 1: Content fades
+      // Phase 1: Content fades, backdrop starts transitioning toward the page
       if (content) {
-        content.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+        content.style.transition = 'opacity 0.8s ease, transform 0.8s ease';
         content.style.opacity = '0';
-        content.style.transform = 'scale(0.97)';
+        content.style.transform = 'scale(0.95)';
+      }
+      // If going to a light page, start brightening the backdrop
+      if (backdrop && isSunTheme) {
+        backdrop.style.transition = 'background 2.5s ease';
+        backdrop.style.background = 'radial-gradient(ellipse at 50% 40%, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.15) 60%, rgba(255,255,255,0.05) 100%)';
       }
 
-      // Phase 2: Blur lifts, vortex fades
+      // Phase 2: Blur lifts slowly, vortex twists away
       setTimeout(() => {
         if (backdrop) {
-          backdrop.style.transition = 'all 1.4s cubic-bezier(0.4, 0, 0.2, 1)';
+          backdrop.style.transition = 'all 2.5s cubic-bezier(0.4, 0, 0.2, 1)';
           backdrop.style.backdropFilter = 'blur(0px)';
           (backdrop.style as any).webkitBackdropFilter = 'blur(0px)';
           backdrop.style.background = 'transparent';
         }
-        if (vortexCanvas) {
-          vortexCanvas.style.opacity = '0';
-        }
-      }, 600);
+      }, 800);
 
-      // Phase 3: Full clear
+      // Phase 3: Slow fade of entire quiz overlay
       setTimeout(() => {
-        quiz.style.transition = 'opacity 0.3s ease';
+        quiz.style.transition = 'opacity 1.2s ease';
         quiz.style.opacity = '0';
-      }, 1800);
+      }, 2500);
 
       setTimeout(() => {
         quiz.style.display = 'none';
@@ -226,7 +232,7 @@
         if (typeof (window as any).__initPersonalization === 'function') {
           (window as any).__initPersonalization();
         }
-      }, 2100);
+      }, 4000);
     }
 
     function showRevealThenClose(nameStr?: string) {
@@ -236,7 +242,7 @@
         revealName.textContent = ` for ${nameStr.split(' ')[0]}`;
       }
       showStep(6);
-      setTimeout(closeQuiz, 1400);
+      setTimeout(closeQuiz, 2000);
     }
 
     function buildThemeName(): string {
@@ -401,7 +407,7 @@
       return {
         x: cx + Math.cos(angle) * dist,
         y: cy + Math.sin(angle) * dist,
-        speed: 200 + Math.random() * 400,
+        speed: 75 + Math.random() * 175,
         opacity: 0.01 + Math.random() * 0.025,
         thickness: 0.5 + Math.random() * 1,
       };
@@ -440,18 +446,19 @@
     function draw() {
       if (!running) return;
 
-      ctx.fillStyle = 'rgba(0,0,0,0.06)';
+      ctx.fillStyle = 'rgba(0,0,0,0.03)';
       ctx.fillRect(0, 0, w, h);
 
       time += 0.003;
       const now = Date.now();
       const speedMult = accelerating ? 8 + Math.min((now - accelStart) / 200, 20) : 1;
 
-      // Advance wave
+      // Advance wave with undulation — it breathes as it travels
       if (waveRadius >= 0) {
-        waveRadius += waveSpeed * waveDirection;
-        if (waveRadius > waveMaxR) { waveDirection = -1; } // bounce back
-        if (waveRadius < 0 && waveDirection === -1) { waveRadius = -1; waveDirection = 1; } // done
+        const undulate = Math.sin(waveRadius * 0.02) * 8; // oscillates ±8px
+        waveRadius += (waveSpeed + undulate * 0.3) * waveDirection;
+        if (waveRadius > waveMaxR) { waveDirection = -1; }
+        if (waveRadius < 0 && waveDirection === -1) { waveRadius = -1; waveDirection = 1; }
       }
 
       for (const t of tracers) {
@@ -464,7 +471,7 @@
         const dx = t.x - cx, dy = t.y - cy;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
-        const killRadius = 60;
+        const killRadius = 15;
         if (t.x < -50 || t.x > w + 50 || t.y < -50 || t.y > h + 50 || dist < killRadius) {
           const nt = spawnTracer();
           t.x = nt.x; t.y = nt.y; t.speed = nt.speed;
@@ -472,7 +479,8 @@
           continue;
         }
 
-        const centerFade = Math.min(1, (dist - killRadius) / (Math.max(w, h) * 0.25));
+        // Gentle fade near center — allows some buildup but not blinding
+        const centerFade = Math.min(1, dist / (Math.max(w, h) * 0.15));
 
         // Wave color blend — tracers behind the wave show new color,
         // tracers ahead show old color. Wave carries the color change outward.
@@ -519,21 +527,17 @@
       waveSpeed = 25;
     };
 
-    // Final close — everything twists tight and contracts into the page
+    // Final close — vortex tightens and twists away slowly
     (window as any).__vortexAccelerate = () => {
       accelerating = true;
       accelStart = Date.now();
-      // Tighten the spiral dramatically
-      for (const t of tracers) {
-        t.speed = t.speed * 0.3; // slow linear speed
-      }
-      // Canvas contracts and fades
+      // Canvas twists down slowly — the chaos IS the creation
       const canvasEl = canvas;
-      canvasEl.style.transition = 'transform 1.8s cubic-bezier(0.4, 0, 0.2, 1), opacity 1.8s ease';
+      canvasEl.style.transition = 'transform 3.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 3s ease-in';
       setTimeout(() => {
-        canvasEl.style.transform = 'scale(0.02) rotate(180deg)';
+        canvasEl.style.transform = 'scale(0.01) rotate(360deg)';
         canvasEl.style.opacity = '0';
-      }, 100);
+      }, 200);
     };
 
     (window as any).__vortexStop = () => {

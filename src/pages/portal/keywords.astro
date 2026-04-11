@@ -64,8 +64,21 @@ const clients = isAdmin ? await getAllClients() : [];
       </div>
     </div>
 
+    <!-- Loading state -->
+    <div id="kw-loading" class="text-center py-20">
+      <div class="inline-block w-8 h-8 border-2 border-neutral-700 border-t-amber-500 rounded-full animate-spin mb-4"></div>
+      <p class="text-sm text-neutral-500">Loading keywords...</p>
+    </div>
+
+    <!-- Error state -->
+    <div id="kw-error" class="hidden text-center py-20">
+      <p class="text-red-400 text-lg mb-2">Something went wrong</p>
+      <p id="kw-error-detail" class="text-sm text-neutral-600 mb-6"></p>
+      <button onclick="loadKeywords()" class="px-5 py-2.5 bg-amber-500 text-neutral-950 font-medium text-sm rounded-lg hover:bg-amber-400 transition-colors">Retry</button>
+    </div>
+
     <!-- Search filter -->
-    <div class="mb-4">
+    <div class="mb-4 hidden" id="kw-search-wrap">
       <input type="search" id="kw-search" placeholder="Search keywords..."
         class="w-full px-4 py-2.5 bg-neutral-900/50 border border-white/5 rounded-xl text-neutral-100 text-sm placeholder-neutral-600 focus:outline-none focus:border-amber-500/30" />
     </div>
@@ -93,27 +106,46 @@ const clients = isAdmin ? await getAllClients() : [];
     }
 
     async function loadKeywords() {
+      const loadingEl = document.getElementById('kw-loading');
+      const errorEl = document.getElementById('kw-error');
+      const searchWrap = document.getElementById('kw-search-wrap');
+
+      loadingEl.classList.remove('hidden');
+      errorEl.classList.add('hidden');
+      searchWrap.classList.add('hidden');
+      document.getElementById('kw-summary').classList.add('hidden');
+      document.getElementById('kw-empty').classList.add('hidden');
+      document.getElementById('kw-list').innerHTML = '';
+      document.getElementById('kw-count').textContent = '';
+
       const source = document.getElementById('kw-source').value;
       const cid = activeClientId;
-      if (!cid) { document.getElementById('kw-empty').classList.remove('hidden'); return; }
-
-      const res = await fetch(`/portal/api/dashboard/keywords?client_id=${cid}&source=${source}&limit=500`);
-      const data = await res.json();
-      allKeywords = data.keywords || [];
-
-      const summaryEl = document.getElementById('kw-summary');
-      const emptyEl = document.getElementById('kw-empty');
-
-      if (allKeywords.length === 0) {
-        summaryEl.classList.add('hidden');
-        emptyEl.classList.remove('hidden');
-        document.getElementById('kw-list').innerHTML = '';
-        document.getElementById('kw-count').textContent = '';
+      if (!cid) {
+        loadingEl.classList.add('hidden');
+        document.getElementById('kw-empty').classList.remove('hidden');
         return;
       }
 
-      emptyEl.classList.add('hidden');
-      summaryEl.classList.remove('hidden');
+      try {
+        const res = await fetch(`/portal/api/dashboard/keywords?client_id=${cid}&source=${source}&limit=500`);
+        if (!res.ok) throw new Error('Failed to load keyword data');
+        const data = await res.json();
+        allKeywords = data.keywords || [];
+
+        loadingEl.classList.add('hidden');
+
+        const summaryEl = document.getElementById('kw-summary');
+        const emptyEl = document.getElementById('kw-empty');
+
+        if (allKeywords.length === 0) {
+          summaryEl.classList.add('hidden');
+          emptyEl.classList.remove('hidden');
+          return;
+        }
+
+        emptyEl.classList.add('hidden');
+        summaryEl.classList.remove('hidden');
+        searchWrap.classList.remove('hidden');
 
       const withPos = allKeywords.filter(k => k.position);
       const top3 = withPos.filter(k => k.position <= 3).length;
@@ -150,6 +182,11 @@ const clients = isAdmin ? await getAllClients() : [];
       document.getElementById('kw-narrative').textContent = narr;
 
       renderList();
+      } catch (err) {
+        loadingEl.classList.add('hidden');
+        document.getElementById('kw-error-detail').textContent = err.message || 'Could not connect to the server.';
+        errorEl.classList.remove('hidden');
+      }
     }
 
     function renderList() {

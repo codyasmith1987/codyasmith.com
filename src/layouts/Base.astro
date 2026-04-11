@@ -69,16 +69,17 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
     <Footer />
     <Quiz />
 
-    <!-- Dev theme switcher (remove before final launch) -->
-    <div class="theme-switcher" id="theme-switcher">
-      <button data-set-theme="" title="Original (no theme)">Orig</button>
-      <button data-set-theme="sun-mountain-fall-stars" title="Sun+Mtn+Fall+Stars">SmFs</button>
-      <button data-set-theme="sun-mountain-fall-clouds" title="Sun+Mtn+Fall+Clouds">SmFc</button>
-      <button data-set-theme="moon-mountain-fall-stars" title="Moon+Mtn+Fall+Stars">MmFs</button>
-      <button data-set-theme="moon-mountain-fall-clouds" title="Moon+Mtn+Fall+Clouds">MmFc</button>
-      <button data-set-theme="moon-beach-spring-stars" title="Moon+Beach+Spring+Stars">MbSs</button>
-      <button data-set-theme="sun-beach-spring-clouds" title="Sun+Beach+Spring+Clouds">SbSc</button>
-    </div>
+    {import.meta.env.DEV && (
+      <div class="theme-switcher" id="theme-switcher">
+        <button data-set-theme="" title="Original (no theme)">Orig</button>
+        <button data-set-theme="sun-mountain-fall-stars" title="Sun+Mtn+Fall+Stars">SmFs</button>
+        <button data-set-theme="sun-mountain-fall-clouds" title="Sun+Mtn+Fall+Clouds">SmFc</button>
+        <button data-set-theme="moon-mountain-fall-stars" title="Moon+Mtn+Fall+Stars">MmFs</button>
+        <button data-set-theme="moon-mountain-fall-clouds" title="Moon+Mtn+Fall+Clouds">MmFc</button>
+        <button data-set-theme="moon-beach-spring-stars" title="Moon+Beach+Spring+Stars">MbSs</button>
+        <button data-set-theme="sun-beach-spring-clouds" title="Sun+Beach+Spring+Clouds">SbSc</button>
+      </div>
+    )}
 
     <script>
       function initPersonalization() {

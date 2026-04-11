@@ -78,6 +78,13 @@ if (token) {
       const success = document.getElementById('success-message')!;
       const errorEl = document.getElementById('error-message')!;
 
+      // Show error from redirect (e.g. expired magic link)
+      const urlError = new URLSearchParams(window.location.search).get('error');
+      if (urlError === 'expired') {
+        errorEl.textContent = 'That login link has expired. Please request a new one.';
+        errorEl.classList.remove('hidden');
+      }
+
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         btn.disabled = true;

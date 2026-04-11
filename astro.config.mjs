@@ -10,7 +10,7 @@ export default defineConfig({
   integrations: [sitemap()],
   adapter: node({ mode: 'standalone' }),
   security: {
-    checkOrigin: false
+    checkOrigin: true
   },
   vite: {
     plugins: [tailwindcss()]

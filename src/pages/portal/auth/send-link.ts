@@ -12,6 +12,9 @@ export const POST: APIRoute = async ({ request, url }) => {
     if (!email || typeof email !== 'string') {
       return json({ error: 'Email is required' }, 400);
     }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      return json({ error: 'Invalid email address' }, 400);
+    }
 
     const user = await getUserByEmail(email);
 

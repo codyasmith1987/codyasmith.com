@@ -72,7 +72,7 @@ const clients = await getAllClients();
     {users.length > 0 ? (
       <div class="space-y-3">
         {users.map(u => (
-          <div class="bg-neutral-900/30 border border-white/5 rounded-lg p-4 flex items-center justify-between">
+          <div class="bg-neutral-900/30 border border-white/5 rounded-lg p-4 flex items-center justify-between group" data-user-row={u.id}>
             <div>
               <p class="text-sm font-medium text-neutral-200">{u.name}</p>
               <p class="text-xs text-neutral-500">{u.email}</p>
@@ -90,6 +90,23 @@ const clients = await getAllClients();
                   Last login: {new Date(u.last_login_at).toLocaleDateString()}
                 </span>
               )}
+              <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  data-revoke-user={u.id}
+                  class="text-xs text-neutral-500 hover:text-amber-400 transition-colors"
+                  title="Force logout"
+                >
+                  Revoke sessions
+                </button>
+                <button
+                  data-delete-user={u.id}
+                  data-user-name={u.name}
+                  class="text-xs text-neutral-500 hover:text-red-400 transition-colors"
+                  title="Delete user"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
         ))}
@@ -100,6 +117,49 @@ const clients = await getAllClients();
   </div>
 
   <script>
+    // Revoke sessions
+    document.querySelectorAll('[data-revoke-user]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId = (btn as HTMLElement).dataset.revokeUser!;
+        const res = await fetch('/portal/api/admin/revoke-sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          (btn as HTMLElement).textContent = `Revoked (${data.sessions_revoked})`;
+          (btn as HTMLElement).classList.add('text-amber-400');
+          setTimeout(() => {
+            (btn as HTMLElement).textContent = 'Revoke sessions';
+            (btn as HTMLElement).classList.remove('text-amber-400');
+          }, 2000);
+        }
+      });
+    });
+
+    // Delete user
+    document.querySelectorAll('[data-delete-user]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId = (btn as HTMLElement).dataset.deleteUser!;
+        const userName = (btn as HTMLElement).dataset.userName!;
+        if (!confirm(`Delete ${userName}? This will also revoke all their sessions.`)) return;
+
+        const res = await fetch('/portal/api/admin/delete-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId }),
+        });
+        if (res.ok) {
+          const row = document.querySelector(`[data-user-row="${userId}"]`);
+          if (row) row.remove();
+        } else {
+          const data = await res.json();
+          alert(data.error || 'Failed to delete user');
+        }
+      });
+    });
+
     const form = document.getElementById('create-user-form') as HTMLFormElement;
     const msg = document.getElementById('user-msg')!;
 

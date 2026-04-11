@@ -373,11 +373,13 @@ const recentScans = await getRecentScans(5);
         const color = scoreColor(data.overall_score);
         document.getElementById('t1-brand')!.textContent = `Results for ${data.brand}`;
         const ring = document.getElementById('t1-score-ring')!;
-        ring.className = `inline-flex items-center justify-center w-36 h-36 rounded-full border-4 mb-4 border-${color}-500/40`;
+        ring.className = 'inline-flex items-center justify-center w-36 h-36 rounded-full border-4 mb-4';
+        ring.style.borderColor = color.border;
         document.getElementById('t1-score')!.textContent = String(data.overall_score);
         const labelEl = document.getElementById('t1-label')!;
         labelEl.textContent = data.overall_label;
-        labelEl.className = `text-lg font-semibold mb-2 text-${color}-400`;
+        labelEl.className = 'text-lg font-semibold mb-2';
+        labelEl.style.color = color.text;
         document.getElementById('t1-mention-count')!.textContent = `${data.mention_count} mentions analyzed across the web`;
         document.getElementById('t1-summary')!.textContent = data.summary;
 
@@ -442,10 +444,10 @@ const recentScans = await getRecentScans(5);
         tier1.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }) as EventListener);
 
-      function scoreColor(score: number): string {
-        if (score >= 65) return 'emerald';
-        if (score >= 40) return 'amber';
-        return 'red';
+      function scoreColor(score: number): { name: string; border: string; text: string } {
+        if (score >= 65) return { name: 'emerald', border: 'rgba(16,185,129,0.4)', text: '#34d399' };
+        if (score >= 40) return { name: 'amber', border: 'rgba(245,158,11,0.4)', text: '#fbbf24' };
+        return { name: 'red', border: 'rgba(239,68,68,0.4)', text: '#f87171' };
       }
 
       function badgeClasses(label: string): string {
@@ -474,7 +476,7 @@ const recentScans = await getRecentScans(5);
               </div>
             </div>
             <p class="text-neutral-400 text-xs leading-relaxed mt-2">${(m.snippet || '').slice(0, 200)}${(m.snippet || '').length > 200 ? '...' : ''}</p>
-            ${showFull && m.key_phrases ? `<div class="flex flex-wrap gap-1 mt-2">${(typeof m.key_phrases === 'string' ? JSON.parse(m.key_phrases) : m.key_phrases).map((p: string) => `<span class="px-2 py-0.5 bg-white/5 border border-white/10 rounded text-[10px] text-neutral-500">${p}</span>`).join('')}</div>` : ''}
+            ${showFull && m.key_phrases ? `<div class="flex flex-wrap gap-1 mt-2">${((() => { try { return typeof m.key_phrases === 'string' ? JSON.parse(m.key_phrases) : m.key_phrases; } catch { return []; } })()).map((p: string) => `<span class="px-2 py-0.5 bg-white/5 border border-white/10 rounded text-[10px] text-neutral-500">${p}</span>`).join('')}</div>` : ''}
           </div>`;
       }
 

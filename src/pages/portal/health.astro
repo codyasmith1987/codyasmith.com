@@ -50,6 +50,19 @@ const clients = isAdmin ? await getAllClients() : [];
       </div>
     </div>
 
+    <!-- Loading state -->
+    <div id="health-loading" class="text-center py-20">
+      <div class="inline-block w-8 h-8 border-2 border-neutral-700 border-t-amber-500 rounded-full animate-spin mb-4"></div>
+      <p class="text-sm text-neutral-500">Loading site health...</p>
+    </div>
+
+    <!-- Error state -->
+    <div id="health-error" class="hidden text-center py-20">
+      <p class="text-red-400 text-lg mb-2">Something went wrong</p>
+      <p id="health-error-detail" class="text-sm text-neutral-600 mb-6"></p>
+      <button onclick="loadHealth()" class="px-5 py-2.5 bg-amber-500 text-neutral-950 font-medium text-sm rounded-lg hover:bg-amber-400 transition-colors">Retry</button>
+    </div>
+
     <!-- Issue categories -->
     <div id="issue-groups" class="space-y-6 mb-8"></div>
 
@@ -129,22 +142,39 @@ const clients = isAdmin ? await getAllClients() : [];
     }
 
     async function loadHealth() {
+      const loadingEl = document.getElementById('health-loading');
+      const errorEl = document.getElementById('health-error');
+
+      loadingEl.classList.remove('hidden');
+      errorEl.classList.add('hidden');
+      document.getElementById('health-empty').classList.add('hidden');
+      document.getElementById('health-hero').classList.add('hidden');
+      document.getElementById('issue-groups').innerHTML = '';
+
       const cid = activeClientId;
-      if (!cid) { document.getElementById('health-empty').classList.remove('hidden'); return; }
-
-      const res = await fetch(`/portal/api/dashboard/issues?client_id=${cid}`);
-      const data = await res.json();
-      const issues = data.issues || [];
-
-      if (issues.length === 0) {
+      if (!cid) {
+        loadingEl.classList.add('hidden');
         document.getElementById('health-empty').classList.remove('hidden');
-        document.getElementById('health-hero').classList.add('hidden');
-        document.getElementById('issue-groups').innerHTML = '';
         return;
       }
 
-      document.getElementById('health-empty').classList.add('hidden');
-      document.getElementById('health-hero').classList.remove('hidden');
+      try {
+        const res = await fetch(`/portal/api/dashboard/issues?client_id=${cid}`);
+        if (!res.ok) throw new Error('Failed to load health data');
+        const data = await res.json();
+        const issues = data.issues || [];
+
+        loadingEl.classList.add('hidden');
+
+        if (issues.length === 0) {
+          document.getElementById('health-empty').classList.remove('hidden');
+          document.getElementById('health-hero').classList.add('hidden');
+          document.getElementById('issue-groups').innerHTML = '';
+          return;
+        }
+
+        document.getElementById('health-empty').classList.add('hidden');
+        document.getElementById('health-hero').classList.remove('hidden');
 
       const high = issues.filter(i => ['critical', 'high'].includes((i.priority || '').toLowerCase())).length;
       const medium = issues.filter(i => (i.priority || '').toLowerCase() === 'medium').length;
@@ -225,6 +255,11 @@ const clients = isAdmin ? await getAllClients() : [];
           </div>
         </div>
       `).join('');
+      } catch (err) {
+        loadingEl.classList.add('hidden');
+        document.getElementById('health-error-detail').textContent = err.message || 'Could not connect to the server.';
+        errorEl.classList.remove('hidden');
+      }
     }
 
     loadHealth();

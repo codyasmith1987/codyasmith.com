@@ -292,6 +292,40 @@ export async function getAllClients() {
   }));
 }
 
+export async function toggleClientActive(clientId: string): Promise<boolean> {
+  await ensurePortalTables();
+  const result = await turso.execute({
+    sql: 'SELECT active FROM clients WHERE id = ?',
+    args: [clientId],
+  });
+  if (result.rows.length === 0) throw new Error('Client not found');
+  const newActive = (result.rows[0][0] as number) === 1 ? 0 : 1;
+  await turso.execute({
+    sql: 'UPDATE clients SET active = ? WHERE id = ?',
+    args: [newActive, clientId],
+  });
+  return newActive === 1;
+}
+
+export async function deleteUser(userId: string): Promise<void> {
+  await ensurePortalTables();
+  // Delete sessions first, then magic links, then user
+  await turso.batch([
+    { sql: 'DELETE FROM sessions WHERE user_id = ?', args: [userId] },
+    { sql: 'DELETE FROM magic_links WHERE user_id = ?', args: [userId] },
+    { sql: 'DELETE FROM users WHERE id = ?', args: [userId] },
+  ], 'write');
+}
+
+export async function revokeUserSessions(userId: string): Promise<number> {
+  await ensurePortalTables();
+  const result = await turso.execute({
+    sql: 'DELETE FROM sessions WHERE user_id = ?',
+    args: [userId],
+  });
+  return result.rowsAffected;
+}
+
 export async function getAllUsers() {
   await ensurePortalTables();
   const result = await turso.execute(

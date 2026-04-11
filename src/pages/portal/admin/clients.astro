@@ -50,17 +50,29 @@ const clients = await getAllClients();
     {clients.length > 0 ? (
       <div class="space-y-3">
         {clients.map(client => (
-          <div class="bg-neutral-900/30 border border-white/5 rounded-lg p-4 flex items-center justify-between">
+          <div class="bg-neutral-900/30 border border-white/5 rounded-lg p-4 flex items-center justify-between group" data-client-row={client.id}>
             <div>
               <p class="text-sm font-medium text-neutral-200">{client.name}</p>
               <p class="text-xs text-neutral-500">{client.slug}</p>
             </div>
-            <span class:list={[
-              'text-xs px-2 py-0.5 rounded-full',
-              client.active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-neutral-700 text-neutral-400',
-            ]}>
-              {client.active ? 'Active' : 'Inactive'}
-            </span>
+            <div class="flex items-center gap-3">
+              <span
+                data-client-badge={client.id}
+                class:list={[
+                  'text-xs px-2 py-0.5 rounded-full',
+                  client.active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-neutral-700 text-neutral-400',
+                ]}
+              >
+                {client.active ? 'Active' : 'Inactive'}
+              </span>
+              <button
+                data-toggle-client={client.id}
+                data-client-active={client.active ? '1' : '0'}
+                class="text-xs text-neutral-500 hover:text-amber-400 transition-colors opacity-0 group-hover:opacity-100"
+              >
+                {client.active ? 'Deactivate' : 'Activate'}
+              </button>
+            </div>
           </div>
         ))}
       </div>
@@ -70,6 +82,31 @@ const clients = await getAllClients();
   </div>
 
   <script>
+    // Toggle active/inactive
+    document.querySelectorAll('[data-toggle-client]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const clientId = (btn as HTMLElement).dataset.toggleClient!;
+        const isActive = (btn as HTMLElement).dataset.clientActive === '1';
+
+        if (isActive && !confirm('Deactivate this client? Their users won\'t be able to log in.')) return;
+
+        const res = await fetch('/portal/api/admin/toggle-client', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ client_id: clientId }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const badge = document.querySelector(`[data-client-badge="${clientId}"]`)!;
+          badge.textContent = data.active ? 'Active' : 'Inactive';
+          badge.className = `text-xs px-2 py-0.5 rounded-full ${data.active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-neutral-700 text-neutral-400'}`;
+          (btn as HTMLElement).textContent = data.active ? 'Deactivate' : 'Activate';
+          (btn as HTMLElement).dataset.clientActive = data.active ? '1' : '0';
+        }
+      });
+    });
+
     const form = document.getElementById('create-client-form') as HTMLFormElement;
     const msg = document.getElementById('client-msg')!;
     const nameInput = document.getElementById('client-name') as HTMLInputElement;

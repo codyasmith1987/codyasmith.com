@@ -7,7 +7,7 @@
 
 <div id="quiz" class="fixed inset-0 z-[70]" style="display:none">
   <!-- Frosted glass: layered depth — blur + gradient vignette + grain -->
-  <div id="quiz-backdrop" class="absolute inset-0 transition-all duration-1000 ease-out" style="backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);background:radial-gradient(ellipse at 50% 40%, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.85) 60%, rgba(0,0,0,0.92) 100%)"></div>
+  <div id="quiz-backdrop" class="absolute inset-0 transition-all duration-1000 ease-out" style="backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);background:radial-gradient(ellipse at 50% 40%, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.55) 60%, rgba(0,0,0,0.65) 100%)"></div>
   <!-- Vortex: canvas-based particle system — real chaos, never repeats -->
   <canvas id="quiz-vortex" class="absolute inset-0 w-full h-full pointer-events-none" style="transition:opacity 1.2s ease"></canvas>
   <div class="relative z-10 min-h-screen flex items-center justify-center p-6">
@@ -188,43 +188,33 @@
 
     function closeQuiz() {
       const backdrop = document.getElementById('quiz-backdrop');
-      const vortexCanvas = document.getElementById('quiz-vortex');
       const content = quiz.querySelector('.relative.z-10') as HTMLElement;
 
-      // Detect if destination is a light (sun) theme
-      const theme = document.documentElement.getAttribute('data-theme') || '';
-      const isSunTheme = theme.startsWith('sun-');
-
-      // Signal vortex to twist and collapse
+      // Start killing tracers randomly
       if ((window as any).__vortexAccelerate) (window as any).__vortexAccelerate();
 
-      // Phase 1: Content fades, backdrop starts transitioning toward the page
+      // Content fades
       if (content) {
         content.style.transition = 'opacity 0.8s ease, transform 0.8s ease';
         content.style.opacity = '0';
         content.style.transform = 'scale(0.95)';
       }
-      // If going to a light page, start brightening the backdrop
-      if (backdrop && isSunTheme) {
-        backdrop.style.transition = 'background 2.5s ease';
-        backdrop.style.background = 'radial-gradient(ellipse at 50% 40%, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.15) 60%, rgba(255,255,255,0.05) 100%)';
-      }
 
-      // Phase 2: Blur lifts slowly, vortex twists away
-      setTimeout(() => {
-        if (backdrop) {
-          backdrop.style.transition = 'all 2.5s cubic-bezier(0.4, 0, 0.2, 1)';
+      // Backdrop: lift blur and darken, revealing clear page beneath
+      if (backdrop) {
+        backdrop.style.transition = 'all 3.5s ease';
+        setTimeout(() => {
           backdrop.style.backdropFilter = 'blur(0px)';
           (backdrop.style as any).webkitBackdropFilter = 'blur(0px)';
           backdrop.style.background = 'transparent';
-        }
-      }, 800);
+        }, 500);
+      }
 
-      // Phase 3: Slow fade of entire quiz overlay
+      // Final clear
       setTimeout(() => {
-        quiz.style.transition = 'opacity 1.2s ease';
+        quiz.style.transition = 'opacity 0.5s ease';
         quiz.style.opacity = '0';
-      }, 2500);
+      }, 4000);
 
       setTimeout(() => {
         quiz.style.display = 'none';
@@ -232,7 +222,7 @@
         if (typeof (window as any).__initPersonalization === 'function') {
           (window as any).__initPersonalization();
         }
-      }, 4000);
+      }, 4800);
     }
 
     function showRevealThenClose(nameStr?: string) {
@@ -511,28 +501,31 @@
         // Gentle fade near center — allows some buildup but not blinding
         const centerFade = Math.min(1, dist / (Math.max(w, h) * 0.15));
 
-        // Wave color blend — tracers behind the wave show new color,
-        // tracers ahead show old color. Wave carries the color change outward.
-        let r: number, g: number, b: number;
+        // Default: tracers are white/neutral — like light refracting through glass.
+        // Wave pulse temporarily colors them with the theme accent.
+        let r = 220, g = 215, b = 210; // warm white — refraction baseline
         let waveBoost = 0;
+        let colorIntensity = 0;
+
         if (waveRadius >= 0) {
           const waveDist = Math.abs(dist - waveRadius);
-          const waveWidth = 120;
+          const waveWidth = 150;
           if (waveDist < waveWidth) {
-            waveBoost = (1 - waveDist / waveWidth) * 0.05; // brighten at wavefront
+            colorIntensity = (1 - waveDist / waveWidth);
+            waveBoost = colorIntensity * 0.06;
           }
-          // Behind wave = new color, ahead = old color
-          const colorBlend = waveDirection === 1
-            ? Math.min(1, Math.max(0, (waveRadius - dist) / 150))
-            : Math.min(1, Math.max(0, (dist - waveRadius) / 150 + 1));
-          r = Math.round(prevAccentRGB[0] + (accentRGB[0] - prevAccentRGB[0]) * colorBlend);
-          g = Math.round(prevAccentRGB[1] + (accentRGB[1] - prevAccentRGB[1]) * colorBlend);
-          b = Math.round(prevAccentRGB[2] + (accentRGB[2] - prevAccentRGB[2]) * colorBlend);
-        } else {
-          r = accentRGB[0]; g = accentRGB[1]; b = accentRGB[2];
+          // Wave carries the theme color — fades back to white after wave passes
+          const behindWave = waveDirection === 1
+            ? Math.min(1, Math.max(0, (waveRadius - dist) / 200))
+            : Math.min(1, Math.max(0, (dist - waveRadius) / 200 + 1));
+          // Blend from white toward accent, strongest at wavefront
+          const colorMix = Math.max(colorIntensity, behindWave * 0.6);
+          r = Math.round(220 + (accentRGB[0] - 220) * colorMix);
+          g = Math.round(215 + (accentRGB[1] - 215) * colorMix);
+          b = Math.round(210 + (accentRGB[2] - 210) * colorMix);
         }
 
-        const alpha = (t.opacity + waveBoost) * centerFade * (accelerating ? 2 : 1);
+        const alpha = (t.opacity + waveBoost) * centerFade * (accelerating ? 1.5 : 1);
 
         ctx.beginPath();
         ctx.moveTo(prevX, prevY);
@@ -558,21 +551,10 @@
       wavePauseUntil = 0;
     };
 
-    // Final close — tracers die randomly one by one, backdrop lifts gradually
+    // Final close — tracers die randomly one by one
     (window as any).__vortexAccelerate = () => {
       accelerating = true;
       accelStart = Date.now();
-
-      // Gradually lift the backdrop blur to reveal the page beneath
-      const backdrop = document.getElementById('quiz-backdrop');
-      if (backdrop) {
-        backdrop.style.transition = 'backdrop-filter 3.5s ease, -webkit-backdrop-filter 3.5s ease, background 3.5s ease';
-        setTimeout(() => {
-          backdrop.style.backdropFilter = 'blur(0px)';
-          (backdrop.style as any).webkitBackdropFilter = 'blur(0px)';
-          backdrop.style.background = 'transparent';
-        }, 200);
-      }
     };
 
     (window as any).__vortexStop = () => {

@@ -378,128 +378,141 @@
       return [245, 158, 11]; // fallback amber
     }
 
-    // Ghostly vortex — the softest chaos imaginable.
-    // Dense, fast, swirling — but whisper-thin and translucent.
-    // A memory of a tornado seen through frosted glass.
-    interface Strand {
-      angle: number;
-      radius: number;
+    // Ghostly vortex — noise flow field.
+    // Hundreds of tracers follow invisible spiraling currents.
+    // They leave long fading trails. The result is smoke in a whirlpool.
+    // Not arcs. Not dots. Flowing, turbulent, organic wisps.
+
+    interface Tracer {
+      x: number;
+      y: number;
       speed: number;
-      drift: number;
-      length: number;
-      thickness: number;
       opacity: number;
-      noiseOffset: number;
+      thickness: number;
     }
 
-    const strands: Strand[] = [];
-    const COUNT = 350;
-    const maxR = Math.max(w, h) * 0.75;
+    const tracers: Tracer[] = [];
+    const COUNT = 400;
 
-    for (let i = 0; i < COUNT; i++) {
-      const layer = Math.random();
-      const dir = Math.random() > 0.35 ? 1 : -1; // 35% counter-rotating for chaos
-      strands.push({
-        angle: Math.random() * Math.PI * 2,
-        radius: 15 + Math.random() * maxR,
-        speed: (0.004 + layer * 0.012) * dir,
-        drift: -0.015 - Math.random() * 0.06,
-        length: 0.1 + Math.random() * 0.8,
-        thickness: 0.3 + layer * 1.2,
-        opacity: 0.006 + layer * 0.018,
-        noiseOffset: Math.random() * 1000,
-      });
+    function spawnTracer(): Tracer {
+      // Spawn anywhere on canvas, biased toward edges
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 50 + Math.random() * Math.max(w, h) * 0.5;
+      return {
+        x: cx + Math.cos(angle) * dist,
+        y: cy + Math.sin(angle) * dist,
+        speed: 1.5 + Math.random() * 3,
+        opacity: 0.01 + Math.random() * 0.025,
+        thickness: 0.5 + Math.random() * 1,
+      };
     }
+
+    for (let i = 0; i < COUNT; i++) tracers.push(spawnTracer());
 
     let time = 0;
     let accentRGB = getAccentColor();
-    let pulseUntil = 0; // timestamp — vortex surges when quiz answer is clicked
+    let pulseUntil = 0;
+    let swirlStrength = 3.5; // how strongly the flow spirals
 
     const themeObserver = new MutationObserver(() => { accentRGB = getAccentColor(); });
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
+    // Flow field: at any (x,y), return the direction a tracer should move.
+    // Combines a spiral toward center with noise turbulence.
+    function flowAngle(x: number, y: number, t: number): number {
+      const dx = x - cx, dy = y - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy) + 1;
+
+      // Base: spiral toward center (tangent + inward pull)
+      const toCenter = Math.atan2(dy, dx);
+      const tangent = toCenter + Math.PI * 0.5; // perpendicular = orbit
+      const spiral = tangent + 0.3; // slight inward bias
+
+      // Noise turbulence layered on top
+      const n1 = noise(x * 0.003, y * 0.003, t) * Math.PI;
+      const n2 = noise(x * 0.008 + 100, y * 0.008 + 100, t * 1.3) * Math.PI * 0.5;
+
+      // Closer to center = more spiral, less noise. Further = more chaos.
+      const blend = Math.min(1, dist / (Math.max(w, h) * 0.3));
+      return spiral * (1 - blend * 0.4) + (n1 + n2) * blend * 0.6;
+    }
+
     function draw() {
       if (!running) return;
 
-      // Long motion trails — very slow fade = ghostly persistence
-      ctx.fillStyle = 'rgba(0,0,0,0.018)';
+      // Very slow fade = extremely long trails (ghostly)
+      ctx.fillStyle = 'rgba(0,0,0,0.012)';
       ctx.fillRect(0, 0, w, h);
 
-      time += 0.004;
+      time += 0.003;
 
-      // Pulse multiplier — surges on quiz answer, decays over ~1.5s
       const now = Date.now();
       const pulseActive = now < pulseUntil;
       const pulseFade = pulseActive ? Math.max(0, (pulseUntil - now) / 1500) : 0;
-      const pulseMult = 1 + pulseFade * 2.5;
-      const speedMult = accelerating ? 5 + Math.min((now - accelStart) / 300, 10) : pulseMult;
+      const pulseMult = 1 + pulseFade * 3;
+      const speedMult = accelerating ? 6 + Math.min((now - accelStart) / 250, 12) : pulseMult;
 
-      for (const s of strands) {
-        // Noise-based radius wobble for organic turbulence
-        const wobble = noise(s.noiseOffset, time * 0.5, s.angle) * 12;
+      // During acceleration, increase spiral pull
+      const currentSwirl = accelerating ? swirlStrength * 3 : swirlStrength;
 
-        // Rotate
-        s.angle += s.speed * speedMult;
+      for (const t of tracers) {
+        const prevX = t.x, prevY = t.y;
 
-        // Drift inward
-        s.radius += s.drift * (accelerating ? 4 : 1);
+        // Get flow direction at this position
+        const angle = flowAngle(t.x, t.y, time);
 
-        // Recycle
-        if (s.radius < 8) {
-          s.radius = maxR * (0.4 + Math.random() * 0.6);
-          s.angle = Math.random() * Math.PI * 2;
+        // Move along the flow
+        t.x += Math.cos(angle) * t.speed * speedMult;
+        t.y += Math.sin(angle) * t.speed * speedMult;
+
+        // Distance from center
+        const dx = t.x - cx, dy = t.y - cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        // Recycle if out of bounds or sucked into center
+        if (t.x < -50 || t.x > w + 50 || t.y < -50 || t.y > h + 50 || dist < 8) {
+          const nt = spawnTracer();
+          t.x = nt.x; t.y = nt.y; t.speed = nt.speed;
+          t.opacity = nt.opacity; t.thickness = nt.thickness;
+          continue;
         }
-        if (s.radius > maxR) {
-          s.radius = maxR;
-          s.drift = -Math.abs(s.drift);
-        }
 
-        // Draw arc with radius wobble
-        const r0 = s.radius + wobble;
-        const startAngle = s.angle;
-        const endAngle = s.angle + s.length * (s.speed > 0 ? 1 : -1);
+        // Inner = slightly brighter
+        const depthAlpha = 1 + Math.max(0, 1 - dist / (Math.max(w, h) * 0.4)) * 0.5;
+        const alpha = t.opacity * depthAlpha * (accelerating ? 1.5 : 1);
 
-        // Inner = brighter, outer = dimmer
-        const depth = Math.max(0, 1 - s.radius / maxR);
-        const alpha = s.opacity * (0.4 + depth * 0.6) * (accelerating ? 2 : 1);
-
+        // Draw line from previous to current position
         ctx.beginPath();
-        ctx.arc(cx, cy, Math.max(1, r0), startAngle, endAngle, s.speed < 0);
-        ctx.strokeStyle = `rgba(${accentRGB[0]},${accentRGB[1]},${accentRGB[2]},${Math.min(alpha, 0.05)})`;
-        ctx.lineWidth = s.thickness;
-        ctx.lineCap = 'round';
+        ctx.moveTo(prevX, prevY);
+        ctx.lineTo(t.x, t.y);
+        ctx.strokeStyle = `rgba(${accentRGB[0]},${accentRGB[1]},${accentRGB[2]},${Math.min(alpha, 0.04)})`;
+        ctx.lineWidth = t.thickness;
         ctx.stroke();
       }
 
-      // Soft glow at center
-      const eyeGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 100);
-      eyeGrad.addColorStop(0, `rgba(${accentRGB[0]},${accentRGB[1]},${accentRGB[2]},0.04)`);
+      // Faint glow at eye
+      const eyeGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 80);
+      eyeGrad.addColorStop(0, `rgba(${accentRGB[0]},${accentRGB[1]},${accentRGB[2]},0.03)`);
       eyeGrad.addColorStop(1, 'transparent');
       ctx.fillStyle = eyeGrad;
       ctx.beginPath();
-      ctx.arc(cx, cy, 100, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 80, 0, Math.PI * 2);
       ctx.fill();
 
       requestAnimationFrame(draw);
     }
 
-    // Clear canvas fully before first frame
     ctx.fillStyle = 'rgba(0,0,0,1)';
     ctx.fillRect(0, 0, w, h);
     requestAnimationFrame(draw);
 
-    // Pulse — called when quiz answer is selected. Vortex surges briefly.
     (window as any).__vortexPulse = () => {
       pulseUntil = Date.now() + 1500;
     };
 
-    // Accelerate — called on quiz close. Everything collapses inward.
     (window as any).__vortexAccelerate = () => {
       accelerating = true;
       accelStart = Date.now();
-      for (const s of strands) {
-        s.drift = -Math.abs(s.drift) * 5 - 0.4;
-      }
     };
 
     (window as any).__vortexStop = () => {

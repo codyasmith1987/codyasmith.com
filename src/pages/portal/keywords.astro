@@ -1,0 +1,205 @@
+---
+import Portal from '../../layouts/Portal.astro';
+import { getAllClients } from '../../lib/auth';
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const isAdmin = user.role === 'admin';
+const clients = isAdmin ? await getAllClients() : [];
+---
+
+<Portal title="Keywords">
+  <div class="max-w-4xl mx-auto">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h1 class="text-2xl font-semibold text-neutral-100">Keyword Rankings</h1>
+        <p class="text-sm text-neutral-500 mt-1">How your site shows up when people search Google</p>
+      </div>
+      <div class="flex items-center gap-3">
+        {isAdmin && clients.length > 0 && (
+          <select id="client-selector" class="px-3 py-2 bg-neutral-900 border border-white/10 rounded-lg text-neutral-100 text-sm">
+            {clients.map(c => <option value={c.id}>{c.name}</option>)}
+          </select>
+        )}
+        <select id="kw-source" class="px-3 py-2 bg-neutral-900 border border-white/10 rounded-lg text-neutral-100 text-sm">
+          <option value="position_tracking">Tracked Rankings</option>
+          <option value="keyword_research">All Keywords</option>
+          <option value="keyword_suggestions">Opportunities</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Visibility summary -->
+    <div id="kw-summary" class="mb-8 hidden">
+      <div class="bg-neutral-900/50 border border-white/5 rounded-2xl p-6">
+        <div class="grid grid-cols-4 gap-6 mb-6">
+          <div class="text-center">
+            <p id="kw-total" class="text-3xl font-bold text-neutral-100">—</p>
+            <p class="text-xs text-neutral-500 mt-1">tracked</p>
+          </div>
+          <div class="text-center">
+            <p id="kw-top3" class="text-3xl font-bold text-emerald-400">—</p>
+            <p class="text-xs text-neutral-500 mt-1">top 3</p>
+          </div>
+          <div class="text-center">
+            <p id="kw-page1" class="text-3xl font-bold text-amber-400">—</p>
+            <p class="text-xs text-neutral-500 mt-1">page 1</p>
+          </div>
+          <div class="text-center">
+            <p id="kw-buried" class="text-3xl font-bold text-neutral-600">—</p>
+            <p class="text-xs text-neutral-500 mt-1">page 2+</p>
+          </div>
+        </div>
+        <!-- Position distribution bar -->
+        <div class="h-3 rounded-full overflow-hidden flex bg-neutral-800">
+          <div id="bar-top3" class="bg-emerald-500 transition-all duration-700"></div>
+          <div id="bar-page1" class="bg-amber-500 transition-all duration-700"></div>
+          <div id="bar-page2" class="bg-neutral-600 transition-all duration-700"></div>
+        </div>
+        <div class="flex justify-between mt-2">
+          <span class="text-[10px] text-neutral-600">Position 1</span>
+          <span class="text-[10px] text-neutral-600">Position 100+</span>
+        </div>
+        <p id="kw-narrative" class="text-sm text-neutral-400 mt-4 leading-relaxed"></p>
+      </div>
+    </div>
+
+    <!-- Search filter -->
+    <div class="mb-4">
+      <input type="search" id="kw-search" placeholder="Search keywords..."
+        class="w-full px-4 py-2.5 bg-neutral-900/50 border border-white/5 rounded-xl text-neutral-100 text-sm placeholder-neutral-600 focus:outline-none focus:border-amber-500/30" />
+    </div>
+
+    <!-- Keyword list -->
+    <div id="kw-list" class="space-y-1"></div>
+    <p id="kw-count" class="mt-4 text-xs text-neutral-600"></p>
+
+    <div id="kw-empty" class="hidden bg-neutral-900/50 border border-white/5 rounded-xl p-12 text-center">
+      <p class="text-neutral-500">No keyword data yet.</p>
+      {isAdmin && <p class="text-sm text-neutral-600 mt-2">Upload a position tracking CSV to see rankings.</p>}
+    </div>
+  </div>
+
+  <script define:vars={{ clientId: user.client_id, isAdmin, firstClientId: clients[0]?.id || '' }}>
+    let activeClientId = isAdmin ? firstClientId : clientId;
+    let allKeywords = [];
+
+    const selector = document.getElementById('client-selector');
+    if (selector) {
+      selector.addEventListener('change', (e) => {
+        activeClientId = e.target.value;
+        loadKeywords();
+      });
+    }
+
+    async function loadKeywords() {
+      const source = document.getElementById('kw-source').value;
+      const cid = activeClientId;
+      if (!cid) { document.getElementById('kw-empty').classList.remove('hidden'); return; }
+
+      const res = await fetch(`/portal/api/dashboard/keywords?client_id=${cid}&source=${source}&limit=500`);
+      const data = await res.json();
+      allKeywords = data.keywords || [];
+
+      const summaryEl = document.getElementById('kw-summary');
+      const emptyEl = document.getElementById('kw-empty');
+
+      if (allKeywords.length === 0) {
+        summaryEl.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        document.getElementById('kw-list').innerHTML = '';
+        document.getElementById('kw-count').textContent = '';
+        return;
+      }
+
+      emptyEl.classList.add('hidden');
+      summaryEl.classList.remove('hidden');
+
+      const withPos = allKeywords.filter(k => k.position);
+      const top3 = withPos.filter(k => k.position <= 3).length;
+      const page1 = withPos.filter(k => k.position <= 10).length;
+      const page2 = withPos.filter(k => k.position > 10 && k.position <= 20).length;
+      const buried = withPos.filter(k => k.position > 20).length;
+      const total = withPos.length;
+
+      document.getElementById('kw-total').textContent = allKeywords.length;
+      document.getElementById('kw-top3').textContent = top3;
+      document.getElementById('kw-page1').textContent = page1;
+      document.getElementById('kw-buried').textContent = (page2 + buried) || '0';
+
+      // Distribution bar
+      if (total > 0) {
+        document.getElementById('bar-top3').style.width = `${(top3 / total) * 100}%`;
+        document.getElementById('bar-page1').style.width = `${((page1 - top3) / total) * 100}%`;
+        document.getElementById('bar-page2').style.width = `${((page2 + buried) / total) * 100}%`;
+      }
+
+      // Narrative
+      const totalVol = withPos.filter(k => k.position <= 10).reduce((s, k) => s + (k.search_volume || 0), 0);
+      let narr = '';
+      if (source === 'position_tracking') {
+        narr = `You're tracking ${total} keyword${total !== 1 ? 's' : ''}. ${page1} show${page1 !== 1 ? '' : 's'} up on Google's first page`;
+        if (totalVol > 0) narr += `, reaching approximately ${totalVol.toLocaleString()} searches per month`;
+        narr += `. ${top3 > 0 ? `${top3} keyword${top3 !== 1 ? 's rank' : ' ranks'} in the top 3 — that's premium placement.` : ''}`;
+        if (page2 > 0) narr += ` ${page2} keyword${page2 !== 1 ? 's are' : ' is'} on page 2, close to breaking onto page 1.`;
+      } else if (source === 'keyword_research') {
+        narr = `${allKeywords.length} keywords found across your site. These represent the search terms Google already associates with your content.`;
+      } else {
+        narr = `${allKeywords.length} keyword opportunities identified. These are searches your target audience is making that you could rank for with the right content.`;
+      }
+      document.getElementById('kw-narrative').textContent = narr;
+
+      renderList();
+    }
+
+    function renderList() {
+      const filter = (document.getElementById('kw-search').value || '').toLowerCase();
+      const filtered = filter ? allKeywords.filter(k => k.keyword.toLowerCase().includes(filter)) : allKeywords;
+      const list = document.getElementById('kw-list');
+      const count = document.getElementById('kw-count');
+
+      if (filtered.length === 0) {
+        list.innerHTML = '<p class="text-sm text-neutral-600 py-4 text-center">No matches</p>';
+        count.textContent = '';
+        return;
+      }
+
+      list.innerHTML = filtered.slice(0, 100).map(k => {
+        const pos = k.position;
+        let posColor = 'text-neutral-600';
+        let posBg = 'bg-neutral-800/50';
+        if (pos && pos <= 3) { posColor = 'text-emerald-400'; posBg = 'bg-emerald-500/10'; }
+        else if (pos && pos <= 10) { posColor = 'text-amber-400'; posBg = 'bg-amber-500/10'; }
+        else if (pos && pos <= 20) { posColor = 'text-neutral-400'; posBg = 'bg-neutral-800'; }
+
+        return `
+          <div class="flex items-center justify-between py-2.5 px-4 rounded-lg hover:bg-white/[0.02] transition-colors">
+            <div class="flex items-center gap-4 min-w-0">
+              <span class="text-sm font-mono ${posColor} ${posBg} w-10 text-center py-1 rounded shrink-0">
+                ${pos ? '#' + pos : '—'}
+              </span>
+              <div class="min-w-0">
+                <span class="text-sm text-neutral-200 block truncate">${k.keyword}</span>
+                ${k.url ? `<span class="text-[10px] text-neutral-600 block truncate">${k.url.replace('https://', '')}</span>` : ''}
+              </div>
+            </div>
+            <div class="flex items-center gap-4 shrink-0 ml-4">
+              ${k.search_volume ? `<span class="text-xs text-neutral-500">${k.search_volume.toLocaleString()}/mo</span>` : ''}
+              ${k.seo_difficulty != null ? `<span class="text-xs ${k.seo_difficulty <= 30 ? 'text-emerald-600' : k.seo_difficulty <= 60 ? 'text-amber-600' : 'text-red-600'}">${k.seo_difficulty} SD</span>` : ''}
+              ${k.change ? `<span class="text-xs ${k.change < 0 ? 'text-emerald-400' : 'text-red-400'}">${k.change < 0 ? '↑' : '↓'}${Math.abs(k.change)}</span>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      count.textContent = filtered.length > 100
+        ? `Showing 100 of ${filtered.length} keywords`
+        : `${filtered.length} keyword${filtered.length !== 1 ? 's' : ''}`;
+    }
+
+    document.getElementById('kw-search').addEventListener('input', renderList);
+    document.getElementById('kw-source').addEventListener('change', loadKeywords);
+
+    loadKeywords();
+  </script>
+</Portal>

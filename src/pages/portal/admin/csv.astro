@@ -1,0 +1,197 @@
+---
+import Portal from '../../../layouts/Portal.astro';
+import { getAllClients } from '../../../lib/auth';
+import { getRecentUploads } from '../../../lib/csv/index';
+export const prerender = false;
+
+const clients = await getAllClients();
+const uploads = await getRecentUploads(undefined, 30);
+
+function formatLabel(format: string): string {
+  return format.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+---
+
+<Portal title="CSV Upload">
+  <div class="max-w-4xl mx-auto">
+    <div class="mb-8">
+      <h1 class="text-2xl font-semibold text-neutral-100">CSV Upload</h1>
+      <p class="text-sm text-neutral-500 mt-1">Drop CSVs from Ubersuggest, Screaming Frog, and other tools</p>
+    </div>
+
+    <!-- Upload form -->
+    <form id="csv-form" class="bg-neutral-900/50 border border-white/5 rounded-xl p-6 mb-8">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-xs text-neutral-500 mb-1">Client</label>
+          <select id="csv-client" required class="w-full px-3 py-2 bg-neutral-900 border border-white/10 rounded-lg text-neutral-100 text-sm focus:outline-none focus:border-amber-500/40">
+            <option value="">Select...</option>
+            {clients.map(c => <option value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-neutral-500 mb-1">Month</label>
+          <input type="month" id="csv-month" required
+            value={new Date().toISOString().slice(0, 7)}
+            class="w-full px-3 py-2 bg-neutral-900 border border-white/10 rounded-lg text-neutral-100 text-sm focus:outline-none focus:border-amber-500/40" />
+        </div>
+        <div>
+          <label class="block text-xs text-neutral-500 mb-1">CSV files</label>
+          <input type="file" id="csv-files" accept=".csv" multiple required
+            class="w-full text-sm text-neutral-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-amber-500 file:text-neutral-950 hover:file:bg-amber-400 file:cursor-pointer" />
+        </div>
+      </div>
+      <div class="mt-4 flex items-center gap-4">
+        <button type="submit" id="csv-btn" class="px-4 py-2 bg-amber-500 text-neutral-950 font-medium text-sm rounded-lg hover:bg-amber-400 transition-colors disabled:opacity-50">
+          Upload & Process
+        </button>
+        <span id="csv-progress" class="text-sm text-neutral-500 hidden"></span>
+      </div>
+    </form>
+
+    <!-- Upload results (populated by JS) -->
+    <div id="csv-results" class="space-y-3 mb-8 hidden"></div>
+
+    <!-- Manual metric entry -->
+    <details class="mb-8">
+      <summary class="text-sm text-neutral-400 cursor-pointer hover:text-neutral-200">Manual metric entry</summary>
+      <form id="manual-form" class="bg-neutral-900/50 border border-white/5 rounded-xl p-6 mt-3">
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <select id="m-client" required class="px-3 py-2 bg-neutral-900 border border-white/10 rounded-lg text-neutral-100 text-sm">
+            <option value="">Client</option>
+            {clients.map(c => <option value={c.id}>{c.name}</option>)}
+          </select>
+          <input type="month" id="m-month" required value={new Date().toISOString().slice(0, 7)}
+            class="px-3 py-2 bg-neutral-900 border border-white/10 rounded-lg text-neutral-100 text-sm" />
+          <input type="text" id="m-category" required placeholder="Category (e.g. traffic)"
+            class="px-3 py-2 bg-neutral-900 border border-white/10 rounded-lg text-neutral-100 text-sm" />
+          <input type="text" id="m-key" required placeholder="Metric key"
+            class="px-3 py-2 bg-neutral-900 border border-white/10 rounded-lg text-neutral-100 text-sm" />
+          <div class="flex gap-2">
+            <input type="number" id="m-value" required step="any" placeholder="Value"
+              class="flex-1 px-3 py-2 bg-neutral-900 border border-white/10 rounded-lg text-neutral-100 text-sm" />
+            <button type="submit" class="px-3 py-2 bg-amber-500 text-neutral-950 text-sm font-medium rounded-lg hover:bg-amber-400">Save</button>
+          </div>
+        </div>
+        <p id="m-msg" class="mt-2 text-sm hidden"></p>
+      </form>
+    </details>
+
+    <!-- Recent uploads -->
+    {uploads.length > 0 && (
+      <div>
+        <h2 class="text-sm font-medium text-neutral-400 mb-3">Recent uploads</h2>
+        <div class="space-y-2">
+          {uploads.map(u => (
+            <div class="bg-neutral-900/30 border border-white/5 rounded-lg p-4 flex items-center justify-between">
+              <div>
+                <p class="text-sm font-medium text-neutral-200">{u.original_name}</p>
+                <div class="flex items-center gap-3 mt-0.5">
+                  <span class="text-xs text-neutral-500">{u.client_name}</span>
+                  <span class="text-xs text-neutral-500">{u.month}</span>
+                  <span class:list={[
+                    'text-xs px-2 py-0.5 rounded-full',
+                    u.error ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400',
+                  ]}>
+                    {u.error ? 'Error' : formatLabel(u.detected_format)}
+                  </span>
+                </div>
+              </div>
+              <span class="text-xs text-neutral-500">{u.row_count} rows</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+  </div>
+
+  <script>
+    const form = document.getElementById('csv-form') as HTMLFormElement;
+    const btn = document.getElementById('csv-btn') as HTMLButtonElement;
+    const progress = document.getElementById('csv-progress')!;
+    const resultsDiv = document.getElementById('csv-results')!;
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      btn.disabled = true;
+      resultsDiv.innerHTML = '';
+      resultsDiv.classList.remove('hidden');
+
+      const files = (document.getElementById('csv-files') as HTMLInputElement).files!;
+      const clientId = (document.getElementById('csv-client') as HTMLSelectElement).value;
+      const month = (document.getElementById('csv-month') as HTMLInputElement).value;
+
+      progress.classList.remove('hidden');
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        progress.textContent = `Processing ${i + 1}/${files.length}: ${file.name}...`;
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('client_id', clientId);
+        formData.append('month', month);
+
+        try {
+          const res = await fetch('/portal/api/csv/upload', { method: 'POST', body: formData });
+          const data = await res.json();
+
+          const card = document.createElement('div');
+          card.className = `bg-neutral-900/30 border rounded-lg p-4 ${data.error ? 'border-red-500/20' : 'border-emerald-500/20'}`;
+          card.innerHTML = `
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-sm font-medium text-neutral-200">${file.name}</p>
+                <p class="text-xs text-neutral-500 mt-0.5">
+                  ${data.format !== 'unknown' ? `Detected: <span class="text-emerald-400">${data.format.replace(/_/g, ' ')}</span>` : ''}
+                  ${data.row_count ? ` — ${data.row_count} rows processed` : ''}
+                </p>
+              </div>
+              ${data.error ? `<span class="text-xs text-red-400">${data.error}</span>` : '<span class="text-xs text-emerald-400">Done</span>'}
+            </div>
+          `;
+          resultsDiv.appendChild(card);
+        } catch (err: any) {
+          const card = document.createElement('div');
+          card.className = 'bg-neutral-900/30 border border-red-500/20 rounded-lg p-4';
+          card.innerHTML = `<p class="text-sm text-red-400">${file.name}: ${err.message}</p>`;
+          resultsDiv.appendChild(card);
+        }
+      }
+
+      progress.textContent = `Done — ${files.length} file(s) processed`;
+      btn.disabled = false;
+    });
+
+    // Manual metric form
+    const mForm = document.getElementById('manual-form') as HTMLFormElement;
+    const mMsg = document.getElementById('m-msg')!;
+
+    mForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      mMsg.classList.add('hidden');
+
+      const res = await fetch('/portal/api/metrics/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_id: (document.getElementById('m-client') as HTMLSelectElement).value,
+          month: (document.getElementById('m-month') as HTMLInputElement).value,
+          category: (document.getElementById('m-category') as HTMLInputElement).value,
+          metric_key: (document.getElementById('m-key') as HTMLInputElement).value,
+          metric_value: (document.getElementById('m-value') as HTMLInputElement).value,
+        }),
+      });
+
+      if (res.ok) {
+        mMsg.textContent = 'Saved';
+        mMsg.className = 'mt-2 text-sm text-emerald-400';
+      } else {
+        const data = await res.json();
+        mMsg.textContent = data.error || 'Failed';
+        mMsg.className = 'mt-2 text-sm text-red-400';
+      }
+      mMsg.classList.remove('hidden');
+    });
+  </script>
+</Portal>

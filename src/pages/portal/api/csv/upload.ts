@@ -1,0 +1,48 @@
+import type { APIRoute } from 'astro';
+import { ingestCSV } from '../../../../lib/csv/index';
+
+export const prerender = false;
+
+const json = (data: any, status = 200) =>
+  new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
+
+export const POST: APIRoute = async ({ locals, request }) => {
+  if (locals.user?.role !== 'admin') return json({ error: 'Forbidden' }, 403);
+
+  try {
+    const formData = await request.formData();
+    const file = formData.get('file') as File | null;
+    const clientId = formData.get('client_id') as string;
+    const month = formData.get('month') as string;
+
+    if (!file || !clientId || !month) {
+      return json({ error: 'File, client_id, and month are required' }, 400);
+    }
+
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      return json({ error: 'Only CSV files are accepted' }, 400);
+    }
+
+    const raw = await file.text();
+    const result = await ingestCSV(raw, clientId, month, file.name, locals.user.id);
+
+    if (result.error) {
+      return json({
+        upload_id: result.uploadId,
+        format: result.format,
+        row_count: result.rowCount,
+        error: result.error,
+        headers: result.headers,
+      }, 422);
+    }
+
+    return json({
+      upload_id: result.uploadId,
+      format: result.format,
+      row_count: result.rowCount,
+    });
+  } catch (err: any) {
+    console.error('CSV upload error:', err);
+    return json({ error: err.message || 'Upload failed' }, 500);
+  }
+};

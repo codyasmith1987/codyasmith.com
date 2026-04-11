@@ -1,0 +1,232 @@
+---
+import Portal from '../../layouts/Portal.astro';
+import { getAllClients } from '../../lib/auth';
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const isAdmin = user.role === 'admin';
+const clients = isAdmin ? await getAllClients() : [];
+---
+
+<Portal title="Site Health">
+  <div class="max-w-4xl mx-auto">
+    <div class="flex items-center justify-between mb-4">
+      <div>
+        <h1 class="text-2xl font-semibold text-neutral-100">Site Health</h1>
+        <p class="text-sm text-neutral-500 mt-1">Technical issues that affect your search rankings and visitor experience</p>
+      </div>
+      {isAdmin && clients.length > 0 && (
+        <select id="client-selector" class="px-3 py-2 bg-neutral-900 border border-white/10 rounded-lg text-neutral-100 text-sm">
+          {clients.map(c => <option value={c.id}>{c.name}</option>)}
+        </select>
+      )}
+    </div>
+
+    <!-- Health Score -->
+    <div id="health-hero" class="mb-10 hidden">
+      <div class="bg-neutral-900/50 border border-white/5 rounded-2xl p-8">
+        <div class="flex items-start gap-6 mb-6">
+          <div id="health-grade" class="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold shrink-0"></div>
+          <div>
+            <h2 id="health-headline" class="text-lg font-medium text-neutral-100 mb-1"></h2>
+            <p id="health-description" class="text-sm text-neutral-400 leading-relaxed"></p>
+          </div>
+        </div>
+        <!-- Issue breakdown bar -->
+        <div class="grid grid-cols-3 gap-4">
+          <div class="text-center">
+            <p id="count-critical" class="text-2xl font-bold text-red-400">0</p>
+            <p class="text-xs text-neutral-500 mt-0.5">critical / high</p>
+          </div>
+          <div class="text-center">
+            <p id="count-medium" class="text-2xl font-bold text-amber-400">0</p>
+            <p class="text-xs text-neutral-500 mt-0.5">medium</p>
+          </div>
+          <div class="text-center">
+            <p id="count-low" class="text-2xl font-bold text-neutral-500">0</p>
+            <p class="text-xs text-neutral-500 mt-0.5">low priority</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Issue categories -->
+    <div id="issue-groups" class="space-y-6 mb-8"></div>
+
+    <div id="health-empty" class="hidden bg-neutral-900/50 border border-white/5 rounded-xl p-12 text-center">
+      <p class="text-neutral-500">No health data yet.</p>
+      {isAdmin && <p class="text-sm text-neutral-600 mt-2">Upload a site audit CSV to see health metrics.</p>}
+    </div>
+  </div>
+
+  <script define:vars={{ clientId: user.client_id, isAdmin, firstClientId: clients[0]?.id || '' }}>
+    let activeClientId = isAdmin ? firstClientId : clientId;
+
+    const selector = document.getElementById('client-selector');
+    if (selector) {
+      selector.addEventListener('change', (e) => {
+        activeClientId = e.target.value;
+        loadHealth();
+      });
+    }
+
+    // Group issues into human-readable categories
+    const ISSUE_CATEGORIES = [
+      {
+        name: 'Content & Structure',
+        icon: '📝',
+        description: 'How well your pages are organized for Google and visitors',
+        match: (n) => /^(h1|h2|content|page title|meta desc)/i.test(n),
+      },
+      {
+        name: 'Images',
+        icon: '🖼',
+        description: 'Image optimization affects page speed and accessibility',
+        match: (n) => /^image/i.test(n),
+      },
+      {
+        name: 'Links',
+        icon: '🔗',
+        description: 'How pages connect to each other and the outside web',
+        match: (n) => /^(link|response code|broken)/i.test(n),
+      },
+      {
+        name: 'Security',
+        icon: '🔒',
+        description: 'Browser security settings that protect your visitors',
+        match: (n) => /^security/i.test(n),
+      },
+    ];
+
+    const ISSUE_EXPLAIN = {
+      'images: missing alt text': 'Images need text descriptions so Google can understand them and screen readers can describe them to visitors. This is the #1 accessibility fix on most sites.',
+      'images: over 100 kb': 'Large images slow your site down, especially on phones. Compressing them makes every page feel faster — and Google rewards fast sites.',
+      'images: alt text over 100 characters': 'Keep image descriptions concise. Long alt text gets ignored by screen readers.',
+      'meta description: missing': 'The summary that appears under your link in Google search results. Without one, Google picks random text from the page — usually not what you\'d choose.',
+      'h2: multiple': 'Multiple subheadings of the same level. Not a major issue, but cleaning up the heading structure helps Google understand your page hierarchy.',
+      'h2: duplicate': 'Same heading text used more than once on a page. Makes the content structure look repetitive.',
+      'h2: missing': 'Pages without subheadings. Subheadings break up content and help both visitors and Google scan the page.',
+      'h2: non-sequential': 'Heading levels that skip (H2 → H4). Like a book outline that jumps from chapters to sub-sub-sections.',
+      'h1: multiple': 'More than one main title on a page. Google expects exactly one H1 per page — it\'s the title of that page\'s content.',
+      'page titles: below 30 characters': 'Page titles too short to be useful in search results. A good title is 50-60 characters.',
+      'page titles: below 200 pixels': 'Page titles that may get cut off when displayed in search results.',
+      'content: low content pages': 'Pages with very little text. Google may treat thin content as low quality, which can hurt your rankings.',
+      'response codes: internal client error (4xx)': 'Broken links on your own site. Visitors hit dead ends, and Google wastes time trying to crawl pages that don\'t exist.',
+      'response codes: external client error (4xx)': 'Links pointing to other websites that are broken. Less critical than internal errors, but still looks unprofessional.',
+      'security: missing content-security-policy header': 'A browser setting that controls what resources can load on your pages. Prevents certain types of attacks.',
+      'security: missing hsts header': 'Tells browsers to always use HTTPS. Without it, someone could intercept the initial connection.',
+      'security: missing secure referrer-policy header': 'Controls what information gets shared when visitors click links to other sites.',
+      'links: internal outlinks with no anchor text': 'Links that don\'t have descriptive text. Google uses link text to understand what the target page is about.',
+      'links: non-descriptive anchor text in internal outlinks': 'Links that say things like "click here" instead of describing the destination. Google prefers descriptive link text.',
+    };
+
+    function gradeFromIssues(high, medium, total) {
+      if (high === 0 && medium <= 2) return { grade: 'A', color: 'bg-emerald-500/20 text-emerald-400', label: 'Excellent' };
+      if (high <= 1 && medium <= 5) return { grade: 'B', color: 'bg-emerald-500/10 text-emerald-400', label: 'Good' };
+      if (high <= 3 && medium <= 10) return { grade: 'C', color: 'bg-amber-500/15 text-amber-400', label: 'Fair' };
+      if (high <= 5) return { grade: 'D', color: 'bg-red-500/10 text-red-400', label: 'Needs work' };
+      return { grade: 'F', color: 'bg-red-500/20 text-red-400', label: 'Critical' };
+    }
+
+    async function loadHealth() {
+      const cid = activeClientId;
+      if (!cid) { document.getElementById('health-empty').classList.remove('hidden'); return; }
+
+      const res = await fetch(`/portal/api/dashboard/issues?client_id=${cid}`);
+      const data = await res.json();
+      const issues = data.issues || [];
+
+      if (issues.length === 0) {
+        document.getElementById('health-empty').classList.remove('hidden');
+        document.getElementById('health-hero').classList.add('hidden');
+        document.getElementById('issue-groups').innerHTML = '';
+        return;
+      }
+
+      document.getElementById('health-empty').classList.add('hidden');
+      document.getElementById('health-hero').classList.remove('hidden');
+
+      const high = issues.filter(i => ['critical', 'high'].includes((i.priority || '').toLowerCase())).length;
+      const medium = issues.filter(i => (i.priority || '').toLowerCase() === 'medium').length;
+      const low = issues.filter(i => (i.priority || '').toLowerCase() === 'low' || !i.priority).length;
+
+      document.getElementById('count-critical').textContent = high;
+      document.getElementById('count-medium').textContent = medium;
+      document.getElementById('count-low').textContent = low;
+
+      const grade = gradeFromIssues(high, medium, issues.length);
+      document.getElementById('health-grade').textContent = grade.grade;
+      document.getElementById('health-grade').className = `w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold shrink-0 ${grade.color}`;
+
+      // Headline and description
+      const totalUrls = issues.reduce((s, i) => s + (i.affected_urls || 0), 0);
+      let headline = '', desc = '';
+
+      if (grade.grade === 'A' || grade.grade === 'B') {
+        headline = `Site health: ${grade.label}`;
+        desc = `Your site is in good shape. ${issues.length} issues found across ${totalUrls.toLocaleString()} page instances, but nothing critical. The items below are opportunities to polish, not emergencies.`;
+      } else if (grade.grade === 'C') {
+        headline = `Site health: ${grade.label} — fixable issues`;
+        desc = `${issues.length} issues found, with ${high > 0 ? `${high} high-priority item${high !== 1 ? 's' : ''} that should be addressed soon` : `${medium} medium-priority items worth cleaning up`}. These are affecting ${totalUrls.toLocaleString()} page instances. None of this is unusual for a site that's actively being worked on.`;
+      } else {
+        headline = `Site health: ${grade.label}`;
+        desc = `${high} high-priority issue${high !== 1 ? 's' : ''} and ${medium} medium-priority issue${medium !== 1 ? 's' : ''} found. These are actively hurting your search rankings and should be addressed. The list below is ordered by impact.`;
+      }
+
+      document.getElementById('health-headline').textContent = headline;
+      document.getElementById('health-description').textContent = desc;
+
+      // Group issues by category
+      const grouped = ISSUE_CATEGORIES.map(cat => ({
+        ...cat,
+        issues: issues.filter(i => cat.match(i.issue_name)),
+      })).filter(g => g.issues.length > 0);
+
+      // Ungrouped
+      const groupedNames = new Set(grouped.flatMap(g => g.issues.map(i => i.issue_name)));
+      const ungrouped = issues.filter(i => !groupedNames.has(i.issue_name));
+      if (ungrouped.length > 0) {
+        grouped.push({ name: 'Other', icon: '📋', description: 'Additional items from the site audit', issues: ungrouped });
+      }
+
+      document.getElementById('issue-groups').innerHTML = grouped.map(group => `
+        <div class="bg-neutral-900/50 border border-white/5 rounded-xl overflow-hidden">
+          <div class="p-5 border-b border-white/5">
+            <div class="flex items-center gap-3">
+              <span class="text-lg">${group.icon}</span>
+              <div>
+                <h3 class="text-sm font-medium text-neutral-200">${group.name}</h3>
+                <p class="text-xs text-neutral-500">${group.description}</p>
+              </div>
+              <span class="ml-auto text-xs text-neutral-600">${group.issues.length} issue${group.issues.length !== 1 ? 's' : ''}</span>
+            </div>
+          </div>
+          <div class="divide-y divide-white/5">
+            ${group.issues.map(i => {
+              const p = (i.priority || 'low').toLowerCase();
+              const dotColor = ['critical', 'high'].includes(p) ? 'bg-red-500' : p === 'medium' ? 'bg-amber-500' : 'bg-neutral-600';
+              const explanation = ISSUE_EXPLAIN[i.issue_name.toLowerCase()] || i.description || '';
+              return `
+                <div class="p-4">
+                  <div class="flex items-start gap-3">
+                    <div class="w-2 h-2 rounded-full ${dotColor} mt-1.5 shrink-0"></div>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center justify-between gap-4">
+                        <span class="text-sm text-neutral-200">${i.issue_name}</span>
+                        <span class="text-xs text-neutral-500 shrink-0">${i.affected_urls || 0} pages</span>
+                      </div>
+                      ${explanation ? `<p class="text-xs text-neutral-500 mt-1 leading-relaxed">${explanation}</p>` : ''}
+                      ${i.how_to_fix ? `<p class="text-xs text-amber-500/50 mt-1">Fix: ${i.how_to_fix}</p>` : ''}
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    loadHealth();
+  </script>
+</Portal>

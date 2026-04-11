@@ -271,11 +271,11 @@
         // Store answer for current step
         answers[String(currentStep)] = answer;
 
-        // Preview the theme behind the frosted glass
-        previewTheme();
-
-        // Pulse the vortex on each answer
+        // Pulse the vortex FIRST — theme updates when wave completes
         if ((window as any).__vortexPulse) (window as any).__vortexPulse();
+
+        // Delay theme change until wave has swept out (~2s for both beats)
+        setTimeout(() => { previewTheme(); }, 2000);
 
         // Brief highlight on the clicked button using theme accent
         const accent = getComputedStyle(quiz).getPropertyValue('--quiz-accent').trim();
@@ -503,11 +503,11 @@
 
         const centerFade = Math.min(1, dist / (Math.max(w, h) * 0.15));
 
-        // Color: 33% tinted by theme, wave pushes to full accent
-        const tint = 0.33;
-        const baseR = Math.round(220 + (accentRGB[0] - 220) * tint);
-        const baseG = Math.round(215 + (accentRGB[1] - 215) * tint);
-        const baseB = Math.round(210 + (accentRGB[2] - 210) * tint);
+        // Color: warm white with subtle 20% tint — never goes dark
+        const tint = 0.2;
+        const baseR = Math.round(235 + (accentRGB[0] - 235) * tint);
+        const baseG = Math.round(230 + (accentRGB[1] - 230) * tint);
+        const baseB = Math.round(225 + (accentRGB[2] - 225) * tint);
         let r = baseR, g = baseG, b = baseB;
         let waveBoost = 0;
 
@@ -528,15 +528,17 @@
           b = Math.round(baseB + (accentRGB[2] - baseB) * colorMix);
         }
 
-        // Draw trail — each segment fades from head (bright) to tail (invisible)
+        // Draw trail as a narrow wake — tapers from thick at head to hairline at tail
         if (t.trail.length > 1) {
           for (let i = 1; i < t.trail.length; i++) {
-            const segAlpha = (i / t.trail.length) * (t.opacity + waveBoost) * centerFade;
+            const progress = i / t.trail.length; // 0 = tail, 1 = head
+            const segAlpha = progress * (t.opacity + waveBoost) * centerFade;
+            const segWidth = t.thickness * (0.1 + progress * 0.9); // tapers to 10% at tail
             ctx.beginPath();
             ctx.moveTo(t.trail[i - 1][0], t.trail[i - 1][1]);
             ctx.lineTo(t.trail[i][0], t.trail[i][1]);
             ctx.strokeStyle = `rgba(${r},${g},${b},${Math.min(segAlpha, 0.08)})`;
-            ctx.lineWidth = t.thickness;
+            ctx.lineWidth = segWidth;
             ctx.lineCap = 'round';
             ctx.stroke();
           }

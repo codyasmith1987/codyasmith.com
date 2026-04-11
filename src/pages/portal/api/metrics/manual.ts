@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { nanoid } from 'nanoid';
 import turso from '../../../../lib/turso';
 import { ensurePortalTables } from '../../../../lib/auth';
+import { logger } from '../../../../lib/logger';
 
 export const prerender = false;
 
@@ -29,7 +30,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
     return json({ ok: true });
   } catch (err: any) {
-    console.error('Manual metric error:', err);
+    logger.error('Manual metric error', err);
     return json({ error: err.message || 'Failed' }, 500);
   }
 };

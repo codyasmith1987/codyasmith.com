@@ -434,46 +434,66 @@
     border-radius: 4px;
   }
 
-  /* Quiz button styles — extracted from inline handlers */
+  /* Quiz — theme-aware via CSS custom properties
+     The quiz sits over a dark frosted backdrop, so text stays light.
+     Accents adapt to the active theme as the user answers questions. */
+  #quiz {
+    --quiz-accent: var(--color-amber-500, #c47d5a);
+    --quiz-accent-hover: var(--color-amber-400, #d4926a);
+    --quiz-text: #f0e8df;
+    --quiz-text-muted: #a69a8e;
+    --quiz-text-dim: #847a6e;
+    --quiz-border: rgba(255,255,255,0.08);
+    --quiz-border-hover: rgba(255,255,255,0.15);
+  }
+
+  .quiz-label { color: var(--quiz-accent); }
+  .quiz-heading { color: var(--quiz-text); }
+  .quiz-body { color: var(--quiz-text-muted); }
+  .quiz-step-count { color: var(--quiz-text-dim); }
+  .quiz-answer-text { color: var(--quiz-text); }
+
   .quiz-btn-primary {
-    background: #c47d5a;
+    background: var(--quiz-accent);
     color: #15120f;
     transition: all 0.3s;
   }
-  .quiz-btn-primary:hover, .quiz-btn-primary:focus-visible { background: #d4926a; }
+  .quiz-btn-primary:hover, .quiz-btn-primary:focus-visible {
+    background: var(--quiz-accent-hover);
+  }
 
   .quiz-btn-secondary {
-    border-color: #302a23;
-    color: #847a6e;
+    border-color: var(--quiz-border);
+    color: var(--quiz-text-dim);
     transition: all 0.3s;
   }
   .quiz-btn-secondary:hover, .quiz-btn-secondary:focus-visible {
-    border-color: #4d453c;
-    color: #a69a8e;
+    border-color: var(--quiz-border-hover);
+    color: var(--quiz-text-muted);
   }
 
   .quiz-choice {
-    border-color: #302a23;
+    border-color: var(--quiz-border);
     background: transparent;
     transition: all 0.3s;
   }
   .quiz-choice:hover, .quiz-choice:focus-visible {
-    border-color: #d4926a;
-    background: rgba(196,125,90,0.05);
+    border-color: var(--quiz-accent);
+    background: color-mix(in srgb, var(--quiz-accent) 5%, transparent);
   }
 
   .quiz-input {
-    border-color: #302a23;
-    color: #f0e8df;
+    border-color: var(--quiz-border);
+    color: var(--quiz-text);
     transition: border-color 0.3s;
   }
-  .quiz-input:focus { border-color: #d4926a; }
+  .quiz-input:focus { border-color: var(--quiz-accent); }
 
   .quiz-skip {
-    color: #685e54;
+    color: var(--quiz-text-dim);
     transition: color 0.3s;
   }
-  .quiz-skip:hover, .quiz-skip:focus-visible { color: #a69a8e; }
+  .quiz-skip:hover, .quiz-skip:focus-visible { color: var(--quiz-text-muted); }
 
   .reveal {
     opacity: 0;

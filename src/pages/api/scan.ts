@@ -2,6 +2,7 @@ export const prerender = false;
 
 import type { APIRoute } from 'astro';
 import { parseInput, searchForMentions } from '../../lib/search';
+import { logger } from '../../lib/logger';
 import { scrapeAll } from '../../lib/scraper';
 import { generateReport } from '../../lib/sentiment';
 import { getRecommendation } from '../../lib/recommend';
@@ -54,7 +55,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     // Serper API key
     const serperKey = import.meta.env.SERPER_API_KEY;
     if (!serperKey) {
-      console.error('SERPER_API_KEY not set');
+      logger.error('SERPER_API_KEY not set');
       return json({ error: 'Search service not configured' }, 500);
     }
 
@@ -158,7 +159,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     });
 
   } catch (err: any) {
-    console.error('Scan error:', err);
+    logger.error('Scan error', err);
     return json({ error: err.message || 'Scan failed' }, 500);
   }
 };

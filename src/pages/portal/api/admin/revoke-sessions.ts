@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { revokeUserSessions } from '../../../../lib/auth';
+import { logger } from '../../../../lib/logger';
 
 export const prerender = false;
 
@@ -16,7 +17,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     const count = await revokeUserSessions(user_id);
     return json({ ok: true, sessions_revoked: count });
   } catch (err: any) {
-    console.error('Revoke sessions error:', err);
+    logger.error('Revoke sessions error', err);
     return json({ error: 'Failed to revoke sessions' }, 500);
   }
 };

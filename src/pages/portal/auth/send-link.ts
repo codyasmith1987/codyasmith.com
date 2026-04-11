@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { getUserByEmail, createMagicLink } from '../../../lib/auth';
 import { rateLimit } from '../../../lib/rate-limit';
+import { logger } from '../../../lib/logger';
 
 export const prerender = false;
 
@@ -61,18 +62,18 @@ export const POST: APIRoute = async ({ request, url, clientAddress }) => {
             </div>
           `,
         }),
-      }).catch(err => { console.error('Brevo magic link email error:', err); return null; });
+      }).catch(err => { logger.error('Brevo magic link email error', err); return null; });
       if (emailRes && !emailRes.ok) {
-        console.error('Brevo magic link API error:', await emailRes.text());
+        logger.error('Brevo magic link API error', new Error(await emailRes.text()));
       }
     } else {
       // Dev fallback: log the link
-      console.log(`\n[MAGIC LINK] ${loginUrl}\n`);
+      logger.info('Magic link generated (dev mode)', { url: loginUrl });
     }
 
     return json({ ok: true });
   } catch (err: any) {
-    console.error('Send link error:', err);
+    logger.error('Send link error', err);
     return json({ error: 'Failed to send login link' }, 500);
   }
 };

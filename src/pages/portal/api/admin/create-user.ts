@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { createUser, createMagicLink, getUserByEmail } from '../../../../lib/auth';
+import { logger } from '../../../../lib/logger';
 
 export const prerender = false;
 
@@ -68,17 +69,17 @@ export const POST: APIRoute = async ({ locals, request, url }) => {
               </div>
             `,
           }),
-        }).catch(err => console.error('Brevo invite email error:', err));
+        }).catch(err => logger.error('Brevo invite email error', err));
         invite_sent = true;
       } else {
-        console.log(`\n[INVITE LINK] ${loginUrl}\n`);
+        logger.info(`[INVITE LINK] ${loginUrl}`);
         invite_sent = true;
       }
     }
 
     return json({ id: userId, invite_sent });
   } catch (err: any) {
-    console.error('Create user error:', err);
+    logger.error('Create user error', err);
     return json({ error: 'Failed to create user' }, 500);
   }
 };

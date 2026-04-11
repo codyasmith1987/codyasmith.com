@@ -2,6 +2,7 @@ export const prerender = false;
 
 import type { APIRoute } from 'astro';
 import { rateLimit } from '../../lib/rate-limit';
+import { logger } from '../../lib/logger';
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -42,7 +43,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
 
     const apiKey = import.meta.env.BREVO_API_KEY;
     if (!apiKey) {
-      console.error('BREVO_API_KEY not set');
+      logger.error('BREVO_API_KEY not set');
       return new Response(JSON.stringify({ error: 'Server configuration error' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
@@ -76,7 +77,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
 
     if (!brevoRes.ok) {
       const err = await brevoRes.text();
-      console.error('Brevo API error:', err);
+      logger.error('Brevo API error', new Error(err));
       return new Response(JSON.stringify({ error: 'Failed to send' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
@@ -106,10 +107,10 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       });
       if (!confirmRes.ok) {
         const confirmErr = await confirmRes.text();
-        console.error('Confirmation email API error:', confirmRes.status, confirmErr);
+        logger.error('Confirmation email API error', new Error(`${confirmRes.status}: ${confirmErr}`));
       }
     } catch (err) {
-      console.error('Confirmation email failed:', err);
+      logger.error('Confirmation email failed', err);
     }
 
     return new Response(JSON.stringify({ success: true }), {
@@ -118,7 +119,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     });
 
   } catch (err) {
-    console.error('Contact form error:', err);
+    logger.error('Contact form error', err);
     return new Response(JSON.stringify({ error: 'Server error' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }

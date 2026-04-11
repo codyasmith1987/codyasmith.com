@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { ingestCSV } from '../../../../lib/csv/index';
+import { logger } from '../../../../lib/logger';
 
 export const prerender = false;
 
@@ -47,7 +48,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       row_count: result.rowCount,
     });
   } catch (err: any) {
-    console.error('CSV upload error:', err);
+    logger.error('CSV upload error', err);
     return json({ error: err.message || 'Upload failed' }, 500);
   }
 };

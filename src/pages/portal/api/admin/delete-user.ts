@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { deleteUser } from '../../../../lib/auth';
+import { logger } from '../../../../lib/logger';
 
 export const prerender = false;
 
@@ -21,7 +22,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     await deleteUser(user_id);
     return json({ ok: true });
   } catch (err: any) {
-    console.error('Delete user error:', err);
+    logger.error('Delete user error', err);
     return json({ error: 'Failed to delete user' }, 500);
   }
 };

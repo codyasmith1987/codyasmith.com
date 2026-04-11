@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { uploadFile } from '../../../../lib/storage';
 import turso from '../../../../lib/turso';
 import { ensurePortalTables } from '../../../../lib/auth';
+import { logger } from '../../../../lib/logger';
 
 export const prerender = false;
 
@@ -51,7 +52,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
     return json({ id: result.id, filename: file.name, size: buffer.length });
   } catch (err: any) {
-    console.error('File upload error:', err);
+    logger.error('File upload error', err);
     return json({ error: err.message || 'Upload failed' }, 500);
   }
 };

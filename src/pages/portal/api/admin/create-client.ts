@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { createClient } from '../../../../lib/auth';
+import { logger } from '../../../../lib/logger';
 
 export const prerender = false;
 
@@ -26,7 +27,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     if (err.message?.includes('UNIQUE constraint')) {
       return json({ error: 'A client with that slug already exists' }, 409);
     }
-    console.error('Create client error:', err);
+    logger.error('Create client error', err);
     return json({ error: 'Failed to create client' }, 500);
   }
 };

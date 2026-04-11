@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { toggleClientActive } from '../../../../lib/auth';
+import { logger } from '../../../../lib/logger';
 
 export const prerender = false;
 
@@ -16,7 +17,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     const active = await toggleClientActive(client_id);
     return json({ client_id, active });
   } catch (err: any) {
-    console.error('Toggle client error:', err);
+    logger.error('Toggle client error', err);
     return json({ error: err.message || 'Failed to toggle client' }, 500);
   }
 };

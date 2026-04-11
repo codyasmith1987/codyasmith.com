@@ -1,9 +1,17 @@
 import { defineMiddleware } from 'astro:middleware';
 import { validateSession, SESSION_COOKIE, isClientActive } from './lib/auth';
+import { setRequestId } from './lib/logger';
+
+let reqCounter = 0;
 
 export const onRequest = defineMiddleware(async (context, next) => {
+  // Generate request ID for correlation logging
+  const requestId = `r${Date.now().toString(36)}-${(++reqCounter).toString(36)}`;
+  setRequestId(requestId);
+
   // Add security headers to all responses
   const response = await handleRequest(context, next);
+  response.headers.set('X-Request-Id', requestId);
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('X-Frame-Options', 'DENY');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');

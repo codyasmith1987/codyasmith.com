@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { getFileById, deleteFileFromStorage } from '../../../../lib/storage';
+import { logger } from '../../../../lib/logger';
 
 export const prerender = false;
 
@@ -19,7 +20,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     await deleteFileFromStorage(file.s3_key, file.id);
     return json({ ok: true });
   } catch (err: any) {
-    console.error('File delete error:', err);
+    logger.error('File delete error', err);
     return json({ error: 'Delete failed' }, 500);
   }
 };

@@ -14,12 +14,23 @@
   "dependencies": {
     "@astrojs/node": "^10.0.4",
     "@astrojs/sitemap": "^3.7.2",
+    "@aws-sdk/client-s3": "^3.1029.0",
+    "@aws-sdk/s3-request-presigner": "^3.1029.0",
+    "@libsql/client": "^0.17.2",
+    "@oslojs/crypto": "^1.0.1",
+    "@oslojs/encoding": "^1.1.0",
     "@tailwindcss/vite": "^4.2.2",
     "astro": "^6.1.3",
     "cheerio": "^1.2.0",
+    "nanoid": "^5.1.7",
+    "papaparse": "^5.5.3",
     "pdf-parse": "^2.4.5",
     "sentiment": "^5.0.2",
-    "sql.js": "^1.14.1",
     "tailwindcss": "^4.2.2"
+  },
+  "devDependencies": {
+    "@types/papaparse": "^5.5.2",
+    "dotenv": "^17.4.1",
+    "tsx": "^4.21.0"
   }
 }

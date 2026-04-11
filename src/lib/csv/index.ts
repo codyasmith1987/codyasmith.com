@@ -1,6 +1,5 @@
 import { nanoid } from 'nanoid';
 import turso from '../turso';
-import { ensurePortalTables } from '../auth';
 import { detectFormat, type CsvFormat } from './detector';
 import { parse as parsePositionTracking } from './parsers/position-tracking';
 import { parse as parseIssuesOverview } from './parsers/issues-overview';
@@ -23,17 +22,17 @@ const FORMAT_SOURCES: Record<string, { tables: string[]; source: string }> = {
   accessibility: { tables: ['metrics'], source: 'accessibility' },
 };
 
-async function clearPreviousData(clientId: string, month: string, format: string, currentUploadId: string) {
+async function clearPreviousData(clientId: string, month: string, format: string, currentUploadId: string): Promise<string | null> {
   const config = FORMAT_SOURCES[format];
-  if (!config) return;
+  if (!config) return null;
 
   // Find previous upload IDs for this client+month+format (not the current one)
   const prevUploads = await turso.execute({
-    sql: 'SELECT id FROM csv_uploads WHERE client_id = ? AND month = ? AND detected_format = ? AND id != ?',
+    sql: 'SELECT id FROM csv_uploads WHERE client_id = ? AND month = ? AND detected_format = ? AND id != ? ORDER BY created_at ASC',
     args: [clientId, month, format, currentUploadId],
   });
 
-  if (prevUploads.rows.length === 0) return;
+  if (prevUploads.rows.length === 0) return null;
 
   const prevIds = prevUploads.rows.map(r => r[0] as string);
 
@@ -53,6 +52,8 @@ async function clearPreviousData(clientId: string, month: string, format: string
     sql: 'UPDATE csv_uploads SET error = ? WHERE id = ?',
     args: ['Superseded by newer upload', latestPrevId],
   });
+
+  return latestPrevId;
 }
 
 export interface IngestResult {
@@ -70,8 +71,6 @@ export async function ingestCSV(
   filename: string,
   uploadedBy: string,
 ): Promise<IngestResult> {
-  await ensurePortalTables();
-
   const { format, headers } = detectFormat(raw, filename);
   const uploadId = nanoid();
 
@@ -90,9 +89,9 @@ export async function ingestCSV(
   }
 
   try {
-    // Clear old data for this client+month+source before inserting
-    // This prevents duplicates from re-uploads or overlapping tools
-    await clearPreviousData(clientId, month, format, uploadId);
+    // Clear old data for this client+month+source before inserting.
+    // Track what was cleared so we can undo if parsing fails.
+    const clearedUploadId = await clearPreviousData(clientId, month, format, uploadId);
 
     let rowCount = 0;
 
@@ -130,6 +129,25 @@ export async function ingestCSV(
 
     return { uploadId, format, rowCount, headers };
   } catch (err: any) {
+    // Clean up partial data from the failed parse
+    const config = FORMAT_SOURCES[format];
+    if (config) {
+      for (const table of config.tables) {
+        await turso.execute({
+          sql: `DELETE FROM ${table} WHERE csv_upload_id = ?`,
+          args: [uploadId],
+        });
+      }
+    }
+
+    // If we cleared a previous upload's data, un-mark it as superseded
+    if (clearedUploadId) {
+      await turso.execute({
+        sql: 'UPDATE csv_uploads SET error = NULL WHERE id = ?',
+        args: [clearedUploadId],
+      });
+    }
+
     await turso.execute({
       sql: 'UPDATE csv_uploads SET error = ? WHERE id = ?',
       args: [err.message, uploadId],
@@ -139,7 +157,6 @@ export async function ingestCSV(
 }
 
 export async function getRecentUploads(clientId?: string, limit = 20) {
-  await ensurePortalTables();
   const sql = clientId
     ? 'SELECT u.*, c.name as client_name FROM csv_uploads u JOIN clients c ON c.id = u.client_id WHERE u.client_id = ? ORDER BY u.created_at DESC LIMIT ?'
     : 'SELECT u.*, c.name as client_name FROM csv_uploads u JOIN clients c ON c.id = u.client_id ORDER BY u.created_at DESC LIMIT ?';

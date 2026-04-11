@@ -1,5 +1,8 @@
 ---
 import '../styles/global.css';
+import '../styles/portal.css';
+import ConfirmModal from '../components/portal/ConfirmModal.astro';
+import Toast from '../components/portal/Toast.astro';
 
 export const prerender = false;
 
@@ -9,6 +12,7 @@ interface Props {
 
 const { title } = Astro.props;
 const user = Astro.locals.user;
+const csrfToken = Astro.locals.csrfToken || '';
 const currentPath = Astro.url.pathname;
 
 const navItems = [
@@ -22,6 +26,7 @@ const adminItems = [
   { href: '/portal/admin/clients', label: 'Clients' },
   { href: '/portal/admin/users', label: 'Users' },
   { href: '/portal/admin/csv', label: 'CSV Upload' },
+  { href: '/portal/admin/activity', label: 'Activity' },
 ];
 ---
 
@@ -36,6 +41,7 @@ const adminItems = [
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <meta name="csrf-token" content={csrfToken} />
   </head>
   <body class="min-h-screen bg-neutral-950 text-neutral-300 font-sans">
     <div class="flex min-h-screen">
@@ -165,6 +171,9 @@ const adminItems = [
         </main>
       </div>
     </div>
+
+    <ConfirmModal />
+    <Toast />
 
     <script>
       const btn = document.getElementById('mobile-menu-btn');

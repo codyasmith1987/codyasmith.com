@@ -1,8 +1,8 @@
 import type { APIRoute } from 'astro';
 import { uploadFile } from '../../../../lib/storage';
 import turso from '../../../../lib/turso';
-import { ensurePortalTables } from '../../../../lib/auth';
 import { logger } from '../../../../lib/logger';
+import { logActivity } from '../../../../lib/activity';
 
 export const prerender = false;
 
@@ -28,7 +28,6 @@ export const POST: APIRoute = async ({ locals, request }) => {
     }
 
     // Get client slug for S3 path
-    await ensurePortalTables();
     const clientResult = await turso.execute({
       sql: 'SELECT slug FROM clients WHERE id = ?',
       args: [clientId],
@@ -49,6 +48,15 @@ export const POST: APIRoute = async ({ locals, request }) => {
       locals.user.id,
       category,
     );
+
+    await logActivity({
+      clientId,
+      userId: locals.user!.id,
+      action: 'uploaded',
+      entityType: 'file',
+      entityId: result.id,
+      summary: `${locals.user!.name} uploaded "${file.name}"`,
+    });
 
     return json({ id: result.id, filename: file.name, size: buffer.length });
   } catch (err: any) {

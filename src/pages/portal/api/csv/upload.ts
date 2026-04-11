@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { ingestCSV } from '../../../../lib/csv/index';
 import { logger } from '../../../../lib/logger';
+import { logActivity } from '../../../../lib/activity';
 
 export const prerender = false;
 
@@ -31,6 +32,15 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
     const raw = await file.text();
     const result = await ingestCSV(raw, clientId, month, file.name, locals.user.id);
+
+    await logActivity({
+      clientId,
+      userId: locals.user!.id,
+      action: 'uploaded',
+      entityType: 'csv_upload',
+      entityId: result.uploadId,
+      summary: `${locals.user!.name} uploaded CSV "${file.name}" (${result.format}${result.error ? ', failed' : `, ${result.rowCount} rows`})`,
+    });
 
     if (result.error) {
       return json({

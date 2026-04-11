@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { deleteUser } from '../../../../lib/auth';
 import { logger } from '../../../../lib/logger';
+import { logActivity } from '../../../../lib/activity';
 
 export const prerender = false;
 
@@ -18,6 +19,15 @@ export const POST: APIRoute = async ({ locals, request }) => {
     if (user_id === locals.user.id) {
       return json({ error: 'You cannot delete your own account' }, 400);
     }
+
+    // Log before delete — the user record won't exist after
+    await logActivity({
+      userId: locals.user!.id,
+      action: 'deleted',
+      entityType: 'user',
+      entityId: user_id,
+      summary: `${locals.user!.name} deleted user ${user_id}`,
+    });
 
     await deleteUser(user_id);
     return json({ ok: true });

@@ -8,10 +8,12 @@ declare namespace App {
       name: string;
       role: 'admin' | 'client';
       client_id: string | null;
+      permissions: string | null;
     };
     session?: {
       id: string;
       expires_at: string;
     };
+    csrfToken?: string;
   }
 }

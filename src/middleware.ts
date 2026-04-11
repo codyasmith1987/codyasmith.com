@@ -1,10 +1,15 @@
 import { defineMiddleware } from 'astro:middleware';
 import { validateSession, SESSION_COOKIE, isClientActive } from './lib/auth';
 import { setRequestId } from './lib/logger';
+import { runMigrations } from './lib/migrate';
+import { generateCsrfToken, validateCsrfToken } from './lib/csrf';
 
 let reqCounter = 0;
 
 export const onRequest = defineMiddleware(async (context, next) => {
+  // Run migrations once at cold start (race-safe, idempotent)
+  await runMigrations();
+
   // Generate request ID for correlation logging
   const requestId = `r${Date.now().toString(36)}-${(++reqCounter).toString(36)}`;
   setRequestId(requestId);
@@ -58,6 +63,18 @@ async function handleRequest(context: Parameters<Parameters<typeof defineMiddlew
 
   context.locals.user = result.user;
   context.locals.session = result.session;
+  context.locals.csrfToken = generateCsrfToken(result.session!.id);
+
+  // CSRF validation for authenticated POST requests to portal API routes
+  if (context.request.method === 'POST' && context.url.pathname.startsWith('/portal/api/')) {
+    const csrfToken = context.request.headers.get('X-CSRF-Token');
+    if (!validateCsrfToken(result.session!.id, csrfToken || '')) {
+      return new Response(JSON.stringify({ error: 'Invalid or missing CSRF token' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+  }
 
   // Block users on inactive clients
   if (result.user?.client_id && result.user.role !== 'admin') {

@@ -119,13 +119,15 @@ const clients = await getAllClients();
   </div>
 
   <script>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
     // Revoke sessions
     document.querySelectorAll('[data-revoke-user]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const userId = (btn as HTMLElement).dataset.revokeUser!;
         const res = await fetch('/portal/api/admin/revoke-sessions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
           body: JSON.stringify({ user_id: userId }),
         });
         if (res.ok) {
@@ -145,11 +147,17 @@ const clients = await getAllClients();
       btn.addEventListener('click', async () => {
         const userId = (btn as HTMLElement).dataset.deleteUser!;
         const userName = (btn as HTMLElement).dataset.userName!;
-        if (!confirm(`Delete ${userName}? This will also revoke all their sessions.`)) return;
+        const confirmed = await (window as any).__confirm({
+          title: `Delete ${userName}`,
+          message: 'This will permanently delete the user and revoke all their sessions.',
+          confirmLabel: 'Delete user',
+          danger: true,
+        });
+        if (!confirmed) return;
 
         const res = await fetch('/portal/api/admin/delete-user', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
           body: JSON.stringify({ user_id: userId }),
         });
         if (res.ok) {
@@ -162,7 +170,7 @@ const clients = await getAllClients();
           }
         } else {
           const data = await res.json();
-          alert(data.error || 'Failed to delete user');
+          (window as any).__toast(data.error || 'Failed to delete user', 'error');
         }
       });
     });
@@ -182,7 +190,7 @@ const clients = await getAllClients();
 
       const res = await fetch('/portal/api/admin/create-user', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
         body: JSON.stringify({ name, email, role, client_id, send_invite }),
       });
 

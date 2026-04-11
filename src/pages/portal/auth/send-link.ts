@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { getUserByEmail, createMagicLink } from '../../../lib/auth';
 import { rateLimit } from '../../../lib/rate-limit';
 import { logger } from '../../../lib/logger';
+import { logActivity } from '../../../lib/activity';
 
 export const prerender = false;
 
@@ -10,7 +11,7 @@ const json = (data: any, status = 200) =>
 
 export const POST: APIRoute = async ({ request, url, clientAddress }) => {
   const ip = clientAddress || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-  if (!rateLimit(`login:${ip}`, 10, 15 * 60 * 1000)) {
+  if (!await rateLimit(`login:${ip}`, 10, 15 * 60 * 1000)) {
     return json({ error: 'Too many login attempts. Please wait a few minutes.' }, 429);
   }
   try {
@@ -30,6 +31,15 @@ export const POST: APIRoute = async ({ request, url, clientAddress }) => {
     }
 
     const token = await createMagicLink(user.id);
+
+    await logActivity({
+      userId: user.id,
+      action: 'created',
+      entityType: 'magic_link',
+      entityId: user.id,
+      summary: `Magic link sent to ${user.email}`,
+    });
+
     const origin = import.meta.env.SITE || url.origin;
     const loginUrl = `${origin}/portal/auth/verify?token=${token}`;
 

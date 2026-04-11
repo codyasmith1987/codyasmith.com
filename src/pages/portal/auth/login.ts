@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { verifyPassword, createSession, SESSION_COOKIE } from '../../../lib/auth';
 import { rateLimit } from '../../../lib/rate-limit';
 import { logger } from '../../../lib/logger';
+import { logActivity } from '../../../lib/activity';
 
 export const prerender = false;
 
@@ -10,7 +11,7 @@ const json = (data: any, status = 200) =>
 
 export const POST: APIRoute = async ({ request, cookies, clientAddress }) => {
   const ip = clientAddress || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-  if (!rateLimit(`login:${ip}`, 10, 15 * 60 * 1000)) {
+  if (!await rateLimit(`login:${ip}`, 10, 15 * 60 * 1000)) {
     return json({ error: 'Too many login attempts. Please wait a few minutes.' }, 429);
   }
 
@@ -27,6 +28,14 @@ export const POST: APIRoute = async ({ request, cookies, clientAddress }) => {
     }
 
     const sessionToken = await createSession(userId);
+
+    await logActivity({
+      userId,
+      action: 'logged_in',
+      entityType: 'session',
+      entityId: userId,
+      summary: `User logged in via password`,
+    });
 
     cookies.set(SESSION_COOKIE, sessionToken, {
       path: '/portal',

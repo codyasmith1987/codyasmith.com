@@ -462,6 +462,7 @@
       }
 
       for (const t of tracers) {
+        if (t.opacity <= 0) continue; // dead tracer
         const prevX = t.x, prevY = t.y;
         const angle = flowAngle(t.x, t.y, time);
 
@@ -473,6 +474,11 @@
 
         const killRadius = 15;
         if (t.x < -50 || t.x > w + 50 || t.y < -50 || t.y > h + 50 || dist < killRadius) {
+          if (accelerating) {
+            // Don't respawn — tracer is gone. Set opacity to 0 so it's dead.
+            t.opacity = 0;
+            continue;
+          }
           const nt = spawnTracer();
           t.x = nt.x; t.y = nt.y; t.speed = nt.speed;
           t.opacity = nt.opacity; t.thickness = nt.thickness;
@@ -527,17 +533,11 @@
       waveSpeed = 25;
     };
 
-    // Final close — vortex tightens and twists away slowly
+    // Final close — tracers stop spawning and fade away naturally
     (window as any).__vortexAccelerate = () => {
       accelerating = true;
       accelStart = Date.now();
-      // Canvas twists down slowly — the chaos IS the creation
-      const canvasEl = canvas;
-      canvasEl.style.transition = 'transform 3.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 3s ease-in';
-      setTimeout(() => {
-        canvasEl.style.transform = 'scale(0.01) rotate(360deg)';
-        canvasEl.style.opacity = '0';
-      }, 200);
+      // Kill all tracers gradually — they fly off screen or hit center and don't respawn
     };
 
     (window as any).__vortexStop = () => {

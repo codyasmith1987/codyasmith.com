@@ -1,0 +1,2 @@
+# Force LF line endings in the repo (standard for web projects)
+* text=auto eol=lf

@@ -385,21 +385,26 @@
       speed: number;
       opacity: number;
       thickness: number;
+      trail: [number, number][]; // position history for tail rendering
+      alive: boolean;
     }
 
     const tracers: Tracer[] = [];
     const COUNT = 400;
+    const TRAIL_LENGTH = 18;
 
     function spawnTracer(): Tracer {
-      // Spawn anywhere on canvas, biased toward edges
       const angle = Math.random() * Math.PI * 2;
       const dist = 50 + Math.random() * Math.max(w, h) * 0.5;
+      const x = cx + Math.cos(angle) * dist;
+      const y = cy + Math.sin(angle) * dist;
       return {
-        x: cx + Math.cos(angle) * dist,
-        y: cy + Math.sin(angle) * dist,
+        x, y,
         speed: 75 + Math.random() * 175,
         opacity: Math.random() < 0.2 ? (0.05 + Math.random() * 0.04) : (0.012 + Math.random() * 0.022),
         thickness: 0.5 + Math.random() * 1,
+        trail: [[x, y]],
+        alive: true,
       };
     }
 
@@ -438,28 +443,26 @@
     function draw() {
       if (!running) return;
 
-      ctx.fillStyle = 'rgba(0,0,0,0.05)';
-      ctx.fillRect(0, 0, w, h);
+      // CLEAR canvas — fully transparent. Page shows through.
+      ctx.clearRect(0, 0, w, h);
 
       time += 0.003;
       const now = Date.now();
-      const speedMult = accelerating ? 8 + Math.min((now - accelStart) / 200, 20) : 1;
+      const speedMult = accelerating ? 1 : 1; // no speed change on close
 
-      // Heartbeat wave — two quick pulses out and back, then done
+      // Heartbeat wave
       if (waveRadius >= 0 && now >= wavePauseUntil) {
         const undulate = Math.sin(waveRadius * 0.025) * 6;
         waveRadius += (waveSpeed + undulate * 0.3) * waveDirection;
         if (waveRadius > waveMaxR) { waveDirection = -1; }
         if (waveRadius < 0 && waveDirection === -1) {
           if (waveBeatCount === 0) {
-            // First beat done — pause briefly, then second beat (faster, stronger)
             waveBeatCount = 1;
             waveRadius = 0;
             waveDirection = 1;
             waveSpeed = 35;
-            wavePauseUntil = now + 150; // short pause between beats
+            wavePauseUntil = now + 150;
           } else {
-            // Second beat done
             waveRadius = -1;
             waveBeatCount = 0;
           }
@@ -467,42 +470,40 @@
       }
 
       for (const t of tracers) {
-        if (t.opacity <= 0) continue; // dead tracer
+        if (!t.alive) continue;
 
-        // During close: randomly kill tracers — they just vanish, one by one
+        // During close: randomly kill tracers one by one
         if (accelerating) {
-          const elapsed = (now - accelStart) / 1000; // seconds since close started
-          const deathChance = 0.003 + elapsed * 0.008; // starts slow, accelerates
-          if (Math.random() < deathChance) { t.opacity = 0; continue; }
+          const elapsed = (now - accelStart) / 1000;
+          const deathChance = 0.004 + elapsed * 0.012;
+          if (Math.random() < deathChance) { t.alive = false; continue; }
         }
 
-        const prevX = t.x, prevY = t.y;
         const angle = flowAngle(t.x, t.y, time);
-
         t.x += Math.cos(angle) * t.speed * speedMult;
         t.y += Math.sin(angle) * t.speed * speedMult;
+
+        // Store trail
+        t.trail.push([t.x, t.y]);
+        if (t.trail.length > TRAIL_LENGTH) t.trail.shift();
 
         const dx = t.x - cx, dy = t.y - cy;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
+        // Recycle or kill
         const killRadius = 15;
         if (t.x < -50 || t.x > w + 50 || t.y < -50 || t.y > h + 50 || dist < killRadius) {
-          if (accelerating) {
-            // Don't respawn — tracer is gone. Set opacity to 0 so it's dead.
-            t.opacity = 0;
-            continue;
-          }
+          if (accelerating) { t.alive = false; continue; }
           const nt = spawnTracer();
           t.x = nt.x; t.y = nt.y; t.speed = nt.speed;
           t.opacity = nt.opacity; t.thickness = nt.thickness;
+          t.trail = [[t.x, t.y]];
           continue;
         }
 
-        // Gentle fade near center — allows some buildup but not blinding
         const centerFade = Math.min(1, dist / (Math.max(w, h) * 0.15));
 
-        // Tracers are 33% tinted by current theme — like light refracting through tinted glass.
-        // Wave pulse pushes them to full accent color, then they settle back to the tint.
+        // Color: 33% tinted by theme, wave pushes to full accent
         const tint = 0.33;
         const baseR = Math.round(220 + (accentRGB[0] - 220) * tint);
         const baseG = Math.round(215 + (accentRGB[1] - 215) * tint);
@@ -521,28 +522,30 @@
           const behindWave = waveDirection === 1
             ? Math.min(1, Math.max(0, (waveRadius - dist) / 200))
             : Math.min(1, Math.max(0, (dist - waveRadius) / 200 + 1));
-          // Wavefront pushes to full accent, settles back to 33% tint
           const colorMix = Math.max(colorIntensity, behindWave * 0.7);
           r = Math.round(baseR + (accentRGB[0] - baseR) * colorMix);
           g = Math.round(baseG + (accentRGB[1] - baseG) * colorMix);
           b = Math.round(baseB + (accentRGB[2] - baseB) * colorMix);
         }
 
-        const alpha = (t.opacity + waveBoost) * centerFade * (accelerating ? 1.5 : 1);
-
-        ctx.beginPath();
-        ctx.moveTo(prevX, prevY);
-        ctx.lineTo(t.x, t.y);
-        ctx.strokeStyle = `rgba(${r},${g},${b},${Math.min(alpha, 0.08)})`;
-        ctx.lineWidth = t.thickness;
-        ctx.stroke();
+        // Draw trail — each segment fades from head (bright) to tail (invisible)
+        if (t.trail.length > 1) {
+          for (let i = 1; i < t.trail.length; i++) {
+            const segAlpha = (i / t.trail.length) * (t.opacity + waveBoost) * centerFade;
+            ctx.beginPath();
+            ctx.moveTo(t.trail[i - 1][0], t.trail[i - 1][1]);
+            ctx.lineTo(t.trail[i][0], t.trail[i][1]);
+            ctx.strokeStyle = `rgba(${r},${g},${b},${Math.min(segAlpha, 0.08)})`;
+            ctx.lineWidth = t.thickness;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+          }
+        }
       }
 
       requestAnimationFrame(draw);
     }
 
-    ctx.fillStyle = 'rgba(0,0,0,1)';
-    ctx.fillRect(0, 0, w, h);
     requestAnimationFrame(draw);
 
     // Pulse wave — radiates color change outward and back

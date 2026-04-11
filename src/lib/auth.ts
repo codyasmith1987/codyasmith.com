@@ -114,6 +114,13 @@ export async function ensurePortalTables(): Promise<void> {
     )`,
   ], 'write');
 
+  // Add password_hash column if missing (migration for existing tables)
+  try {
+    await turso.execute('ALTER TABLE users ADD COLUMN password_hash TEXT');
+  } catch {
+    // Column already exists — expected
+  }
+
   portalTablesCreated = true;
 }
 

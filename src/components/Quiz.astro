@@ -411,28 +411,28 @@
 
     let time = 0;
     let accentRGB = getAccentColor();
-    let pulseUntil = 0;
-    let swirlStrength = 3.5; // how strongly the flow spirals
+    let prevAccentRGB = [...accentRGB] as [number, number, number];
 
-    const themeObserver = new MutationObserver(() => { accentRGB = getAccentColor(); });
+    // Pulse wave state — radiates out from center and back on each quiz choice
+    let waveRadius = -1;       // -1 = no wave active
+    let waveDirection = 1;     // 1 = expanding, -1 = contracting
+    let waveSpeed = 0;
+    const waveMaxR = Math.max(w, h) * 0.8;
+
+    const themeObserver = new MutationObserver(() => {
+      prevAccentRGB = [...accentRGB] as [number, number, number];
+      accentRGB = getAccentColor();
+    });
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
-    // Flow field: at any (x,y), return the direction a tracer should move.
-    // Combines a spiral toward center with noise turbulence.
     function flowAngle(x: number, y: number, t: number): number {
       const dx = x - cx, dy = y - cy;
       const dist = Math.sqrt(dx * dx + dy * dy) + 1;
-
-      // Base: spiral toward center (tangent + inward pull)
       const toCenter = Math.atan2(dy, dx);
-      const tangent = toCenter + Math.PI * 0.5; // perpendicular = orbit
-      const spiral = tangent + 0.3; // slight inward bias
-
-      // Noise turbulence layered on top
+      const tangent = toCenter + Math.PI * 0.5;
+      const spiral = tangent + 0.3;
       const n1 = noise(x * 0.003, y * 0.003, t) * Math.PI;
       const n2 = noise(x * 0.008 + 100, y * 0.008 + 100, t * 1.3) * Math.PI * 0.5;
-
-      // Closer to center = more spiral, less noise. Further = more chaos.
       const blend = Math.min(1, dist / (Math.max(w, h) * 0.3));
       return spiral * (1 - blend * 0.4) + (n1 + n2) * blend * 0.6;
     }
@@ -440,36 +440,30 @@
     function draw() {
       if (!running) return;
 
-      // Very slow fade = extremely long trails (ghostly)
       ctx.fillStyle = 'rgba(0,0,0,0.06)';
       ctx.fillRect(0, 0, w, h);
 
       time += 0.003;
-
       const now = Date.now();
-      const pulseActive = now < pulseUntil;
-      const pulseFade = pulseActive ? Math.max(0, (pulseUntil - now) / 1500) : 0;
-      const pulseMult = 1 + pulseFade * 3;
-      const speedMult = accelerating ? 6 + Math.min((now - accelStart) / 250, 12) : pulseMult;
+      const speedMult = accelerating ? 8 + Math.min((now - accelStart) / 200, 20) : 1;
 
-      // During acceleration, increase spiral pull
-      const currentSwirl = accelerating ? swirlStrength * 3 : swirlStrength;
+      // Advance wave
+      if (waveRadius >= 0) {
+        waveRadius += waveSpeed * waveDirection;
+        if (waveRadius > waveMaxR) { waveDirection = -1; } // bounce back
+        if (waveRadius < 0 && waveDirection === -1) { waveRadius = -1; waveDirection = 1; } // done
+      }
 
       for (const t of tracers) {
         const prevX = t.x, prevY = t.y;
-
-        // Get flow direction at this position
         const angle = flowAngle(t.x, t.y, time);
 
-        // Move along the flow
         t.x += Math.cos(angle) * t.speed * speedMult;
         t.y += Math.sin(angle) * t.speed * speedMult;
 
-        // Distance from center
         const dx = t.x - cx, dy = t.y - cy;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
-        // Recycle if out of bounds or near center
         const killRadius = 60;
         if (t.x < -50 || t.x > w + 50 || t.y < -50 || t.y > h + 50 || dist < killRadius) {
           const nt = spawnTracer();
@@ -478,19 +472,38 @@
           continue;
         }
 
-        // Fade out near center — no stacking, no bright core
         const centerFade = Math.min(1, (dist - killRadius) / (Math.max(w, h) * 0.25));
-        const alpha = t.opacity * centerFade * (accelerating ? 1.5 : 1);
 
-        // Draw line from previous to current position
+        // Wave color blend — tracers behind the wave show new color,
+        // tracers ahead show old color. Wave carries the color change outward.
+        let r: number, g: number, b: number;
+        let waveBoost = 0;
+        if (waveRadius >= 0) {
+          const waveDist = Math.abs(dist - waveRadius);
+          const waveWidth = 120;
+          if (waveDist < waveWidth) {
+            waveBoost = (1 - waveDist / waveWidth) * 0.03; // brighten at wavefront
+          }
+          // Behind wave = new color, ahead = old color
+          const colorBlend = waveDirection === 1
+            ? Math.min(1, Math.max(0, (waveRadius - dist) / 150))
+            : Math.min(1, Math.max(0, (dist - waveRadius) / 150 + 1));
+          r = Math.round(prevAccentRGB[0] + (accentRGB[0] - prevAccentRGB[0]) * colorBlend);
+          g = Math.round(prevAccentRGB[1] + (accentRGB[1] - prevAccentRGB[1]) * colorBlend);
+          b = Math.round(prevAccentRGB[2] + (accentRGB[2] - prevAccentRGB[2]) * colorBlend);
+        } else {
+          r = accentRGB[0]; g = accentRGB[1]; b = accentRGB[2];
+        }
+
+        const alpha = (t.opacity + waveBoost) * centerFade * (accelerating ? 2 : 1);
+
         ctx.beginPath();
         ctx.moveTo(prevX, prevY);
         ctx.lineTo(t.x, t.y);
-        ctx.strokeStyle = `rgba(${accentRGB[0]},${accentRGB[1]},${accentRGB[2]},${Math.min(alpha, 0.04)})`;
+        ctx.strokeStyle = `rgba(${r},${g},${b},${Math.min(alpha, 0.06)})`;
         ctx.lineWidth = t.thickness;
         ctx.stroke();
       }
-
 
       requestAnimationFrame(draw);
     }
@@ -499,13 +512,28 @@
     ctx.fillRect(0, 0, w, h);
     requestAnimationFrame(draw);
 
+    // Pulse wave — radiates color change outward and back
     (window as any).__vortexPulse = () => {
-      pulseUntil = Date.now() + 1500;
+      waveRadius = 0;
+      waveDirection = 1;
+      waveSpeed = 25;
     };
 
+    // Final close — everything twists tight and contracts into the page
     (window as any).__vortexAccelerate = () => {
       accelerating = true;
       accelStart = Date.now();
+      // Tighten the spiral dramatically
+      for (const t of tracers) {
+        t.speed = t.speed * 0.3; // slow linear speed
+      }
+      // Canvas contracts and fades
+      const canvasEl = canvas;
+      canvasEl.style.transition = 'transform 1.8s cubic-bezier(0.4, 0, 0.2, 1), opacity 1.8s ease';
+      setTimeout(() => {
+        canvasEl.style.transform = 'scale(0.02) rotate(180deg)';
+        canvasEl.style.opacity = '0';
+      }, 100);
     };
 
     (window as any).__vortexStop = () => {

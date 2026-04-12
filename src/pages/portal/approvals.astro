@@ -1,0 +1,107 @@
+---
+import Portal from '../../layouts/Portal.astro';
+import { getPendingApprovals, getApproval } from '../../lib/invoices';
+import { getContract } from '../../lib/contracts';
+export const prerender = false;
+
+const user = Astro.locals.user!;
+if (!user.client_id) return Astro.redirect('/portal/dashboard');
+
+// Get pending approvals for contracts belonging to this client
+const allPending = await getPendingApprovals();
+const clientApprovals = [];
+for (const approval of allPending) {
+  const contract = await getContract(approval.contract_id);
+  if (contract?.client_id === user.client_id) {
+    clientApprovals.push({
+      id: approval.id,
+      title: approval.title,
+      description: approval.description,
+      status: approval.status,
+      requested_at: approval.requested_at,
+    });
+  }
+}
+---
+
+<Portal title="Approvals">
+  <div class="max-w-3xl mx-auto">
+    <div class="mb-10">
+      <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Approvals</h1>
+      <p class="text-sm text-neutral-500 mt-2">Items waiting for your review and sign-off.</p>
+    </div>
+
+    {clientApprovals.length > 0 ? (
+      <div class="space-y-4">
+        {clientApprovals.map(approval => (
+          <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8" data-approval-id={approval.id}>
+            <div class="mb-4">
+              <h2 class="text-lg font-medium text-neutral-100">{approval.title}</h2>
+              {approval.description && <p class="text-sm text-neutral-400 mt-2 leading-relaxed">{approval.description}</p>}
+              <p class="text-[10px] text-neutral-700 font-mono mt-3">Requested {new Date(approval.requested_at).toLocaleDateString()}</p>
+            </div>
+
+            <div class="border-t border-white/5 pt-5">
+              <div class="mb-4">
+                <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Your response (optional note)</label>
+                <textarea data-note={approval.id} rows="2" placeholder="Any comments or feedback..." class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30"></textarea>
+              </div>
+              <div class="flex items-center gap-3">
+                <button data-approve={approval.id} class="px-5 py-2.5 bg-emerald-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-emerald-400 transition-all duration-300">Approve</button>
+                <button data-revision={approval.id} class="px-5 py-2.5 bg-neutral-800 text-neutral-300 text-sm rounded-lg hover:bg-neutral-700 transition-all duration-300">Request revision</button>
+                <button data-reject={approval.id} class="px-5 py-2.5 text-red-400 text-sm hover:text-red-300 transition-colors">Reject</button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    ) : (
+      <div class="text-center py-16">
+        <p class="font-serif text-xl text-neutral-100 mb-2">Nothing waiting on you</p>
+        <p class="text-sm text-neutral-500">When we need your sign-off on something, it will appear here.</p>
+      </div>
+    )}
+  </div>
+
+  <script>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    async function respond(id: string, status: string) {
+      const note = (document.querySelector(`[data-note="${id}"]`) as HTMLTextAreaElement)?.value.trim();
+
+      if (status === 'rejected') {
+        const confirmed = await (window as any).__confirm({
+          title: 'Reject this item',
+          message: 'Are you sure you want to reject? You can add a note explaining why.',
+          confirmLabel: 'Reject',
+          danger: true,
+        });
+        if (!confirmed) return;
+      }
+
+      const res = await fetch('/portal/api/client/approvals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({ id, status, response_note: note || undefined }),
+      });
+
+      if (res.ok) {
+        (window as any).__toast({ type: 'success', message: status === 'approved' ? 'Approved' : status === 'rejected' ? 'Rejected' : 'Revision requested' });
+        setTimeout(() => location.reload(), 600);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        (window as any).__toast({ type: 'error', message: (err as any).error || 'Something went wrong' });
+      }
+    }
+
+    document.querySelectorAll('[data-approve]').forEach(btn => {
+      btn.addEventListener('click', () => respond((btn as HTMLElement).dataset.approve!, 'approved'));
+    });
+    document.querySelectorAll('[data-revision]').forEach(btn => {
+      btn.addEventListener('click', () => respond((btn as HTMLElement).dataset.revision!, 'revision_requested'));
+    });
+    document.querySelectorAll('[data-reject]').forEach(btn => {
+      btn.addEventListener('click', () => respond((btn as HTMLElement).dataset.reject!, 'rejected'));
+    });
+  </script>
+</Portal>

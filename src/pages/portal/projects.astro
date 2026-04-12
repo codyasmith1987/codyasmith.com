@@ -1,0 +1,150 @@
+---
+import Portal from '../../layouts/Portal.astro';
+import { getClientVisibleProjects, getClientVisibleMilestones, getClientVisibleTasks } from '../../lib/contracts';
+export const prerender = false;
+
+const user = Astro.locals.user!;
+if (!user.client_id) return Astro.redirect('/portal/dashboard');
+
+const projects = await getClientVisibleProjects(user.client_id);
+
+// Enrich with milestones and tasks
+const enriched = await Promise.all(projects.map(async (project) => {
+  const milestones = await getClientVisibleMilestones(project.id);
+  const milestonesWithTasks = await Promise.all(milestones.map(async (ms) => {
+    const tasks = await getClientVisibleTasks(ms.id);
+    return { ...ms, tasks };
+  }));
+  return { ...project, milestones: milestonesWithTasks };
+}));
+
+const statusLabels: Record<string, string> = {
+  not_started: 'Upcoming',
+  in_progress: 'In progress',
+  on_hold: 'On hold',
+  completed: 'Complete',
+  cancelled: 'Cancelled',
+};
+
+const statusColors: Record<string, string> = {
+  not_started: 'bg-neutral-700/30 text-neutral-400',
+  in_progress: 'bg-blue-500/10 text-blue-400',
+  on_hold: 'bg-amber-500/10 text-amber-400',
+  completed: 'bg-emerald-500/10 text-emerald-400',
+  cancelled: 'bg-neutral-700/30 text-neutral-500',
+  todo: 'bg-neutral-700/30 text-neutral-400',
+  review: 'bg-purple-500/10 text-purple-400',
+  done: 'bg-emerald-500/10 text-emerald-400',
+  blocked: 'bg-red-500/10 text-red-400',
+};
+---
+
+<Portal title="Projects">
+  <div class="max-w-3xl mx-auto">
+    <div class="mb-10">
+      <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Your Projects</h1>
+      <p class="text-sm text-neutral-500 mt-2">Everything we're working on for you.</p>
+    </div>
+
+    {enriched.length > 0 ? (
+      <div class="space-y-10">
+        {enriched.map(project => {
+          const activeMilestones = project.milestones.filter(m => m.status === 'in_progress');
+          const completedMilestones = project.milestones.filter(m => m.status === 'completed');
+          const upcomingMilestones = project.milestones.filter(m => m.status === 'not_started');
+
+          return (
+            <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
+              <div class="flex items-start justify-between mb-6">
+                <div>
+                  <h2 class="font-serif text-xl text-neutral-100">{project.title}</h2>
+                  {project.description && <p class="text-sm text-neutral-500 mt-1">{project.description}</p>}
+                </div>
+                <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full shrink-0 ${statusColors[project.status] || ''}`}>
+                  {statusLabels[project.status] || project.status}
+                </span>
+              </div>
+
+              {/* Progress bar */}
+              {project.milestones.length > 0 && (
+                <div class="mb-6">
+                  <div class="flex items-center justify-between mb-2">
+                    <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-wide">Progress</p>
+                    <p class="text-[10px] font-mono text-neutral-500">{completedMilestones.length} of {project.milestones.length} milestones</p>
+                  </div>
+                  <div class="h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+                    <div class="h-full bg-amber-500/60 rounded-full transition-all duration-500" style={`width: ${project.milestones.length > 0 ? Math.round((completedMilestones.length / project.milestones.length) * 100) : 0}%`}></div>
+                  </div>
+                </div>
+              )}
+
+              {/* Active milestones */}
+              {activeMilestones.length > 0 && (
+                <div class="mb-6">
+                  <p class="text-[10px] font-mono text-blue-400 uppercase tracking-wide mb-3">In progress</p>
+                  {activeMilestones.map(ms => (
+                    <div class="border border-white/5 rounded-xl p-5 mb-3 last:mb-0">
+                      <div class="flex items-start justify-between mb-2">
+                        <h3 class="text-sm font-medium text-neutral-200">{ms.title}</h3>
+                        {ms.due_date && <span class="text-[10px] text-neutral-600 font-mono">Due: {ms.due_date}</span>}
+                      </div>
+                      {ms.client_update_text && (
+                        <p class="text-sm text-neutral-400 leading-relaxed mb-3">{ms.client_update_text}</p>
+                      )}
+                      {ms.tasks.length > 0 && (
+                        <div class="space-y-1.5 mt-3">
+                          {ms.tasks.map(t => (
+                            <div class="flex items-center gap-3">
+                              <span class={`w-1.5 h-1.5 rounded-full shrink-0 ${t.status === 'done' ? 'bg-emerald-400' : t.status === 'in_progress' ? 'bg-blue-400' : 'bg-neutral-700'}`}></span>
+                              <span class={`text-xs ${t.status === 'done' ? 'text-neutral-600 line-through' : 'text-neutral-300'}`}>{t.title}</span>
+                              {t.client_update_text && <span class="text-[10px] text-neutral-500 ml-auto">{t.client_update_text}</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Upcoming milestones */}
+              {upcomingMilestones.length > 0 && (
+                <div class="mb-6">
+                  <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-wide mb-3">Coming up</p>
+                  {upcomingMilestones.map(ms => (
+                    <div class="flex items-center justify-between py-2.5 border-b border-white/5 last:border-0">
+                      <span class="text-sm text-neutral-400">{ms.title}</span>
+                      {ms.due_date && <span class="text-[10px] text-neutral-700 font-mono">{ms.due_date}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Completed milestones */}
+              {completedMilestones.length > 0 && (
+                <div>
+                  <p class="text-[10px] font-mono text-emerald-400/60 uppercase tracking-wide mb-3">Completed</p>
+                  {completedMilestones.map(ms => (
+                    <div class="flex items-center justify-between py-2 opacity-60">
+                      <span class="text-sm text-neutral-500">{ms.title}</span>
+                      {ms.completed_at && <span class="text-[10px] text-neutral-700 font-mono">{ms.completed_at.split('T')[0]}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {project.milestones.length === 0 && (
+                <p class="text-sm text-neutral-600">Work plan is being prepared. You'll see milestones here once we get started.</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    ) : (
+      <div class="text-center py-16">
+        <p class="font-serif text-xl text-neutral-100 mb-2">No active projects right now</p>
+        <p class="text-sm text-neutral-500">When work begins, you'll see it here.</p>
+      </div>
+    )}
+  </div>
+</Portal>

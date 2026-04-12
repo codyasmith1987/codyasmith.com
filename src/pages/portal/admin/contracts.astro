@@ -6,7 +6,14 @@ import { getAllContracts, getContractsByClient, getContractsByStatus } from '../
 import { getPendingApprovals } from '../../../lib/invoices';
 import { getInvoicesByStatus, getOverdueInvoices } from '../../../lib/invoices';
 import { getRecentActivity } from '../../../lib/activity';
+import { checkAndGenerateInvoices } from '../../../lib/billing';
 export const prerender = false;
+
+// Lightweight auto-generate check on page load
+const user = Astro.locals.user!;
+if (user.role === 'admin') {
+  await checkAndGenerateInvoices(user.id);
+}
 
 const clients = await getAllClients();
 const clientId = Astro.url.searchParams.get('client');
@@ -72,9 +79,14 @@ const statusColors: Record<string, string> = {
           ))}
         </select>
       </form>
-      <button id="show-create-form" class="px-5 py-2.5 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300">
-        New contract
-      </button>
+      <div class="flex items-center gap-3">
+        <button id="generate-invoices-btn" class="px-5 py-2.5 bg-neutral-800 text-neutral-300 text-sm rounded-lg hover:bg-neutral-700 transition-all duration-300">
+          Generate invoices
+        </button>
+        <button id="show-create-form" class="px-5 py-2.5 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300">
+          New contract
+        </button>
+      </div>
     </div>
 
     <!-- Create form (hidden by default) -->
@@ -247,6 +259,25 @@ const statusColors: Record<string, string> = {
       } else {
         const err = await res.json().catch(() => ({ error: 'Failed' }));
         (window as any).__toast({ type: 'error', message: err.error || 'Failed to create contract' });
+      }
+    });
+
+    // Generate invoices button
+    document.getElementById('generate-invoices-btn')?.addEventListener('click', async () => {
+      const res = await fetch('/portal/api/admin/billing/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.generated > 0) {
+          (window as any).__toast({ type: 'success', message: `Generated ${data.generated} invoice(s)` });
+          setTimeout(() => location.reload(), 800);
+        } else {
+          (window as any).__toast({ type: 'info', message: 'No invoices due right now' });
+        }
+      } else {
+        (window as any).__toast({ type: 'error', message: 'Failed to generate invoices' });
       }
     });
   </script>

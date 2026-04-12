@@ -3,8 +3,9 @@
 // Triggers create notifications, cascade status changes, and log activity.
 // They never fail the parent operation — errors are logged and swallowed.
 
-import { getTask, getMilestone, getProject, getContract, getTasksByMilestone, getMilestonesByProject, updateMilestone, updateProject, updateContract } from './contracts';
+import { getTask, getMilestone, getProject, getContract, getTasksByMilestone, getMilestonesByProject, updateMilestone, updateProject, updateTask, updateContract } from './contracts';
 import { getInvoice, getChangeOrder } from './invoices';
+import { createPendingCharge } from './billing';
 import { createNotification } from './notifications';
 import { getUsersByClientId, getAdminUsers } from './auth';
 import { logActivity } from './activity';
@@ -41,6 +42,14 @@ export async function onTaskCompleted(taskId: string): Promise<void> {
 
     const project = milestone ? await getProject(milestone.project_id) : null;
     const contract = project ? await getContract(project.contract_id) : null;
+
+    // Auto-write client update text (System 5)
+    const completedDate = new Date().toISOString().split('T')[0];
+    if (task.client_visible) {
+      await updateTask(taskId, {
+        client_update_text: `${task.title} completed on ${completedDate}`,
+      });
+    }
 
     // Notify client
     if (contract) {
@@ -80,6 +89,13 @@ export async function onMilestoneCompleted(milestoneId: string): Promise<void> {
     if (!project) return;
 
     const contract = await getContract(project.contract_id);
+
+    // Auto-write client update text (System 5)
+    if (milestone.client_visible) {
+      await updateMilestone(milestoneId, {
+        client_update_text: `${milestone.title} completed \u2014 all tasks finished`,
+      });
+    }
 
     // Notify client
     if (contract) {
@@ -151,6 +167,18 @@ export async function onChangeOrderApproved(changeOrderId: string): Promise<void
     if (co.cost_impact !== 0 && contract.total_value != null) {
       await updateContract(co.contract_id, {
         total_value: contract.total_value + co.cost_impact,
+      });
+    }
+
+    // Create pending billable charge (System 6)
+    if (co.cost_impact > 0) {
+      const approvedDate = co.approved_at ? co.approved_at.split('T')[0] : new Date().toISOString().split('T')[0];
+      await createPendingCharge({
+        contract_id: co.contract_id,
+        description: `${co.title} (approved ${approvedDate})`,
+        amount: co.cost_impact,
+        source_type: 'change_order',
+        source_id: co.id,
       });
     }
 

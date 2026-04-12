@@ -3,6 +3,8 @@ import { getTask, updateTask, deleteTask, getMilestone, getProject } from '../..
 import { logActivity } from '../../../../../lib/activity';
 import { logger } from '../../../../../lib/logger';
 import { onTaskCompleted } from '../../../../../lib/triggers';
+import { updateOverageCharge, getCurrentBillingPeriod } from '../../../../../lib/billing';
+import { getContract } from '../../../../../lib/contracts';
 
 export const prerender = false;
 
@@ -64,6 +66,21 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
 
     if (updates.status === 'done' && task.status !== 'done') {
       await onTaskCompleted(params.id!);
+    }
+
+    // Recalculate overage if hours changed
+    if (updates.actual_hours !== undefined || updates.status === 'done') {
+      try {
+        const ms = milestone || await getMilestone(task.milestone_id);
+        const proj = project || (ms ? await (await import('../../../../../lib/contracts')).getProject(ms.project_id) : null);
+        if (proj) {
+          const ctr = await getContract(proj.contract_id);
+          if (ctr?.billing_cadence === 'monthly' && ctr.billing_day && ctr.included_hours != null) {
+            const period = getCurrentBillingPeriod(ctr.billing_day);
+            await updateOverageCharge(ctr.id, period.start, period.end);
+          }
+        }
+      } catch { /* overage recalc is best-effort */ }
     }
 
     return json({ ok: true });

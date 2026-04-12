@@ -231,7 +231,7 @@ const statusColors: Record<string, string> = {
 
       const res = await fetch(`/portal/api/admin/contracts/${contractId}`, {
         method: 'DELETE',
-        headers: { 'X-CSRF-Token': csrfToken },
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
       });
 
       if (res.ok) {

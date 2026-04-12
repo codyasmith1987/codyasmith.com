@@ -3,6 +3,20 @@
 import { nanoid } from 'nanoid';
 import turso from './turso';
 
+// Lazy import to avoid circular dependency — invoices.ts imports nothing from contracts.ts
+// but contracts.ts needs deleteInvoice for cascade deletes.
+async function cascadeDeleteContractChildren(contractId: string): Promise<void> {
+  const { getInvoicesByContract, deleteInvoice } = await import('./invoices');
+  // Delete invoices (which cascade their own items + payments)
+  const invoices = await getInvoicesByContract(contractId);
+  for (const inv of invoices) {
+    await deleteInvoice(inv.id);
+  }
+  // Delete approvals and change orders
+  await turso.execute({ sql: 'DELETE FROM approvals WHERE contract_id = ?', args: [contractId] });
+  await turso.execute({ sql: 'DELETE FROM change_orders WHERE contract_id = ?', args: [contractId] });
+}
+
 // --- Column allowlists for dynamic UPDATE builders ---
 // Runtime guard against SQL column injection. TypeScript types disappear at runtime;
 // these allowlists enforce valid column names regardless of caller.
@@ -116,14 +130,14 @@ export async function updateContract(id: string, data: Partial<Pick<Contract,
   await turso.execute(update);
 }
 
-// Cascade delete: removes all projects, milestones, tasks, and artifacts under this contract.
-// Call only after confirming the user intends to delete the entire contract tree.
+// Cascade delete: removes all projects, milestones, tasks, artifacts, invoices, approvals,
+// and change orders under this contract.
 export async function deleteContract(id: string): Promise<void> {
-  // Get all projects under this contract
   const projects = await getProjectsByContract(id);
   for (const project of projects) {
     await deleteProject(project.id);
   }
+  await cascadeDeleteContractChildren(id);
   await turso.execute({ sql: 'DELETE FROM contracts WHERE id = ?', args: [id] });
 }
 

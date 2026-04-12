@@ -1,0 +1,160 @@
+---
+import Portal from '../../../../layouts/Portal.astro';
+import { getProject, getContract, getMilestonesByProject } from '../../../../lib/contracts';
+export const prerender = false;
+
+const { id } = Astro.params;
+const project = await getProject(id!);
+if (!project) return Astro.redirect('/portal/admin/contracts');
+
+const contract = await getContract(project.contract_id);
+const milestones = await getMilestonesByProject(id!);
+
+const statusColors: Record<string, string> = {
+  not_started: 'bg-neutral-700/30 text-neutral-400',
+  in_progress: 'bg-blue-500/10 text-blue-400',
+  on_hold: 'bg-amber-500/10 text-amber-400',
+  completed: 'bg-emerald-500/10 text-emerald-400',
+  cancelled: 'bg-red-500/10 text-red-400',
+  todo: 'bg-neutral-700/30 text-neutral-400',
+  review: 'bg-purple-500/10 text-purple-400',
+  done: 'bg-emerald-500/10 text-emerald-400',
+  blocked: 'bg-red-500/10 text-red-400',
+};
+---
+
+<Portal title={project.title}>
+  <div class="max-w-4xl mx-auto">
+    <div class="mb-6">
+      <a href={`/portal/admin/contracts/${project.contract_id}`} class="text-xs text-neutral-600 hover:text-amber-400 transition-colors">&larr; {contract?.title || 'Contract'}</a>
+    </div>
+
+    <div class="flex items-start justify-between mb-8">
+      <div>
+        <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-2">Project</p>
+        <h1 class="font-serif text-3xl text-neutral-100">{project.title}</h1>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[project.status] || ''}`}>{project.status}</span>
+        <button id="delete-project" class="text-xs text-neutral-600 hover:text-red-400 transition-colors">Delete</button>
+      </div>
+    </div>
+
+    <!-- Project fields -->
+    <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-8">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Status</label>
+          <select id="f-status" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+            {['not_started', 'in_progress', 'on_hold', 'completed', 'cancelled'].map(s => (
+              <option value={s} selected={s === project.status}>{s.replace(/_/g, ' ')}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Client visible</label>
+          <select id="f-visible" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+            <option value="1" selected={project.client_visible === 1}>Yes</option>
+            <option value="0" selected={project.client_visible === 0}>No</option>
+          </select>
+        </div>
+      </div>
+      <div class="mt-5">
+        <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Description</label>
+        <textarea id="f-desc" rows="3" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">{project.description || ''}</textarea>
+      </div>
+      <button id="save-project" class="mt-6 px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300">Save changes</button>
+    </div>
+
+    <!-- Milestones -->
+    <div class="mb-8">
+      <div class="flex items-center justify-between mb-4">
+        <p class="text-[10px] font-mono text-neutral-700 tracking-[0.15em] uppercase">Milestones ({milestones.length})</p>
+        <button id="show-add-ms" class="text-xs text-amber-400 hover:text-amber-300 transition-colors">+ Add milestone</button>
+      </div>
+
+      <form id="add-ms-form" class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 mb-4 hidden">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <input type="text" id="am-title" required placeholder="Milestone title" class="px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          <input type="date" id="am-due" placeholder="Due date" class="px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          <div class="flex gap-3">
+            <button type="submit" class="px-5 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all">Create</button>
+            <button type="button" id="cancel-add-ms" class="text-sm text-neutral-500 hover:text-neutral-300">Cancel</button>
+          </div>
+        </div>
+      </form>
+
+      {milestones.length > 0 ? (
+        <div class="space-y-2">
+          {milestones.map(ms => (
+            <a href={`/portal/admin/milestones/${ms.id}`} class="block bg-neutral-900/30 border border-white/5 rounded-xl p-4 hover:border-white/10 transition-all group">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm text-neutral-200 group-hover:text-amber-400 transition-colors">{ms.title}</p>
+                  {ms.due_date && <p class="text-xs text-neutral-600 mt-0.5">Due: {ms.due_date}</p>}
+                </div>
+                <span class={`text-[10px] font-mono tracking-wide uppercase px-2 py-0.5 rounded-full ${statusColors[ms.status] || ''}`}>{ms.status.replace(/_/g, ' ')}</span>
+              </div>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <p class="text-sm text-neutral-600 py-4">No milestones yet. Add one to break this project into trackable phases.</p>
+      )}
+    </div>
+  </div>
+
+  <script define:vars={{ projectId: id, contractId: project.contract_id }}>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    document.getElementById('save-project')?.addEventListener('click', async () => {
+      const res = await fetch(`/portal/api/admin/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          status: document.getElementById('f-status').value,
+          client_visible: Number(document.getElementById('f-visible').value),
+          description: document.getElementById('f-desc').value.trim() || null,
+        }),
+      });
+      if (res.ok) window.__toast({ type: 'success', message: 'Project updated' });
+      else window.__toast({ type: 'error', message: 'Failed to save' });
+    });
+
+    document.getElementById('delete-project')?.addEventListener('click', async () => {
+      const confirmed = await window.__confirm({
+        title: 'Delete project',
+        message: 'This will permanently delete this project and all its milestones and tasks.',
+        confirmLabel: 'Delete', danger: true,
+      });
+      if (!confirmed) return;
+      const res = await fetch(`/portal/api/admin/projects/${projectId}`, {
+        method: 'DELETE', headers: { 'X-CSRF-Token': csrfToken },
+      });
+      if (res.ok) {
+        window.__toast({ type: 'success', message: 'Project deleted' });
+        setTimeout(() => window.location.href = `/portal/admin/contracts/${contractId}`, 600);
+      } else window.__toast({ type: 'error', message: 'Failed to delete' });
+    });
+
+    const msForm = document.getElementById('add-ms-form');
+    document.getElementById('show-add-ms')?.addEventListener('click', () => msForm.classList.remove('hidden'));
+    document.getElementById('cancel-add-ms')?.addEventListener('click', () => msForm.classList.add('hidden'));
+
+    msForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('am-title').value.trim();
+      const due_date = document.getElementById('am-due').value || undefined;
+      if (!title) return;
+      const res = await fetch('/portal/api/admin/milestones/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({ project_id: projectId, title, due_date }),
+      });
+      if (res.ok) {
+        window.__toast({ type: 'success', message: 'Milestone created' });
+        setTimeout(() => location.reload(), 600);
+      } else window.__toast({ type: 'error', message: 'Failed to create milestone' });
+    });
+  </script>
+</Portal>

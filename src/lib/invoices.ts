@@ -116,6 +116,17 @@ export async function getInvoicesByContract(contractId: string): Promise<Invoice
   return queryAll('SELECT * FROM invoices WHERE contract_id = ? ORDER BY created_at DESC', [contractId]);
 }
 
+export async function getInvoicesByStatus(status: InvoiceStatus): Promise<Invoice[]> {
+  return queryAll('SELECT * FROM invoices WHERE status = ? ORDER BY created_at DESC', [status]);
+}
+
+export async function getOverdueInvoices(): Promise<Invoice[]> {
+  return queryAll(
+    "SELECT * FROM invoices WHERE status = 'sent' AND due_date < date('now') ORDER BY due_date",
+    []
+  );
+}
+
 // Client-safe: excludes created_by, contract_id, milestone_id (admin context)
 export async function getClientVisibleInvoices(clientId: string): Promise<Pick<Invoice, 'id' | 'invoice_number' | 'status' | 'issued_date' | 'due_date' | 'total' | 'amount_paid' | 'notes'>[]> {
   return queryAll(

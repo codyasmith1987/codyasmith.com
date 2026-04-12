@@ -1,0 +1,217 @@
+---
+import Portal from '../../../layouts/Portal.astro';
+import ClientSelector from '../../../components/portal/ClientSelector.astro';
+import { getAllClients } from '../../../lib/auth';
+import { getAllContracts, getContractsByClient, getContractsByStatus } from '../../../lib/contracts';
+import { getPendingApprovals } from '../../../lib/invoices';
+import { getInvoicesByStatus, getOverdueInvoices } from '../../../lib/invoices';
+import { getRecentActivity } from '../../../lib/activity';
+export const prerender = false;
+
+const clients = await getAllClients();
+const clientId = Astro.url.searchParams.get('client');
+const contracts = clientId
+  ? await getContractsByClient(clientId)
+  : await getAllContracts();
+
+// Summary stats
+const draftContracts = await getContractsByStatus('draft');
+const activeContracts = await getContractsByStatus('active');
+const pendingApprovals = await getPendingApprovals();
+const draftInvoices = await getInvoicesByStatus('draft');
+const overdueInvoices = await getOverdueInvoices();
+const recentActivity = await getRecentActivity({ limit: 5 });
+
+const statusColors: Record<string, string> = {
+  draft: 'bg-neutral-700/30 text-neutral-400',
+  sent: 'bg-blue-500/10 text-blue-400',
+  active: 'bg-emerald-500/10 text-emerald-400',
+  completed: 'bg-amber-500/10 text-amber-400',
+  cancelled: 'bg-red-500/10 text-red-400',
+};
+---
+
+<Portal title="Contracts">
+  <div class="max-w-5xl mx-auto">
+    <div class="mb-10">
+      <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin</p>
+      <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Contracts</h1>
+    </div>
+
+    <!-- Summary cards -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-10">
+      <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-4">
+        <p class="text-2xl font-semibold text-neutral-100">{draftContracts.length}</p>
+        <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-wide mt-1">Draft</p>
+      </div>
+      <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-4">
+        <p class="text-2xl font-semibold text-emerald-400">{activeContracts.length}</p>
+        <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-wide mt-1">Active</p>
+      </div>
+      <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-4">
+        <p class="text-2xl font-semibold text-amber-400">{pendingApprovals.length}</p>
+        <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-wide mt-1">Pending Approvals</p>
+      </div>
+      <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-4">
+        <p class="text-2xl font-semibold text-neutral-400">{draftInvoices.length}</p>
+        <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-wide mt-1">Draft Invoices</p>
+      </div>
+      <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-4">
+        <p class="text-2xl font-semibold text-red-400">{overdueInvoices.length}</p>
+        <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-wide mt-1">Overdue</p>
+      </div>
+    </div>
+
+    <!-- Filter + Create -->
+    <div class="flex items-center justify-between mb-6 gap-4">
+      <form method="GET" class="flex items-center gap-3">
+        <select name="client" onchange="this.form.submit()" class="px-4 py-2.5 bg-neutral-900/50 border border-white/5 rounded-lg text-sm text-neutral-300 focus:outline-none focus:border-amber-500/30">
+          <option value="">All clients</option>
+          {clients.map(c => (
+            <option value={c.id} selected={c.id === clientId}>{c.name}</option>
+          ))}
+        </select>
+      </form>
+      <button id="show-create-form" class="px-5 py-2.5 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300">
+        New contract
+      </button>
+    </div>
+
+    <!-- Create form (hidden by default) -->
+    <form id="create-contract-form" class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-8 hidden">
+      <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">New contract</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Client</label>
+          <select id="cc-client" required class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+            <option value="">Select client...</option>
+            {clients.map(c => <option value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Title</label>
+          <input type="text" id="cc-title" required class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="Website Redesign" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Type</label>
+          <select id="cc-type" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+            <option value="fixed">Fixed price</option>
+            <option value="retainer">Retainer</option>
+            <option value="hourly">Hourly</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Total value</label>
+          <input type="number" id="cc-value" step="0.01" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="5000.00" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Start date</label>
+          <input type="date" id="cc-start" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">End date</label>
+          <input type="date" id="cc-end" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+        </div>
+      </div>
+      <div class="mt-5">
+        <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Description</label>
+        <textarea id="cc-desc" rows="3" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="Scope summary..."></textarea>
+      </div>
+      <div class="flex items-center gap-3 mt-6">
+        <button type="submit" class="px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300">Create contract</button>
+        <button type="button" id="cancel-create" class="px-6 py-3 text-neutral-500 text-sm hover:text-neutral-300 transition-colors">Cancel</button>
+      </div>
+    </form>
+
+    <!-- Contract list -->
+    {contracts.length > 0 ? (
+      <div class="space-y-3">
+        {contracts.map(contract => {
+          const client = clients.find(c => c.id === contract.client_id);
+          return (
+            <a href={`/portal/admin/contracts/${contract.id}`} class="block bg-neutral-900/30 border border-white/5 rounded-xl p-5 hover:border-white/10 transition-all duration-300 group">
+              <div class="flex items-start justify-between">
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium text-neutral-200 group-hover:text-amber-400 transition-colors">{contract.title}</p>
+                  <p class="text-xs text-neutral-600 mt-1">{client?.name || 'Unknown client'}</p>
+                  {contract.description && <p class="text-xs text-neutral-500 mt-2 line-clamp-1">{contract.description}</p>}
+                </div>
+                <div class="flex items-center gap-3 ml-4 shrink-0">
+                  {contract.total_value != null && (
+                    <span class="text-xs font-mono text-neutral-500">${contract.total_value.toLocaleString()}</span>
+                  )}
+                  <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[contract.status] || statusColors.draft}`}>
+                    {contract.status}
+                  </span>
+                </div>
+              </div>
+              <div class="flex items-center gap-4 mt-3 text-[10px] text-neutral-700">
+                <span>{contract.type}</span>
+                {contract.start_date && <span>Start: {contract.start_date}</span>}
+                {contract.end_date && <span>End: {contract.end_date}</span>}
+              </div>
+            </a>
+          );
+        })}
+      </div>
+    ) : (
+      <div class="text-center py-16">
+        <p class="font-serif text-xl text-neutral-100 mb-2">No contracts yet</p>
+        <p class="text-sm text-neutral-500">Create your first contract to start tracking work.</p>
+      </div>
+    )}
+
+    <!-- Recent activity -->
+    {recentActivity.entries.length > 0 && (
+      <div class="mt-12">
+        <p class="text-[10px] font-mono text-neutral-700 tracking-[0.15em] uppercase mb-4">Recent activity</p>
+        <div class="space-y-2">
+          {recentActivity.entries.map(entry => (
+            <div class="flex items-baseline gap-3 text-xs">
+              <span class="text-neutral-700 font-mono shrink-0">{new Date(entry.created_at).toLocaleDateString()}</span>
+              <span class="text-neutral-500">{entry.summary}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+  </div>
+
+  <script>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const form = document.getElementById('create-contract-form') as HTMLFormElement;
+    const showBtn = document.getElementById('show-create-form')!;
+    const cancelBtn = document.getElementById('cancel-create')!;
+
+    showBtn.addEventListener('click', () => { form.classList.remove('hidden'); showBtn.classList.add('hidden'); });
+    cancelBtn.addEventListener('click', () => { form.classList.add('hidden'); showBtn.classList.remove('hidden'); });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const body = {
+        client_id: (document.getElementById('cc-client') as HTMLSelectElement).value,
+        title: (document.getElementById('cc-title') as HTMLInputElement).value.trim(),
+        type: (document.getElementById('cc-type') as HTMLSelectElement).value,
+        total_value: (document.getElementById('cc-value') as HTMLInputElement).value || undefined,
+        start_date: (document.getElementById('cc-start') as HTMLInputElement).value || undefined,
+        end_date: (document.getElementById('cc-end') as HTMLInputElement).value || undefined,
+        description: (document.getElementById('cc-desc') as HTMLTextAreaElement).value.trim() || undefined,
+      };
+
+      const res = await fetch('/portal/api/admin/contracts/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        (window as any).__toast({ type: 'success', message: 'Contract created' });
+        setTimeout(() => window.location.href = `/portal/admin/contracts/${data.id}`, 600);
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Failed' }));
+        (window as any).__toast({ type: 'error', message: err.error || 'Failed to create contract' });
+      }
+    });
+  </script>
+</Portal>

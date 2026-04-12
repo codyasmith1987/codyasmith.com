@@ -1,0 +1,287 @@
+---
+import Portal from '../../../../layouts/Portal.astro';
+import { getContract, getProjectsByContract } from '../../../../lib/contracts';
+import { getInvoicesByContract, getApprovalsByContract, getChangeOrdersByContract } from '../../../../lib/invoices';
+import { getAllClients } from '../../../../lib/auth';
+export const prerender = false;
+
+const { id } = Astro.params;
+const contract = await getContract(id!);
+if (!contract) return Astro.redirect('/portal/admin/contracts');
+
+const clients = await getAllClients();
+const client = clients.find(c => c.id === contract.client_id);
+const projects = await getProjectsByContract(id!);
+const invoices = await getInvoicesByContract(id!);
+const approvals = await getApprovalsByContract(id!);
+const changeOrders = await getChangeOrdersByContract(id!);
+
+const statusColors: Record<string, string> = {
+  draft: 'bg-neutral-700/30 text-neutral-400',
+  sent: 'bg-blue-500/10 text-blue-400',
+  active: 'bg-emerald-500/10 text-emerald-400',
+  completed: 'bg-amber-500/10 text-amber-400',
+  cancelled: 'bg-red-500/10 text-red-400',
+  not_started: 'bg-neutral-700/30 text-neutral-400',
+  in_progress: 'bg-blue-500/10 text-blue-400',
+  on_hold: 'bg-amber-500/10 text-amber-400',
+  pending: 'bg-amber-500/10 text-amber-400',
+  approved: 'bg-emerald-500/10 text-emerald-400',
+  rejected: 'bg-red-500/10 text-red-400',
+  partial: 'bg-amber-500/10 text-amber-400',
+  paid: 'bg-emerald-500/10 text-emerald-400',
+  overdue: 'bg-red-500/10 text-red-400',
+};
+---
+
+<Portal title={contract.title}>
+  <div class="max-w-4xl mx-auto">
+    <!-- Breadcrumb -->
+    <div class="mb-6">
+      <a href="/portal/admin/contracts" class="text-xs text-neutral-600 hover:text-amber-400 transition-colors">&larr; Contracts</a>
+    </div>
+
+    <!-- Header -->
+    <div class="flex items-start justify-between mb-8">
+      <div>
+        <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-2">{client?.name}</p>
+        <h1 id="contract-title" class="font-serif text-3xl text-neutral-100">{contract.title}</h1>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[contract.status] || ''}`}>
+          {contract.status}
+        </span>
+        <button id="delete-contract" class="text-xs text-neutral-600 hover:text-red-400 transition-colors">Delete</button>
+      </div>
+    </div>
+
+    <!-- Contract fields -->
+    <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-8">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Status</label>
+          <select id="f-status" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+            {['draft', 'sent', 'active', 'completed', 'cancelled'].map(s => (
+              <option value={s} selected={s === contract.status}>{s}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Type</label>
+          <select id="f-type" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+            {['fixed', 'retainer', 'hourly'].map(t => (
+              <option value={t} selected={t === contract.type}>{t}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Total value</label>
+          <input type="number" id="f-value" step="0.01" value={contract.total_value ?? ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Start date</label>
+          <input type="date" id="f-start" value={contract.start_date || ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">End date</label>
+          <input type="date" id="f-end" value={contract.end_date || ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+        </div>
+      </div>
+      <div class="mt-5">
+        <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Description</label>
+        <textarea id="f-desc" rows="3" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">{contract.description || ''}</textarea>
+      </div>
+      <button id="save-contract" class="mt-6 px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300">Save changes</button>
+    </div>
+
+    <!-- Projects section -->
+    <div class="mb-8">
+      <div class="flex items-center justify-between mb-4">
+        <p class="text-[10px] font-mono text-neutral-700 tracking-[0.15em] uppercase">Projects ({projects.length})</p>
+        <button id="show-add-project" class="text-xs text-amber-400 hover:text-amber-300 transition-colors">+ Add project</button>
+      </div>
+
+      <form id="add-project-form" class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 mb-4 hidden">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <input type="text" id="ap-title" required placeholder="Project title" class="px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          <div class="flex gap-3">
+            <button type="submit" class="px-5 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all">Create</button>
+            <button type="button" id="cancel-add-project" class="text-sm text-neutral-500 hover:text-neutral-300">Cancel</button>
+          </div>
+        </div>
+      </form>
+
+      {projects.length > 0 ? (
+        <div class="space-y-2">
+          {projects.map(p => (
+            <a href={`/portal/admin/projects/${p.id}`} class="block bg-neutral-900/30 border border-white/5 rounded-xl p-4 hover:border-white/10 transition-all group">
+              <div class="flex items-center justify-between">
+                <p class="text-sm text-neutral-200 group-hover:text-amber-400 transition-colors">{p.title}</p>
+                <span class={`text-[10px] font-mono tracking-wide uppercase px-2 py-0.5 rounded-full ${statusColors[p.status] || ''}`}>{p.status}</span>
+              </div>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <p class="text-sm text-neutral-600 py-4">No projects yet. Add one to start tracking deliverables.</p>
+      )}
+    </div>
+
+    <!-- Invoices section -->
+    <div class="mb-8">
+      <div class="flex items-center justify-between mb-4">
+        <p class="text-[10px] font-mono text-neutral-700 tracking-[0.15em] uppercase">Invoices ({invoices.length})</p>
+        <button id="create-invoice-btn" class="text-xs text-amber-400 hover:text-amber-300 transition-colors">+ New invoice</button>
+      </div>
+      {invoices.length > 0 ? (
+        <div class="space-y-2">
+          {invoices.map(inv => (
+            <a href={`/portal/admin/invoices/${inv.id}`} class="block bg-neutral-900/30 border border-white/5 rounded-xl p-4 hover:border-white/10 transition-all group">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm text-neutral-200 group-hover:text-amber-400 transition-colors font-mono">{inv.invoice_number}</p>
+                  <p class="text-xs text-neutral-600 mt-0.5">${inv.total.toFixed(2)}{inv.amount_paid > 0 ? ` (paid: $${inv.amount_paid.toFixed(2)})` : ''}</p>
+                </div>
+                <span class={`text-[10px] font-mono tracking-wide uppercase px-2 py-0.5 rounded-full ${statusColors[inv.status] || ''}`}>{inv.status}</span>
+              </div>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <p class="text-sm text-neutral-600 py-4">No invoices yet.</p>
+      )}
+    </div>
+
+    <!-- Approvals section -->
+    {approvals.length > 0 && (
+      <div class="mb-8">
+        <p class="text-[10px] font-mono text-neutral-700 tracking-[0.15em] uppercase mb-4">Approvals ({approvals.length})</p>
+        <div class="space-y-2">
+          {approvals.map(a => (
+            <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-4">
+              <div class="flex items-center justify-between">
+                <p class="text-sm text-neutral-200">{a.title}</p>
+                <span class={`text-[10px] font-mono tracking-wide uppercase px-2 py-0.5 rounded-full ${statusColors[a.status] || ''}`}>{a.status}</span>
+              </div>
+              {a.response_note && <p class="text-xs text-neutral-500 mt-2">{a.response_note}</p>}
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    <!-- Change Orders section -->
+    {changeOrders.length > 0 && (
+      <div class="mb-8">
+        <p class="text-[10px] font-mono text-neutral-700 tracking-[0.15em] uppercase mb-4">Change Orders ({changeOrders.length})</p>
+        <div class="space-y-2">
+          {changeOrders.map(co => (
+            <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <p class="text-sm text-neutral-200">{co.title}</p>
+                  <p class="text-xs text-neutral-600 mt-0.5">Cost: ${co.cost_impact.toFixed(2)} | Time: +{co.time_impact_days}d</p>
+                </div>
+                <span class={`text-[10px] font-mono tracking-wide uppercase px-2 py-0.5 rounded-full ${statusColors[co.status] || ''}`}>{co.status}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+  </div>
+
+  <script define:vars={{ contractId: id, clientId: contract.client_id }}>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    // Save contract
+    document.getElementById('save-contract')?.addEventListener('click', async () => {
+      const body = {
+        status: document.getElementById('f-status').value,
+        type: document.getElementById('f-type').value,
+        total_value: document.getElementById('f-value').value ? Number(document.getElementById('f-value').value) : null,
+        start_date: document.getElementById('f-start').value || null,
+        end_date: document.getElementById('f-end').value || null,
+        description: document.getElementById('f-desc').value.trim() || null,
+      };
+
+      const res = await fetch(`/portal/api/admin/contracts/${contractId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        window.__toast({ type: 'success', message: 'Contract updated' });
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Failed' }));
+        window.__toast({ type: 'error', message: err.error || 'Failed to save' });
+      }
+    });
+
+    // Delete contract
+    document.getElementById('delete-contract')?.addEventListener('click', async () => {
+      const confirmed = await window.__confirm({
+        title: 'Delete contract',
+        message: 'This will permanently delete this contract and all its projects, milestones, and tasks.',
+        confirmLabel: 'Delete',
+        danger: true,
+      });
+      if (!confirmed) return;
+
+      const res = await fetch(`/portal/api/admin/contracts/${contractId}`, {
+        method: 'DELETE',
+        headers: { 'X-CSRF-Token': csrfToken },
+      });
+
+      if (res.ok) {
+        window.__toast({ type: 'success', message: 'Contract deleted' });
+        setTimeout(() => window.location.href = '/portal/admin/contracts', 600);
+      } else {
+        window.__toast({ type: 'error', message: 'Failed to delete contract' });
+      }
+    });
+
+    // Add project
+    const apForm = document.getElementById('add-project-form');
+    document.getElementById('show-add-project')?.addEventListener('click', () => apForm.classList.remove('hidden'));
+    document.getElementById('cancel-add-project')?.addEventListener('click', () => apForm.classList.add('hidden'));
+
+    apForm?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('ap-title').value.trim();
+      if (!title) return;
+
+      const res = await fetch('/portal/api/admin/projects/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({ contract_id: contractId, client_id: clientId, title }),
+      });
+
+      if (res.ok) {
+        window.__toast({ type: 'success', message: 'Project created' });
+        setTimeout(() => location.reload(), 600);
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Failed' }));
+        window.__toast({ type: 'error', message: err.error || 'Failed to create project' });
+      }
+    });
+
+    // Create invoice
+    document.getElementById('create-invoice-btn')?.addEventListener('click', async () => {
+      const res = await fetch('/portal/api/admin/invoices/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({ contract_id: contractId, client_id: clientId }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        window.__toast({ type: 'success', message: `Invoice ${data.invoice_number} created` });
+        setTimeout(() => window.location.href = `/portal/admin/invoices/${data.id}`, 600);
+      } else {
+        window.__toast({ type: 'error', message: 'Failed to create invoice' });
+      }
+    });
+  </script>
+</Portal>

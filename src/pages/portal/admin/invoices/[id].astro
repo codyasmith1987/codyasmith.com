@@ -38,6 +38,8 @@ const statusColors: Record<string, string> = {
       </div>
       <div class="flex items-center gap-3">
         <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[invoice.status] || ''}`}>{invoice.status}</span>
+        {invoice.last_reminder_sent && <span class="text-[10px] text-neutral-600">Reminder sent {invoice.last_reminder_sent.split('T')[0]}</span>}
+        <a href={`/portal/api/admin/invoices/${id}/pdf`} class="text-xs text-amber-400 hover:text-amber-300 transition-colors">Download PDF</a>
         <button id="delete-invoice" class="text-xs text-neutral-600 hover:text-red-400 transition-colors">Delete</button>
       </div>
     </div>

@@ -59,9 +59,12 @@ const statusColors: Record<string, string> = {
                     {inv.due_date && <span>Due: {inv.due_date}</span>}
                   </div>
                 </div>
-                <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[inv.status] || ''}`}>
-                  {statusLabels[inv.status] || inv.status}
-                </span>
+                <div class="flex items-center gap-3">
+                  <a href={`/portal/api/client/invoices/${inv.id}/pdf`} class="text-xs text-amber-400 hover:text-amber-300 transition-colors">PDF</a>
+                  <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[inv.status] || ''}`}>
+                    {statusLabels[inv.status] || inv.status}
+                  </span>
+                </div>
               </div>
 
               {/* Payment progress */}

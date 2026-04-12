@@ -26,6 +26,7 @@
     "nanoid": "^5.1.7",
     "papaparse": "^5.5.3",
     "pdf-parse": "^2.4.5",
+    "pdfkit": "^0.18.0",
     "sentiment": "^5.0.2",
     "tailwindcss": "^4.2.2"
   },

@@ -12,9 +12,10 @@ async function cascadeDeleteContractChildren(contractId: string): Promise<void> 
   for (const inv of invoices) {
     await deleteInvoice(inv.id);
   }
-  // Delete approvals and change orders
+  // Delete approvals, change orders, and pending charges
   await turso.execute({ sql: 'DELETE FROM approvals WHERE contract_id = ?', args: [contractId] });
   await turso.execute({ sql: 'DELETE FROM change_orders WHERE contract_id = ?', args: [contractId] });
+  await turso.execute({ sql: 'DELETE FROM pending_charges WHERE contract_id = ?', args: [contractId] });
 }
 
 // --- Column allowlists for dynamic UPDATE builders ---

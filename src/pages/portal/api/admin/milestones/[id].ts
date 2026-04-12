@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { getMilestone, updateMilestone, deleteMilestone, getProject } from '../../../../../lib/contracts';
 import { logActivity } from '../../../../../lib/activity';
 import { logger } from '../../../../../lib/logger';
+import { onMilestoneCompleted } from '../../../../../lib/triggers';
 
 export const prerender = false;
 
@@ -56,6 +57,10 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
       entityId: params.id!,
       summary: `${locals.user!.name} updated milestone "${milestone.title}"`,
     });
+
+    if (updates.status === 'completed' && milestone.status !== 'completed') {
+      await onMilestoneCompleted(params.id!);
+    }
 
     return json({ ok: true });
   } catch (err) {

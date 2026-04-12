@@ -303,6 +303,30 @@ export async function revokeUserSessions(userId: string): Promise<number> {
   return result.rowsAffected;
 }
 
+export async function getUsersByClientId(clientId: string) {
+  const result = await turso.execute({
+    sql: 'SELECT id, email, name, role, client_id FROM users WHERE client_id = ?',
+    args: [clientId],
+  });
+  return result.rows.map(row => ({
+    id: row[0] as string,
+    email: row[1] as string,
+    name: row[2] as string,
+    role: row[3] as string,
+    client_id: row[4] as string,
+  }));
+}
+
+export async function getAdminUsers() {
+  const result = await turso.execute("SELECT id, email, name, role FROM users WHERE role = 'admin'");
+  return result.rows.map(row => ({
+    id: row[0] as string,
+    email: row[1] as string,
+    name: row[2] as string,
+    role: row[3] as string,
+  }));
+}
+
 export async function getAllUsers() {
   const result = await turso.execute(
     `SELECT u.id, u.email, u.name, u.role, u.client_id, u.created_at, u.last_login_at, c.name as client_name

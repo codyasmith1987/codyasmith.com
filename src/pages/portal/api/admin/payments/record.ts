@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { recordPayment, getInvoice } from '../../../../../lib/invoices';
 import { logActivity } from '../../../../../lib/activity';
 import { logger } from '../../../../../lib/logger';
+import { onPaymentRecorded } from '../../../../../lib/triggers';
 
 export const prerender = false;
 
@@ -39,6 +40,8 @@ export const POST: APIRoute = async ({ locals, request }) => {
       entityId: id,
       summary: `${locals.user!.name} recorded $${Number(amount).toFixed(2)} payment on invoice ${invoice.invoice_number}`,
     });
+
+    await onPaymentRecorded(invoice_id, Number(amount));
 
     return json({ id }, 201);
   } catch (err) {

@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { getApproval, respondToApproval } from '../../../../../lib/invoices';
 import { logActivity } from '../../../../../lib/activity';
 import { logger } from '../../../../../lib/logger';
+import { onApprovalResponded } from '../../../../../lib/triggers';
 
 export const prerender = false;
 
@@ -52,6 +53,8 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
       entityId: params.id!,
       summary: `${locals.user!.name} ${status} approval: "${approval.title}"`,
     });
+
+    await onApprovalResponded(params.id!, status, locals.user!.name);
 
     return json({ ok: true });
   } catch (err) {

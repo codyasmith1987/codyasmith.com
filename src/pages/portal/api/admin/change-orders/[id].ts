@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { getChangeOrder, updateChangeOrder, approveChangeOrder } from '../../../../../lib/invoices';
 import { logActivity } from '../../../../../lib/activity';
 import { logger } from '../../../../../lib/logger';
+import { onChangeOrderApproved } from '../../../../../lib/triggers';
 
 export const prerender = false;
 
@@ -44,6 +45,8 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
         entityId: params.id!,
         summary: `${locals.user!.name} approved change order: "${co.title}"`,
       });
+
+      await onChangeOrderApproved(params.id!);
 
       return json({ ok: true });
     }

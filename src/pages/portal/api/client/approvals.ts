@@ -5,6 +5,7 @@ import { getPendingApprovals, getApproval, respondToApproval } from '../../../..
 import { getContract } from '../../../../lib/contracts';
 import { logActivity } from '../../../../lib/activity';
 import { logger } from '../../../../lib/logger';
+import { onApprovalResponded } from '../../../../lib/triggers';
 
 export const prerender = false;
 
@@ -77,6 +78,8 @@ export const POST: APIRoute = async ({ locals, request }) => {
       entityId: id,
       summary: `${locals.user.name} ${status} approval: "${approval.title}"`,
     });
+
+    await onApprovalResponded(id, status, locals.user.name);
 
     return json({ ok: true });
   } catch (err) {

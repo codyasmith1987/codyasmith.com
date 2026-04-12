@@ -5,6 +5,7 @@ import {
 } from '../../../../../lib/invoices';
 import { logActivity } from '../../../../../lib/activity';
 import { logger } from '../../../../../lib/logger';
+import { onInvoiceSent } from '../../../../../lib/triggers';
 
 export const prerender = false;
 
@@ -78,6 +79,10 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
       entityId: params.id!,
       summary: `${locals.user!.name} updated invoice ${invoice.invoice_number}`,
     });
+
+    if (body.status === 'sent' && invoice.status !== 'sent') {
+      await onInvoiceSent(params.id!);
+    }
 
     return json({ ok: true });
   } catch (err) {

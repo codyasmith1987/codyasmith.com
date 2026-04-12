@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { createUser, createMagicLink, getUserByEmail } from '../../../../lib/auth';
 import { logActivity } from '../../../../lib/activity';
 import { logger } from '../../../../lib/logger';
+import { logActivity } from '../../../../lib/activity';
 
 export const prerender = false;
 

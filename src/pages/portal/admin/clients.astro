@@ -86,17 +86,27 @@ const clients = await getAllClients();
   </div>
 
   <script>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
     // Toggle active/inactive
     document.querySelectorAll('[data-toggle-client]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const clientId = (btn as HTMLElement).dataset.toggleClient!;
         const isActive = (btn as HTMLElement).dataset.clientActive === '1';
 
-        if (isActive && !confirm('Deactivate this client? Their users won\'t be able to log in.')) return;
+        if (isActive) {
+          const confirmed = await (window as any).__confirm({
+            title: 'Deactivate client',
+            message: 'Their users won\'t be able to log in while deactivated.',
+            confirmLabel: 'Deactivate',
+            danger: true,
+          });
+          if (!confirmed) return;
+        }
 
         const res = await fetch('/portal/api/admin/toggle-client', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
           body: JSON.stringify({ client_id: clientId }),
         });
 
@@ -130,7 +140,7 @@ const clients = await getAllClients();
 
       const res = await fetch('/portal/api/admin/create-client', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
         body: JSON.stringify({
           name: nameInput.value.trim(),
           slug: slugInput.value.trim(),

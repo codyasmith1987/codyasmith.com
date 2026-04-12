@@ -1,14 +1,26 @@
-// Request-correlated logging
+// Request-correlated logging using AsyncLocalStorage
 // Each request gets a unique ID that flows through all log entries
+// without bleeding across concurrent requests
 
-let currentRequestId = '';
+import { AsyncLocalStorage } from 'node:async_hooks';
+
+const als = new AsyncLocalStorage<string>();
 
 export function setRequestId(id: string) {
-  currentRequestId = id;
+  // Legacy setter — still used by middleware for backward compatibility
+  // Actual correlation happens via runWithRequestId
+  _fallbackId = id;
+}
+
+let _fallbackId = '';
+
+export function runWithRequestId<T>(id: string, fn: () => T): T {
+  return als.run(id, fn);
 }
 
 function prefix(): string {
-  return currentRequestId ? `[${currentRequestId}]` : '';
+  const id = als.getStore() || _fallbackId;
+  return id ? `[${id}]` : '';
 }
 
 export const logger = {

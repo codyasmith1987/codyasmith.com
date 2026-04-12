@@ -13,14 +13,6 @@ function formatLabel(format: string): string {
 ---
 
 <Portal title="CSV Upload">
-  <style>
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(12px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .csv-result { opacity: 0; animation: fadeUp 0.4s ease-out forwards; }
-  </style>
-
   <div class="max-w-4xl mx-auto">
     <div class="mb-10">
       <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin</p>
@@ -115,6 +107,7 @@ function formatLabel(format: string): string {
   </div>
 
   <script>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const form = document.getElementById('csv-form') as HTMLFormElement;
     const btn = document.getElementById('csv-btn') as HTMLButtonElement;
     const progress = document.getElementById('csv-progress')!;
@@ -142,7 +135,7 @@ function formatLabel(format: string): string {
         formData.append('month', month);
 
         try {
-          const res = await fetch('/portal/api/csv/upload', { method: 'POST', body: formData });
+          const res = await fetch('/portal/api/csv/upload', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken }, body: formData });
           const data = await res.json();
 
           const card = document.createElement('div');
@@ -184,7 +177,7 @@ function formatLabel(format: string): string {
 
       const res = await fetch('/portal/api/metrics/manual', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
         body: JSON.stringify({
           client_id: (document.getElementById('m-client') as HTMLSelectElement).value,
           month: (document.getElementById('m-month') as HTMLInputElement).value,

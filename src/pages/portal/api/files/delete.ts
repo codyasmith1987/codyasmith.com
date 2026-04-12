@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { getFileById, deleteFileFromStorage } from '../../../../lib/storage';
 import { logger } from '../../../../lib/logger';
+import { logActivity } from '../../../../lib/activity';
 
 export const prerender = false;
 
@@ -16,6 +17,16 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
     const file = await getFileById(file_id);
     if (!file) return json({ error: 'File not found' }, 404);
+
+    // Log before delete
+    await logActivity({
+      clientId: file.client_id,
+      userId: locals.user!.id,
+      action: 'deleted',
+      entityType: 'file',
+      entityId: file.id,
+      summary: `${locals.user!.name} deleted "${file.original_name}"`,
+    });
 
     await deleteFileFromStorage(file.s3_key, file.id);
     return json({ ok: true });

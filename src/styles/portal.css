@@ -1,0 +1,65 @@
+/* Shared portal animations — extracted from individual page <style> blocks */
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Dashboard-specific animations */
+@keyframes countUp {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 var(--glow-color); }
+  50% { box-shadow: 0 0 40px 4px var(--glow-color); }
+}
+
+.portal-fade {
+  opacity: 0;
+  animation: fadeUp 0.5s ease-out forwards;
+}
+
+.story-section {
+  opacity: 0;
+  animation: fadeUp 0.6s ease-out forwards;
+}
+
+.story-section:nth-child(2) { animation-delay: 0.15s; }
+.story-section:nth-child(3) { animation-delay: 0.3s; }
+.story-section:nth-child(4) { animation-delay: 0.45s; }
+
+.score-glow {
+  animation: pulseGlow 3s ease-in-out 1.8s 1;
+}
+
+.trophy-row {
+  opacity: 0;
+  animation: fadeUp 0.4s ease-out forwards;
+}
+
+.sim-result {
+  opacity: 0;
+  animation: fadeUp 0.35s ease-out forwards;
+}
+
+.checkup-card {
+  opacity: 0;
+  animation: fadeUp 0.4s ease-out forwards;
+}
+
+.kw-animate {
+  opacity: 0;
+  animation: fadeUp 0.5s ease-out forwards;
+}
+
+.health-animate {
+  opacity: 0;
+  animation: fadeUp 0.5s ease-out forwards;
+}
+
+.csv-result {
+  opacity: 0;
+  animation: fadeUp 0.4s ease-out forwards;
+}

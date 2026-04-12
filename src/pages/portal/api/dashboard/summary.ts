@@ -1,6 +1,5 @@
 import type { APIRoute } from 'astro';
 import turso from '../../../../lib/turso';
-import { ensurePortalTables } from '../../../../lib/auth';
 
 export const prerender = false;
 
@@ -9,8 +8,6 @@ const json = (data: any, status = 200) =>
 
 export const GET: APIRoute = async ({ locals, url }) => {
   if (!locals.user) return json({ error: 'Unauthorized' }, 401);
-
-  await ensurePortalTables();
 
   // Admin can query any client, clients see their own
   const clientId = locals.user.role === 'admin'

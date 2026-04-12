@@ -10,7 +10,7 @@ function escapeHtml(s: string): string {
 
 export const POST: APIRoute = async ({ request, clientAddress }) => {
   const ip = clientAddress || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-  if (!rateLimit(`quiz:${ip}`, 5, 60 * 60 * 1000)) {
+  if (!await rateLimit(`quiz:${ip}`, 5, 60 * 60 * 1000)) {
     return new Response(JSON.stringify({ error: 'Too many requests' }), {
       status: 429, headers: { 'Content-Type': 'application/json' },
     });

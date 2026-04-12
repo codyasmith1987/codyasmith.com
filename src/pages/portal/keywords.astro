@@ -1,5 +1,9 @@
 ---
 import Portal from '../../layouts/Portal.astro';
+import ClientSelector from '../../components/portal/ClientSelector.astro';
+import StateLoading from '../../components/portal/StateLoading.astro';
+import StateError from '../../components/portal/StateError.astro';
+import StateEmpty from '../../components/portal/StateEmpty.astro';
 import { getAllClients } from '../../lib/auth';
 export const prerender = false;
 
@@ -9,13 +13,6 @@ const clients = isAdmin ? await getAllClients() : [];
 ---
 
 <Portal title="Keywords">
-  <style>
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(12px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .kw-animate { opacity: 0; animation: fadeUp 0.5s ease-out forwards; }
-  </style>
 
   <div class="max-w-4xl mx-auto">
     <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
@@ -24,11 +21,7 @@ const clients = isAdmin ? await getAllClients() : [];
         <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Keyword Rankings</h1>
       </div>
       <div class="flex items-center gap-3">
-        {isAdmin && clients.length > 0 && (
-          <select id="client-selector" class="px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-400 text-xs focus:outline-none focus:border-amber-500/30 transition-colors duration-300">
-            {clients.map(c => <option value={c.id}>{c.name}</option>)}
-          </select>
-        )}
+        {isAdmin && <ClientSelector clients={clients} />}
         <select id="kw-source" class="px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-400 text-xs focus:outline-none focus:border-amber-500/30 transition-colors duration-300">
           <option value="position_tracking">Tracked Rankings</option>
           <option value="keyword_research">All Keywords</option>
@@ -72,18 +65,8 @@ const clients = isAdmin ? await getAllClients() : [];
       </div>
     </div>
 
-    <!-- Loading state -->
-    <div id="kw-loading" class="text-center py-24">
-      <div class="inline-block w-8 h-8 border-2 border-neutral-800 border-t-amber-500 rounded-full animate-spin mb-5"></div>
-      <p class="text-sm text-neutral-600">Loading keywords...</p>
-    </div>
-
-    <!-- Error state -->
-    <div id="kw-error" class="hidden text-center py-24">
-      <p class="font-serif text-2xl text-neutral-100 mb-3">Something went wrong</p>
-      <p id="kw-error-detail" class="text-sm text-neutral-500 mb-8"></p>
-      <button onclick="loadKeywords()" class="px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.2)]">Retry</button>
-    </div>
+    <StateLoading id="kw-loading" message="Loading keywords..." />
+    <StateError id="kw-error" detailId="kw-error-detail" retryFn="loadKeywords" />
 
     <!-- Search filter -->
     <div class="mb-6 hidden" id="kw-search-wrap">
@@ -100,12 +83,11 @@ const clients = isAdmin ? await getAllClients() : [];
     </div>
     <p id="kw-count" class="mt-6 text-[10px] font-mono text-neutral-700 tracking-wide uppercase"></p>
 
-    <div id="kw-empty" class="hidden text-center py-24">
-      <p class="font-serif text-2xl text-neutral-100 mb-3">No keyword data yet</p>
-      <p class="text-sm text-neutral-500 leading-relaxed max-w-xs mx-auto">
-        {isAdmin ? 'Upload a position tracking CSV to start seeing rankings here.' : 'Your keyword rankings will appear here once data is available.'}
-      </p>
-    </div>
+    <StateEmpty
+      id="kw-empty"
+      title="No keyword data yet"
+      message={isAdmin ? 'Upload a position tracking CSV to start seeing rankings here.' : 'Your keyword rankings will appear here once data is available.'}
+    />
   </div>
 
   <script define:vars={{ clientId: user.client_id, isAdmin, firstClientId: clients[0]?.id || '' }}>

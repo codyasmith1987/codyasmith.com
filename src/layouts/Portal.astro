@@ -1,5 +1,8 @@
 ---
 import '../styles/global.css';
+import '../styles/portal.css';
+import ConfirmModal from '../components/portal/ConfirmModal.astro';
+import Toast from '../components/portal/Toast.astro';
 
 export const prerender = false;
 
@@ -9,19 +12,49 @@ interface Props {
 
 const { title } = Astro.props;
 const user = Astro.locals.user;
+const csrfToken = Astro.locals.csrfToken || '';
 const currentPath = Astro.url.pathname;
 
-const navItems = [
+// Dashboard — always first
+const topItems = [
   { href: '/portal/dashboard', label: 'Dashboard' },
+];
+
+// Work section — client operational pages (shown to client users)
+const workItems = user?.role === 'client' ? [
+  { href: '/portal/projects', label: 'Projects' },
+  { href: '/portal/approvals', label: 'Approvals' },
+  { href: '/portal/invoices', label: 'Invoices' },
+] : [];
+
+// Reports section — SEO reporting (shown to all users)
+const reportItems = [
   { href: '/portal/keywords', label: 'Keywords' },
   { href: '/portal/health', label: 'Site Health' },
   { href: '/portal/files', label: 'Files' },
 ];
 
+// Admin section (admin only)
 const adminItems = [
+  { href: '/portal/admin/contracts', label: 'Contracts' },
+  { href: '/portal/admin/invoices', label: 'Invoices' },
+  { href: '/portal/admin/approvals', label: 'Approvals' },
   { href: '/portal/admin/clients', label: 'Clients' },
   { href: '/portal/admin/users', label: 'Users' },
   { href: '/portal/admin/csv', label: 'CSV Upload' },
+  { href: '/portal/admin/activity', label: 'Activity' },
+];
+
+// Helper to render a nav link
+const linkClass = (href: string) => [
+  'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all duration-300',
+  currentPath.startsWith(href)
+    ? 'bg-amber-500/10 text-amber-400 font-medium'
+    : 'text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.03]',
+];
+const mobileLinkClass = (href: string) => [
+  'block px-4 py-2.5 rounded-lg text-sm transition-colors duration-300',
+  currentPath.startsWith(href) ? 'bg-amber-500/10 text-amber-400' : 'text-neutral-500',
 ];
 ---
 
@@ -36,6 +69,7 @@ const adminItems = [
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <meta name="csrf-token" content={csrfToken} />
   </head>
   <body class="min-h-screen bg-neutral-950 text-neutral-300 font-sans">
     <div class="flex min-h-screen">
@@ -49,18 +83,26 @@ const adminItems = [
         </div>
 
         <nav class="flex-1 px-4 py-6 space-y-1">
-          {navItems.map(item => (
-            <a
-              href={item.href}
-              class:list={[
-                'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all duration-300',
-                currentPath.startsWith(item.href)
-                  ? 'bg-amber-500/10 text-amber-400 font-medium'
-                  : 'text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.03]',
-              ]}
-            >
-              {item.label}
-            </a>
+          {topItems.map(item => (
+            <a href={item.href} class:list={linkClass(item.href)}>{item.label}</a>
+          ))}
+
+          {workItems.length > 0 && (
+            <>
+              <div class="pt-6 pb-2">
+                <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Work</p>
+              </div>
+              {workItems.map(item => (
+                <a href={item.href} class:list={linkClass(item.href)}>{item.label}</a>
+              ))}
+            </>
+          )}
+
+          <div class="pt-6 pb-2">
+            <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Reports</p>
+          </div>
+          {reportItems.map(item => (
+            <a href={item.href} class:list={linkClass(item.href)}>{item.label}</a>
           ))}
 
           {user?.role === 'admin' && (
@@ -69,23 +111,17 @@ const adminItems = [
                 <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Admin</p>
               </div>
               {adminItems.map(item => (
-                <a
-                  href={item.href}
-                  class:list={[
-                    'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all duration-300',
-                    currentPath.startsWith(item.href)
-                      ? 'bg-amber-500/10 text-amber-400 font-medium'
-                      : 'text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.03]',
-                  ]}
-                >
-                  {item.label}
-                </a>
+                <a href={item.href} class:list={linkClass(item.href)}>{item.label}</a>
               ))}
             </>
           )}
         </nav>
 
         <div class="p-4 border-t border-white/5 space-y-3">
+          <a href="/portal/notifications" class:list={['flex items-center gap-2 px-4 py-2 text-xs rounded-lg transition-colors duration-300', currentPath === '/portal/notifications' ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-600 hover:text-amber-400 hover:bg-white/[0.03]']}>
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>
+            Notifications
+          </a>
           <a href="/" class="flex items-center gap-2 px-4 py-2 text-xs text-neutral-600 hover:text-amber-400 transition-colors duration-300 rounded-lg hover:bg-white/[0.03]">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
             Back to website
@@ -121,16 +157,24 @@ const adminItems = [
         <!-- Mobile nav drawer -->
         <nav id="mobile-nav" class="md:hidden bg-neutral-900/95 backdrop-blur-md border-b border-white/5 overflow-hidden transition-all duration-300 ease-out" style="max-height: 0; opacity: 0;">
           <div class="px-6 py-6 space-y-1">
-            {navItems.map(item => (
-              <a
-                href={item.href}
-                class:list={[
-                  'block px-4 py-2.5 rounded-lg text-sm transition-colors duration-300',
-                  currentPath.startsWith(item.href) ? 'bg-amber-500/10 text-amber-400' : 'text-neutral-500',
-                ]}
-              >
-                {item.label}
-              </a>
+            {topItems.map(item => (
+              <a href={item.href} class:list={mobileLinkClass(item.href)}>{item.label}</a>
+            ))}
+            {workItems.length > 0 && (
+              <>
+                <div class="pt-4 pb-1">
+                  <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Work</p>
+                </div>
+                {workItems.map(item => (
+                  <a href={item.href} class:list={mobileLinkClass(item.href)}>{item.label}</a>
+                ))}
+              </>
+            )}
+            <div class="pt-4 pb-1">
+              <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Reports</p>
+            </div>
+            {reportItems.map(item => (
+              <a href={item.href} class:list={mobileLinkClass(item.href)}>{item.label}</a>
             ))}
             {user?.role === 'admin' && (
               <>
@@ -138,19 +182,12 @@ const adminItems = [
                   <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Admin</p>
                 </div>
                 {adminItems.map(item => (
-                  <a
-                    href={item.href}
-                    class:list={[
-                      'block px-4 py-2.5 rounded-lg text-sm transition-colors duration-300',
-                      currentPath.startsWith(item.href) ? 'bg-amber-500/10 text-amber-400' : 'text-neutral-500',
-                    ]}
-                  >
-                    {item.label}
-                  </a>
+                  <a href={item.href} class:list={mobileLinkClass(item.href)}>{item.label}</a>
                 ))}
               </>
             )}
             <div class="pt-4 mt-2 border-t border-white/5 flex items-center justify-between">
+              <a href="/portal/notifications" class="text-xs text-neutral-600 hover:text-amber-400 transition-colors">Notifications</a>
               <a href="/" class="text-xs text-neutral-600 hover:text-amber-400 transition-colors">Back to website</a>
               <form method="POST" action="/portal/auth/logout">
                 <button type="submit" class="text-xs text-neutral-600 hover:text-red-400 transition-colors">Log out</button>
@@ -165,6 +202,9 @@ const adminItems = [
         </main>
       </div>
     </div>
+
+    <ConfirmModal />
+    <Toast />
 
     <script>
       const btn = document.getElementById('mobile-menu-btn');

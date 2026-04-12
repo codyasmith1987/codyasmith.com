@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { createClient } from '../../../../lib/auth';
 import { logger } from '../../../../lib/logger';
+import { logActivity } from '../../../../lib/activity';
 
 export const prerender = false;
 
@@ -22,6 +23,16 @@ export const POST: APIRoute = async ({ locals, request }) => {
     }
 
     const id = await createClient(name.trim(), slug.trim());
+
+    await logActivity({
+      clientId: id,
+      userId: locals.user!.id,
+      action: 'created',
+      entityType: 'client',
+      entityId: id,
+      summary: `${locals.user!.name} created client "${name.trim()}"`,
+    });
+
     return json({ id, name: name.trim(), slug: slug.trim() });
   } catch (err: any) {
     if (err.message?.includes('UNIQUE constraint')) {

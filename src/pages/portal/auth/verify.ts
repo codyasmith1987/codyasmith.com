@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { validateMagicLink, createSession, SESSION_COOKIE } from '../../../lib/auth';
+import { logActivity } from '../../../lib/activity';
 
 export const prerender = false;
 
@@ -18,6 +19,14 @@ export const GET: APIRoute = async ({ url, cookies, redirect }) => {
   }
 
   const sessionToken = await createSession(userId);
+
+  await logActivity({
+    userId,
+    action: 'logged_in',
+    entityType: 'session',
+    entityId: userId,
+    summary: 'User logged in via magic link',
+  });
 
   cookies.set(SESSION_COOKIE, sessionToken, {
     path: '/portal',

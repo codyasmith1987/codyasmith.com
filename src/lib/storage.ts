@@ -2,7 +2,6 @@ import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } fro
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { nanoid } from 'nanoid';
 import turso from './turso';
-import { ensurePortalTables } from './auth';
 
 let _s3: S3Client | null = null;
 function getS3(): S3Client {
@@ -22,6 +21,10 @@ function getS3(): S3Client {
 
 function getBucket(): string {
   return import.meta.env.DO_SPACES_BUCKET || '';
+}
+
+function getKeyPrefix(): string {
+  return import.meta.env.STORAGE_KEY_PREFIX || '';
 }
 
 const ALLOWED_TYPES = new Set([
@@ -54,11 +57,10 @@ export async function uploadFile(
     throw new Error(`File exceeds ${MAX_SIZE / 1024 / 1024}MB limit`);
   }
 
-  await ensurePortalTables();
-
   const ext = originalName.split('.').pop() || 'bin';
   const filename = `${nanoid(12)}.${ext}`;
-  const s3Key = `clients/${clientSlug}/${month}/${filename}`;
+  const prefix = getKeyPrefix();
+  const s3Key = `${prefix}clients/${clientSlug}/${month}/${filename}`;
 
   await getS3().send(new PutObjectCommand({
     Bucket: getBucket(),
@@ -91,7 +93,6 @@ export async function deleteFileFromStorage(s3Key: string, fileId: string): Prom
 }
 
 export async function getFilesForClient(clientId: string): Promise<any[]> {
-  await ensurePortalTables();
   const result = await turso.execute({
     sql: `SELECT id, filename, original_name, mime_type, size_bytes, category, month, created_at
           FROM files WHERE client_id = ? ORDER BY month DESC, created_at DESC`,
@@ -112,7 +113,6 @@ export async function getFilesForClient(clientId: string): Promise<any[]> {
 export async function getFileById(fileId: string): Promise<{
   id: string; client_id: string; s3_key: string; original_name: string; mime_type: string;
 } | null> {
-  await ensurePortalTables();
   const result = await turso.execute({
     sql: 'SELECT id, client_id, s3_key, original_name, mime_type FROM files WHERE id = ?',
     args: [fileId],
@@ -129,7 +129,6 @@ export async function getFileById(fileId: string): Promise<{
 }
 
 export async function getAllFilesAdmin(): Promise<any[]> {
-  await ensurePortalTables();
   const result = await turso.execute(
     `SELECT f.id, f.original_name, f.mime_type, f.size_bytes, f.category, f.month, f.created_at, c.name as client_name, c.id as client_id
      FROM files f JOIN clients c ON c.id = f.client_id

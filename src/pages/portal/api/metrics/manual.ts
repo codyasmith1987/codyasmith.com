@@ -1,8 +1,8 @@
 import type { APIRoute } from 'astro';
 import { nanoid } from 'nanoid';
 import turso from '../../../../lib/turso';
-import { ensurePortalTables } from '../../../../lib/auth';
 import { logger } from '../../../../lib/logger';
+import { logActivity } from '../../../../lib/activity';
 
 export const prerender = false;
 
@@ -13,7 +13,6 @@ export const POST: APIRoute = async ({ locals, request }) => {
   if (locals.user?.role !== 'admin') return json({ error: 'Forbidden' }, 403);
 
   try {
-    await ensurePortalTables();
     const { client_id, month, category, metric_key, metric_value } = await request.json();
 
     if (!client_id || !month || !category || !metric_key || metric_value === undefined) {
@@ -26,6 +25,15 @@ export const POST: APIRoute = async ({ locals, request }) => {
             ON CONFLICT(client_id, month, category, metric_key)
             DO UPDATE SET metric_value = excluded.metric_value, source = 'manual'`,
       args: [nanoid(), client_id, month, category, metric_key, parseFloat(metric_value)],
+    });
+
+    await logActivity({
+      clientId: client_id,
+      userId: locals.user!.id,
+      action: 'created',
+      entityType: 'metric',
+      entityId: `${client_id}:${month}:${category}:${metric_key}`,
+      summary: `${locals.user!.name} set ${category}.${metric_key} = ${metric_value}`,
     });
 
     return json({ ok: true });

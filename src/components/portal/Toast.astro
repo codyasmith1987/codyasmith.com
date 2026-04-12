@@ -1,0 +1,41 @@
+---
+// No props — global toast container controlled via JS
+---
+
+<div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+<script>
+  const container = document.getElementById('toast-container')!;
+
+  function showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
+    const toast = document.createElement('div');
+    const colors = {
+      success: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400',
+      error: 'bg-red-500/10 border-red-500/20 text-red-400',
+      info: 'bg-amber-500/10 border-amber-500/20 text-amber-400',
+    };
+
+    toast.className = `pointer-events-auto px-5 py-3 border rounded-lg text-sm backdrop-blur-md ${colors[type]} transform transition-all duration-300 translate-y-2 opacity-0`;
+    toast.textContent = message;
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+
+    container.appendChild(toast);
+
+    // Animate in
+    requestAnimationFrame(() => {
+      toast.style.transform = 'translateY(0)';
+      toast.style.opacity = '1';
+    });
+
+    // Auto-dismiss after 4 seconds
+    setTimeout(() => {
+      toast.style.transform = 'translateY(2px)';
+      toast.style.opacity = '0';
+      setTimeout(() => toast.remove(), 300);
+    }, 4000);
+  }
+
+  // Expose globally
+  (window as any).__toast = showToast;
+</script>

@@ -146,6 +146,7 @@ function categoryLabel(cat: string): string {
 
   <script>
     // Upload handler
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const form = document.getElementById('upload-form') as HTMLFormElement | null;
     if (form) {
       const btn = document.getElementById('upload-btn') as HTMLButtonElement;
@@ -164,14 +165,12 @@ function categoryLabel(cat: string): string {
         formData.append('category', (document.getElementById('upload-category') as HTMLSelectElement).value);
 
         try {
-          const res = await fetch('/portal/api/files/upload', { method: 'POST', body: formData });
+          const res = await fetch('/portal/api/files/upload', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken }, body: formData });
           const data = await res.json();
 
           if (res.ok) {
-            msg.textContent = `Uploaded "${data.filename}"`;
-            msg.className = 'text-sm text-emerald-400';
-            msg.classList.remove('hidden');
-            setTimeout(() => location.reload(), 800);
+            (window as any).__toast(`Uploaded "${data.filename}"`, 'success');
+            setTimeout(() => location.reload(), 1500);
           } else {
             throw new Error(data.error || 'Upload failed');
           }
@@ -189,11 +188,17 @@ function categoryLabel(cat: string): string {
     // Delete handlers
     document.querySelectorAll('[data-delete-file]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (!confirm('Delete this file? This cannot be undone.')) return;
+        const confirmed = await (window as any).__confirm({
+          title: 'Delete file',
+          message: 'This file will be permanently deleted. This cannot be undone.',
+          confirmLabel: 'Delete',
+          danger: true,
+        });
+        if (!confirmed) return;
         const fileId = (btn as HTMLElement).dataset.deleteFile;
         const res = await fetch('/portal/api/files/delete', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
           body: JSON.stringify({ file_id: fileId }),
         });
         if (res.ok) {

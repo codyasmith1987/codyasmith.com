@@ -9,7 +9,7 @@ function getTurso(): Client {
     if (!url) {
       throw new Error('TURSO_DATABASE_URL is not set');
     }
-    client = createClient({ url, authToken });
+    client = createClient(authToken ? { url, authToken } : { url });
   }
   return client;
 }

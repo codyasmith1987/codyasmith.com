@@ -1,5 +1,9 @@
 ---
 import Portal from '../../layouts/Portal.astro';
+import ClientSelector from '../../components/portal/ClientSelector.astro';
+import StateLoading from '../../components/portal/StateLoading.astro';
+import StateError from '../../components/portal/StateError.astro';
+import StateEmpty from '../../components/portal/StateEmpty.astro';
 import { getAllClients } from '../../lib/auth';
 export const prerender = false;
 
@@ -9,51 +13,11 @@ const clients = isAdmin ? await getAllClients() : [];
 ---
 
 <Portal title="Dashboard">
-  <style>
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(16px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes countUp {
-      from { opacity: 0; transform: scale(0.8); }
-      to { opacity: 1; transform: scale(1); }
-    }
-    @keyframes pulseGlow {
-      0%, 100% { box-shadow: 0 0 0 0 var(--glow-color); }
-      50% { box-shadow: 0 0 40px 4px var(--glow-color); }
-    }
-    .story-section {
-      opacity: 0;
-      animation: fadeUp 0.6s ease-out forwards;
-    }
-    .story-section:nth-child(2) { animation-delay: 0.15s; }
-    .story-section:nth-child(3) { animation-delay: 0.3s; }
-    .story-section:nth-child(4) { animation-delay: 0.45s; }
-    .score-glow {
-      animation: pulseGlow 3s ease-in-out 1.8s 1;
-    }
-    .trophy-row {
-      opacity: 0;
-      animation: fadeUp 0.4s ease-out forwards;
-    }
-    .sim-result {
-      opacity: 0;
-      animation: fadeUp 0.35s ease-out forwards;
-    }
-    .checkup-card {
-      opacity: 0;
-      animation: fadeUp 0.4s ease-out forwards;
-    }
-  </style>
 
   <div class="max-w-2xl mx-auto">
     <div class="flex items-center justify-between mb-10">
       <p id="data-date" class="text-[10px] font-mono text-neutral-700 tracking-[0.15em] uppercase"></p>
-      {isAdmin && clients.length > 0 && (
-        <select id="client-selector" class="px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-400 text-xs focus:outline-none focus:border-amber-500/30 transition-colors duration-300">
-          {clients.map(c => <option value={c.id}>{c.name}</option>)}
-        </select>
-      )}
+      {isAdmin && <ClientSelector clients={clients} />}
     </div>
 
     <div id="story" class="hidden">
@@ -61,7 +25,7 @@ const clients = isAdmin ? await getAllClients() : [];
       <!-- ═══════ CHAPTER 1: THE VERDICT ═══════ -->
       <section class="story-section mb-20">
         <div class="flex flex-col items-center text-center">
-          <div id="score-wrap" class="relative w-44 h-44 mb-8 score-glow rounded-full" style="--glow-color: rgba(16,185,129,0);">
+          <div id="score-wrap" class="relative w-44 h-44 mb-8 score-glow rounded-full" style="--glow-color: rgba(38,38,38,0.05);">
             <canvas id="score-ring" role="img" aria-label="Website health score"></canvas>
             <div class="absolute inset-0 flex flex-col items-center justify-center">
               <span id="score-number" class="text-5xl font-bold tracking-tight" style="animation: countUp 0.8s ease-out 0.6s both;"></span>
@@ -125,29 +89,14 @@ const clients = isAdmin ? await getAllClients() : [];
 
     </div>
 
-    <!-- Loading state -->
-    <div id="loading-state" class="text-center py-24">
-      <div class="inline-block w-8 h-8 border-2 border-neutral-800 border-t-amber-500 rounded-full animate-spin mb-5"></div>
-      <p class="text-sm text-neutral-600">Loading your dashboard...</p>
-    </div>
-
-    <!-- Error state -->
-    <div id="error-state" class="hidden text-center py-24">
-      <p class="font-serif text-2xl text-neutral-100 mb-3">Something went wrong</p>
-      <p id="error-detail" class="text-sm text-neutral-500 mb-8 leading-relaxed"></p>
-      <button onclick="loadDashboard()" class="px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.2)]">Retry</button>
-    </div>
-
-    <!-- Empty state -->
-    <div id="empty-state" class="hidden text-center py-24">
-      <p class="font-serif text-2xl text-neutral-100 mb-3">Nothing here yet</p>
-      <p class="text-sm text-neutral-500 leading-relaxed max-w-xs mx-auto mb-8">Once we upload your first round of data, this is where your full report lives.</p>
-      {isAdmin && (
-        <a href="/portal/admin/csv" class="inline-flex items-center justify-center px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.2)]">
-          Upload CSVs
-        </a>
-      )}
-    </div>
+    <StateLoading id="loading-state" message="Loading your dashboard..." />
+    <StateError id="error-state" detailId="error-detail" retryFn="loadDashboard" />
+    <StateEmpty
+      id="empty-state"
+      message="Once we upload your first round of data, this is where your full report lives."
+      actionHref={isAdmin ? '/portal/admin/csv' : undefined}
+      actionLabel={isAdmin ? 'Upload CSVs' : undefined}
+    />
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js" crossorigin="anonymous"></script>

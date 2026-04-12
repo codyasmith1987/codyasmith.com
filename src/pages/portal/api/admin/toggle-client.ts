@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { toggleClientActive } from '../../../../lib/auth';
 import { logger } from '../../../../lib/logger';
+import { logActivity } from '../../../../lib/activity';
 
 export const prerender = false;
 
@@ -15,6 +16,16 @@ export const POST: APIRoute = async ({ locals, request }) => {
     if (!client_id) return json({ error: 'client_id is required' }, 400);
 
     const active = await toggleClientActive(client_id);
+
+    await logActivity({
+      clientId: client_id,
+      userId: locals.user!.id,
+      action: 'updated',
+      entityType: 'client',
+      entityId: client_id,
+      summary: `${locals.user!.name} ${active ? 'activated' : 'deactivated'} client ${client_id}`,
+    });
+
     return json({ client_id, active });
   } catch (err: any) {
     logger.error('Toggle client error', err);

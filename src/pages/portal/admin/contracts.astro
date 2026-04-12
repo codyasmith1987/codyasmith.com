@@ -6,13 +6,14 @@ import { getAllContracts, getContractsByClient, getContractsByStatus } from '../
 import { getPendingApprovals } from '../../../lib/invoices';
 import { getInvoicesByStatus, getOverdueInvoices } from '../../../lib/invoices';
 import { getRecentActivity } from '../../../lib/activity';
-import { checkAndGenerateInvoices } from '../../../lib/billing';
+import { checkAndGenerateInvoices, checkAndSendReminders } from '../../../lib/billing';
 export const prerender = false;
 
-// Lightweight auto-generate check on page load
+// Lightweight billing checks on page load
 const user = Astro.locals.user!;
 if (user.role === 'admin') {
   await checkAndGenerateInvoices(user.id);
+  await checkAndSendReminders();
 }
 
 const clients = await getAllClients();

@@ -293,3 +293,58 @@ export async function getDueInvoices(withinDays: number = 3): Promise<any[]> {
     [cutoff.toISOString().split('T')[0]]
   );
 }
+
+export async function sendDueReminders(): Promise<number> {
+  const { sendEmail } = await import('./email');
+  const dueInvoices = await getDueInvoices(3);
+  let sent = 0;
+
+  for (const invoice of dueInvoices) {
+    try {
+      const contract = await getContract(invoice.contract_id);
+      if (!contract) continue;
+
+      const users = await getUsersByClientId(contract.client_id);
+      if (users.length === 0) continue;
+
+      const portalUrl = import.meta.env.SITE || 'https://codyasmith.com';
+      const ok = await sendEmail(
+        users.map(u => ({ email: u.email, name: u.name })),
+        `Invoice ${invoice.invoice_number} — payment due ${invoice.due_date}`,
+        `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+          <h2 style="color: #171717; margin-bottom: 16px;">Payment reminder</h2>
+          <p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">
+            Invoice <strong>${invoice.invoice_number}</strong> for <strong>$${invoice.total.toFixed(2)}</strong> is due on <strong>${invoice.due_date}</strong>.
+          </p>
+          ${invoice.amount_paid > 0 ? `<p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">Amount paid so far: $${invoice.amount_paid.toFixed(2)}. Remaining: $${(invoice.total - invoice.amount_paid).toFixed(2)}.</p>` : ''}
+          <a href="${portalUrl}/portal/invoices" style="display: inline-block; background: #f59e0b; color: #0a0a0a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; margin-top: 16px;">
+            View invoice in portal
+          </a>
+          <p style="color: #a3a3a3; font-size: 12px; margin-top: 32px;">
+            <a href="${portalUrl}" style="color: #a3a3a3;">codyasmith.com</a>
+          </p>
+        </div>
+        `
+      );
+
+      if (ok) {
+        await updateInvoice(invoice.id, { last_reminder_sent: new Date().toISOString() });
+        sent++;
+      }
+    } catch (err) {
+      logger.error(`Failed to send reminder for invoice ${invoice.id}`, err);
+    }
+  }
+
+  return sent;
+}
+
+// Lightweight check — call on admin page load
+export async function checkAndSendReminders(): Promise<void> {
+  try {
+    await sendDueReminders();
+  } catch (err) {
+    logger.error('Auto-send reminders check failed', err);
+  }
+}

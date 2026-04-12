@@ -87,6 +87,43 @@ const statusColors: Record<string, string> = {
           <input type="date" id="f-end" value={contract.end_date || ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
         </div>
       </div>
+
+      <!-- Billing rules -->
+      <div class="mt-6 pt-6 border-t border-white/5">
+        <p class="text-[10px] font-mono text-neutral-700 tracking-[0.15em] uppercase mb-5">Billing rules</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Billing cadence</label>
+            <select id="f-cadence" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+              <option value="" selected={!contract.billing_cadence}>None</option>
+              {['monthly', 'milestone', 'one-time'].map(c => (
+                <option value={c} selected={c === contract.billing_cadence}>{c}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Billing day (1-28)</label>
+            <input type="number" id="f-billing-day" min="1" max="28" value={contract.billing_day ?? ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Recurring amount</label>
+            <input type="number" id="f-recurring" step="0.01" value={contract.recurring_amount ?? ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Included hours</label>
+            <input type="number" id="f-hours" step="0.5" value={contract.included_hours ?? ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Overage rate ($/hr)</label>
+            <input type="number" id="f-overage" step="0.01" value={contract.overage_rate ?? ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Payment terms (days)</label>
+            <input type="number" id="f-terms" value={contract.payment_terms_days ?? 30} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          </div>
+        </div>
+      </div>
+
       <div class="mt-5">
         <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Description</label>
         <textarea id="f-desc" rows="3" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">{contract.description || ''}</textarea>
@@ -196,12 +233,19 @@ const statusColors: Record<string, string> = {
 
     // Save contract
     document.getElementById('save-contract')?.addEventListener('click', async () => {
+      const v = (id) => document.getElementById(id)?.value;
       const body = {
-        status: document.getElementById('f-status').value,
-        type: document.getElementById('f-type').value,
-        total_value: document.getElementById('f-value').value ? Number(document.getElementById('f-value').value) : null,
-        start_date: document.getElementById('f-start').value || null,
-        end_date: document.getElementById('f-end').value || null,
+        status: v('f-status'),
+        type: v('f-type'),
+        total_value: v('f-value') ? Number(v('f-value')) : null,
+        start_date: v('f-start') || null,
+        end_date: v('f-end') || null,
+        billing_cadence: v('f-cadence') || null,
+        billing_day: v('f-billing-day') ? Number(v('f-billing-day')) : null,
+        recurring_amount: v('f-recurring') ? Number(v('f-recurring')) : null,
+        included_hours: v('f-hours') ? Number(v('f-hours')) : null,
+        overage_rate: v('f-overage') ? Number(v('f-overage')) : null,
+        payment_terms_days: v('f-terms') ? Number(v('f-terms')) : 30,
         description: document.getElementById('f-desc').value.trim() || null,
       };
 

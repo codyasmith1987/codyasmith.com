@@ -35,7 +35,8 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
   try {
     const body = await request.json();
-    const { client_id, title, description, type, total_value, start_date, end_date } = body;
+    const { client_id, title, description, type, total_value, start_date, end_date,
+            billing_cadence, billing_day, recurring_amount, included_hours, overage_rate, payment_terms_days } = body;
 
     if (!client_id?.trim() || !title?.trim()) {
       return json({ error: 'client_id and title are required' }, 400);
@@ -49,6 +50,12 @@ export const POST: APIRoute = async ({ locals, request }) => {
       total_value: total_value != null ? Number(total_value) : undefined,
       start_date: start_date || undefined,
       end_date: end_date || undefined,
+      billing_cadence: billing_cadence || undefined,
+      billing_day: billing_day != null ? Number(billing_day) : undefined,
+      recurring_amount: recurring_amount != null ? Number(recurring_amount) : undefined,
+      included_hours: included_hours != null ? Number(included_hours) : undefined,
+      overage_rate: overage_rate != null ? Number(overage_rate) : undefined,
+      payment_terms_days: payment_terms_days != null ? Number(payment_terms_days) : undefined,
       created_by: locals.user!.id,
     });
 

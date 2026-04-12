@@ -80,7 +80,7 @@ const statusColors: Record<string, string> = {
     <!-- Create form (hidden by default) -->
     <form id="create-contract-form" class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-8 hidden">
       <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">New contract</p>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         <div>
           <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Client</label>
           <select id="cc-client" required class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
@@ -90,7 +90,7 @@ const statusColors: Record<string, string> = {
         </div>
         <div>
           <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Title</label>
-          <input type="text" id="cc-title" required class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="Website Redesign" />
+          <input type="text" id="cc-title" required class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="ZKH Web Management" />
         </div>
         <div>
           <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Type</label>
@@ -99,6 +99,35 @@ const statusColors: Record<string, string> = {
             <option value="retainer">Retainer</option>
             <option value="hourly">Hourly</option>
           </select>
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Billing cadence</label>
+          <select id="cc-cadence" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+            <option value="">None</option>
+            <option value="monthly">Monthly</option>
+            <option value="milestone">Per milestone</option>
+            <option value="one-time">One-time</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Billing day (1-28)</label>
+          <input type="number" id="cc-billing-day" min="1" max="28" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="9" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Recurring amount</label>
+          <input type="number" id="cc-recurring" step="0.01" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="500.00" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Included hours</label>
+          <input type="number" id="cc-hours" step="0.5" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="5" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Overage rate ($/hr)</label>
+          <input type="number" id="cc-overage" step="0.01" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="100.00" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Payment terms (days)</label>
+          <input type="number" id="cc-terms" value="30" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
         </div>
         <div>
           <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Total value</label>
@@ -188,13 +217,20 @@ const statusColors: Record<string, string> = {
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      const val = (id: string) => (document.getElementById(id) as HTMLInputElement)?.value;
       const body = {
-        client_id: (document.getElementById('cc-client') as HTMLSelectElement).value,
-        title: (document.getElementById('cc-title') as HTMLInputElement).value.trim(),
-        type: (document.getElementById('cc-type') as HTMLSelectElement).value,
-        total_value: (document.getElementById('cc-value') as HTMLInputElement).value || undefined,
-        start_date: (document.getElementById('cc-start') as HTMLInputElement).value || undefined,
-        end_date: (document.getElementById('cc-end') as HTMLInputElement).value || undefined,
+        client_id: val('cc-client'),
+        title: val('cc-title')?.trim(),
+        type: val('cc-type'),
+        billing_cadence: val('cc-cadence') || undefined,
+        billing_day: val('cc-billing-day') ? Number(val('cc-billing-day')) : undefined,
+        recurring_amount: val('cc-recurring') ? Number(val('cc-recurring')) : undefined,
+        included_hours: val('cc-hours') ? Number(val('cc-hours')) : undefined,
+        overage_rate: val('cc-overage') ? Number(val('cc-overage')) : undefined,
+        payment_terms_days: val('cc-terms') ? Number(val('cc-terms')) : undefined,
+        total_value: val('cc-value') || undefined,
+        start_date: val('cc-start') || undefined,
+        end_date: val('cc-end') || undefined,
         description: (document.getElementById('cc-desc') as HTMLTextAreaElement).value.trim() || undefined,
       };
 

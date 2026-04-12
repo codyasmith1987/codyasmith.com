@@ -22,7 +22,7 @@ async function cascadeDeleteContractChildren(contractId: string): Promise<void> 
 // these allowlists enforce valid column names regardless of caller.
 
 const UPDATABLE_COLUMNS: Record<string, Set<string>> = {
-  contracts: new Set(['title', 'description', 'status', 'type', 'total_value', 'start_date', 'end_date', 'signed_at']),
+  contracts: new Set(['title', 'description', 'status', 'type', 'total_value', 'start_date', 'end_date', 'signed_at', 'billing_cadence', 'billing_day', 'recurring_amount', 'included_hours', 'overage_rate', 'payment_terms_days']),
   projects: new Set(['title', 'description', 'status', 'sort_order', 'client_visible']),
   milestones: new Set(['title', 'description', 'status', 'due_date', 'completed_at', 'sort_order', 'client_visible', 'client_update_text']),
   tasks: new Set(['title', 'description', 'status', 'priority', 'assigned_to', 'estimated_hours', 'actual_hours', 'due_date', 'completed_at', 'sort_order', 'client_visible', 'client_update_text']),
@@ -66,6 +66,7 @@ async function queryAll(sql: string, args: any[] = []): Promise<any[]> {
 
 export type ContractStatus = 'draft' | 'sent' | 'active' | 'completed' | 'cancelled';
 export type ContractType = 'fixed' | 'retainer' | 'hourly';
+export type BillingCadence = 'monthly' | 'milestone' | 'one-time';
 
 export interface Contract {
   id: string;
@@ -78,6 +79,12 @@ export interface Contract {
   start_date: string | null;
   end_date: string | null;
   signed_at: string | null;
+  billing_cadence: BillingCadence | null;
+  billing_day: number | null;
+  recurring_amount: number | null;
+  included_hours: number | null;
+  overage_rate: number | null;
+  payment_terms_days: number;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -91,16 +98,26 @@ export async function createContract(data: {
   total_value?: number;
   start_date?: string;
   end_date?: string;
+  billing_cadence?: BillingCadence;
+  billing_day?: number;
+  recurring_amount?: number;
+  included_hours?: number;
+  overage_rate?: number;
+  payment_terms_days?: number;
   created_by: string;
 }): Promise<string> {
   const id = nanoid();
   await turso.execute({
-    sql: `INSERT INTO contracts (id, client_id, title, description, type, total_value, start_date, end_date, created_by)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO contracts (id, client_id, title, description, type, total_value, start_date, end_date, billing_cadence, billing_day, recurring_amount, included_hours, overage_rate, payment_terms_days, created_by)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id, data.client_id, data.title, data.description ?? null,
       data.type ?? 'fixed', data.total_value ?? null,
-      data.start_date ?? null, data.end_date ?? null, data.created_by,
+      data.start_date ?? null, data.end_date ?? null,
+      data.billing_cadence ?? null, data.billing_day ?? null,
+      data.recurring_amount ?? null, data.included_hours ?? null,
+      data.overage_rate ?? null, data.payment_terms_days ?? 30,
+      data.created_by,
     ],
   });
   return id;
@@ -123,7 +140,8 @@ export async function getAllContracts(): Promise<Contract[]> {
 }
 
 export async function updateContract(id: string, data: Partial<Pick<Contract,
-  'title' | 'description' | 'status' | 'type' | 'total_value' | 'start_date' | 'end_date' | 'signed_at'
+  'title' | 'description' | 'status' | 'type' | 'total_value' | 'start_date' | 'end_date' | 'signed_at' |
+  'billing_cadence' | 'billing_day' | 'recurring_amount' | 'included_hours' | 'overage_rate' | 'payment_terms_days'
 >>): Promise<void> {
   const update = buildSafeUpdate('contracts', id, data);
   if (!update) return;

@@ -5,7 +5,7 @@ import turso from './turso';
 
 // --- Column allowlists for dynamic UPDATE builders ---
 const UPDATABLE_COLUMNS: Record<string, Set<string>> = {
-  invoices: new Set(['status', 'issued_date', 'due_date', 'subtotal', 'tax', 'total', 'amount_paid', 'notes', 'client_visible']),
+  invoices: new Set(['status', 'issued_date', 'due_date', 'subtotal', 'tax', 'total', 'amount_paid', 'notes', 'client_visible', 'billing_period_start', 'billing_period_end', 'last_reminder_sent']),
   invoice_items: new Set(['description', 'quantity', 'unit_price', 'amount', 'sort_order']),
   change_orders: new Set(['title', 'description', 'status', 'cost_impact', 'time_impact_days']),
 };
@@ -63,6 +63,9 @@ export interface Invoice {
   amount_paid: number;
   notes: string | null;
   client_visible: number;
+  billing_period_start: string | null;
+  billing_period_end: string | null;
+  last_reminder_sent: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;

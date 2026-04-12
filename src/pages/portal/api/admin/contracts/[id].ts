@@ -33,7 +33,8 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
     if (!contract) return json({ error: 'Not found' }, 404);
 
     const body = await request.json();
-    const { title, description, status, type, total_value, start_date, end_date, signed_at } = body;
+    const { title, description, status, type, total_value, start_date, end_date, signed_at,
+            billing_cadence, billing_day, recurring_amount, included_hours, overage_rate, payment_terms_days } = body;
 
     await updateContract(params.id!, {
       ...(title !== undefined && { title: title.trim() }),
@@ -44,6 +45,12 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
       ...(start_date !== undefined && { start_date }),
       ...(end_date !== undefined && { end_date }),
       ...(signed_at !== undefined && { signed_at }),
+      ...(billing_cadence !== undefined && { billing_cadence }),
+      ...(billing_day !== undefined && { billing_day: billing_day != null ? Number(billing_day) : null }),
+      ...(recurring_amount !== undefined && { recurring_amount: recurring_amount != null ? Number(recurring_amount) : null }),
+      ...(included_hours !== undefined && { included_hours: included_hours != null ? Number(included_hours) : null }),
+      ...(overage_rate !== undefined && { overage_rate: overage_rate != null ? Number(overage_rate) : null }),
+      ...(payment_terms_days !== undefined && { payment_terms_days: payment_terms_days != null ? Number(payment_terms_days) : 30 }),
     });
 
     await logActivity({

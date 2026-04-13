@@ -649,28 +649,10 @@
      Layered color treatment with grain and erosion
      ============================================ */
   .word-dated {
-    position: relative;
     color: var(--color-dated);
     font-style: italic;
     letter-spacing: -0.02em;
-    /* Layered shadow: glow underneath + eroded edge */
-    text-shadow:
-      0 0 8px color-mix(in srgb, var(--color-dated) 20%, transparent),
-      0 1px 0 color-mix(in srgb, var(--color-dated) 40%, transparent),
-      0 -1px 0 color-mix(in srgb, var(--color-neutral-950) 60%, transparent);
-    /* Subtle horizontal lines through the text like weathering */
-    background: repeating-linear-gradient(
-      0deg,
-      var(--color-dated) 0px,
-      var(--color-dated) 2px,
-      color-mix(in srgb, var(--color-dated) 50%, var(--color-neutral-950)) 2px,
-      color-mix(in srgb, var(--color-dated) 50%, var(--color-neutral-950)) 3px
-    );
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    /* Roughen the edges slightly */
-    filter: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='r'%3E%3CfeTurbulence baseFrequency='0.04' numOctaves='3' seed='1'/%3E%3CfeDisplacementMap in='SourceGraphic' scale='1.5'/%3E%3C/filter%3E%3C/svg%3E#r");
+    text-shadow: 0 1px 0 color-mix(in srgb, var(--color-dated) 25%, transparent);
   }
 
   /* ============================================

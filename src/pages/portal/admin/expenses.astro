@@ -1,0 +1,289 @@
+---
+import Portal from '../../../layouts/Portal.astro';
+import { getAllContracts } from '../../../lib/contracts';
+import turso from '../../../lib/turso';
+
+export const prerender = false;
+
+// Minimum viable admin expense flow. Cody adds a monthly expense to a
+// contract and picks whether it attaches to the next billing run or to
+// a specific draft invoice. The billing engine already consumes
+// pending_charges during generateInvoiceForContract.
+//
+// Left intentionally bare: no categories, no receipts, no markup,
+// no recurring expense schedules, no filters or search.
+
+const user = Astro.locals.user!;
+if (user.role !== 'admin') {
+  return new Response('Forbidden', { status: 403 });
+}
+
+// Middleware enforces X-CSRF-Token on every mutating /portal/api/* call.
+// Inject the per-session token into the client-side fetches below.
+const csrfToken = Astro.locals.csrfToken ?? '';
+
+const contracts = (await getAllContracts()).filter((c) => c.status === 'active');
+
+// Load open (unbilled OR draft-bound) expenses across all contracts.
+// Mirrors GET /portal/api/admin/expenses with no filter.
+const openRows = await turso.execute({
+  sql: `SELECT pc.id, pc.contract_id, c.title AS contract_title, pc.description,
+               pc.amount, pc.source_type, pc.billed_invoice_id, pc.created_at,
+               i.invoice_number
+        FROM pending_charges pc
+        JOIN contracts c ON c.id = pc.contract_id
+        LEFT JOIN invoices i ON i.id = pc.billed_invoice_id
+        WHERE pc.billed_invoice_id IS NULL
+           OR EXISTS (SELECT 1 FROM invoices i2
+                      WHERE i2.id = pc.billed_invoice_id AND i2.status = 'draft')
+        ORDER BY c.title, pc.created_at DESC`,
+});
+
+interface ExpenseRow {
+  id: string;
+  contract_id: string;
+  contract_title: string;
+  description: string;
+  amount: number;
+  source_type: string;
+  billed_invoice_id: string | null;
+  invoice_number: string | null;
+  created_at: string;
+}
+const open: ExpenseRow[] = openRows.rows.map((r) => ({
+  id: r[0] as string,
+  contract_id: r[1] as string,
+  contract_title: r[2] as string,
+  description: r[3] as string,
+  amount: Number(r[4]),
+  source_type: r[5] as string,
+  billed_invoice_id: r[6] as string | null,
+  invoice_number: r[8] as string | null,
+  created_at: r[7] as string,
+}));
+
+// Group by contract for the list.
+const byContract = new Map<string, { title: string; rows: ExpenseRow[] }>();
+for (const e of open) {
+  const g = byContract.get(e.contract_id) ?? { title: e.contract_title, rows: [] };
+  g.rows.push(e);
+  byContract.set(e.contract_id, g);
+}
+
+// Also load draft invoices per contract for the optional "pin to invoice" dropdown.
+const draftInvRows = await turso.execute({
+  sql: `SELECT id, contract_id, invoice_number, billing_period_start, billing_period_end
+        FROM invoices WHERE status = 'draft' ORDER BY contract_id, created_at DESC`,
+});
+const draftsByContract = new Map<string, Array<{ id: string; invoice_number: string; label: string }>>();
+for (const r of draftInvRows.rows) {
+  const contractId = r[1] as string;
+  const invNum = r[2] as string;
+  const start = r[3] as string | null;
+  const end = r[4] as string | null;
+  const label = `${invNum}${start && end ? ` (${start} → ${end})` : ''}`;
+  const list = draftsByContract.get(contractId) ?? [];
+  list.push({ id: r[0] as string, invoice_number: invNum, label });
+  draftsByContract.set(contractId, list);
+}
+---
+
+<Portal title="Expenses">
+  <div class="max-w-4xl mx-auto">
+    <div class="mb-10">
+      <h1 class="text-2xl font-serif text-neutral-100 mb-2">Expenses</h1>
+      <p class="text-sm text-neutral-500">
+        Add a monthly expense to a contract. It attaches to the next invoice by default,
+        or you can pin it to a specific draft invoice.
+      </p>
+    </div>
+
+    {/* Add form */}
+    <form
+      id="add-expense-form"
+      class="bg-neutral-900/50 border border-white/5 rounded-xl p-5 mb-8 space-y-4"
+    >
+      <div class="grid grid-cols-1 md:grid-cols-[1fr_120px] gap-3">
+        <div>
+          <label class="block text-[11px] uppercase tracking-wide text-neutral-500 mb-1">Contract</label>
+          <select
+            name="contract_id"
+            required
+            class="w-full bg-neutral-950 border border-white/10 rounded-md px-3 py-2 text-sm text-neutral-100"
+          >
+            <option value="">Select contract…</option>
+            {contracts.map((c) => (
+              <option value={c.id}>{c.title}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label class="block text-[11px] uppercase tracking-wide text-neutral-500 mb-1">Amount (USD)</label>
+          <input
+            type="number"
+            name="amount"
+            min="0.01"
+            step="0.01"
+            required
+            class="w-full bg-neutral-950 border border-white/10 rounded-md px-3 py-2 text-sm text-neutral-100"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-[11px] uppercase tracking-wide text-neutral-500 mb-1">Description</label>
+        <input
+          type="text"
+          name="description"
+          required
+          placeholder="e.g. WPForms renewal, hosting, plugin license"
+          class="w-full bg-neutral-950 border border-white/10 rounded-md px-3 py-2 text-sm text-neutral-100"
+        />
+      </div>
+
+      <div>
+        <label class="flex items-center gap-2 text-sm text-neutral-300">
+          <input type="checkbox" id="attach-next" checked class="accent-amber-500" />
+          <span>Attach to next invoice</span>
+        </label>
+        <div id="pin-to-invoice-wrap" class="mt-3 hidden">
+          <label class="block text-[11px] uppercase tracking-wide text-neutral-500 mb-1">
+            Pin to a specific draft invoice
+          </label>
+          <select
+            name="target_invoice_id"
+            class="w-full bg-neutral-950 border border-white/10 rounded-md px-3 py-2 text-sm text-neutral-100"
+          >
+            <option value="">— select a draft invoice —</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between">
+        <p id="form-error" class="text-xs text-red-400 hidden"></p>
+        <button
+          type="submit"
+          class="bg-amber-500 hover:bg-amber-400 text-black font-semibold text-sm px-4 py-2 rounded-md transition-colors"
+        >
+          Add expense
+        </button>
+      </div>
+    </form>
+
+    {/* Open expense list */}
+    <div>
+      <h2 class="text-[11px] uppercase tracking-wide text-neutral-500 mb-3">Open expenses</h2>
+      {byContract.size === 0 ? (
+        <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-8 text-center text-sm text-neutral-500">
+          No unbilled expenses. Add one above to attach it to the next invoice.
+        </div>
+      ) : (
+        <div class="space-y-6">
+          {[...byContract.entries()].map(([contractId, group]) => (
+            <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-4">
+              <p class="text-sm font-medium text-neutral-200 mb-3">{group.title}</p>
+              <ul class="divide-y divide-white/5">
+                {group.rows.map((e) => (
+                  <li class="flex items-start justify-between py-2 text-sm">
+                    <div class="flex-1 min-w-0 pr-4">
+                      <p class="text-neutral-200 truncate">{e.description}</p>
+                      <p class="text-[10px] text-neutral-600 mt-0.5">
+                        {e.billed_invoice_id
+                          ? `pinned to ${e.invoice_number}`
+                          : 'attaches to next invoice'}
+                        {' · '}
+                        {new Date(e.created_at).toISOString().split('T')[0]}
+                      </p>
+                    </div>
+                    <div class="flex items-center gap-3 shrink-0">
+                      <span class="text-neutral-100 tabular-nums">${e.amount.toFixed(2)}</span>
+                      <button
+                        data-delete={e.id}
+                        class="text-[11px] text-neutral-500 hover:text-red-400 transition-colors"
+                      >
+                        delete
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  </div>
+
+  <script define:vars={{ draftsByContract: Object.fromEntries(draftsByContract), csrfToken }}>
+    const form = document.getElementById('add-expense-form');
+    const errEl = document.getElementById('form-error');
+    const attachNext = document.getElementById('attach-next');
+    const pinWrap = document.getElementById('pin-to-invoice-wrap');
+    const contractSelect = form.querySelector('select[name="contract_id"]');
+    const invoiceSelect = form.querySelector('select[name="target_invoice_id"]');
+
+    function updateInvoiceOptions() {
+      const cid = contractSelect.value;
+      const drafts = draftsByContract[cid] || [];
+      invoiceSelect.innerHTML = '<option value="">— select a draft invoice —</option>' +
+        drafts.map((d) => `<option value="${d.id}">${d.label}</option>`).join('');
+    }
+    contractSelect.addEventListener('change', updateInvoiceOptions);
+
+    attachNext.addEventListener('change', () => {
+      if (attachNext.checked) {
+        pinWrap.classList.add('hidden');
+        invoiceSelect.value = '';
+      } else {
+        pinWrap.classList.remove('hidden');
+      }
+    });
+
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      errEl.classList.add('hidden');
+      const fd = new FormData(form);
+      const body = {
+        contract_id: fd.get('contract_id'),
+        description: fd.get('description'),
+        amount: Number(fd.get('amount')),
+        target_invoice_id: attachNext.checked ? null : fd.get('target_invoice_id') || null,
+      };
+      if (!attachNext.checked && !body.target_invoice_id) {
+        errEl.textContent = 'Pick a draft invoice or check "Attach to next invoice".';
+        errEl.classList.remove('hidden');
+        return;
+      }
+      const res = await fetch('/portal/api/admin/expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        errEl.textContent = data.error || `Failed (${res.status})`;
+        errEl.classList.remove('hidden');
+        return;
+      }
+      window.location.reload();
+    });
+
+    document.querySelectorAll('[data-delete]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-delete');
+        if (!id) return;
+        if (!confirm('Delete this expense?')) return;
+        const res = await fetch(`/portal/api/admin/expenses/${id}`, {
+          method: 'DELETE',
+          headers: { 'X-CSRF-Token': csrfToken },
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          alert(data.error || `Delete failed (${res.status})`);
+          return;
+        }
+        window.location.reload();
+      });
+    });
+  </script>
+</Portal>

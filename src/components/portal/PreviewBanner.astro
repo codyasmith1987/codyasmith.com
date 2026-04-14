@@ -1,0 +1,46 @@
+---
+// PreviewBanner — admin-only "view as client" indicator.
+//
+// Renders a sticky, unmissable banner at the very top of a client-facing
+// page when the page is being previewed by an admin. There is no session
+// state, no cookie change, no toggle — the preview is purely driven by
+// the current URL ?as_client=1&client_id=X, so exiting is a single
+// navigation back to /portal/admin/.
+//
+// The component is defensively admin-gated: if any future edit puts
+// this component on a page a non-admin can reach, it renders nothing.
+// The data-preview attribute makes it easy to assert "is the admin in
+// preview mode" from browser tests.
+
+interface Props {
+  clientName: string;
+}
+
+const { clientName } = Astro.props;
+const user = Astro.locals.user;
+const isAdmin = user?.role === 'admin';
+---
+
+{isAdmin && (
+  <div
+    data-preview="client"
+    class="sticky top-0 z-50 bg-amber-500/95 text-neutral-950 border-b border-amber-700 backdrop-blur"
+  >
+    <div class="max-w-3xl mx-auto px-4 py-2.5 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="text-[10px] font-mono tracking-[0.2em] uppercase bg-neutral-950/20 text-neutral-950 rounded px-1.5 py-0.5 shrink-0">
+          preview
+        </span>
+        <p class="text-sm font-medium text-neutral-950 truncate">
+          You are viewing this as <strong class="font-semibold">{clientName}</strong> — this is what the client sees.
+        </p>
+      </div>
+      <a
+        href="/portal/admin/"
+        class="shrink-0 text-[11px] font-semibold text-neutral-950 bg-neutral-950/10 hover:bg-neutral-950/20 border border-neutral-950/20 rounded px-2.5 py-1 tracking-wide transition-colors"
+      >
+        ← exit preview
+      </a>
+    </div>
+  </div>
+)}

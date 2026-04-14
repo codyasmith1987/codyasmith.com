@@ -57,6 +57,14 @@ const clients = await getAllClients();
               <p class="text-xs font-mono text-neutral-600 mt-0.5">{client.slug}</p>
             </div>
             <div class="flex items-center gap-3">
+              {client.active && (
+                <a
+                  href={`/portal/dashboard?as_client=1&client_id=${encodeURIComponent(client.id)}`}
+                  class="text-[11px] text-amber-400 hover:text-amber-300 tracking-wide font-mono transition-colors"
+                >
+                  view as client →
+                </a>
+              )}
               <span
                 data-client-badge={client.id}
                 class:list={[

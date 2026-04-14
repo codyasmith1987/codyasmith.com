@@ -6,6 +6,10 @@ export const prerender = false;
 const json = (data: any, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 
+// Reads from metric_snapshots joined to periods. Time axis uses
+// SUBSTR(period_start, 1, 7) to retain 'YYYY-MM' labels on the wire so
+// the existing frontend doesn't need to change.
+
 export const GET: APIRoute = async ({ locals, url }) => {
   if (!locals.user) return json({ error: 'Unauthorized' }, 401);
 
@@ -19,15 +23,15 @@ export const GET: APIRoute = async ({ locals, url }) => {
   const months = parseInt(url.searchParams.get('months') || '6');
 
   const result = await turso.execute({
-    sql: `SELECT month, metric_key, metric_value
-          FROM metrics
-          WHERE client_id = ? AND category = ?
-          ORDER BY month DESC
+    sql: `SELECT SUBSTR(p.period_start, 1, 7) AS month, m.metric_key, m.metric_value
+          FROM metric_snapshots m
+          JOIN periods p ON p.id = m.period_id
+          WHERE m.client_id = ? AND m.category = ?
+          ORDER BY p.period_start DESC
           LIMIT ?`,
-    args: [clientId, category, months * 20], // generous limit for multiple metrics per month
+    args: [clientId, category, months * 20],
   });
 
-  // Group by month
   const byMonth = new Map<string, Record<string, number>>();
   for (const row of result.rows) {
     const month = row[0] as string;

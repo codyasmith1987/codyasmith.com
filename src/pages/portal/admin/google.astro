@@ -1,0 +1,255 @@
+---
+// Slice 18 — admin page for connecting Google accounts and binding
+// GSC properties to data_source_bindings. Minimal on purpose: the
+// backend endpoints do the real work, this page just surfaces them.
+
+import Portal from '../../../layouts/Portal.astro';
+import turso from '../../../lib/turso';
+import { listConnectionsForAdmin } from '../../../lib/google/connections';
+import { isOAuthConfigured } from '../../../lib/google/oauth';
+import { isGoogleCryptoConfigured } from '../../../lib/google/crypto';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+if (user.role !== 'admin') {
+  return Astro.redirect('/portal/dashboard');
+}
+
+const oauthConfigured = isOAuthConfigured();
+const cryptoConfigured = isGoogleCryptoConfigured();
+
+const connections = await listConnectionsForAdmin(user.id);
+
+// All Google-source data_source_bindings across every client, so
+// Cody can bind or sync from one place.
+const bindingsRows = await turso.execute({
+  sql: `SELECT dsb.id, dsb.client_id, dsb.source, dsb.enabled, dsb.config_json, dsb.last_seen_at,
+               c.name AS client_name, co.title AS contract_title
+        FROM data_source_bindings dsb
+        JOIN clients c ON c.id = dsb.client_id
+        JOIN contracts co ON co.id = dsb.contract_id
+        WHERE dsb.source IN ('gsc', 'ga4')
+        ORDER BY c.name, co.title, dsb.source`,
+});
+const bindings = bindingsRows.rows.map((r) => ({
+  id: r[0] as string,
+  client_id: r[1] as string,
+  source: r[2] as string,
+  enabled: Number(r[3]) === 1,
+  config_json: (r[4] as string | null) ?? null,
+  last_seen_at: (r[5] as string | null) ?? null,
+  client_name: r[6] as string,
+  contract_title: r[7] as string,
+}));
+
+function parseBindingConfig(json: string | null): { connection_id?: string; property?: string } {
+  if (!json) return {};
+  try {
+    return JSON.parse(json);
+  } catch {
+    return {};
+  }
+}
+
+const csrfToken = Astro.locals.csrfToken ?? '';
+const connectStatus = Astro.url.searchParams.get('connected');
+const connectError = Astro.url.searchParams.get('connect_error');
+
+// Default "month" for the sync form: current month in YYYY-MM.
+const today = new Date();
+const defaultMonth = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}`;
+---
+
+<Portal title="Admin · Google">
+  <div class="max-w-4xl mx-auto">
+    <header class="mb-8">
+      <p class="text-[11px] uppercase tracking-widest text-neutral-600 mb-1">admin · google services</p>
+      <h1 class="text-xl font-serif text-neutral-100 mb-1">Google Search Console</h1>
+      <p class="text-[11px] text-neutral-500 font-mono">
+        Connect a Google account once, then bind any client's GSC binding to a property you have access to.
+      </p>
+    </header>
+
+    {!oauthConfigured && (
+      <div class="mb-8 p-4 border border-red-500/30 bg-red-500/[0.04] rounded-md">
+        <p class="text-sm text-red-200 font-medium">Google OAuth is not configured on this server.</p>
+        <p class="text-[11px] text-red-300/70 mt-1 leading-relaxed">
+          Set <code class="font-mono">GOOGLE_OAUTH_CLIENT_ID</code>, <code class="font-mono">GOOGLE_OAUTH_CLIENT_SECRET</code>, and <code class="font-mono">GOOGLE_OAUTH_REDIRECT_URI</code> in the server environment.
+          Create the OAuth client at <a href="https://console.cloud.google.com/apis/credentials" class="underline">Google Cloud Console → Credentials</a>.
+        </p>
+      </div>
+    )}
+    {!cryptoConfigured && (
+      <div class="mb-8 p-4 border border-red-500/30 bg-red-500/[0.04] rounded-md">
+        <p class="text-sm text-red-200 font-medium">Google token encryption key is not configured.</p>
+        <p class="text-[11px] text-red-300/70 mt-1 leading-relaxed">
+          Set <code class="font-mono">GOOGLE_TOKEN_KEY</code> to a base64-encoded 32-byte secret. Generate with <code class="font-mono">openssl rand -base64 32</code>.
+        </p>
+      </div>
+    )}
+
+    {connectStatus && (
+      <div class="mb-6 p-3 border border-emerald-500/30 bg-emerald-500/[0.04] rounded-md">
+        <p class="text-sm text-emerald-200">Connected Google account: <span class="font-mono">{connectStatus}</span></p>
+      </div>
+    )}
+    {connectError && (
+      <div class="mb-6 p-3 border border-red-500/30 bg-red-500/[0.04] rounded-md">
+        <p class="text-sm text-red-200">Connection failed: <span class="font-mono">{connectError}</span></p>
+      </div>
+    )}
+
+    {/* -------- Connections -------- */}
+    <section class="mb-10">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-[11px] uppercase tracking-widest text-neutral-500">Connected Google accounts</h2>
+        {oauthConfigured && cryptoConfigured && (
+          <a
+            href="/portal/api/admin/google/connect"
+            class="text-[11px] text-amber-400 hover:text-amber-300 tracking-wide border border-amber-500/30 bg-amber-500/[0.04] hover:bg-amber-500/10 rounded px-2 py-1"
+          >
+            + Connect Google account
+          </a>
+        )}
+      </div>
+
+      {connections.length === 0 ? (
+        <p class="text-[11px] text-neutral-600 font-mono">No Google accounts connected yet.</p>
+      ) : (
+        <ul class="space-y-1">
+          {connections.map((c) => (
+            <li class="p-3 border border-white/5 rounded-md bg-neutral-900/30">
+              <div class="flex items-baseline justify-between gap-3">
+                <p class="text-sm text-neutral-200 font-mono">{c.google_account_email}</p>
+                <p class="text-[10px] text-neutral-600 font-mono">connected {c.connected_at.split('T')[0] || c.connected_at}</p>
+              </div>
+              <p class="text-[10px] text-neutral-600 mt-1">
+                scopes: {c.scopes.join(', ') || '(none recorded)'}
+              </p>
+              {c.last_refresh_error && (
+                <p class="text-[11px] text-red-300 mt-1">last refresh error: {c.last_refresh_error}</p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+
+    {/* -------- Bindings -------- */}
+    <section>
+      <h2 class="text-[11px] uppercase tracking-widest text-neutral-500 mb-3">Google source bindings</h2>
+
+      {bindings.length === 0 ? (
+        <p class="text-[11px] text-neutral-600 font-mono">
+          No GSC or GA4 bindings seeded yet. When a contract is provisioned with Google data sources, they appear here for connection.
+        </p>
+      ) : (
+        <ul class="space-y-3">
+          {bindings.map((b) => {
+            const cfg = parseBindingConfig(b.config_json);
+            const isBound = !!cfg.connection_id && !!cfg.property;
+            const lastSeen = b.last_seen_at ?? 'never synced';
+            return (
+              <li class="p-4 border border-white/5 rounded-md bg-neutral-900/30">
+                <div class="flex items-baseline justify-between gap-3 flex-wrap">
+                  <div>
+                    <p class="text-sm text-neutral-200">{b.client_name} · {b.contract_title}</p>
+                    <p class="text-[11px] text-neutral-500 font-mono mt-0.5">
+                      {b.source} · {b.enabled ? 'enabled' : 'disabled'} · last seen: {lastSeen}
+                    </p>
+                  </div>
+                  {isBound ? (
+                    <p class="text-[11px] text-emerald-300/80 font-mono">bound to {cfg.property}</p>
+                  ) : (
+                    <p class="text-[11px] text-amber-300/70 font-mono">not bound yet</p>
+                  )}
+                </div>
+
+                <form
+                  class="wiz-bind-form mt-3 flex items-center gap-2 flex-wrap"
+                  data-binding-id={b.id}
+                >
+                  <select class="px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs" name="connection_id">
+                    <option value="">connection…</option>
+                    {connections.map((c) => (
+                      <option value={c.id} selected={cfg.connection_id === c.id}>{c.google_account_email}</option>
+                    ))}
+                  </select>
+                  <input type="text" name="property" value={cfg.property ?? ''}
+                    placeholder="sc-domain:example.com"
+                    class="px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono w-64" />
+                  <button type="submit" class="text-[11px] text-amber-400 hover:text-amber-300 border border-amber-500/30 bg-amber-500/[0.04] rounded px-2 py-1">bind</button>
+                </form>
+
+                {isBound && (
+                  <form
+                    class="wiz-sync-form mt-2 flex items-center gap-2 flex-wrap"
+                    data-binding-id={b.id}
+                  >
+                    <input type="text" name="month" value={defaultMonth} placeholder="YYYY-MM"
+                      class="px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono w-24" />
+                    <button type="submit" class="text-[11px] text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 bg-emerald-500/[0.04] rounded px-2 py-1">sync now</button>
+                    <span class="wiz-sync-result text-[11px] font-mono"></span>
+                  </form>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  </div>
+
+  <script define:vars={{ csrfToken }}>
+    const csrf = csrfToken;
+    async function hit(url, body) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+        body: JSON.stringify(body),
+      });
+      const text = await res.text();
+      let json;
+      try { json = JSON.parse(text); } catch { json = { error: text }; }
+      return { status: res.status, json };
+    }
+    for (const form of document.querySelectorAll('.wiz-bind-form')) {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const bindingId = form.dataset.bindingId;
+        const connectionId = form.querySelector('[name=connection_id]').value;
+        const property = form.querySelector('[name=property]').value.trim();
+        if (!connectionId || !property) { alert('Pick a connection and enter a property.'); return; }
+        const { status, json } = await hit('/portal/api/admin/google/bind', {
+          binding_id: bindingId,
+          connection_id: connectionId,
+          property,
+        });
+        if (status === 200) location.reload();
+        else alert(`Bind failed: ${json.error || status}`);
+      });
+    }
+    for (const form of document.querySelectorAll('.wiz-sync-form')) {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const bindingId = form.dataset.bindingId;
+        const month = form.querySelector('[name=month]').value.trim();
+        const out = form.querySelector('.wiz-sync-result');
+        out.textContent = 'syncing...';
+        out.className = 'wiz-sync-result text-[11px] font-mono text-neutral-500';
+        const { status, json } = await hit('/portal/api/admin/google/sync', {
+          binding_id: bindingId,
+          month,
+        });
+        if (status === 200 && json.status === 'applied') {
+          out.textContent = `applied ${json.row_count} rows`;
+          out.className = 'wiz-sync-result text-[11px] font-mono text-emerald-400';
+        } else {
+          out.textContent = `failed: ${json.error || 'unknown'}`;
+          out.className = 'wiz-sync-result text-[11px] font-mono text-red-400';
+        }
+      });
+    }
+  </script>
+</Portal>

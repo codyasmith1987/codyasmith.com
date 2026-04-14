@@ -1,39 +1,225 @@
 ---
 import Portal from '../../layouts/Portal.astro';
 import ClientSelector from '../../components/portal/ClientSelector.astro';
+import PreviewBanner from '../../components/portal/PreviewBanner.astro';
 import StateLoading from '../../components/portal/StateLoading.astro';
 import StateError from '../../components/portal/StateError.astro';
 import StateEmpty from '../../components/portal/StateEmpty.astro';
 import { getAllClients } from '../../lib/auth';
+import {
+  generateOverviewVerdict,
+  generateSlowdownVerdict,
+  generateNowVerdict,
+  generateNeedToKnowVerdict,
+  type VerdictResult,
+  type SlowdownResult,
+  type NowResult,
+  type NeedToKnowResult,
+  type FactKind,
+} from '../../lib/client-narrator';
+import {
+  getLatestTrafficPeriodId,
+  getTrafficMetricsForPeriod,
+  type TrafficMetrics,
+} from '../../lib/traffic-metrics';
+import { buildTrafficSummary, type ClientSummary } from '../../lib/client-page-summary';
+import ClientSummaryBlock from '../../components/portal/ClientSummary.astro';
 export const prerender = false;
 
 const user = Astro.locals.user!;
 const isAdmin = user.role === 'admin';
+const isPreview = isAdmin && Astro.url.searchParams.get('as_client') === '1';
+
+// Admins land on their action queue, not the client-facing story page.
+// The only exception is explicit preview mode (?as_client=1), which
+// drops the admin into the real client-facing page with a clearly
+// marked preview banner.
+if (isAdmin && !isPreview) {
+  return Astro.redirect('/portal/admin/');
+}
+
 const clients = isAdmin ? await getAllClients() : [];
+
+// Resolve which client to generate the verdict for.
+//   - client users: their own client_id, always. Forged ?client_id= is
+//     ignored — non-admins cannot read another client's dashboard.
+//   - admin in preview mode: ?client_id=X or fallback to first client.
+const selectedClientId = isAdmin
+  ? (Astro.url.searchParams.get('client_id') || clients[0]?.id || null)
+  : (user.client_id ?? null);
+
+let verdict: VerdictResult | null = null;
+let slowdown: SlowdownResult | null = null;
+let now: NowResult | null = null;
+let needToKnow: NeedToKnowResult | null = null;
+let previewClientName: string | null = null;
+if (selectedClientId) {
+  verdict = await generateOverviewVerdict(selectedClientId);
+  // Slice 3: second sentence directly below the verdict. Pass slice 1's
+  // winning fact kind so slice 3 never re-renders the same signal — if
+  // slice 1 already rendered a negative delta as its best-available
+  // truth, slice 3 falls through to the current-period issue rank.
+  const excludeFactKind =
+    verdict.confidence === 'comparative'
+      ? (verdict.basis.winning_fact as FactKind | undefined)
+      : undefined;
+  slowdown = await generateSlowdownVerdict(selectedClientId, { excludeFactKind });
+  // Slice 4: third sentence — "what is happening now?". Present-tense
+  // truth about active delivery work, or when none exists, the honest
+  // current refresh / tracking state. Project shells do not qualify.
+  now = await generateNowVerdict(selectedClientId);
+  // Slice 5: fourth sentence — "what do I need to know?". Single most
+  // time-sensitive client-facing fact. Draft invoices are never
+  // surfaced. Notifications are filtered via entity join so test
+  // pollution and deleted rows cannot produce client-facing lies.
+  // Slice 12b: pass the viewer's email so the approval branch can
+  // decide whether to say "your" (viewer is the approval contact) or
+  // name the approver ("Kelsey's"). Admins in preview mode have no
+  // natural "viewer as approver" semantics, so passing their email
+  // is fine — it won't match a client contact in practice.
+  needToKnow = await generateNeedToKnowVerdict(
+    selectedClientId,
+    Astro.locals.user?.email ?? undefined
+  );
+  if (isPreview) {
+    // Admin already has getAllClients() loaded above. Look the name up
+    // locally instead of issuing another query.
+    previewClientName = clients.find((c) => c.id === selectedClientId)?.name ?? 'unknown client';
+  }
+}
+
+// Slice 18b — minimal traffic card. Renders only when GA4 is
+// actually connected and synced for this client. If no data:
+// no card. Zero decorative placeholders.
+let traffic: TrafficMetrics | null = null;
+let trafficPeriodId: string | null = null;
+if (selectedClientId) {
+  trafficPeriodId = await getLatestTrafficPeriodId(selectedClientId);
+  if (trafficPeriodId) {
+    traffic = await getTrafficMetricsForPeriod(selectedClientId, trafficPeriodId);
+  }
+}
+
+// Slice 18c — plain-language traffic summary above the tile card.
+// Builder always returns a populated ClientSummary (no-data,
+// first-month, or compare). We only render when traffic data
+// exists — the no-data case is technically available but suppressing
+// it here keeps the dashboard quiet for clients without GA4.
+let trafficSummary: ClientSummary | null = null;
+if (selectedClientId && trafficPeriodId) {
+  trafficSummary = await buildTrafficSummary(selectedClientId);
+}
 ---
 
 <Portal title="Dashboard">
 
-  <div class="max-w-2xl mx-auto">
+  {isPreview && previewClientName && (
+    <PreviewBanner clientName={previewClientName} />
+  )}
+
+  <div class="max-w-3xl mx-auto">
     <div class="flex items-center justify-between mb-10">
       <p id="data-date" class="text-[10px] font-mono text-neutral-700 tracking-[0.15em] uppercase"></p>
       {isAdmin && <ClientSelector clients={clients} />}
     </div>
 
-    <div id="story" class="hidden">
+    {/* ═══════ SLICES 1 + 3: OVERVIEW VERDICT + SLOWDOWN (server-rendered) ═══════ */}
+    {verdict && (
+      <section class="mb-20">
+        <p class="text-[11px] uppercase tracking-widest text-neutral-600 mb-5">Where you stand right now</p>
+        <h1
+          id="overview-verdict"
+          class="text-[28px] md:text-4xl font-serif text-neutral-100 leading-tight max-w-[640px]"
+          data-confidence={verdict.confidence}
+        >
+          {verdict.headline}
+        </h1>
+        {slowdown && (
+          <p
+            id="overview-slowdown"
+            class="text-lg md:text-xl font-serif text-neutral-400 leading-snug mt-4 max-w-[640px]"
+            data-source={slowdown.source}
+          >
+            {slowdown.headline}
+          </p>
+        )}
+        {now && (
+          <p
+            id="overview-now"
+            class="text-lg md:text-xl font-serif text-neutral-400 leading-snug mt-4 max-w-[640px]"
+            data-source={now.source}
+          >
+            {now.headline}
+          </p>
+        )}
+        {needToKnow && (
+          <p
+            id="overview-need-to-know"
+            class="text-lg md:text-xl font-serif text-neutral-400 leading-snug mt-4 max-w-[640px]"
+            data-source={needToKnow.source}
+          >
+            {needToKnow.headline}
+          </p>
+        )}
+        {verdict.confidence === 'first_month' && (
+          <p class="text-[11px] font-mono text-neutral-600 mt-5 tracking-wide">one month of data so far</p>
+        )}
+        {verdict.confidence === 'no_data' && (
+          <p class="text-[11px] font-mono text-neutral-600 mt-5 tracking-wide">waiting on first import</p>
+        )}
+      </section>
+    )}
 
-      <!-- ═══════ CHAPTER 1: THE VERDICT ═══════ -->
-      <section class="story-section mb-20">
+    {/* ═══════ SLICE 18c: PLAIN-LANGUAGE TRAFFIC SUMMARY ═══════ */}
+    {trafficSummary && <ClientSummaryBlock summary={trafficSummary} />}
+
+    {/* ═══════ SLICE 18b: TRAFFIC CARD ═══════ */}
+    {/* Renders only when GA4 is actually connected AND has real data
+        for the latest available period. No data = no card. No
+        decorative "waiting on Google" placeholder. */}
+    {traffic && (
+      <section class="mb-16">
+        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-3">Traffic this month</p>
+        <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-6 grid grid-cols-2 md:grid-cols-4 gap-6 max-w-[640px]">
+          <div>
+            <p class="text-2xl font-semibold text-neutral-100 tabular-nums">{traffic.sessions.toLocaleString()}</p>
+            <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-wide mt-1">Visits</p>
+          </div>
+          <div>
+            <p class="text-2xl font-semibold text-neutral-100 tabular-nums">{traffic.users.toLocaleString()}</p>
+            <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-wide mt-1">People</p>
+          </div>
+          <div>
+            <p class="text-2xl font-semibold text-neutral-100 tabular-nums">{traffic.page_views.toLocaleString()}</p>
+            <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-wide mt-1">Page views</p>
+          </div>
+          <div>
+            <p class="text-2xl font-semibold text-neutral-100 tabular-nums">{Math.round(traffic.engagement_rate * 100)}%</p>
+            <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-wide mt-1">Engaged</p>
+          </div>
+        </div>
+      </section>
+    )}
+
+    {/* Divider marking everything below as secondary context — the verdict
+        above is the primary truth. Chapters 1–3 below are pre-slice
+        leftovers kept for now; they will be replaced in later slices. */}
+    <div class="border-t border-white/5 pt-6 mb-10">
+      <p class="text-[10px] font-mono text-neutral-700 tracking-[0.15em] uppercase">More detail</p>
+    </div>
+
+    <div id="story" class="hidden opacity-90">
+
+      <!-- ═══════ CHAPTER 1: SCORE (demoted from primary verdict) ═══════ -->
+      <section class="story-section mb-16">
         <div class="flex flex-col items-center text-center">
-          <div id="score-wrap" class="relative w-44 h-44 mb-8 score-glow rounded-full" style="--glow-color: rgba(38,38,38,0.05);">
+          <div id="score-wrap" class="relative w-28 h-28 mb-5 score-glow rounded-full" style="--glow-color: rgba(38,38,38,0.05);">
             <canvas id="score-ring" role="img" aria-label="Website health score"></canvas>
             <div class="absolute inset-0 flex flex-col items-center justify-center">
-              <span id="score-number" class="text-5xl font-bold tracking-tight" style="animation: countUp 0.8s ease-out 0.6s both;"></span>
+              <span id="score-number" class="text-3xl font-bold tracking-tight text-neutral-300" style="animation: countUp 0.8s ease-out 0.6s both;"></span>
             </div>
           </div>
-          <h1 id="verdict" class="text-2xl md:text-3xl font-serif text-neutral-100 leading-snug mb-4 max-w-md"></h1>
-          <p id="verdict-sub" class="text-sm text-neutral-500 leading-relaxed max-w-sm"></p>
-          <p id="score-explain" class="text-[10px] text-neutral-700 mt-4 max-w-sm"></p>
+          <p id="score-explain" class="text-[10px] text-neutral-700 max-w-sm"></p>
         </div>
       </section>
 
@@ -107,8 +293,13 @@ const clients = isAdmin ? await getAllClients() : [];
     const selector = document.getElementById('client-selector');
     if (selector) {
       selector.addEventListener('change', (e) => {
-        activeClientId = e.target.value;
-        loadDashboard();
+        // Full page reload on client switch so the server-rendered
+        // verdict at the top re-generates for the new client. Without
+        // this, the verdict would stay pinned to the initial client
+        // while the lower chapters re-fetched their own data — a
+        // split-brain view.
+        const cid = encodeURIComponent(e.target.value);
+        window.location.href = `/portal/dashboard?as_client=1&client_id=${cid}`;
       });
     }
 
@@ -230,22 +421,11 @@ const clients = isAdmin ? await getAllClients() : [];
       const glowRgb = score >= 75 ? '16,185,129' : score >= 50 ? '251,191,36' : '239,68,68';
       wrap.style.setProperty('--glow-color', `rgba(${glowRgb},${glowAlpha})`);
 
-      let verdict, sub;
-      if (score >= 80) {
-        verdict = 'Your website is in excellent shape.';
-        sub = 'People are finding you on Google, your site is technically sound, and you\'re ahead of most competitors in your space. Let\'s keep it there.';
-      } else if (score >= 65) {
-        verdict = 'Looking good. A few things to tighten up.';
-        sub = 'You\'re showing up where it counts. Cleaning up the items below will push you further — these are quick wins, not overhauls.';
-      } else if (score >= 45) {
-        verdict = 'Solid foundation. Room to grow.';
-        sub = 'The building blocks are in place. The issues flagged below are what\'s standing between you and stronger Google visibility.';
-      } else {
-        verdict = 'Let\'s get to work.';
-        sub = 'There are a handful of real issues keeping your site from performing the way it should. Every one of them is fixable — that\'s what we\'re here for.';
-      }
-      document.getElementById('verdict').textContent = verdict;
-      document.getElementById('verdict-sub').textContent = sub;
+      // Primary verdict is now server-rendered above from real snapshot
+      // data (see src/lib/client-narrator.ts). The old client-side
+      // score→sentence mapping used to live here — it wrote canned text
+      // based on an integer score with no month-over-month awareness.
+      // Removed as part of slice 1 of the client translation layer.
       document.getElementById('score-explain').textContent = `Score based on: ${page1} of ${kws.length} keywords on page 1, ${top3} in top 3, ${highIss} high-priority site issues.`;
 
       const ctx = document.getElementById('score-ring');

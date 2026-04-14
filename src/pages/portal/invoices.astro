@@ -1,12 +1,17 @@
 ---
 import Portal from '../../layouts/Portal.astro';
+import ClientSummary from '../../components/portal/ClientSummary.astro';
 import { getClientVisibleInvoices, getInvoiceItems, getPaymentsByInvoice } from '../../lib/invoices';
+import { buildInvoicesSummary } from '../../lib/client-page-summary';
 export const prerender = false;
 
 const user = Astro.locals.user!;
 if (!user.client_id) return Astro.redirect('/portal/dashboard');
 
 const invoices = await getClientVisibleInvoices(user.client_id);
+
+// Slice 17 — plain-language top summary.
+const summary = await buildInvoicesSummary(user.client_id);
 
 // Enrich with items and payments
 const enriched = await Promise.all(invoices.map(async (inv) => {
@@ -44,6 +49,8 @@ const statusColors: Record<string, string> = {
       <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Invoices</h1>
       <p class="text-sm text-neutral-500 mt-2">Your billing history and payment status.</p>
     </div>
+
+    <ClientSummary summary={summary} />
 
     {enriched.length > 0 ? (
       <div class="space-y-6">

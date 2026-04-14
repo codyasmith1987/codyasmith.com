@@ -6,15 +6,17 @@ import { getAllContracts, getContractsByClient, getContractsByStatus } from '../
 import { getPendingApprovals } from '../../../lib/invoices';
 import { getInvoicesByStatus, getOverdueInvoices } from '../../../lib/invoices';
 import { getRecentActivity } from '../../../lib/activity';
-import { checkAndGenerateInvoices, checkAndSendReminders } from '../../../lib/billing';
+import { DATA_SOURCE_KINDS } from '../../../lib/data-sources';
+import { getMilestoneTemplateForService } from '../../../lib/milestone-templates';
+import { CONTACT_ROLES } from '../../../lib/clients';
 export const prerender = false;
 
-// Lightweight billing checks on page load
+// Billing generation and due-reminder checks used to run here on every
+// admin page load. As of Phase 1 Step 5 they live in scheduled_jobs and
+// run via POST /portal/api/jobs/run (hit by an external cron once/hour).
+// Admin-triggered "run billing now" still works via
+// /portal/api/admin/billing/generate.
 const user = Astro.locals.user!;
-if (user.role === 'admin') {
-  await checkAndGenerateInvoices(user.id);
-  await checkAndSendReminders();
-}
 
 const clients = await getAllClients();
 const clientId = Astro.url.searchParams.get('client');
@@ -36,6 +38,38 @@ const statusColors: Record<string, string> = {
   active: 'bg-emerald-500/10 text-emerald-400',
   completed: 'bg-amber-500/10 text-amber-400',
   cancelled: 'bg-red-500/10 text-red-400',
+};
+
+// Human labels for the data source kinds shown in the intake wizard.
+// The keys MUST match the DataSourceKind union in src/lib/data-sources.ts.
+const DATA_SOURCE_LABELS: Record<string, { label: string; hint: string }> = {
+  ubersuggest_position_tracking: { label: 'Ubersuggest — position tracking', hint: 'monthly keyword rank CSV' },
+  ubersuggest_keyword_research: { label: 'Ubersuggest — keyword research', hint: 'research CSV exports' },
+  ubersuggest_site_audit: { label: 'Ubersuggest — site audit', hint: 'audit, crawl, issues CSVs' },
+  screaming_frog_issues: { label: 'Screaming Frog — issues', hint: 'SF crawl findings CSV' },
+  gsc: { label: 'Google Search Console', hint: 'search performance feed' },
+  ga4: { label: 'Google Analytics 4', hint: 'traffic feed' },
+};
+
+// Client-facing modules that can be enabled/disabled per contract.
+// Keys must stay in sync with the DEFAULT_MODULES constant in
+// src/lib/contracts.ts — contracts.modules_json stores the selected
+// subset and gates which portal pages a client sees.
+const MODULE_OPTIONS: Array<{ key: string; label: string; hint: string }> = [
+  { key: 'dashboard', label: 'Dashboard', hint: 'the four-question home page (always on)' },
+  { key: 'rankings', label: 'Rankings', hint: '/portal/keywords — keyword performance' },
+  { key: 'health', label: 'Site health', hint: '/portal/health — issues and fixes' },
+  { key: 'files', label: 'Files', hint: '/portal/files — shared vault' },
+  { key: 'invoices', label: 'Invoices', hint: '/portal/invoices — billing history' },
+];
+
+// Pre-resolved milestone templates per service type, serialized into
+// the page so the wizard review step can render the seed preview
+// without a round-trip to the server.
+const MILESTONE_TEMPLATE_MAP = {
+  web_management: getMilestoneTemplateForService('web_management'),
+  consulting: getMilestoneTemplateForService('consulting'),
+  hybrid: getMilestoneTemplateForService('hybrid'),
 };
 ---
 
@@ -90,80 +124,284 @@ const statusColors: Record<string, string> = {
       </div>
     </div>
 
-    <!-- Create form (hidden by default) -->
-    <form id="create-contract-form" class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-8 hidden">
-      <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">New contract</p>
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        <div>
+    <!-- Contract intake wizard (hidden by default). One atomic POST at
+         step 5 hits /portal/api/admin/contracts, which drives
+         provisionContract() — contract + project + scheduled billing
+         job + data source bindings + client profile upsert all land
+         in a single transaction. -->
+    <div id="create-wizard" class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-8 hidden">
+      <div class="flex items-center justify-between mb-6 gap-4 flex-wrap">
+        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase">New contract · intake</p>
+        <button type="button" id="wiz-cancel" class="text-[11px] text-neutral-500 hover:text-neutral-300 font-mono">cancel</button>
+      </div>
+
+      <div id="wiz-stepper" class="flex items-center gap-2 mb-8 text-[10px] font-mono tracking-wide uppercase flex-wrap">
+        <span data-step-label="0" class="text-amber-400">1 · Client</span>
+        <span class="text-neutral-700">→</span>
+        <span data-step-label="1" class="text-neutral-600">2 · Commercial</span>
+        <span class="text-neutral-700">→</span>
+        <span data-step-label="2" class="text-neutral-600">3 · Billing</span>
+        <span class="text-neutral-700">→</span>
+        <span data-step-label="3" class="text-neutral-600">4 · Data sources</span>
+        <span class="text-neutral-700">→</span>
+        <span data-step-label="4" class="text-neutral-600">5 · Contacts</span>
+        <span class="text-neutral-700">→</span>
+        <span data-step-label="5" class="text-neutral-600">6 · Review</span>
+      </div>
+
+      <!-- STEP 1: Client -->
+      <section data-step="0">
+        <h3 class="font-serif text-lg text-neutral-100 mb-5">Who is this contract with?</h3>
+        <div class="flex gap-2 mb-5">
+          <button type="button" data-client-mode-btn="existing" class="px-4 py-2 text-xs border rounded transition-colors">use existing client</button>
+          <button type="button" data-client-mode-btn="new" class="px-4 py-2 text-xs border rounded transition-colors">create new client</button>
+        </div>
+        <div data-client-panel="existing">
           <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Client</label>
-          <select id="cc-client" required class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+          <select id="wiz-existing-client" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
             <option value="">Select client...</option>
             {clients.map(c => <option value={c.id}>{c.name}</option>)}
           </select>
         </div>
-        <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Title</label>
-          <input type="text" id="cc-title" required class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="ZKH Web Management" />
+        <div data-client-panel="new" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Client name</label>
+            <input type="text" id="wiz-new-client-name" placeholder="ZipKit Homes" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Slug</label>
+            <input type="text" id="wiz-new-client-slug" placeholder="zipkit-homes" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 font-mono" />
+            <p class="text-[10px] text-neutral-600 mt-1">lowercase letters, numbers, hyphens only — auto-generated, editable</p>
+          </div>
         </div>
-        <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Type</label>
-          <select id="cc-type" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
-            <option value="fixed">Fixed price</option>
-            <option value="retainer">Retainer</option>
-            <option value="hourly">Hourly</option>
+
+        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mt-8 mb-4">Client profile</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Primary URL</label>
+            <input type="url" id="wiz-primary-url" placeholder="https://zipkithomes.com" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Primary contact email</label>
+            <input type="email" id="wiz-primary-contact-email" placeholder="owner@example.com" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Brand accent (hex)</label>
+            <input type="text" id="wiz-brand-accent" placeholder="#f59e0b" maxlength="7" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 font-mono" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Reading level target</label>
+            <input type="number" id="wiz-reading-level" min="1" max="12" value="7" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 font-mono" />
+          </div>
+        </div>
+      </section>
+
+      <!-- STEP 2: Commercial -->
+      <section data-step="1" class="hidden">
+        <h3 class="font-serif text-lg text-neutral-100 mb-5">Commercial terms</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="sm:col-span-2">
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Contract title <span class="text-red-400">*</span></label>
+            <input type="text" id="wiz-title" placeholder="ZKH web management retainer" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Contract type</label>
+            <select id="wiz-type" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+              <option value="fixed">Fixed price</option>
+              <option value="retainer">Retainer</option>
+              <option value="hourly">Hourly</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Service type</label>
+            <select id="wiz-service-type" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+              <option value="">Unspecified</option>
+              <option value="web_management">Web management</option>
+              <option value="consulting">Consulting</option>
+              <option value="hybrid">Hybrid</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Start date</label>
+            <input type="date" id="wiz-start-date" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">End date</label>
+            <input type="date" id="wiz-end-date" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Total value ($)</label>
+            <input type="number" step="0.01" id="wiz-total-value" placeholder="e.g. 6000 for a year-long retainer" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Description</label>
+            <textarea id="wiz-description" rows="3" placeholder="Scope summary..." class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30"></textarea>
+          </div>
+        </div>
+
+        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mt-8 mb-3">Client-facing modules</p>
+        <p class="text-[11px] text-neutral-500 mb-4 leading-relaxed">
+          Pick which sections this client sees in their portal. Unchecked modules are hidden from their nav.
+        </p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {MODULE_OPTIONS.map((m) => (
+            <label class="flex items-start gap-3 p-3 border border-white/5 rounded-lg hover:border-white/10 transition-colors cursor-pointer">
+              <input type="checkbox" data-wiz-module={m.key} checked class="mt-1 accent-amber-500" />
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-neutral-200">{m.label}</p>
+                <p class="text-[10px] text-neutral-600 mt-0.5">{m.hint}</p>
+              </div>
+            </label>
+          ))}
+        </div>
+      </section>
+
+      <!-- STEP 3: Billing -->
+      <section data-step="2" class="hidden">
+        <h3 class="font-serif text-lg text-neutral-100 mb-5">Billing rules</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Cadence</label>
+            <select id="wiz-cadence" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+              <option value="">None</option>
+              <option value="monthly">Monthly</option>
+              <option value="milestone">Per milestone</option>
+              <option value="one-time">One-time</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Billing day (1-28) <span data-billing-required class="text-red-400 hidden">*</span></label>
+            <input type="number" id="wiz-billing-day" min="1" max="28" placeholder="9" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Recurring amount ($) <span data-billing-required class="text-red-400 hidden">*</span></label>
+            <input type="number" id="wiz-recurring-amount" step="0.01" placeholder="500.00" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Payment terms (days)</label>
+            <input type="number" id="wiz-payment-terms-days" value="30" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Included hours / period</label>
+            <input type="number" step="0.5" id="wiz-included-hours" placeholder="5" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Overage rate ($/hr)</label>
+            <input type="number" step="0.01" id="wiz-overage-rate" placeholder="100.00" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          </div>
+        </div>
+        <p class="text-[10px] text-neutral-600 mt-4 leading-relaxed">
+          A monthly cadence schedules an automatic invoice generation job for the next billing day.
+          Milestone and one-time cadences leave invoice generation manual.
+        </p>
+
+        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mt-8 mb-3">Reminder rule</p>
+        <p class="text-[11px] text-neutral-500 mb-4 leading-relaxed">
+          When to chase payment. Lists of whole days relative to the due date, comma-separated.
+          Each tick fires at most once per invoice. Empty arrays mean no reminders at that phase.
+        </p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Before due (days)</label>
+            <input type="text" id="wiz-reminder-before" placeholder="7, 3, 1" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 font-mono" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">After due (days)</label>
+            <input type="text" id="wiz-reminder-after" placeholder="1, 3, 7, 14" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 font-mono" />
+          </div>
+        </div>
+
+        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mt-8 mb-3">Passthrough expense rule</p>
+        <p class="text-[11px] text-neutral-500 mb-4 leading-relaxed">
+          Default action for uncategorized expenses, plus one row per allowed category.
+          Expenses with a matching category hit their cap and auto-bill / flag per row.
+        </p>
+        <div class="mb-4">
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Default action for uncategorized</label>
+          <select id="wiz-passthrough-default" class="w-full sm:w-64 px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+            <option value="manual_review">Manual review (flag for approval)</option>
+            <option value="auto_bill">Auto-bill</option>
+            <option value="block">Block (reject)</option>
           </select>
         </div>
-        <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Billing cadence</label>
-          <select id="cc-cadence" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
-            <option value="">None</option>
-            <option value="monthly">Monthly</option>
-            <option value="milestone">Per milestone</option>
-            <option value="one-time">One-time</option>
-          </select>
+        <div id="wiz-passthrough-categories" class="space-y-2"></div>
+        <button type="button" id="wiz-add-category" class="mt-3 text-[11px] text-amber-400 hover:text-amber-300 tracking-wide">+ add category</button>
+
+        <!-- Slice 15 — multi-contract staging. Each click of "Save &
+             add another" snapshots the current Commercial+Billing
+             fields into a JS-side blocks list and resets the form.
+             At submit time the orchestrator gets every staged block
+             plus the one currently in the form (if it has a title). -->
+        <div class="mt-10 pt-6 border-t border-white/5">
+          <div class="flex items-center justify-between mb-3">
+            <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase">Contracts in this intake</p>
+            <button type="button" id="wiz-save-add-another" class="text-[11px] text-amber-400 hover:text-amber-300 tracking-wide">
+              + save &amp; add another contract
+            </button>
+          </div>
+          <p class="text-[11px] text-neutral-500 mb-3 leading-relaxed">
+            Adding another contract is optional. Leave the current form alone and click Next when you're done.
+          </p>
+          <ul id="wiz-staged-blocks" class="space-y-1 text-[11px] text-neutral-400 font-mono"></ul>
         </div>
-        <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Billing day (1-28)</label>
-          <input type="number" id="cc-billing-day" min="1" max="28" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="9" />
+      </section>
+
+      <!-- STEP 4: Data sources -->
+      <section data-step="3" class="hidden">
+        <h3 class="font-serif text-lg text-neutral-100 mb-3">Which data feeds does this contract expect?</h3>
+        <p class="text-[11px] text-neutral-500 mb-5 leading-relaxed">
+          Enabled feeds will show up on the admin queue if they stop refreshing.
+          Disabled rows are still created so you can flip them on later without re-entering anything.
+        </p>
+        <div class="space-y-2">
+          {DATA_SOURCE_KINDS.map((kind) => (
+            <label class="flex items-start gap-3 p-3 border border-white/5 rounded-lg hover:border-white/10 transition-colors cursor-pointer">
+              <input type="checkbox" data-wiz-source={kind} class="mt-1 accent-amber-500" />
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-neutral-200">{DATA_SOURCE_LABELS[kind]?.label ?? kind}</p>
+                <p class="text-[10px] text-neutral-600 mt-0.5">{DATA_SOURCE_LABELS[kind]?.hint ?? ''}</p>
+              </div>
+              <span class="text-[10px] text-neutral-600 font-mono">{kind}</span>
+            </label>
+          ))}
         </div>
-        <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Recurring amount</label>
-          <input type="number" id="cc-recurring" step="0.01" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="500.00" />
-        </div>
-        <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Included hours</label>
-          <input type="number" id="cc-hours" step="0.5" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="5" />
-        </div>
-        <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Overage rate ($/hr)</label>
-          <input type="number" id="cc-overage" step="0.01" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="100.00" />
-        </div>
-        <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Payment terms (days)</label>
-          <input type="number" id="cc-terms" value="30" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
-        </div>
-        <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Total value</label>
-          <input type="number" id="cc-value" step="0.01" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="5000.00" />
-        </div>
-        <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Start date</label>
-          <input type="date" id="cc-start" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
-        </div>
-        <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">End date</label>
-          <input type="date" id="cc-end" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+      </section>
+
+      <!-- STEP 5: Contacts -->
+      <section data-step="4" class="hidden">
+        <h3 class="font-serif text-lg text-neutral-100 mb-3">Contacts for this client</h3>
+        <p class="text-[11px] text-neutral-500 mb-5 leading-relaxed">
+          People who should hear from us about this client. Roles drive routing — billing and primary contacts get invoices and reminders. A contact can hold multiple roles.
+        </p>
+        <div id="wiz-contacts-host" class="space-y-2"></div>
+        <button type="button" id="wiz-add-contact" class="mt-3 text-[11px] text-amber-400 hover:text-amber-300 tracking-wide">+ add contact</button>
+        <p class="text-[10px] text-neutral-600 mt-4 leading-relaxed">
+          Leave empty if this client has no contacts to seed yet — reminders will fall back to the client profile's primary contact email, then to any portal login users on this client.
+        </p>
+      </section>
+
+      <!-- STEP 6: Review -->
+      <section data-step="5" class="hidden">
+        <h3 class="font-serif text-lg text-neutral-100 mb-5">Review</h3>
+        <div id="wiz-review" class="space-y-3 text-sm text-neutral-300 leading-relaxed"></div>
+        <p class="text-[11px] text-neutral-600 mt-5 leading-relaxed">
+          One atomic write: contract row, default project shell, milestones from service type, data source binding rows, billing schedule (if monthly), contract rules, client profile update, and provisioning activity entry all commit together or not at all.
+        </p>
+      </section>
+
+      <!-- Milestone templates serialized for the review preview. The
+           script parses this on load to avoid a server round-trip
+           when stepping through the wizard. -->
+      <script id="wiz-milestone-templates" type="application/json" set:html={JSON.stringify(MILESTONE_TEMPLATE_MAP)}></script>
+
+      <div class="flex items-center justify-between mt-8 pt-6 border-t border-white/5">
+        <button type="button" id="wiz-back" class="px-5 py-2.5 text-sm text-neutral-500 hover:text-neutral-300 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">← Back</button>
+        <div class="flex items-center gap-3">
+          <button type="button" id="wiz-next" class="px-6 py-2.5 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-colors">Next →</button>
+          <button type="button" id="wiz-submit" class="hidden px-6 py-2.5 bg-emerald-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-emerald-400 transition-colors">Create contract</button>
         </div>
       </div>
-      <div class="mt-5">
-        <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Description</label>
-        <textarea id="cc-desc" rows="3" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="Scope summary..."></textarea>
-      </div>
-      <div class="flex items-center gap-3 mt-6">
-        <button type="submit" class="px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300">Create contract</button>
-        <button type="button" id="cancel-create" class="px-6 py-3 text-neutral-500 text-sm hover:text-neutral-300 transition-colors">Cancel</button>
-      </div>
-    </form>
+    </div>
 
     <!-- Contract list -->
     {contracts.length > 0 ? (
@@ -220,50 +458,800 @@ const statusColors: Record<string, string> = {
   </div>
 
   <script>
+    // Parse the milestone template map serialized into the page by
+    // the Astro frontmatter so the review preview can show which
+    // milestones will be seeded for the current service_type.
+    const milestoneTemplateMap: Record<string, Array<{
+      title: string;
+      description: string;
+      client_update_text: string;
+      sort_order: number;
+      client_visible: boolean;
+    }>> = (() => {
+      const el = document.getElementById('wiz-milestone-templates');
+      if (!el?.textContent) return {};
+      try {
+        return JSON.parse(el.textContent);
+      } catch {
+        return {};
+      }
+    })();
+
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-    const form = document.getElementById('create-contract-form') as HTMLFormElement;
+    const toast = (opts: { type: string; message: string }) =>
+      (window as any).__toast?.(opts);
+
+    // --- Wizard state machine ---
+    // Five steps. Each next/back tick re-renders visibility, stepper
+    // labels, and the footer buttons. Validation runs on Next; the
+    // final submit collects the full payload and posts in one shot.
+    const wizard = document.getElementById('create-wizard')!;
     const showBtn = document.getElementById('show-create-form')!;
-    const cancelBtn = document.getElementById('cancel-create')!;
+    const cancelBtn = document.getElementById('wiz-cancel')!;
+    const backBtn = document.getElementById('wiz-back') as HTMLButtonElement;
+    const nextBtn = document.getElementById('wiz-next') as HTMLButtonElement;
+    const submitBtn = document.getElementById('wiz-submit') as HTMLButtonElement;
+    const reviewHost = document.getElementById('wiz-review')!;
 
-    showBtn.addEventListener('click', () => { form.classList.remove('hidden'); showBtn.classList.add('hidden'); });
-    cancelBtn.addEventListener('click', () => { form.classList.add('hidden'); showBtn.classList.remove('hidden'); });
+    let currentStep = 0;
+    let clientMode: 'existing' | 'new' = 'existing';
 
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const val = (id: string) => (document.getElementById(id) as HTMLInputElement)?.value;
-      const body = {
-        client_id: val('cc-client'),
-        title: val('cc-title')?.trim(),
-        type: val('cc-type'),
-        billing_cadence: val('cc-cadence') || undefined,
-        billing_day: val('cc-billing-day') ? Number(val('cc-billing-day')) : undefined,
-        recurring_amount: val('cc-recurring') ? Number(val('cc-recurring')) : undefined,
-        included_hours: val('cc-hours') ? Number(val('cc-hours')) : undefined,
-        overage_rate: val('cc-overage') ? Number(val('cc-overage')) : undefined,
-        payment_terms_days: val('cc-terms') ? Number(val('cc-terms')) : undefined,
-        total_value: val('cc-value') || undefined,
-        start_date: val('cc-start') || undefined,
-        end_date: val('cc-end') || undefined,
-        description: (document.getElementById('cc-desc') as HTMLTextAreaElement).value.trim() || undefined,
-      };
+    const getInput = (id: string) =>
+      (document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement);
+    const val = (id: string) => getInput(id)?.value ?? '';
 
-      const res = await fetch('/portal/api/admin/contracts/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify(body),
-      });
+    function setClientMode(mode: 'existing' | 'new') {
+      clientMode = mode;
+      for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-client-mode-btn]')) {
+        const isActive = btn.dataset.clientModeBtn === mode;
+        btn.className = `px-4 py-2 text-xs border rounded transition-colors ${
+          isActive
+            ? 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+            : 'bg-neutral-900/40 text-neutral-500 border-white/10 hover:border-white/20'
+        }`;
+      }
+      for (const panel of document.querySelectorAll<HTMLElement>('[data-client-panel]')) {
+        panel.classList.toggle('hidden', panel.dataset.clientPanel !== mode);
+      }
+    }
 
-      if (res.ok) {
-        const data = await res.json();
-        (window as any).__toast({ type: 'success', message: 'Contract created' });
-        setTimeout(() => window.location.href = `/portal/admin/contracts/${data.id}`, 600);
-      } else {
-        const err = await res.json().catch(() => ({ error: 'Failed' }));
-        (window as any).__toast({ type: 'error', message: err.error || 'Failed to create contract' });
+    for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-client-mode-btn]')) {
+      btn.addEventListener('click', () => setClientMode(btn.dataset.clientModeBtn as any));
+    }
+
+    // Auto-slug the new-client slug field from the name while it is
+    // pristine (user hasn't manually typed in slug yet).
+    let slugDirty = false;
+    const nameInput = document.getElementById('wiz-new-client-name') as HTMLInputElement;
+    const slugInput = document.getElementById('wiz-new-client-slug') as HTMLInputElement;
+    nameInput?.addEventListener('input', () => {
+      if (slugDirty) return;
+      slugInput.value = nameInput.value
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    });
+    slugInput?.addEventListener('input', () => { slugDirty = true; });
+
+    // Billing-day / recurring-amount are only required when cadence=monthly.
+    // Toggle the visible asterisks to mirror the backend rule.
+    const cadenceSelect = document.getElementById('wiz-cadence') as HTMLSelectElement;
+    cadenceSelect?.addEventListener('change', () => {
+      const monthly = cadenceSelect.value === 'monthly';
+      for (const el of document.querySelectorAll<HTMLElement>('[data-billing-required]')) {
+        el.classList.toggle('hidden', !monthly);
       }
     });
 
-    // Generate invoices button
+    function validateStep(step: number): string | null {
+      if (step === 0) {
+        if (clientMode === 'existing') {
+          if (!val('wiz-existing-client')) return 'Pick a client or switch to "create new client".';
+        } else {
+          if (!val('wiz-new-client-name').trim()) return 'Enter a client name.';
+          const slug = val('wiz-new-client-slug').trim();
+          if (!/^[a-z0-9-]+$/.test(slug)) return 'Slug must be lowercase letters, numbers, and hyphens.';
+        }
+        const url = val('wiz-primary-url').trim();
+        if (url && !/^https?:\/\/[^\s]+$/i.test(url)) return 'Primary URL must start with http:// or https://';
+        const hex = val('wiz-brand-accent').trim();
+        if (hex && !/^#[0-9a-fA-F]{6}$/.test(hex)) return 'Brand accent must be a #rrggbb hex color.';
+        const email = val('wiz-primary-contact-email').trim();
+        if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return 'Primary contact email is not a valid email.';
+        const level = val('wiz-reading-level');
+        if (level) {
+          const n = Number(level);
+          if (!Number.isInteger(n) || n < 1 || n > 12) return 'Reading level must be an integer 1-12.';
+        }
+        return null;
+      }
+      if (step === 1) {
+        if (!val('wiz-title').trim()) return 'Enter a contract title.';
+        return null;
+      }
+      if (step === 2) {
+        if (cadenceSelect?.value === 'monthly') {
+          const day = Number(val('wiz-billing-day'));
+          if (!Number.isInteger(day) || day < 1 || day > 28) return 'Monthly cadence needs a billing day 1-28.';
+          const amt = Number(val('wiz-recurring-amount'));
+          if (!Number.isFinite(amt) || amt <= 0) return 'Monthly cadence needs a recurring amount greater than zero.';
+        }
+        return null;
+      }
+      if (step === 4) {
+        // Contacts: if any rows are present, each must have a name,
+        // valid email, and at least one role checked. Empty contacts
+        // step is OK — fallback chain handles it.
+        const rows = document.querySelectorAll<HTMLElement>('[data-wiz-contact-row]');
+        const seenEmails = new Set<string>();
+        for (const row of rows) {
+          const name = (row.querySelector<HTMLInputElement>('[data-contact-name]')?.value ?? '').trim();
+          const email = (row.querySelector<HTMLInputElement>('[data-contact-email]')?.value ?? '').trim().toLowerCase();
+          if (!name && !email) continue; // empty row, ignore
+          if (!name) return 'Contact is missing a name.';
+          if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return 'Contact has an invalid email.';
+          if (seenEmails.has(email)) return 'Duplicate contact email.';
+          seenEmails.add(email);
+          const hasRole = Array.from(row.querySelectorAll<HTMLInputElement>('[data-contact-role]')).some((c) => c.checked);
+          if (!hasRole) return `Contact "${name}" needs at least one role.`;
+        }
+        return null;
+      }
+      return null;
+    }
+
+    // Slice 15 — collectClientLevelPayload returns the client-level
+    // envelope fields ONLY. The contract blocks are assembled
+    // separately by combining stagedBlocks + the current form
+    // snapshot, so the submit handler can reason about them
+    // independently from the client-level truth.
+    function collectClientLevelPayload() {
+      const clientProfile: Record<string, unknown> = {};
+      const pUrl = val('wiz-primary-url').trim();
+      const pEmail = val('wiz-primary-contact-email').trim();
+      const pHex = val('wiz-brand-accent').trim();
+      const pLvl = val('wiz-reading-level').trim();
+      if (pUrl) clientProfile.primary_url = pUrl;
+      if (pEmail) clientProfile.primary_contact_email = pEmail;
+      if (pHex) clientProfile.brand_accent = pHex;
+      if (pLvl) clientProfile.reading_level_target = Number(pLvl);
+
+      const dataSources: Array<{ source: string; enabled: boolean }> = [];
+      for (const box of document.querySelectorAll<HTMLInputElement>('[data-wiz-source]')) {
+        dataSources.push({ source: box.dataset.wizSource!, enabled: box.checked });
+      }
+
+      const modules: string[] = [];
+      for (const box of document.querySelectorAll<HTMLInputElement>('[data-wiz-module]')) {
+        if (box.checked) modules.push(box.dataset.wizModule!);
+      }
+
+      // Reminder rule: parse comma-separated day lists into integer arrays.
+      const parseDayList = (raw: string): number[] | null => {
+        if (!raw.trim()) return [];
+        const parts = raw.split(/[,\s]+/).filter((s) => s.length > 0);
+        const out: number[] = [];
+        for (const p of parts) {
+          const n = Number(p);
+          if (!Number.isInteger(n) || n < 0 || n > 365) return null;
+          if (!out.includes(n)) out.push(n);
+        }
+        return out;
+      };
+      const beforeDays = parseDayList(val('wiz-reminder-before'));
+      const afterDays = parseDayList(val('wiz-reminder-after'));
+      let reminderRule: any = undefined;
+      if (beforeDays !== null && afterDays !== null && (beforeDays.length > 0 || afterDays.length > 0)) {
+        reminderRule = { before_due_days: beforeDays, after_due_days: afterDays };
+      }
+
+      // Passthrough rule: gather default action + category rows.
+      const categoriesOut: Array<{
+        name: string;
+        monthly_cap: number | null;
+        auto_bill_under_cap: boolean;
+        flag_over_cap: boolean;
+      }> = [];
+      for (const row of document.querySelectorAll<HTMLElement>('[data-wiz-category-row]')) {
+        const nameInput = row.querySelector<HTMLInputElement>('[data-cat-name]');
+        const capInput = row.querySelector<HTMLInputElement>('[data-cat-cap]');
+        const autoInput = row.querySelector<HTMLInputElement>('[data-cat-auto]');
+        const flagInput = row.querySelector<HTMLInputElement>('[data-cat-flag]');
+        const name = nameInput?.value.trim() ?? '';
+        if (!name) continue;
+        const capRaw = capInput?.value.trim() ?? '';
+        const cap = capRaw ? Number(capRaw) : null;
+        categoriesOut.push({
+          name,
+          monthly_cap: cap !== null && Number.isFinite(cap) && cap >= 0 ? cap : null,
+          auto_bill_under_cap: autoInput?.checked === true,
+          flag_over_cap: flagInput?.checked === true,
+        });
+      }
+      const defaultAction = val('wiz-passthrough-default') as
+        | 'manual_review'
+        | 'auto_bill'
+        | 'block';
+      let passthroughRule: any = undefined;
+      if (categoriesOut.length > 0 || defaultAction !== 'manual_review') {
+        passthroughRule = { categories: categoriesOut, default_action: defaultAction };
+      }
+
+      // Contacts: gather rows, skip empty ones.
+      const contactsOut: Array<{
+        name: string;
+        email: string;
+        roles: string[];
+        receives_invoices: boolean;
+        receives_reminders: boolean;
+      }> = [];
+      for (const row of document.querySelectorAll<HTMLElement>('[data-wiz-contact-row]')) {
+        const name = (row.querySelector<HTMLInputElement>('[data-contact-name]')?.value ?? '').trim();
+        const email = (row.querySelector<HTMLInputElement>('[data-contact-email]')?.value ?? '').trim().toLowerCase();
+        if (!name || !email) continue;
+        const roles: string[] = [];
+        for (const box of row.querySelectorAll<HTMLInputElement>('[data-contact-role]')) {
+          if (box.checked) roles.push(box.dataset.contactRole!);
+        }
+        if (roles.length === 0) continue;
+        contactsOut.push({
+          name,
+          email,
+          roles,
+          receives_invoices:
+            row.querySelector<HTMLInputElement>('[data-contact-recv-invoices]')?.checked === true,
+          receives_reminders:
+            row.querySelector<HTMLInputElement>('[data-contact-recv-reminders]')?.checked === true,
+        });
+      }
+
+      return {
+        client_profile: Object.keys(clientProfile).length > 0 ? clientProfile : undefined,
+        contacts: contactsOut.length > 0 ? contactsOut : undefined,
+        data_sources: dataSources,
+      };
+    }
+
+    // Category-row management for the passthrough rule sub-panel.
+    // Rows are created by a small template so we don't fight the
+    // Astro compiler with inline JSX-ish template strings.
+    const catHost = document.getElementById('wiz-passthrough-categories')!;
+    const addCatBtn = document.getElementById('wiz-add-category')!;
+    function addCategoryRow(seed?: { name: string; cap: string; auto: boolean; flag: boolean }) {
+      const row = document.createElement('div');
+      row.dataset.wizCategoryRow = '1';
+      row.className =
+        'grid grid-cols-12 gap-2 items-center p-3 border border-white/5 rounded-lg';
+      row.innerHTML = `
+        <input data-cat-name class="col-span-4 px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-xs focus:outline-none focus:border-amber-500/30" placeholder="hosting" />
+        <input data-cat-cap type="number" step="0.01" min="0" class="col-span-3 px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-xs focus:outline-none focus:border-amber-500/30 font-mono" placeholder="monthly cap" />
+        <label class="col-span-2 flex items-center gap-1 text-[10px] text-neutral-400"><input data-cat-auto type="checkbox" class="accent-amber-500" /> auto-bill</label>
+        <label class="col-span-2 flex items-center gap-1 text-[10px] text-neutral-400"><input data-cat-flag type="checkbox" class="accent-amber-500" /> flag over</label>
+        <button type="button" data-cat-remove class="col-span-1 text-[11px] text-neutral-600 hover:text-red-400">×</button>
+      `;
+      if (seed) {
+        (row.querySelector('[data-cat-name]') as HTMLInputElement).value = seed.name;
+        (row.querySelector('[data-cat-cap]') as HTMLInputElement).value = seed.cap;
+        (row.querySelector('[data-cat-auto]') as HTMLInputElement).checked = seed.auto;
+        (row.querySelector('[data-cat-flag]') as HTMLInputElement).checked = seed.flag;
+      }
+      row.querySelector('[data-cat-remove]')?.addEventListener('click', () => row.remove());
+      catHost.appendChild(row);
+    }
+    addCatBtn.addEventListener('click', () => addCategoryRow());
+
+    // Contact-row management for the Contacts step. Each row has a
+    // name, email, role checkboxes (billing/technical/approval/primary),
+    // and two "receives" toggles. Follows the same factory pattern as
+    // category rows so markup stays out of the Astro template.
+    const contactHost = document.getElementById('wiz-contacts-host')!;
+    const addContactBtn = document.getElementById('wiz-add-contact')!;
+    const contactRoles = ['billing', 'technical', 'approval', 'primary'];
+    function addContactRow() {
+      const row = document.createElement('div');
+      row.dataset.wizContactRow = '1';
+      row.className = 'p-3 border border-white/5 rounded-lg space-y-2';
+      const roleBoxes = contactRoles
+        .map(
+          (role) =>
+            `<label class="flex items-center gap-1 text-[10px] text-neutral-400"><input data-contact-role data-contact-role-name="${role}" type="checkbox" class="accent-amber-500" /> ${role}</label>`
+        )
+        .join('');
+      row.innerHTML = `
+        <div class="grid grid-cols-12 gap-2 items-center">
+          <input data-contact-name class="col-span-5 px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-xs focus:outline-none focus:border-amber-500/30" placeholder="Contact name" />
+          <input data-contact-email type="email" class="col-span-6 px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-xs focus:outline-none focus:border-amber-500/30 font-mono" placeholder="contact@example.com" />
+          <button type="button" data-contact-remove class="col-span-1 text-[11px] text-neutral-600 hover:text-red-400">×</button>
+        </div>
+        <div class="flex flex-wrap items-center gap-3 pt-1">
+          ${roleBoxes}
+          <span class="w-px h-4 bg-white/10"></span>
+          <label class="flex items-center gap-1 text-[10px] text-neutral-400"><input data-contact-recv-invoices type="checkbox" class="accent-amber-500" /> receives invoices</label>
+          <label class="flex items-center gap-1 text-[10px] text-neutral-400"><input data-contact-recv-reminders type="checkbox" class="accent-amber-500" /> receives reminders</label>
+        </div>
+      `;
+      // data-contact-role attribute is the role name too (used by
+      // collectClientLevelPayload and validateStep) — set it explicitly.
+      for (const box of row.querySelectorAll<HTMLInputElement>('[data-contact-role]')) {
+        box.dataset.contactRole = box.dataset.contactRoleName!;
+      }
+      row.querySelector('[data-contact-remove]')?.addEventListener('click', () => row.remove());
+      contactHost.appendChild(row);
+    }
+    addContactBtn.addEventListener('click', () => addContactRow());
+
+    // -----------------------------------------------------------
+    // Slice 15 — multi-contract staging
+    // -----------------------------------------------------------
+    // `stagedBlocks` accumulates Commercial+Billing snapshots as
+    // Cody clicks "Save & add another". The current form holds an
+    // in-progress block whose fields are read at submit time and
+    // appended to the staged list if non-empty.
+
+    type ContractBlock = {
+      title: string;
+      description?: string;
+      type?: string;
+      service_type?: string;
+      modules?: string[];
+      total_value?: number;
+      start_date?: string;
+      end_date?: string;
+      billing_cadence?: string;
+      billing_day?: number;
+      recurring_amount?: number;
+      included_hours?: number;
+      overage_rate?: number;
+      payment_terms_days?: number;
+      passthrough_rule?: any;
+      reminder_rule?: any;
+    };
+
+    let stagedBlocks: ContractBlock[] = [];
+    const stagedList = document.getElementById('wiz-staged-blocks') as HTMLUListElement;
+    const saveAddBtn = document.getElementById('wiz-save-add-another') as HTMLButtonElement;
+
+    function renderStagedList() {
+      stagedList.innerHTML = stagedBlocks
+        .map((b, i) => {
+          const bits: string[] = [b.title];
+          if (b.type) bits.push(b.type);
+          if (b.service_type) bits.push(b.service_type);
+          if (b.billing_cadence) bits.push(b.billing_cadence);
+          if (b.recurring_amount) bits.push(`$${b.recurring_amount}/period`);
+          return `<li class="flex items-center justify-between gap-2 py-1.5 px-3 bg-neutral-900/40 border border-white/5 rounded">
+            <span class="truncate"><span class="text-amber-400">#${i + 1}</span> · ${bits.join(' · ')}</span>
+            <button type="button" data-remove-block="${i}" class="text-neutral-600 hover:text-red-400 text-[12px] shrink-0">×</button>
+          </li>`;
+        })
+        .join('');
+      // Wire remove buttons
+      for (const btn of stagedList.querySelectorAll<HTMLButtonElement>('[data-remove-block]')) {
+        btn.addEventListener('click', () => {
+          const idx = Number(btn.dataset.removeBlock);
+          stagedBlocks.splice(idx, 1);
+          renderStagedList();
+        });
+      }
+    }
+
+    // Snapshots the current Commercial+Billing form state into a
+    // ContractBlock. Called by both "Save & add another" and the
+    // final submit (as the in-progress/last block). Returns null if
+    // the title is empty — the caller decides whether to treat that
+    // as "no block" or as "validation error".
+    function snapshotCurrentBlock(): ContractBlock | null {
+      const title = val('wiz-title').trim();
+      if (!title) return null;
+
+      // Modules checklist
+      const modules: string[] = [];
+      for (const box of document.querySelectorAll<HTMLInputElement>('[data-wiz-module]')) {
+        if (box.checked) modules.push(box.dataset.wizModule!);
+      }
+
+      // Reminder rule
+      const parseDayList = (raw: string): number[] | null => {
+        if (!raw.trim()) return [];
+        const parts = raw.split(/[,\s]+/).filter((s) => s.length > 0);
+        const out: number[] = [];
+        for (const p of parts) {
+          const n = Number(p);
+          if (!Number.isInteger(n) || n < 0 || n > 365) return null;
+          if (!out.includes(n)) out.push(n);
+        }
+        return out;
+      };
+      const beforeDays = parseDayList(val('wiz-reminder-before'));
+      const afterDays = parseDayList(val('wiz-reminder-after'));
+      let reminderRule: any = undefined;
+      if (beforeDays !== null && afterDays !== null && (beforeDays.length > 0 || afterDays.length > 0)) {
+        reminderRule = { before_due_days: beforeDays, after_due_days: afterDays };
+      }
+
+      // Passthrough rule
+      const categoriesOut: Array<{
+        name: string;
+        monthly_cap: number | null;
+        auto_bill_under_cap: boolean;
+        flag_over_cap: boolean;
+      }> = [];
+      for (const row of document.querySelectorAll<HTMLElement>('[data-wiz-category-row]')) {
+        const nameInput = row.querySelector<HTMLInputElement>('[data-cat-name]');
+        const capInput = row.querySelector<HTMLInputElement>('[data-cat-cap]');
+        const autoInput = row.querySelector<HTMLInputElement>('[data-cat-auto]');
+        const flagInput = row.querySelector<HTMLInputElement>('[data-cat-flag]');
+        const name = nameInput?.value.trim() ?? '';
+        if (!name) continue;
+        const capRaw = capInput?.value.trim() ?? '';
+        const cap = capRaw ? Number(capRaw) : null;
+        categoriesOut.push({
+          name,
+          monthly_cap: cap !== null && Number.isFinite(cap) && cap >= 0 ? cap : null,
+          auto_bill_under_cap: autoInput?.checked === true,
+          flag_over_cap: flagInput?.checked === true,
+        });
+      }
+      const defaultAction = val('wiz-passthrough-default') as
+        | 'manual_review'
+        | 'auto_bill'
+        | 'block';
+      let passthroughRule: any = undefined;
+      if (categoriesOut.length > 0 || defaultAction !== 'manual_review') {
+        passthroughRule = { categories: categoriesOut, default_action: defaultAction };
+      }
+
+      return {
+        title,
+        description: val('wiz-description').trim() || undefined,
+        type: val('wiz-type'),
+        service_type: val('wiz-service-type') || undefined,
+        modules,
+        total_value: val('wiz-total-value') ? Number(val('wiz-total-value')) : undefined,
+        start_date: val('wiz-start-date') || undefined,
+        end_date: val('wiz-end-date') || undefined,
+        billing_cadence: val('wiz-cadence') || undefined,
+        billing_day: val('wiz-billing-day') ? Number(val('wiz-billing-day')) : undefined,
+        recurring_amount: val('wiz-recurring-amount') ? Number(val('wiz-recurring-amount')) : undefined,
+        included_hours: val('wiz-included-hours') ? Number(val('wiz-included-hours')) : undefined,
+        overage_rate: val('wiz-overage-rate') ? Number(val('wiz-overage-rate')) : undefined,
+        payment_terms_days: val('wiz-payment-terms-days') ? Number(val('wiz-payment-terms-days')) : undefined,
+        reminder_rule: reminderRule,
+        passthrough_rule: passthroughRule,
+      };
+    }
+
+    // Clears every contract-level field so the form is ready for the
+    // next block. Does NOT touch client-level fields (step 1),
+    // contacts (step 5), or data sources (step 4).
+    function resetContractForm() {
+      const clearIds = [
+        'wiz-title',
+        'wiz-description',
+        'wiz-start-date',
+        'wiz-end-date',
+        'wiz-total-value',
+        'wiz-billing-day',
+        'wiz-recurring-amount',
+        'wiz-included-hours',
+        'wiz-overage-rate',
+        'wiz-reminder-before',
+        'wiz-reminder-after',
+      ];
+      for (const id of clearIds) {
+        const el = getInput(id);
+        if (el) (el as HTMLInputElement).value = '';
+      }
+      // Reset selects to defaults
+      (document.getElementById('wiz-type') as HTMLSelectElement).value = 'fixed';
+      (document.getElementById('wiz-service-type') as HTMLSelectElement).value = '';
+      (document.getElementById('wiz-cadence') as HTMLSelectElement).value = '';
+      (document.getElementById('wiz-payment-terms-days') as HTMLInputElement).value = '30';
+      (document.getElementById('wiz-passthrough-default') as HTMLSelectElement).value = 'manual_review';
+      // Re-check all module boxes (default set)
+      for (const box of document.querySelectorAll<HTMLInputElement>('[data-wiz-module]')) {
+        box.checked = true;
+      }
+      // Wipe passthrough category rows
+      const catHostEl = document.getElementById('wiz-passthrough-categories')!;
+      catHostEl.innerHTML = '';
+      // Hide the monthly-required asterisks
+      for (const el of document.querySelectorAll<HTMLElement>('[data-billing-required]')) {
+        el.classList.add('hidden');
+      }
+    }
+
+    saveAddBtn.addEventListener('click', () => {
+      // Validate step 1 (contract commercial) + step 2 (billing) before staging.
+      for (const s of [1, 2]) {
+        const err = validateStep(s);
+        if (err) {
+          toast({ type: 'error', message: err });
+          return;
+        }
+      }
+      const snapshot = snapshotCurrentBlock();
+      if (!snapshot) {
+        toast({ type: 'error', message: 'Enter a contract title first.' });
+        return;
+      }
+      stagedBlocks.push(snapshot);
+      renderStagedList();
+      resetContractForm();
+      currentStep = 1; // back to Commercial
+      render();
+      toast({ type: 'success', message: `Staged "${snapshot.title}" — enter the next contract.` });
+    });
+
+    // Slice 15 — review renders the client-level summary once and
+    // then iterates stagedBlocks + the current in-progress block.
+    function renderBlockSummary(b: ContractBlock, index: number, total: number): string {
+      const lines: string[] = [];
+      lines.push(
+        `<p class="text-amber-400 text-[11px] uppercase tracking-widest">Contract ${index + 1} of ${total}</p>`
+      );
+      lines.push(`<p><span class="text-neutral-500">Title:</span> ${b.title}</p>`);
+      lines.push(`<p><span class="text-neutral-500">Type:</span> ${b.type}${b.service_type ? ' · ' + b.service_type : ''}</p>`);
+      if (b.start_date || b.end_date) {
+        lines.push(`<p><span class="text-neutral-500">Term:</span> ${b.start_date ?? '?'} → ${b.end_date ?? '?'}</p>`);
+      }
+      if (b.total_value) lines.push(`<p><span class="text-neutral-500">Total:</span> $${b.total_value}</p>`);
+
+      const billingBits: string[] = [];
+      if (b.billing_cadence) billingBits.push(`${b.billing_cadence}`);
+      if (b.billing_day) billingBits.push(`day ${b.billing_day}`);
+      if (b.recurring_amount) billingBits.push(`$${b.recurring_amount}/period`);
+      if (b.included_hours) billingBits.push(`${b.included_hours}h included`);
+      if (b.overage_rate) billingBits.push(`$${b.overage_rate}/h overage`);
+      if (b.payment_terms_days) billingBits.push(`${b.payment_terms_days}d terms`);
+      if (billingBits.length) lines.push(`<p><span class="text-neutral-500">Billing:</span> ${billingBits.join(' · ')}</p>`);
+
+      lines.push(
+        `<p><span class="text-neutral-500">Modules:</span> ${b.modules && b.modules.length ? b.modules.join(', ') : '(none)'}</p>`
+      );
+      if (b.reminder_rule) {
+        const rr = b.reminder_rule;
+        const bits: string[] = [];
+        if (rr.before_due_days?.length) bits.push(`before: ${rr.before_due_days.join(', ')}`);
+        if (rr.after_due_days?.length) bits.push(`after: ${rr.after_due_days.join(', ')}`);
+        lines.push(`<p><span class="text-neutral-500">Reminders:</span> ${bits.join(' · ') || '(default)'}</p>`);
+      }
+      if (b.passthrough_rule) {
+        const pr = b.passthrough_rule;
+        const count = pr.categories?.length ?? 0;
+        lines.push(
+          `<p><span class="text-neutral-500">Passthrough:</span> ${count} categor${count === 1 ? 'y' : 'ies'} · default=${pr.default_action}</p>`
+        );
+      }
+      if (b.service_type && milestoneTemplateMap[b.service_type]) {
+        const tpl = milestoneTemplateMap[b.service_type];
+        if (tpl.length > 0) {
+          lines.push(
+            `<p><span class="text-neutral-500">Milestones:</span> ${tpl.length} seeded from ${b.service_type}</p>`
+          );
+        }
+      }
+      return `<div class="p-3 border border-white/5 rounded-md space-y-1">${lines.join('')}</div>`;
+    }
+
+    function renderReview() {
+      const clientEnv = collectClientLevelPayload();
+      const clientLabel =
+        clientMode === 'existing'
+          ? (document.querySelector<HTMLSelectElement>('#wiz-existing-client')!.selectedOptions[0]?.text ?? '(none)')
+          : `${val('wiz-new-client-name')} [new]`;
+
+      const lines: string[] = [];
+      lines.push(`<p><span class="text-neutral-500">Client:</span> <span class="text-neutral-100">${clientLabel}</span></p>`);
+      if (clientEnv.client_profile) {
+        const bits: string[] = [];
+        const cp = clientEnv.client_profile as Record<string, unknown>;
+        if (cp.primary_url) bits.push(`url ${cp.primary_url}`);
+        if (cp.primary_contact_email) bits.push(`email ${cp.primary_contact_email}`);
+        if (cp.brand_accent) bits.push(`accent ${cp.brand_accent}`);
+        if (cp.reading_level_target !== undefined) bits.push(`level ${cp.reading_level_target}`);
+        if (bits.length) lines.push(`<p><span class="text-neutral-500">Profile:</span> ${bits.join(' · ')}</p>`);
+      }
+
+      const enabled = clientEnv.data_sources.filter((d: any) => d.enabled);
+      const disabled = clientEnv.data_sources.filter((d: any) => !d.enabled);
+      lines.push(
+        `<p><span class="text-neutral-500">Data sources:</span> ${enabled.length} enabled${enabled.length ? ' (' + enabled.map((d: any) => d.source).join(', ') + ')' : ''} · ${disabled.length} placeholders (applied to every contract)</p>`
+      );
+
+      if (clientEnv.contacts) {
+        const billingCount = clientEnv.contacts.filter((c: any) => c.roles.includes('billing')).length;
+        const remCount = clientEnv.contacts.filter((c: any) => c.receives_reminders).length;
+        lines.push(
+          `<p><span class="text-neutral-500">Contacts:</span> ${clientEnv.contacts.length} · ${billingCount} billing · ${remCount} receive reminders</p>`
+        );
+      }
+
+      // Build the full contracts list: all staged + the current form
+      // block if it has a title.
+      const currentBlock = snapshotCurrentBlock();
+      const allBlocks: ContractBlock[] = [...stagedBlocks];
+      if (currentBlock) allBlocks.push(currentBlock);
+
+      lines.push(
+        `<p class="mt-4"><span class="text-neutral-500">Contracts to provision:</span> ${allBlocks.length}</p>`
+      );
+
+      const blocksHtml = allBlocks
+        .map((b, i) => renderBlockSummary(b, i, allBlocks.length))
+        .join('');
+      lines.push(`<div class="space-y-2 mt-2">${blocksHtml}</div>`);
+
+      if (allBlocks.length === 0) {
+        lines.push(
+          `<p class="text-red-400">No contracts to submit. Go back and enter at least one contract title.</p>`
+        );
+      }
+
+      reviewHost.innerHTML = lines.join('\n');
+    }
+
+    function render() {
+      for (const s of document.querySelectorAll<HTMLElement>('[data-step]')) {
+        s.classList.toggle('hidden', Number(s.dataset.step) !== currentStep);
+      }
+      for (const lbl of document.querySelectorAll<HTMLElement>('[data-step-label]')) {
+        const n = Number(lbl.dataset.stepLabel);
+        lbl.className =
+          n === currentStep ? 'text-amber-400' : n < currentStep ? 'text-neutral-400' : 'text-neutral-600';
+      }
+      backBtn.disabled = currentStep === 0;
+      const isLast = currentStep === 5;
+      nextBtn.classList.toggle('hidden', isLast);
+      submitBtn.classList.toggle('hidden', !isLast);
+      if (isLast) renderReview();
+    }
+
+    nextBtn.addEventListener('click', () => {
+      const err = validateStep(currentStep);
+      if (err) { toast({ type: 'error', message: err }); return; }
+      currentStep = Math.min(5, currentStep + 1);
+      render();
+    });
+
+    backBtn.addEventListener('click', () => {
+      currentStep = Math.max(0, currentStep - 1);
+      render();
+    });
+
+    showBtn.addEventListener('click', () => {
+      wizard.classList.remove('hidden');
+      showBtn.classList.add('hidden');
+      currentStep = 0;
+      setClientMode('existing');
+      render();
+    });
+
+    cancelBtn.addEventListener('click', () => {
+      wizard.classList.add('hidden');
+      showBtn.classList.remove('hidden');
+    });
+
+    submitBtn.addEventListener('click', async () => {
+      // Final re-validation before we touch the network.
+      for (const s of [0, 4]) {
+        const err = validateStep(s);
+        if (err) {
+          currentStep = s;
+          render();
+          toast({ type: 'error', message: err });
+          return;
+        }
+      }
+
+      // Assemble the full contract block list: every staged block
+      // plus the in-progress form block if it has a title. Both
+      // staged and current blocks already went through validateStep
+      // 1+2 when they were entered, so no re-validation needed.
+      const current = snapshotCurrentBlock();
+      const blocks: ContractBlock[] = [...stagedBlocks];
+      if (current) blocks.push(current);
+
+      if (blocks.length === 0) {
+        // Nothing staged and no current title. Jump back to step 1.
+        currentStep = 1;
+        render();
+        toast({ type: 'error', message: 'Enter at least one contract title before submitting.' });
+        return;
+      }
+
+      // Validate billing on the current block if it exists (staged
+      // blocks were validated at stage time).
+      if (current) {
+        const err = validateStep(2);
+        if (err) {
+          currentStep = 2;
+          render();
+          toast({ type: 'error', message: err });
+          return;
+        }
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Creating…';
+
+      try {
+        const clientLevel = collectClientLevelPayload();
+
+        // Slice 15 — the POST handler routes the new envelope shape
+        // (contracts: [...]) to provisionClientIntake. The orchestrator
+        // handles new-client creation internally, so no pre-POST to
+        // /create-client is needed.
+        const envelope: any = {
+          ...clientLevel,
+          contracts: blocks,
+        };
+        if (clientMode === 'existing') {
+          envelope.client_id = val('wiz-existing-client');
+        } else {
+          envelope.new_client = {
+            name: val('wiz-new-client-name').trim(),
+            slug: val('wiz-new-client-slug').trim(),
+          };
+        }
+
+        const res = await fetch('/portal/api/admin/contracts/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify(envelope),
+        });
+
+        if (res.status === 201 || res.status === 207) {
+          const data = await res.json();
+          const succ = data.success_count ?? 0;
+          const fail = data.failure_count ?? 0;
+
+          if (fail === 0) {
+            toast({
+              type: 'success',
+              message: succ === 1 ? 'Contract created' : `${succ} contracts created`,
+            });
+            // Jump to the first successful contract's detail page.
+            const firstOk = (data.contracts || []).find((c: any) => c.success);
+            if (firstOk) {
+              setTimeout(() => {
+                window.location.href = `/portal/admin/contracts/${firstOk.contract_id}`;
+              }, 500);
+            } else {
+              setTimeout(() => location.reload(), 500);
+            }
+          } else {
+            // Partial success — show failed titles and keep the
+            // admin on the wizard so they can see what went wrong.
+            const failed = (data.contracts || [])
+              .filter((c: any) => !c.success)
+              .map((c: any) => `${c.title}: ${c.error}`)
+              .join('; ');
+            toast({
+              type: 'error',
+              message: `${succ} of ${succ + fail} contracts created. Failed: ${failed}`,
+            });
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Create contract';
+          }
+        } else {
+          const err = await res.json().catch(() => ({ error: 'Create contract failed' }));
+          toast({ type: 'error', message: err.error || 'Create contract failed' });
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Create contract';
+        }
+      } catch (err) {
+        toast({ type: 'error', message: 'Network error — try again' });
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Create contract';
+      }
+    });
+
+    // Initial paint — sets stepper colors, button visibility, panels.
+    setClientMode('existing');
+    render();
+
+    // Generate invoices button (unchanged behaviour, lives on this page)
     document.getElementById('generate-invoices-btn')?.addEventListener('click', async () => {
       const res = await fetch('/portal/api/admin/billing/generate', {
         method: 'POST',
@@ -272,13 +1260,13 @@ const statusColors: Record<string, string> = {
       if (res.ok) {
         const data = await res.json();
         if (data.generated > 0) {
-          (window as any).__toast({ type: 'success', message: `Generated ${data.generated} invoice(s)` });
+          toast({ type: 'success', message: `Generated ${data.generated} invoice(s)` });
           setTimeout(() => location.reload(), 800);
         } else {
-          (window as any).__toast({ type: 'info', message: 'No invoices due right now' });
+          toast({ type: 'info', message: 'No invoices due right now' });
         }
       } else {
-        (window as any).__toast({ type: 'error', message: 'Failed to generate invoices' });
+        toast({ type: 'error', message: 'Failed to generate invoices' });
       }
     });
   </script>

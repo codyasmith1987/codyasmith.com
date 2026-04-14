@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { ingestCSV } from '../../../../lib/csv/index';
+import { ingestCSVViaSnapshots } from '../../../../lib/csv/ingest-v2';
 import { logger } from '../../../../lib/logger';
 import { logActivity } from '../../../../lib/activity';
 
@@ -7,6 +7,11 @@ export const prerender = false;
 
 const json = (data: any, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
+
+// Cut over to ingest-v2 (snapshot-based, idempotent by content_hash).
+// Response shape extended with a top-level `status` so the admin UI can
+// distinguish 'applied' / 'noop' / 'failed'. The old fields
+// (upload_id, format, row_count, error) are preserved for back-compat.
 
 export const POST: APIRoute = async ({ locals, request }) => {
   if (locals.user?.role !== 'admin') return json({ error: 'Forbidden' }, 403);
@@ -25,35 +30,44 @@ export const POST: APIRoute = async ({ locals, request }) => {
       return json({ error: 'Only CSV files are accepted' }, 400);
     }
 
-    // 10MB size limit for CSV files
     if (file.size > 10 * 1024 * 1024) {
       return json({ error: 'CSV file must be under 10MB' }, 400);
     }
 
     const raw = await file.text();
-    const result = await ingestCSV(raw, clientId, month, file.name, locals.user.id);
+    const result = await ingestCSVViaSnapshots(raw, clientId, month, file.name, locals.user.id);
+
+    const summaryParts: string[] = [result.format];
+    if (result.status === 'noop') summaryParts.push('no-op: identical content already imported');
+    else if (result.status === 'failed') summaryParts.push(`failed: ${result.error ?? 'unknown'}`);
+    else summaryParts.push(`${result.rowCount} rows`);
 
     await logActivity({
       clientId,
       userId: locals.user!.id,
       action: 'uploaded',
       entityType: 'csv_upload',
-      entityId: result.uploadId,
-      summary: `${locals.user!.name} uploaded CSV "${file.name}" (${result.format}${result.error ? ', failed' : `, ${result.rowCount} rows`})`,
+      entityId: result.importId,
+      summary: `${locals.user!.name} uploaded CSV "${file.name}" (${summaryParts.join(', ')})`,
     });
 
-    if (result.error) {
-      return json({
-        upload_id: result.uploadId,
-        format: result.format,
-        row_count: result.rowCount,
-        error: result.error,
-        headers: result.headers,
-      }, 422);
+    if (result.status === 'failed') {
+      return json(
+        {
+          status: 'failed',
+          upload_id: result.importId,
+          format: result.format,
+          row_count: 0,
+          error: result.error,
+          headers: result.headers,
+        },
+        422
+      );
     }
 
     return json({
-      upload_id: result.uploadId,
+      status: result.status,
+      upload_id: result.importId,
       format: result.format,
       row_count: result.rowCount,
     });

@@ -4,12 +4,23 @@ import ClientSelector from '../../components/portal/ClientSelector.astro';
 import StateLoading from '../../components/portal/StateLoading.astro';
 import StateError from '../../components/portal/StateError.astro';
 import StateEmpty from '../../components/portal/StateEmpty.astro';
+import ClientSummary from '../../components/portal/ClientSummary.astro';
 import { getAllClients } from '../../lib/auth';
+import { buildKeywordsSummary } from '../../lib/client-page-summary';
 export const prerender = false;
 
 const user = Astro.locals.user!;
 const isAdmin = user.role === 'admin';
 const clients = isAdmin ? await getAllClients() : [];
+
+// Slice 17 — plain-language summary at the top of the page. Server
+// rendered against the client's latest period data. Admins see the
+// first client's summary when no ?client_id is set, matching the
+// existing SPA widget's default.
+const selectedClientId = isAdmin
+  ? (Astro.url.searchParams.get('client_id') || clients[0]?.id || null)
+  : (user.client_id ?? null);
+const summary = selectedClientId ? await buildKeywordsSummary(selectedClientId) : null;
 ---
 
 <Portal title="Keywords">
@@ -29,6 +40,8 @@ const clients = isAdmin ? await getAllClients() : [];
         </select>
       </div>
     </div>
+
+    {summary && <ClientSummary summary={summary} />}
 
     <!-- Visibility summary -->
     <div id="kw-summary" class="mb-10 hidden kw-animate">

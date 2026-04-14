@@ -1,7 +1,9 @@
 ---
 import Portal from '../../layouts/Portal.astro';
+import ClientSummary from '../../components/portal/ClientSummary.astro';
 import { getFilesForClient, getAllFilesAdmin } from '../../lib/storage';
 import { getAllClients } from '../../lib/auth';
+import { buildFilesSummary } from '../../lib/client-page-summary';
 export const prerender = false;
 
 const user = Astro.locals.user!;
@@ -14,6 +16,13 @@ const files = isAdmin
     : [];
 
 const clients = isAdmin ? await getAllClients() : [];
+
+// Slice 17 — plain-language top summary. Reads the files table for
+// the client and reports what arrived in the past 30 days.
+const selectedClientId = isAdmin
+  ? (Astro.url.searchParams.get('client_id') || clients[0]?.id || null)
+  : (user.client_id ?? null);
+const summary = selectedClientId ? await buildFilesSummary(selectedClientId) : null;
 
 // Group files by month
 const byMonth = new Map<string, typeof files>();
@@ -43,6 +52,8 @@ function categoryLabel(cat: string): string {
 
 <Portal title="Files">
   <div class="max-w-4xl mx-auto">
+    {summary && <ClientSummary summary={summary} />}
+
     <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
       <div>
         <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Deliverables</p>

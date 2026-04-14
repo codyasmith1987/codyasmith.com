@@ -6,6 +6,10 @@ export const prerender = false;
 const json = (data: any, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 
+// Reads from issue_snapshots joined to periods. Collapses by issue_name
+// across sources (issues_overview + site_audit may both report the same
+// issue) using MAX(affected_urls) to keep the more detailed row.
+
 export const GET: APIRoute = async ({ locals, url }) => {
   if (!locals.user) return json({ error: 'Unauthorized' }, 401);
 
@@ -15,27 +19,34 @@ export const GET: APIRoute = async ({ locals, url }) => {
 
   if (!clientId) return json({ error: 'No client specified' }, 400);
 
-  // Get latest month
-  const monthResult = await turso.execute({
-    sql: 'SELECT DISTINCT month FROM site_issues WHERE client_id = ? ORDER BY month DESC LIMIT 1',
+  // Latest period with any issue data.
+  const periodResult = await turso.execute({
+    sql: `SELECT p.id, SUBSTR(p.period_start, 1, 7) AS month_label
+          FROM periods p
+          WHERE p.client_id = ?
+            AND EXISTS (SELECT 1 FROM issue_snapshots i WHERE i.period_id = p.id)
+          ORDER BY p.period_start DESC
+          LIMIT 1`,
     args: [clientId],
   });
 
-  if (monthResult.rows.length === 0) {
+  if (periodResult.rows.length === 0) {
     return json({ month: null, issues: [] });
   }
 
-  const month = monthResult.rows[0][0] as string;
+  const periodId = periodResult.rows[0][0] as string;
+  const month = periodResult.rows[0][1] as string;
 
-  // Deduplicate issues by name — when multiple tools report the same issue,
-  // keep the entry with the most affected URLs (usually the more detailed source)
   const result = await turso.execute({
-    sql: `SELECT issue_name, issue_type, priority, MAX(affected_urls) as affected_urls, MAX(pct_of_total) as pct_of_total, description, how_to_fix
-          FROM site_issues
-          WHERE client_id = ? AND month = ?
+    sql: `SELECT issue_name, issue_type, priority,
+                 MAX(affected_urls) AS affected_urls,
+                 MAX(pct_of_total) AS pct_of_total,
+                 description, how_to_fix
+          FROM issue_snapshots
+          WHERE client_id = ? AND period_id = ?
           GROUP BY issue_name
           ORDER BY affected_urls DESC`,
-    args: [clientId, month],
+    args: [clientId, periodId],
   });
 
   const issues = result.rows.map(row => ({

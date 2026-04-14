@@ -23,6 +23,9 @@ pnpm-debug.log*
 # database
 data/*.db
 
+# phase 1 backups (pre-migration snapshots of prod Turso)
+backups/
+
 # macOS-specific files
 .DS_Store
 

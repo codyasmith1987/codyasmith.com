@@ -6,6 +6,9 @@ export const prerender = false;
 const json = (data: any, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 
+// Reads from keyword_snapshots joined to periods. Response shape
+// unchanged: { month: 'YYYY-MM', keywords: [...] }.
+
 export const GET: APIRoute = async ({ locals, url }) => {
   if (!locals.user) return json({ error: 'Unauthorized' }, 401);
 
@@ -20,28 +23,34 @@ export const GET: APIRoute = async ({ locals, url }) => {
   const source = url.searchParams.get('source') || 'position_tracking';
   const limit = parseInt(url.searchParams.get('limit') || '100');
 
-  // Get latest month with keyword data
-  const monthResult = await turso.execute({
-    sql: 'SELECT DISTINCT month FROM keyword_rankings WHERE client_id = ? AND source = ? ORDER BY month DESC LIMIT 1',
+  // Latest period that has data for this source.
+  const periodResult = await turso.execute({
+    sql: `SELECT p.id, SUBSTR(p.period_start, 1, 7) AS month_label
+          FROM periods p
+          WHERE p.client_id = ?
+            AND EXISTS (SELECT 1 FROM keyword_snapshots k WHERE k.period_id = p.id AND k.source = ?)
+          ORDER BY p.period_start DESC
+          LIMIT 1`,
     args: [clientId, source],
   });
 
-  if (monthResult.rows.length === 0) {
+  if (periodResult.rows.length === 0) {
     return json({ month: null, keywords: [] });
   }
 
-  const month = monthResult.rows[0][0] as string;
+  const periodId = periodResult.rows[0][0] as string;
+  const month = periodResult.rows[0][1] as string;
 
   const validSort = ['position', 'search_volume', 'keyword', 'seo_difficulty'].includes(sort) ? sort : 'position';
   const validOrder = order.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
 
   const result = await turso.execute({
     sql: `SELECT keyword, position, search_volume, url, change_val, seo_difficulty
-          FROM keyword_rankings
-          WHERE client_id = ? AND month = ? AND source = ?
-          ORDER BY ${validSort} ${validOrder} NULLS LAST
+          FROM keyword_snapshots
+          WHERE client_id = ? AND period_id = ? AND source = ?
+          ORDER BY ${validSort} ${validOrder} NULLS LAST, keyword
           LIMIT ?`,
-    args: [clientId, month, source, limit],
+    args: [clientId, periodId, source, limit],
   });
 
   const keywords = result.rows.map(row => ({

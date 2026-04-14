@@ -1,0 +1,45 @@
+---
+// Plain-language top-of-page summary rendered across the four
+// client-visible module pages (keywords, health, files, invoices).
+// Driven by src/lib/client-page-summary.ts which returns a
+// ClientSummary: headline + bullets + optional callout.
+//
+// The component intentionally has no per-page variants — the same
+// block renders for all four pages so the voice stays consistent.
+// Admins and clients both see it; hiding it from admins is a
+// render-side decision the page makes, not this component.
+
+export interface Props {
+  summary: {
+    headline: string;
+    bullets: string[];
+    callout: string | null;
+  };
+}
+
+const { summary } = Astro.props;
+---
+
+<div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-10">
+  <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-3">
+    In plain English
+  </p>
+  <h2 class="font-serif text-xl md:text-2xl text-neutral-100 leading-relaxed mb-4">
+    {summary.headline}
+  </h2>
+  {summary.bullets.length > 0 && (
+    <ul class="space-y-1.5 text-sm text-neutral-400 leading-relaxed">
+      {summary.bullets.map((b) => (
+        <li class="flex items-start gap-2">
+          <span class="text-neutral-700 shrink-0">·</span>
+          <span>{b}</span>
+        </li>
+      ))}
+    </ul>
+  )}
+  {summary.callout && (
+    <p class="text-[12px] text-amber-400 mt-4 leading-relaxed">
+      {summary.callout}
+    </p>
+  )}
+</div>

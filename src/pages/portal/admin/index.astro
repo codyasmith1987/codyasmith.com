@@ -1,0 +1,242 @@
+---
+import Portal from '../../../layouts/Portal.astro';
+import { loadAdminQueue } from '../../../lib/admin-queue';
+import { getAllClients } from '../../../lib/auth';
+
+export const prerender = false;
+
+const user = Astro.locals.user!;
+if (user.role !== 'admin') {
+  return new Response('Forbidden', { status: 403 });
+}
+
+const csrfToken = Astro.locals.csrfToken ?? '';
+const queue = await loadAdminQueue();
+const activeClients = (await getAllClients()).filter((c) => c.active);
+
+// Sections that are real action items get the full dense render.
+// Sections that are empty are still shown but collapsed to one line,
+// because silence is not the same as "everything is fine" — the user
+// needs to see at a glance which signals are zero.
+
+const sections = queue.sections;
+const blockers = queue.blockers;
+const totalRows = sections.reduce((acc, s) => acc + s.count, 0) + blockers.length;
+
+// Tight order for the summary strip (matches section order + blockers first).
+const stripItems: Array<{ label: string; count: number; anchor: string; accent: string }> = [
+  { label: 'blockers', count: blockers.length, anchor: '#blockers', accent: blockers.length ? 'red' : 'neutral' },
+  { label: 'failed jobs', count: queue.counts.failed_jobs ?? 0, anchor: '#failed_jobs', accent: queue.counts.failed_jobs ? 'red' : 'neutral' },
+  { label: 'failed imports', count: queue.counts.failed_imports ?? 0, anchor: '#failed_imports', accent: queue.counts.failed_imports ? 'red' : 'neutral' },
+  { label: 'stale pending', count: queue.counts.stale_pending ?? 0, anchor: '#stale_pending', accent: queue.counts.stale_pending ? 'amber' : 'neutral' },
+  { label: 'late', count: queue.counts.late ?? 0, anchor: '#late', accent: queue.counts.late ? 'red' : 'neutral' },
+  { label: 'drafts', count: queue.counts.drafts ?? 0, anchor: '#drafts', accent: queue.counts.drafts ? 'amber' : 'neutral' },
+  { label: 'needs approval', count: queue.counts.unbilled_needs_approval ?? 0, anchor: '#unbilled_needs_approval', accent: queue.counts.unbilled_needs_approval ? 'red' : 'neutral' },
+  { label: 'manual review', count: queue.counts.unbilled_manual_review ?? 0, anchor: '#unbilled_manual_review', accent: queue.counts.unbilled_manual_review ? 'amber' : 'neutral' },
+  { label: 'auto-bill', count: queue.counts.unbilled_auto_bill ?? 0, anchor: '#unbilled_auto_bill', accent: 'neutral' },
+  { label: 'overdue ms', count: queue.counts.overdue_milestones ?? 0, anchor: '#overdue_milestones', accent: queue.counts.overdue_milestones ? 'red' : 'neutral' },
+  { label: 'upcoming ms', count: queue.counts.upcoming_milestones ?? 0, anchor: '#upcoming_milestones', accent: queue.counts.upcoming_milestones ? 'amber' : 'neutral' },
+  { label: 'due soon', count: queue.counts.due_soon ?? 0, anchor: '#due_soon', accent: 'neutral' },
+  { label: 'expired', count: queue.counts.expired ?? 0, anchor: '#expired', accent: queue.counts.expired ? 'red' : 'neutral' },
+  { label: 'expiring', count: queue.counts.expiring ?? 0, anchor: '#expiring', accent: queue.counts.expiring ? 'amber' : 'neutral' },
+  { label: 'approvals', count: queue.counts.pending_approvals ?? 0, anchor: '#pending_approvals', accent: queue.counts.pending_approvals ? 'amber' : 'neutral' },
+  { label: 'no automation', count: queue.counts.missing_automation ?? 0, anchor: '#missing_automation', accent: queue.counts.missing_automation ? 'red' : 'neutral' },
+  { label: 'locked periods', count: queue.counts.locked_periods ?? 0, anchor: '#locked_periods', accent: 'neutral' },
+];
+
+function accentBg(a: string, n: number) {
+  if (n === 0) return 'bg-neutral-900/40 text-neutral-600 border-white/5';
+  if (a === 'red') return 'bg-red-500/10 text-red-300 border-red-500/30';
+  if (a === 'amber') return 'bg-amber-500/10 text-amber-300 border-amber-500/30';
+  return 'bg-neutral-800 text-neutral-200 border-white/10';
+}
+---
+
+<Portal title="Admin · Queue">
+  <div class="max-w-5xl mx-auto">
+    <header class="mb-8 flex items-start justify-between gap-4 flex-wrap">
+      <div>
+        <p class="text-[11px] uppercase tracking-widest text-neutral-600 mb-1">admin · action queue</p>
+        <h1 class="text-xl font-serif text-neutral-100 mb-1">What needs you now</h1>
+        <p class="text-[11px] text-neutral-600 font-mono">
+          {totalRows} item{totalRows === 1 ? '' : 's'} · generated {queue.generatedAt.split('T')[0]} {queue.generatedAt.split('T')[1].split('.')[0]}Z
+        </p>
+      </div>
+
+      {/* Global "view as client" entry point. Picking from the dropdown
+          navigates to /portal/dashboard?as_client=1&client_id=<id>, which
+          renders the real client-facing page with a preview banner. */}
+      {activeClients.length > 0 && (
+        <div class="flex items-center gap-2 shrink-0">
+          <label for="view-as-select" class="text-[10px] uppercase tracking-widest text-neutral-600 font-mono">
+            view as client
+          </label>
+          <select
+            id="view-as-select"
+            class="bg-neutral-900 border border-white/10 rounded px-2 py-1 text-[12px] text-neutral-200 font-mono focus:outline-none focus:border-amber-500/40"
+          >
+            <option value="">select…</option>
+            {activeClients.map((c) => (
+              <option value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+    </header>
+
+    {/* Top strip — one row of tight count chips */}
+    <div class="flex flex-wrap gap-1.5 mb-8">
+      {stripItems.map((item) => (
+        <a
+          href={item.anchor}
+          class={`border rounded px-2 py-1 text-[11px] font-mono ${accentBg(item.accent, item.count)} hover:brightness-125 transition-all`}
+        >
+          <span class="font-semibold tabular-nums">{item.count}</span>
+          <span class="ml-1 opacity-70">{item.label}</span>
+        </a>
+      ))}
+    </div>
+
+    {/* Blockers — first because they make every other number suspect */}
+    <section id="blockers" class="mb-10">
+      <h2 class="text-[11px] uppercase tracking-widest text-neutral-500 mb-3">
+        Operational blockers ({blockers.length})
+      </h2>
+      {blockers.length === 0 ? (
+        <p class="text-[11px] text-neutral-600 font-mono">None.</p>
+      ) : (
+        <ul class="space-y-2">
+          {blockers.map((b) => (
+            <li class={`border rounded-md p-3 ${b.severity === 'hard' ? 'border-red-500/30 bg-red-500/[0.04]' : 'border-amber-500/20 bg-amber-500/[0.02]'}`}>
+              <div class="flex items-start justify-between gap-3">
+                <div class="flex-1 min-w-0">
+                  <p class={`text-sm font-medium ${b.severity === 'hard' ? 'text-red-200' : 'text-amber-200'}`}>{b.title}</p>
+                  <p class="text-[11px] text-neutral-400 mt-1 leading-relaxed">{b.detail}</p>
+                  <p class="text-[11px] text-neutral-500 mt-1.5">
+                    <span class="text-neutral-400">next:</span> {b.action}
+                  </p>
+                </div>
+                <span class={`text-[9px] uppercase tracking-wider font-mono px-1.5 py-0.5 rounded shrink-0 ${b.severity === 'hard' ? 'bg-red-500/20 text-red-300' : 'bg-amber-500/15 text-amber-300'}`}>
+                  {b.severity}
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+
+    {/* Sections — ordered by consequence, empty sections shown as one-liner */}
+    {sections.map((s) => (
+      <section id={s.key} class="mb-8">
+        <div class="flex items-baseline justify-between mb-2">
+          <h2 class="text-[11px] uppercase tracking-widest text-neutral-500">
+            {s.label}
+          </h2>
+          <span class="text-[11px] font-mono text-neutral-600 tabular-nums">{s.count}</span>
+        </div>
+
+        {s.count === 0 ? (
+          <p class="text-[11px] text-neutral-600 font-mono">None.</p>
+        ) : (
+          <ul class="border border-white/5 rounded-md divide-y divide-white/5 bg-neutral-900/30">
+            {s.rows.map((row) => (
+              <li class="px-3 py-2.5 hover:bg-white/[0.02] transition-colors">
+                <div class="flex items-start gap-3">
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-baseline gap-2 flex-wrap">
+                      <p class="text-sm text-neutral-100 font-medium">{row.what}</p>
+                      <p class="text-[11px] text-neutral-500">· {row.where}</p>
+                      {row.meta && <p class="text-[11px] text-neutral-400 font-mono tabular-nums">· {row.meta}</p>}
+                    </div>
+                    <p class="text-[11px] text-neutral-500 mt-0.5 leading-relaxed truncate">{row.why}</p>
+                    <p class="text-[11px] text-neutral-600 mt-0.5">
+                      <span class="text-neutral-500">next:</span> {row.action}
+                    </p>
+                  </div>
+                  <div class="flex items-center gap-2 shrink-0 mt-1 flex-wrap">
+                    {(row.quickActions ?? []).map((qa) => {
+                      // Reject / delete actions use a red accent so Cody
+                      // can tell them apart from the green "approve"
+                      // button when both render side by side on a
+                      // needs_approval row.
+                      const isDestructive = qa.method === 'DELETE' || qa.label === 'reject';
+                      const cls = isDestructive
+                        ? 'text-[11px] text-red-400 hover:text-red-300 tracking-wide border border-red-500/30 bg-red-500/[0.04] hover:bg-red-500/10 rounded px-2 py-0.5 transition-colors'
+                        : 'text-[11px] text-emerald-400 hover:text-emerald-300 tracking-wide border border-emerald-500/30 bg-emerald-500/[0.04] hover:bg-emerald-500/10 rounded px-2 py-0.5 transition-colors';
+                      return (
+                        <button
+                          type="button"
+                          data-quick-action={JSON.stringify(qa)}
+                          class={cls}
+                        >
+                          {qa.label}
+                        </button>
+                      );
+                    })}
+                    {row.link && (
+                      <a
+                        href={row.link}
+                        class="text-[11px] text-amber-400 hover:text-amber-300 tracking-wide"
+                      >
+                        open →
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    ))}
+
+    <p class="text-[10px] text-neutral-700 font-mono mt-12 pt-4 border-t border-white/5">
+      admin queue reads live state on every request · no cache · no polling · refresh the page to re-aggregate
+    </p>
+  </div>
+
+  <script define:vars={{ csrfToken }}>
+    // View-as-client selector: on change, navigate to the preview URL.
+    // No fetch, no ajax — a full navigation so the server renders the
+    // real client-facing dashboard with the preview banner from the
+    // first byte.
+    const viewAs = document.getElementById('view-as-select');
+    if (viewAs) {
+      viewAs.addEventListener('change', (e) => {
+        const v = e.target.value;
+        if (!v) return;
+        window.location.href = `/portal/dashboard?as_client=1&client_id=${encodeURIComponent(v)}`;
+      });
+    }
+
+    // Quick-action buttons on queue rows. Each button carries a JSON
+    // descriptor in data-quick-action: { label, method, url, confirm? }.
+    // Confirm prompt if present, send request with CSRF token, reload.
+    document.querySelectorAll('[data-quick-action]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const raw = btn.getAttribute('data-quick-action');
+        if (!raw) return;
+        const qa = JSON.parse(raw);
+        if (qa.confirm && !window.confirm(qa.confirm)) return;
+        btn.setAttribute('disabled', 'true');
+        try {
+          const res = await fetch(qa.url, {
+            method: qa.method,
+            headers: { 'X-CSRF-Token': csrfToken },
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            alert(data.error || `Action failed (${res.status})`);
+            btn.removeAttribute('disabled');
+            return;
+          }
+          window.location.reload();
+        } catch (err) {
+          alert(`Request failed: ${err}`);
+          btn.removeAttribute('disabled');
+        }
+      });
+    });
+  </script>
+</Portal>

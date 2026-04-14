@@ -1,7 +1,30 @@
 import Papa from 'papaparse';
 import { nanoid } from 'nanoid';
 import turso from '../../turso';
+import type { ParseResult, StagedMetric } from '../types';
 
+// v2: pure staging.
+export function parseImageOptimizationV2(raw: string): ParseResult {
+  const result = Papa.parse(raw, { header: true, skipEmptyLines: true });
+  const rows = result.data as any[];
+  let totalImages = 0;
+  let totalImprovement = 0;
+  for (const row of rows) {
+    const pct = parseFloat(row['Percent Improvement']?.toString().replace('%', '') || '0');
+    if (!isNaN(pct)) {
+      totalImprovement += pct;
+      totalImages++;
+    }
+  }
+  const avgImprovement = totalImages > 0 ? totalImprovement / totalImages : 0;
+  const metrics: StagedMetric[] = [
+    { category: 'health', metric_key: 'total_images_audited', metric_value: totalImages },
+    { category: 'health', metric_key: 'avg_image_improvement_pct', metric_value: Math.round(avgImprovement * 100) / 100 },
+  ];
+  return { metrics };
+}
+
+// v1: legacy.
 export async function parse(raw: string, clientId: string, month: string, uploadId: string): Promise<number> {
   const result = Papa.parse(raw, { header: true, skipEmptyLines: true });
   const rows = result.data as any[];

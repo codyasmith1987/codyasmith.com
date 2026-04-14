@@ -1,6 +1,49 @@
 import { nanoid } from 'nanoid';
 import turso from '../../turso';
+import type { ParseResult, StagedMetric } from '../types';
 
+// v2: pure staging. Parses the Screaming Frog crawl_overview text report.
+export function parseCrawlOverviewV2(raw: string): ParseResult {
+  const lines = raw.replace(/\r\n/g, '\n').split('\n');
+  const metrics: StagedMetric[] = [];
+  const seen = new Set<string>();
+
+  const metricMap: Record<string, { category: string; key: string }> = {
+    'total urls': { category: 'crawl', key: 'total_urls' },
+    'total urls crawled': { category: 'crawl', key: 'urls_crawled' },
+    'total internal urls': { category: 'crawl', key: 'internal_urls' },
+    'total external urls': { category: 'crawl', key: 'external_urls' },
+  };
+
+  const pushUnique = (m: StagedMetric) => {
+    const k = `${m.category}|${m.metric_key}`;
+    if (seen.has(k)) return;
+    seen.add(k);
+    metrics.push(m);
+  };
+
+  for (const line of lines) {
+    const parts = line.split(',').map((s) => s.trim().replace(/^"|"$/g, ''));
+    if (parts.length < 2) continue;
+    const label = parts[0].toLowerCase();
+    const value = parseFloat(parts[1]);
+    if (isNaN(value)) continue;
+
+    // Exact equality: the v1 parser used `label.includes(pattern)` which
+    // caused 'total urls crawled' to match 'total urls' first and get
+    // swallowed. Preserved metric_map keys are the exact lowercased labels.
+    const meta = metricMap[label];
+    if (meta) {
+      pushUnique({ category: meta.category, metric_key: meta.key, metric_value: value });
+    }
+    if (label === 'html' || label === 'javascript' || label === 'css' || label === 'images') {
+      pushUnique({ category: 'crawl', metric_key: `resource_${label}`, metric_value: value });
+    }
+  }
+  return { metrics };
+}
+
+// v1: legacy.
 export async function parse(raw: string, clientId: string, month: string, uploadId: string): Promise<number> {
   // Crawl overview is a multi-section metadata file, not a flat CSV.
   // Parse key-value pairs and summary sections.

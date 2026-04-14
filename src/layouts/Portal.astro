@@ -3,6 +3,7 @@ import '../styles/global.css';
 import '../styles/portal.css';
 import ConfirmModal from '../components/portal/ConfirmModal.astro';
 import Toast from '../components/portal/Toast.astro';
+import { MODULE_KEYS, type ModuleKey } from '../lib/modules';
 
 export const prerender = false;
 
@@ -15,23 +16,50 @@ const user = Astro.locals.user;
 const csrfToken = Astro.locals.csrfToken || '';
 const currentPath = Astro.url.pathname;
 
-// Dashboard — always first
+// Slice 14a: if the client has set a brand_accent hex the middleware
+// already loaded it into locals. Validate it one more time at render
+// time (basic hex shape) so a poisoned DB value can't leak into the
+// page via a style attribute. Falls back to no accent — the default
+// amber theme — when null or malformed.
+const rawAccent = Astro.locals.brandAccent ?? null;
+const brandAccent =
+  rawAccent && /^#[0-9a-fA-F]{6}$/.test(rawAccent) ? rawAccent : null;
+
+// Slice 13 — enabledModules is populated by middleware for every
+// authenticated /portal/* request. Admins always get the full set.
+// Clients get the union of their active contracts' modules_json with
+// a DEFAULT_MODULES fallback. If somehow missing (e.g. a layout
+// rendered outside the middleware path), treat as full set so nav
+// doesn't collapse to nothing.
+const enabled: Set<ModuleKey> =
+  Astro.locals.enabledModules ?? new Set<ModuleKey>(MODULE_KEYS);
+const hasModule = (m: ModuleKey) => enabled.has(m);
+
+// Dashboard — always first, always on
 const topItems = [
   { href: '/portal/dashboard', label: 'Dashboard' },
 ];
 
-// Work section — client operational pages (shown to client users)
-const workItems = user?.role === 'client' ? [
-  { href: '/portal/projects', label: 'Projects' },
-  { href: '/portal/approvals', label: 'Approvals' },
-  { href: '/portal/invoices', label: 'Invoices' },
-] : [];
+// Work section — client operational pages (shown to client users).
+// Projects and Approvals are always-on client work items (not
+// module-gated); Invoices respects the `invoices` module flag.
+const workItems = user?.role === 'client'
+  ? [
+      { href: '/portal/projects', label: 'Projects' },
+      { href: '/portal/approvals', label: 'Approvals' },
+      ...(hasModule('invoices') ? [{ href: '/portal/invoices', label: 'Invoices' }] : []),
+    ]
+  : [];
 
-// Reports section — SEO reporting (shown to all users)
+// Reports section — each row is gated by its module flag. If a
+// client has a contract that disables rankings, the Keywords link
+// disappears from their nav AND the route is hard-gated by the
+// middleware. The whole section header only renders when at least
+// one item in it is enabled.
 const reportItems = [
-  { href: '/portal/keywords', label: 'Keywords' },
-  { href: '/portal/health', label: 'Site Health' },
-  { href: '/portal/files', label: 'Files' },
+  ...(hasModule('rankings') ? [{ href: '/portal/keywords', label: 'Keywords' }] : []),
+  ...(hasModule('health') ? [{ href: '/portal/health', label: 'Site Health' }] : []),
+  ...(hasModule('files') ? [{ href: '/portal/files', label: 'Files' }] : []),
 ];
 
 // Admin section (admin only)
@@ -71,12 +99,15 @@ const mobileLinkClass = (href: string) => [
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <meta name="csrf-token" content={csrfToken} />
   </head>
-  <body class="min-h-screen bg-neutral-950 text-neutral-300 font-sans">
+  <body class="min-h-screen bg-neutral-950 text-neutral-300 font-sans" style={brandAccent ? `--brand-accent: ${brandAccent}` : undefined}>
     <div class="flex min-h-screen">
       <!-- Sidebar -->
       <aside class="hidden md:flex w-64 flex-col bg-neutral-900/50 border-r border-white/5">
+        {brandAccent && (
+          <div class="h-0.5 w-full" style={`background: ${brandAccent}`}></div>
+        )}
         <div class="p-6 pb-5 border-b border-white/5">
-          <a href="/portal/dashboard" class="font-serif text-xl text-neutral-100 hover:text-amber-400 transition-colors duration-300">
+          <a href="/portal/dashboard" class="font-serif text-xl text-neutral-100 hover:text-amber-400 transition-colors duration-300" style={brandAccent ? `--hover-accent: ${brandAccent}` : undefined}>
             Cody Smith
           </a>
           <p class="text-[10px] text-neutral-600 font-mono tracking-[0.15em] uppercase mt-1.5">Client Portal</p>
@@ -98,12 +129,16 @@ const mobileLinkClass = (href: string) => [
             </>
           )}
 
-          <div class="pt-6 pb-2">
-            <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Reports</p>
-          </div>
-          {reportItems.map(item => (
-            <a href={item.href} class:list={linkClass(item.href)}>{item.label}</a>
-          ))}
+          {reportItems.length > 0 && (
+            <>
+              <div class="pt-6 pb-2">
+                <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Reports</p>
+              </div>
+              {reportItems.map(item => (
+                <a href={item.href} class:list={linkClass(item.href)}>{item.label}</a>
+              ))}
+            </>
+          )}
 
           {user?.role === 'admin' && (
             <>
@@ -170,12 +205,16 @@ const mobileLinkClass = (href: string) => [
                 ))}
               </>
             )}
-            <div class="pt-4 pb-1">
-              <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Reports</p>
-            </div>
-            {reportItems.map(item => (
-              <a href={item.href} class:list={mobileLinkClass(item.href)}>{item.label}</a>
-            ))}
+            {reportItems.length > 0 && (
+              <>
+                <div class="pt-4 pb-1">
+                  <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Reports</p>
+                </div>
+                {reportItems.map(item => (
+                  <a href={item.href} class:list={mobileLinkClass(item.href)}>{item.label}</a>
+                ))}
+              </>
+            )}
             {user?.role === 'admin' && (
               <>
                 <div class="pt-4 pb-1">

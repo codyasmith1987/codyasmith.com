@@ -4,12 +4,21 @@ import ClientSelector from '../../components/portal/ClientSelector.astro';
 import StateLoading from '../../components/portal/StateLoading.astro';
 import StateError from '../../components/portal/StateError.astro';
 import StateEmpty from '../../components/portal/StateEmpty.astro';
+import ClientSummary from '../../components/portal/ClientSummary.astro';
 import { getAllClients } from '../../lib/auth';
+import { buildHealthSummary } from '../../lib/client-page-summary';
 export const prerender = false;
 
 const user = Astro.locals.user!;
 const isAdmin = user.role === 'admin';
 const clients = isAdmin ? await getAllClients() : [];
+
+// Slice 17 — plain-language top summary. Reads issue_snapshots for
+// the most recent period and distills it into one takeaway.
+const selectedClientId = isAdmin
+  ? (Astro.url.searchParams.get('client_id') || clients[0]?.id || null)
+  : (user.client_id ?? null);
+const summary = selectedClientId ? await buildHealthSummary(selectedClientId) : null;
 ---
 
 <Portal title="Site Health">
@@ -22,6 +31,8 @@ const clients = isAdmin ? await getAllClients() : [];
       </div>
       {isAdmin && <ClientSelector clients={clients} />}
     </div>
+
+    {summary && <ClientSummary summary={summary} />}
 
     <!-- Health Score -->
     <div id="health-hero" class="mb-10 hidden health-animate">

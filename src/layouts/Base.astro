@@ -46,6 +46,7 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
     <ClientRouter />
     <script is:inline>
       (function() {
+        var root = document.documentElement;
         var t = new URLSearchParams(window.location.search).get('theme');
         if (t) localStorage.setItem('cs-theme', t);
         var saved = localStorage.getItem('cs-theme');
@@ -54,9 +55,25 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
           saved = saved + '-stars';
           localStorage.setItem('cs-theme', saved);
         }
-        if (saved) document.documentElement.setAttribute('data-theme', saved);
+        if (saved) root.setAttribute('data-theme', saved);
+
+        // First paint decision: does the quiz overlay show or not?
+        // Runs before <body> renders, so returning visitors never flash the quiz
+        // and first-time visitors never flash the raw page before the quiz appears.
+        var quizDone = localStorage.getItem('cs-quiz-done');
+        if (quizDone || t) {
+          root.classList.add('cs-no-quiz');
+        } else {
+          root.classList.add('quiz-active');
+        }
       })();
     </script>
+    <style is:inline>
+      html.cs-no-quiz #quiz { display: none !important; }
+      /* While the quiz is showing, keep page content rendered (the blur needs
+         to see it for reactive theming) but block scroll on the body. */
+      html.quiz-active, html.quiz-active body { overflow: hidden; }
+    </style>
   </head>
   <body class="min-h-screen flex flex-col">
     <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:px-4 focus:py-2 focus:bg-amber-500 focus:text-neutral-950 focus:text-sm focus:font-semibold focus:rounded-lg">
@@ -174,17 +191,6 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
           });
         }, { threshold: 0.1 });
         document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
-
-        // "gap" squeeze — spring animation triggered once on scroll-in
-        const squeezeObserver = new IntersectionObserver((entries) => {
-          entries.forEach(e => {
-            if (e.isIntersecting) {
-              (e.target as HTMLElement).classList.add('squeezed');
-              squeezeObserver.unobserve(e.target);
-            }
-          });
-        }, { threshold: 0.5 });
-        document.querySelectorAll('.word-squeeze').forEach(el => squeezeObserver.observe(el));
       }
 
       function initThemeSwitcher() {

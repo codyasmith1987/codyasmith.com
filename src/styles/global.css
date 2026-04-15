@@ -449,8 +449,8 @@
     --quiz-accent: var(--color-amber-500, #c47d5a);
     --quiz-accent-hover: var(--color-amber-400, #d4926a);
     --quiz-text: #f0e8df;
-    --quiz-text-muted: #a69a8e;
-    --quiz-text-dim: #847a6e;
+    --quiz-text-muted: #cfc4b8;
+    --quiz-text-dim: #a69a8e;
     --quiz-border: rgba(255,255,255,0.08);
     --quiz-border-hover: rgba(255,255,255,0.15);
   }
@@ -490,18 +490,7 @@
     background: color-mix(in srgb, var(--quiz-accent) 5%, transparent);
   }
 
-  .quiz-input {
-    border-color: var(--quiz-border);
-    color: var(--quiz-text);
-    transition: border-color 0.3s;
-  }
-  .quiz-input:focus { border-color: var(--quiz-accent); }
-
-  .quiz-skip {
-    color: var(--quiz-text-dim);
-    transition: color 0.3s;
-  }
-  .quiz-skip:hover, .quiz-skip:focus-visible { color: var(--quiz-text-muted); }
+  /* .quiz-input and .quiz-skip live outside @layer components — see below */
 
   .reveal {
     opacity: 0;
@@ -529,8 +518,6 @@
       transform: none;
       will-change: auto;
     }
-    .word-squeeze { animation: none; }
-    .word-dated::after { animation: none; }
     .story-section, .trophy-row, .sim-result, .checkup-card,
     .kw-animate, .health-animate, .csv-result {
       opacity: 1 !important;
@@ -652,58 +639,6 @@
 
   /* Growth field uses backdrop-filter — see src/lib/growth-field.ts */
 
-  /* ============================================
-     KINETIC TYPOGRAPHY — "outgrew"
-     Layered color treatment with grain and erosion
-     ============================================ */
-  .word-dated {
-    color: var(--color-dated);
-    font-style: italic;
-    letter-spacing: -0.02em;
-    text-shadow: 0 1px 0 color-mix(in srgb, var(--color-dated) 25%, transparent);
-  }
-
-  /* ============================================
-     KINETIC TYPOGRAPHY — "gap" squeeze
-     Spring physics with overshoot
-     ============================================ */
-  .word-squeeze {
-    display: inline-block;
-    transform-origin: center;
-    will-change: transform;
-  }
-
-  .word-squeeze.squeezed {
-    animation: gap-squeeze 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  }
-
-  @keyframes gap-squeeze {
-    0% {
-      transform: scaleX(1) scaleY(1);
-      letter-spacing: 0em;
-    }
-    /* Compress hard */
-    25% {
-      transform: scaleX(0.55) scaleY(1.12);
-      letter-spacing: -0.08em;
-    }
-    /* Overshoot wide */
-    50% {
-      transform: scaleX(1.08) scaleY(0.96);
-      letter-spacing: 0.02em;
-    }
-    /* Settle slightly compressed */
-    70% {
-      transform: scaleX(0.92) scaleY(1.02);
-      letter-spacing: -0.01em;
-    }
-    /* Rest at natural */
-    100% {
-      transform: scaleX(1) scaleY(1);
-      letter-spacing: 0em;
-    }
-  }
-
   /* Dot grid */
   .dot-grid {
     background-image: radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
@@ -757,4 +692,170 @@
     background-color: var(--color-amber-500);
     color: var(--color-neutral-950);
   }
+}
+
+/* ============================================
+   QUIZ FORM — UNLAYERED so Tailwind utilities
+   can't beat these via the cascade. Fully self-
+   contained: do not add utility classes to the
+   input or skip elements in Quiz.astro.
+   ============================================ */
+#quiz .quiz-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.85rem 1rem;
+  font-size: 1rem;
+  font-family: inherit;
+  color: #f0e8df;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(240, 232, 223, 0.50);
+  border-radius: 0.5rem;
+  outline: none;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+#quiz .quiz-input::placeholder {
+  color: rgba(240, 232, 223, 0.65);
+  opacity: 1;
+}
+#quiz .quiz-input:hover {
+  border-color: rgba(240, 232, 223, 0.70);
+  background: rgba(255, 255, 255, 0.10);
+}
+#quiz .quiz-input:focus {
+  border-color: var(--quiz-accent, #c47d5a);
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--quiz-accent, #c47d5a) 25%, transparent);
+}
+
+#quiz .quiz-skip {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 1rem;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: rgba(240, 232, 223, 0.75);
+  background: transparent;
+  border: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+#quiz .quiz-skip:hover,
+#quiz .quiz-skip:focus-visible {
+  color: #f0e8df;
+}
+
+/* ============================================
+   QUIZ LEAD CAPTURE CARD — persona end state
+   High-contrast warm gradient panel so the
+   inputs read unambiguously against any theme.
+   ============================================ */
+#quiz .quiz-lead-card {
+  max-width: 26rem;
+  margin: 0 auto;
+  padding: 2.25rem 2rem 1.75rem;
+  border-radius: 1.25rem;
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--quiz-accent, #c47d5a) 18%, #1a1614) 0%,
+      #120f0d 55%,
+      color-mix(in srgb, var(--quiz-accent, #c47d5a) 10%, #0d0b0a) 100%
+    );
+  border: 1px solid color-mix(in srgb, var(--quiz-accent, #c47d5a) 45%, transparent);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+  text-align: center;
+}
+
+#quiz .quiz-lead-label {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--quiz-accent, #c47d5a);
+  margin: 0 0 1.25rem;
+}
+
+#quiz .quiz-lead-heading {
+  font-family: var(--font-serif, Georgia, serif);
+  font-size: clamp(1.65rem, 4vw, 2.1rem);
+  line-height: 1.15;
+  color: #fff8ef;
+  margin: 0 0 0.6rem;
+}
+
+#quiz .quiz-lead-sub {
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #d8ccbd;
+  margin: 0 0 1.75rem;
+}
+
+#quiz .quiz-lead-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+/* Inverted inputs: cream fill, near-black text — unmistakable contrast */
+#quiz .quiz-lead-form .quiz-input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.95rem 1.1rem;
+  font-size: 1rem;
+  font-family: inherit;
+  color: #1a1410;
+  background: #f5ede0;
+  border: 1.5px solid color-mix(in srgb, var(--quiz-accent, #c47d5a) 55%, transparent);
+  border-radius: 0.6rem;
+  outline: none;
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+  text-align: left;
+}
+#quiz .quiz-lead-form .quiz-input::placeholder {
+  color: #7a6a58;
+  opacity: 1;
+}
+#quiz .quiz-lead-form .quiz-input:hover {
+  background: #fbf4e8;
+}
+#quiz .quiz-lead-form .quiz-input:focus {
+  background: #ffffff;
+  border-color: var(--quiz-accent, #c47d5a);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--quiz-accent, #c47d5a) 30%, transparent);
+}
+
+#quiz .quiz-lead-submit {
+  display: block;
+  width: 100%;
+  padding: 1rem 1.5rem;
+  margin-top: 0.35rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #15120f;
+  background: linear-gradient(
+    135deg,
+    var(--quiz-accent, #c47d5a) 0%,
+    color-mix(in srgb, var(--quiz-accent, #c47d5a) 80%, #ffffff) 100%
+  );
+  border: none;
+  border-radius: 0.6rem;
+  cursor: pointer;
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--quiz-accent, #c47d5a) 35%, transparent);
+  transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+#quiz .quiz-lead-submit:hover,
+#quiz .quiz-lead-submit:focus-visible {
+  filter: brightness(1.08);
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--quiz-accent, #c47d5a) 45%, transparent);
+  transform: translateY(-1px);
 }

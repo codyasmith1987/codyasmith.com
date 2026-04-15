@@ -37,8 +37,11 @@ import { parseCrawlOverviewV2 } from './parsers/crawl-overview';
 import { parseImageOptimizationV2 } from './parsers/image-optimization';
 import { parseSiteAuditV2 } from './parsers/site-audit';
 import { parseAccessibilityV2 } from './parsers/accessibility';
+import { parseScreamingFrogResponseCodesV2 } from './parsers/screaming-frog-response-codes';
 
-// Snapshot target per format. All 8 parsers now supported by ingest-v2.
+// Snapshot target per format. All 8 Ubersuggest parsers plus the
+// Slice 18h Screaming Frog response-codes parser are supported by
+// ingest-v2.
 const SNAPSHOT_TARGET: Partial<Record<CsvFormat, { tables: Array<'keyword_snapshots' | 'issue_snapshots' | 'metric_snapshots'> }>> = {
   position_tracking: { tables: ['keyword_snapshots'] },
   keyword_research: { tables: ['keyword_snapshots'] },
@@ -48,6 +51,7 @@ const SNAPSHOT_TARGET: Partial<Record<CsvFormat, { tables: Array<'keyword_snapsh
   image_optimization: { tables: ['metric_snapshots'] },
   site_audit: { tables: ['issue_snapshots'] },
   accessibility: { tables: ['metric_snapshots'] },
+  screaming_frog_response_codes: { tables: ['issue_snapshots'] },
 };
 
 // Which formats the v2 path owns today. Upload routing code can consult this.
@@ -115,6 +119,8 @@ function dispatchParser(format: CsvFormat, raw: string, filename: string): Parse
       return parseSiteAuditV2(raw, filename);
     case 'accessibility':
       return parseAccessibilityV2(raw);
+    case 'screaming_frog_response_codes':
+      return parseScreamingFrogResponseCodesV2(raw);
     default:
       throw new Error(`ingest-v2 has no parser for format ${format}`);
   }

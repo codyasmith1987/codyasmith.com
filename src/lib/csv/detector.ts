@@ -9,6 +9,7 @@ export type CsvFormat =
   | 'keyword_suggestions'
   | 'site_audit'
   | 'accessibility'
+  | 'screaming_frog_response_codes'
   | 'unknown';
 
 interface FormatSignature {
@@ -40,6 +41,13 @@ const SIGNATURES: FormatSignature[] = [
   {
     format: 'accessibility',
     requiredColumns: ['address', 'wcag 2.0 a violations'],
+  },
+  {
+    // Screaming Frog "Response Codes: All" export. Four-column
+    // signature keeps it distinct from every Ubersuggest format
+    // (none of which ship 'content type' + 'indexability').
+    format: 'screaming_frog_response_codes',
+    requiredColumns: ['address', 'content type', 'status code', 'indexability'],
   },
 ];
 

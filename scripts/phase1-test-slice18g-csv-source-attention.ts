@@ -173,9 +173,10 @@ async function main() {
   console.log();
 
   // Unit sanity: constants are sane and the inverse mapping is
-  // not accidentally empty.
+  // not accidentally empty. Slice 18h added screaming_frog_issues
+  // as the fourth kind with one format (screaming_frog_response_codes).
   eq(CSV_STALE_THRESHOLD_DAYS, 45, 'CSV_STALE_THRESHOLD_DAYS = 45');
-  eq(CSV_SOURCE_KINDS.length, 3, 'three CSV kinds in scope');
+  eq(CSV_SOURCE_KINDS.length, 4, 'four CSV kinds in scope');
   eq(
     CSV_KIND_FORMATS.ubersuggest_position_tracking.length,
     1,
@@ -190,6 +191,11 @@ async function main() {
     CSV_KIND_FORMATS.ubersuggest_site_audit.length,
     5,
     'site_audit maps to five formats'
+  );
+  eq(
+    CSV_KIND_FORMATS.screaming_frog_issues.length,
+    1,
+    'screaming_frog_issues maps to one format (response_codes_all)'
   );
 
   // The health rule is per (client_id, kind). We cannot use ZipKit

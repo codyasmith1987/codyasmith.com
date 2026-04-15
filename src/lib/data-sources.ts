@@ -55,6 +55,8 @@ export function csvFormatToDataSourceKind(format: string): DataSourceKind | null
     case 'site_audit':
     case 'accessibility':
       return 'ubersuggest_site_audit';
+    case 'screaming_frog_response_codes':
+      return 'screaming_frog_issues';
     default:
       return null;
   }

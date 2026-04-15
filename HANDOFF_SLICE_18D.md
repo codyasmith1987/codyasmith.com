@@ -273,6 +273,147 @@ traffic-aware.
 >   `imports` and `periods` tied to clients X/Y before deleting
 >   the clients themselves.
 
+> **Slice 18h landed on top of Slice 18g.** Screaming Frog is no
+> longer the missing source. 18g explicitly documented the gap
+> ("`screaming_frog_issues` still has no real parser/import/
+> heartbeat path in this repo"); 18h closes it with one honest
+> Screaming Frog export format wired end-to-end through the
+> existing CSV ingest pipeline into the existing issue truth.
+> What 18h made real:
+>
+> - **Supported Screaming Frog format: `screaming_frog_response_codes`.**
+>   The smallest honest move — one format, one parser, one
+>   downstream table. Other Screaming Frog exports (Internal HTML,
+>   audit sub-reports, crawl overview text report) still fall
+>   through to the existing `site_audit` filename-hint fallback
+>   unchanged. A future slice can lift additional sub-reports into
+>   dedicated parsers the same way.
+> - **Source export: Screaming Frog "Response Codes: All" CSV.**
+>   Detector signature keys on four unique columns:
+>   `address, content type, status code, indexability`. None of
+>   those overlap with any Ubersuggest signature, so the new format
+>   is matched by signature before any fallback catches it.
+> - **Destination truth: `issue_snapshots`.** No new schema — the
+>   existing per-issue-name-keyed shape with `affected_urls` as a
+>   count, `priority`, `pct_of_total`, `description`, `how_to_fix`
+>   is a perfect fit. The parser groups CSV rows by HTTP status
+>   bucket and emits one `StagedIssue` per non-empty non-2xx
+>   bucket. 2xx rows are counted toward the `pct_of_total`
+>   denominator but never produce a row — healthy URLs are not
+>   issues. Buckets:
+>   - `1xx` → `"Response Codes: Informational (1xx)"`, priority low
+>   - `3xx` → `"Response Codes: Redirection (3xx)"`, priority medium
+>   - **`4xx` → `"Response Codes: Internal Client Error (4xx)"`, priority critical.**
+>     This is byte-for-byte the string the narrator's broken-link
+>     sentence template at `src/lib/client-narrator.ts:451-458`
+>     looks for, so Screaming Frog data lights up the narrator's
+>     "N broken links on your pages are leading visitors to dead
+>     ends" sentence with zero narrator code changes.
+>   - `5xx` → `"Response Codes: Server Error (5xx)"`, priority critical
+>   - `0`/empty → `"Response Codes: Blocked or Unknown (no response)"`, priority medium
+> - **`screaming_frog_issues` binding heartbeat is now real**
+>   through `csvFormatToDataSourceKind('screaming_frog_response_codes')
+>   → 'screaming_frog_issues'` → the existing post-commit
+>   `touchBindingsForClient` block in `ingest-v2.ts:356-368`. Once
+>   the mapping line exists, the shared ingest-v2 heartbeat path
+>   fires automatically — no ingest-v2 code change was needed
+>   beyond wiring the parser dispatch. Proven in 18h.5 with a
+>   source-filter sanity check (the `screaming_frog_issues`
+>   binding gets stamped, a co-located
+>   `ubersuggest_position_tracking` binding on the same contract
+>   stays `NULL`).
+> - **`csv_source_attention` now honestly includes
+>   `screaming_frog_issues`.** `CSV_SOURCE_KINDS` grew from three
+>   to four elements, `CSV_KIND_FORMATS.screaming_frog_issues`
+>   points at `['screaming_frog_response_codes']`, the
+>   previously-documented exclusion note in the module header
+>   was rewritten to say "covered by Slice 18h". The existing
+>   three-rule priority cascade
+>   (`last_import_failed` → `never_imported` → `stale`) applies
+>   identically to the new kind — zero rule-logic change, zero
+>   assertion changes in 18g's rule-behavior cases. 18g's
+>   constants sanity preamble was updated to expect four kinds
+>   instead of three.
+> - **No schema changes.** No migration, no new column, no new
+>   table, no new endpoint, no new `DataSourceKind` variant
+>   (`'screaming_frog_issues'` was already declared but orphaned).
+> - **Still only one Screaming Frog export format supported in
+>   this slice.** Explicitly scoped. The other export sub-reports
+>   remain routed to the `site_audit` filename-hint fallback as
+>   they were pre-18h — that's a known approximation, not a
+>   regression.
+>
+> **Exact files touched by 18h:**
+>
+> - `src/lib/csv/parsers/screaming-frog-response-codes.ts` — new.
+>   Owns the five bucket definitions, the `bucketForStatus`
+>   HTTP-code classifier (numeric range checks with defensive
+>   handling of empty / non-numeric / `0` cases), the grouping
+>   loop, the `pct_of_total` rounding (one decimal place), the
+>   fixed emit-order cascade (`4xx, 5xx, 3xx, 1xx, none`) so
+>   output is deterministic regardless of Map insertion order,
+>   and the `parseScreamingFrogResponseCodesV2(raw): ParseResult`
+>   entry point the dispatch switch calls.
+> - `src/lib/csv/detector.ts` — added `'screaming_frog_response_codes'`
+>   to the `CsvFormat` union and one `SIGNATURES` entry. No
+>   change to `detectFormat`'s control flow; the new signature
+>   is picked up by the existing `for (const sig of SIGNATURES)`
+>   loop and the match runs before every fallback block so the
+>   new format wins over the pre-existing
+>   `type + source + status code` and `response_code` filename
+>   heuristics that previously routed Screaming Frog CSVs to the
+>   `site_audit` approximation.
+> - `src/lib/csv/ingest-v2.ts` — three additive edits. Imported
+>   the new parser, added the `SNAPSHOT_TARGET` entry
+>   `screaming_frog_response_codes: { tables: ['issue_snapshots'] }`,
+>   added one dispatch case to `dispatchParser`. The apply step,
+>   period resolution, import row lifecycle, post-commit
+>   `touchBindingsForClient` block, and transactional replace
+>   are unchanged because the existing generic paths already
+>   handle every `StagedIssue[]` shape.
+> - `src/lib/data-sources.ts` — one new `switch` case in
+>   `csvFormatToDataSourceKind`:
+>   `'screaming_frog_response_codes' → 'screaming_frog_issues'`.
+>   The `DataSourceKind` union already contained the kind, so
+>   no type change. **This is the single line that activates
+>   the heartbeat path** — once the mapping exists, the already-
+>   present post-commit call to `touchBindingsForClient` stamps
+>   `last_seen_at` on every matching binding.
+> - `src/lib/jobs/csv-source-health.ts` — added
+>   `'screaming_frog_issues'` to `CSV_SOURCE_KINDS` and
+>   `CSV_KIND_FORMATS`, and rewrote the module header to reflect
+>   that the kind is now covered. No rule-cascade change, no
+>   `classifyBinding` change, no SELECT change — the existing
+>   generic CSV health path picked up the new kind via the
+>   `CSV_SOURCE_KINDS` IN-list and the `CSV_KIND_FORMATS` lookup.
+> - `scripts/phase1-test-slice18g-csv-source-attention.ts` —
+>   bumped `CSV_SOURCE_KINDS.length` from 3 to 4 and added one
+>   `CSV_KIND_FORMATS.screaming_frog_issues.length === 1` sanity
+>   check. The 18g rule-behavior cases were not changed because
+>   they filter section rows by specific test binding ids and
+>   don't interact with the new kind.
+> - `scripts/phase1-test-slice18h-screaming-frog.ts` — new.
+>   Seven assertion blocks: (1) detector signature match, (2)
+>   parser groups 9-row fixture into 4xx/5xx/3xx/no-response
+>   buckets with exact counts, priorities, and pct_of_total
+>   rounded to one decimal, (3) parser skips healthy-only
+>   fixtures, (4) `csvFormatToDataSourceKind` mapping, (5) full
+>   `ingestCSVViaSnapshots` end-to-end — ZipKit at far-future
+>   period `2099-10`, preflight guard, synthetic contract with
+>   BOTH a `screaming_frog_issues` binding and a
+>   `ubersuggest_position_tracking` binding (for source-filter
+>   proof), null-out heartbeats before the call, assert the
+>   `screaming_frog_issues` binding gets stamped within 5 minutes
+>   and the PT binding stays NULL, (6) run the narrator's exact
+>   `loadRankedIssues` SELECT shape against the ingested rows
+>   and assert the 4xx row comes back with `priority='critical'`
+>   and `affected_urls=3`, (7) spin up a second synthetic client
+>   with a fresh never-imported `screaming_frog_issues` binding
+>   and assert `loadCsvSourceAttentionSection()` now surfaces it
+>   with the expected "never been imported" phrasing. Cleanup
+>   in try/finally via tracked ids + belt-and-braces deletes,
+>   plus explicit teardown of the synthetic second client.
+
 ## Exact landed slices in this run
 
 - **Slice 15** — multi-contract intake (`provisionClientIntake`, envelope POST

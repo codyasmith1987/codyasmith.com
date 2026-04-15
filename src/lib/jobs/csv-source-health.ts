@@ -1,17 +1,16 @@
 // Slice 18g — CSV data-source health detector.
+// Slice 18h — extended to include screaming_frog_issues once
+// parseScreamingFrogResponseCodesV2 and its detector/dispatch/
+// touchBindingsForClient path became real.
 //
 // Surfaces enabled non-Google data_source_bindings whose CSV
-// heartbeat is missing, broken, or stale. Only covers source kinds
-// that already have a real parser + import path in this repo:
+// heartbeat is missing, broken, or stale. Covers every source
+// kind that has a real parser + import path in this repo:
 //
 //   - ubersuggest_position_tracking
 //   - ubersuggest_keyword_research
 //   - ubersuggest_site_audit
-//
-// screaming_frog_issues is intentionally excluded — no parser
-// exists in src/lib/csv/detector.ts, csvFormatToDataSourceKind
-// never returns that kind, and touchBindingsForClient therefore
-// never stamps it. Including it would require fake heuristics.
+//   - screaming_frog_issues     (Slice 18h — response_codes_all)
 //
 // Priority order (one row per binding, highest-priority match wins):
 //
@@ -46,6 +45,7 @@ export const CSV_SOURCE_KINDS = [
   'ubersuggest_position_tracking',
   'ubersuggest_keyword_research',
   'ubersuggest_site_audit',
+  'screaming_frog_issues',
 ] as const;
 
 export type CsvSourceKind = (typeof CSV_SOURCE_KINDS)[number];
@@ -63,6 +63,7 @@ export const CSV_KIND_FORMATS: Record<CsvSourceKind, readonly string[]> = {
     'site_audit',
     'accessibility',
   ],
+  screaming_frog_issues: ['screaming_frog_response_codes'],
 };
 
 export type CsvBindingHealthReason =

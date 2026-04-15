@@ -10,6 +10,7 @@
 import turso from './turso';
 import { getLockedPeriods } from './periods';
 import { loadGoogleSyncAttentionSection } from './jobs/google-sync-health';
+import { loadCsvSourceAttentionSection } from './jobs/csv-source-health';
 
 // --- Types ---
 
@@ -575,7 +576,16 @@ export async function loadAdminQueue(): Promise<AdminQueue> {
   // stale threshold live in src/lib/jobs/google-sync-health.ts.
   const googleSyncAttention = await loadGoogleSyncAttentionSection();
 
-  // 12. Locked periods (Slice 16) — spine-integrity signal.
+  // 12. CSV data sources needing attention (Slice 18g) —
+  // surfaces enabled non-Google CSV bindings whose most recent
+  // import failed, whose upload has never happened, or whose
+  // latest applied import is older than the stale threshold.
+  // Only the three Ubersuggest kinds that actually have parsers
+  // + heartbeat paths in this repo. Rules and threshold live in
+  // src/lib/jobs/csv-source-health.ts.
+  const csvSourceAttention = await loadCsvSourceAttentionSection();
+
+  // 13. Locked periods (Slice 16) — spine-integrity signal.
   // Every month Cody has frozen surfaces here with an unlock quick
   // action. No count alarm, no red — locked is a feature, not a
   // failure. The row exists so admins see at a glance which months
@@ -695,6 +705,7 @@ export async function loadAdminQueue(): Promise<AdminQueue> {
     pendingApprovals,
     missingAuto,
     googleSyncAttention,
+    csvSourceAttention,
     lockedPeriodsSection,
   ];
 

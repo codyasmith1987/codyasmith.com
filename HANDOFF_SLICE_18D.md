@@ -164,6 +164,115 @@ traffic-aware.
 >   Cleanup deletes every test scheduled_job both by tracked id and
 >   via belt-and-braces `payload_json LIKE` sweeps.
 
+> **Slice 18g landed on top of Slice 18f.** Non-Google data-source
+> visibility in the admin queue. 18f gave Cody one place to see
+> unhealthy GSC/GA4 bindings; 18g closes the matching blind spot for
+> CSV-driven sources so every enabled data feed on the platform has
+> a real health row when it needs attention. What 18g made real:
+>
+> - **Admin queue section `csv_source_attention`.** New entry in
+>   `loadAdminQueue()`'s `sections[]` array, positioned between
+>   `google_sync_attention` and `locked_periods` (the silent-failure
+>   canary neighborhood). Label: "CSV data sources needing attention".
+>   Count flows into `queue.counts.csv_source_attention` automatically
+>   via the existing count-assembly loop. Additive to
+>   `google_sync_attention` — not a rename, not a replacement.
+> - **Included source kinds (three, all Ubersuggest):**
+>   - `ubersuggest_position_tracking`
+>   - `ubersuggest_keyword_research`
+>   - `ubersuggest_site_audit`
+> - **Excluded source kind: `screaming_frog_issues`.** Verified
+>   directly in the repo at 18g time — still has no parser in
+>   `src/lib/csv/detector.ts`, still never returned by
+>   `csvFormatToDataSourceKind` in `src/lib/data-sources.ts`, still
+>   never reaches `touchBindingsForClient` in
+>   `src/lib/csv/ingest-v2.ts:359`, still only appears in tests with
+>   `enabled: false`. Including it would force invented heuristics.
+>   When a future slice adds a Screaming Frog parser and wires the
+>   heartbeat, `CSV_SOURCE_KINDS` and `CSV_KIND_FORMATS` in the
+>   health module are the only two constants that need to change.
+> - **Three health rules in strict priority order**, one row per binding:
+>   1. **`last_import_failed`** — the most recent `imports` row for
+>      `(client_id, kind's format set)` has `status='failed'`. The
+>      `why` line echoes the failure tail (truncated to 140 chars)
+>      so Cody sees the real parse error in the queue. This is the
+>      honest per-binding failure linkage — not truly per-binding
+>      since `imports` has no `binding_id` column (it's keyed on
+>      `(client_id, source)` where `source` is the raw format name),
+>      but effectively 1:1 in production thanks to
+>      `UNIQUE(contract_id, source)` + one-retainer-per-client. The
+>      module docstring states the pathological two-retainers-same-
+>      client case explicitly — no fake per-binding attribution.
+>   2. **`never_imported`** — no import row exists at all AND
+>      `last_seen_at IS NULL`. Bound but nothing ever uploaded.
+>   3. **`stale`** — most recent import row is `applied` but its
+>      `started_at` is older than `CSV_STALE_THRESHOLD_DAYS`. Uses
+>      `imports.started_at` (transactionally written by ingest-v2)
+>      as the effective heartbeat rather than
+>      `data_source_bindings.last_seen_at` (best-effort post-commit
+>      touch that can silently fail).
+> - **`CSV_STALE_THRESHOLD_DAYS = 45`** in
+>   `src/lib/jobs/csv-source-health.ts`. Same as Google's threshold.
+>   CSV uploads are ad-hoc with no scheduler, so there's no natural
+>   cadence in the repo to anchor a per-source number to. 45 is the
+>   honest minimum for "at least one monthly cycle plus buffer has
+>   passed without a fresh CSV." Single constant, single source of
+>   truth — a future slice can split per-kind in one place when
+>   there's real cadence evidence.
+> - **Healthy and disabled bindings stay silent.** A binding whose
+>   most recent import is `applied` and within the freshness window
+>   returns null from `classifyBinding` and never hits the `rows[]`
+>   array. Pending imports are silent because the existing
+>   `stale_pending` section already owns that signal. Disabled
+>   bindings (`enabled = 0`) and non-CSV bindings (`gsc`/`ga4`) are
+>   filtered at the top-level SELECT. CSV sources cannot double-
+>   report under the existing `stale_pending` row shape.
+> - **No schema changes.** No migration, no new column, no new
+>   table, no new endpoint. Everything reads existing
+>   `data_source_bindings` + `imports` state and returns one more
+>   `QueueSection` shaped like every other section.
+>
+> **Exact files touched by 18g:**
+>
+> - `src/lib/jobs/csv-source-health.ts` — new. Owns the three
+>   rules, the priority cascade in `classifyBinding`, the
+>   `latestImportForKind` SELECT keyed on `(client_id, source IN
+>   format-set)`, `CSV_SOURCE_KINDS` + `CSV_KIND_FORMATS`
+>   (the strict inverse of `csvFormatToDataSourceKind`), and the
+>   section-level entry point
+>   `loadCsvSourceAttentionSection(): Promise<QueueSection>`.
+>   Re-uses the `QueueSection`/`QueueRow` types from
+>   `admin-queue.ts` without importing anything else from that
+>   module.
+> - `src/lib/admin-queue.ts` — 4-line net edit. Added the import,
+>   one await call at the queue-build site between
+>   `google_sync_attention` and `locked_periods`, and an entry in
+>   the `sections[]` assembly array in the same position. Renumbered
+>   the `locked_periods` comment header from `12.` to `13.` to
+>   reflect the new slot. Nothing else in the file changed.
+> - `scripts/phase1-test-slice18g-csv-source-attention.ts` — new.
+>   Six assertion blocks + constants sanity preamble: (1) never-
+>   imported position_tracking surfaces, (2) stale site_audit
+>   surfaces with day count ≥ 45, (3) last-import-failed keyword_
+>   research surfaces with the original error substring preserved,
+>   (4) healthy position_tracking on an isolated client stays
+>   silent, (5) disabled site_audit stays silent, plus an
+>   integration check that `loadAdminQueue()` composes the new
+>   section alongside the still-present `google_sync_attention`.
+>   Uses **two fully synthetic clients** (X and Y) created via
+>   direct `INSERT INTO clients` — not ZipKit — because the health
+>   rule is per `(client_id, kind)` and ZipKit has real production
+>   CSV imports that would cross-pollinate the per-client lookup
+>   and break case 1 (this bug crashed the first test run; the
+>   fix was to use synthetic clients only). `insertImport` creates
+>   a dedicated synthetic far-future period per import row so we
+>   never stamp real period state. Cleanup in try/finally deletes
+>   `imports` by tracked id + belt-and-braces
+>   `original_name LIKE 'slice-18g-%'`, deletes contracts A/C/D
+>   + bindings + scheduled_jobs + activity_log, then deletes all
+>   `imports` and `periods` tied to clients X/Y before deleting
+>   the clients themselves.
+
 ## Exact landed slices in this run
 
 - **Slice 15** — multi-contract intake (`provisionClientIntake`, envelope POST

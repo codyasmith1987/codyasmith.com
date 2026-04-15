@@ -9,6 +9,7 @@
 
 import turso from './turso';
 import { getLockedPeriods } from './periods';
+import { loadGoogleSyncAttentionSection } from './jobs/google-sync-health';
 
 // --- Types ---
 
@@ -566,7 +567,15 @@ export async function loadAdminQueue(): Promise<AdminQueue> {
     })),
   };
 
-  // 11. Locked periods (Slice 16) — spine-integrity signal.
+  // 11. Google data sources needing attention (Slice 18f) —
+  // surfaces misconfigured, never-synced, stale, or failed-halted
+  // gsc/ga4 bindings so Cody has one place to see what needs
+  // action. Healthy bindings (active pending/running sync job OR
+  // within the freshness window) do not surface. Rules and the
+  // stale threshold live in src/lib/jobs/google-sync-health.ts.
+  const googleSyncAttention = await loadGoogleSyncAttentionSection();
+
+  // 12. Locked periods (Slice 16) — spine-integrity signal.
   // Every month Cody has frozen surfaces here with an unlock quick
   // action. No count alarm, no red — locked is a feature, not a
   // failure. The row exists so admins see at a glance which months
@@ -685,6 +694,7 @@ export async function loadAdminQueue(): Promise<AdminQueue> {
     expiring,
     pendingApprovals,
     missingAuto,
+    googleSyncAttention,
     lockedPeriodsSection,
   ];
 

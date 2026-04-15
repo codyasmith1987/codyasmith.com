@@ -90,6 +90,80 @@ traffic-aware.
 >   guard + try/finally cleanup including belt-and-braces
 >   `payload_json LIKE '%binding_id%'` deletes.
 
+> **Slice 18f landed on top of Slice 18e.** Admin-queue visibility for
+> unhealthy Google data-source bindings. The automated chain from 18e
+> runs silently on success and halts honestly on failure; 18f is the
+> truth layer that surfaces those halted, stale, never-synced, or
+> misconfigured bindings in one place so Cody can see what needs
+> action next. What 18f made real:
+>
+> - **Admin queue section `google_sync_attention`.** New entry in
+>   `loadAdminQueue()`'s `sections[]` array, positioned between
+>   `missing_automation` and `locked_periods` (the silent-failure canary
+>   neighborhood). Label: "Google data sources needing attention".
+>   Count flows into `queue.counts.google_sync_attention` automatically
+>   via the existing count-assembly loop.
+> - **Four health rules in strict priority order**, one row per binding:
+>   1. **`misconfigured`** — `config_json` is null/invalid or lacks a
+>      non-empty `connection_id` / `property`. Admin enabled the binding
+>      but never completed `POST /portal/api/admin/google/bind`.
+>   2. **`failed_halted`** — config is valid, no pending/running
+>      `sync_gsc`/`sync_ga4` job for this binding, AND at least one
+>      done/failed sync row exists whose `last_result` matches
+>      `% failed:%` (the shape `handleSyncResult` writes on any non-
+>      `applied` outcome). The `why` line echoes the failure tail so
+>      Cody sees the real error in the queue.
+>   3. **`never_synced`** — config valid, no active job, no failure-
+>      shape history, `last_seen_at IS NULL`. Bound but the seed job
+>      never ran and nothing is queued.
+>   4. **`stale`** — config valid, no active job, no failure-shape
+>      history, `last_seen_at` older than
+>      `GOOGLE_STALE_THRESHOLD_DAYS`.
+> - **`GOOGLE_STALE_THRESHOLD_DAYS = 45`** in
+>   `src/lib/jobs/google-sync-health.ts`. Rationale: monthly cadence
+>   produces ~30-day gaps between `last_seen_at` stamps; 30 would false-
+>   positive on a single late runner tick, 60 would hide a full missed
+>   month. 45 absorbs one late tick but surfaces a missed month.
+>   Exported so future slices can dial it in one place.
+> - **Healthy and disabled bindings stay silent.** A binding with ANY
+>   pending/running `sync_gsc`/`sync_ga4` job is considered healthy
+>   regardless of `last_seen_at` — the chain is live. Bindings with
+>   `enabled = 0` are filtered out at the top-level SELECT — admin is
+>   explicitly opting out of that source. CSV sources
+>   (`ubersuggest_*`, `screaming_frog_issues`) are not touched.
+> - **No schema changes.** No migration, no new column, no new table,
+>   no new endpoint. Everything reads existing `data_source_bindings`
+>   + `scheduled_jobs` state and returns one more `QueueSection` shaped
+>   exactly like every other section.
+>
+> **Exact files touched by 18f:**
+>
+> - `src/lib/jobs/google-sync-health.ts` — new. Owns the four rules,
+>   the priority cascade in `classifyBinding`, the `hasActiveSyncJob`
+>   and `latestFailedSyncJob` scheduled-jobs lookups via
+>   `payload_json LIKE '%"binding_id":"<id>"%'`, and the section-level
+>   entry point `loadGoogleSyncAttentionSection(): Promise<QueueSection>`.
+>   Re-uses the `QueueSection`/`QueueRow` types from `admin-queue.ts`
+>   without importing anything else from that module.
+> - `src/lib/admin-queue.ts` — 3-line net edit. Added the import,
+>   one await call at the queue-build site between `missing_automation`
+>   and `locked_periods`, and an entry in the `sections[]` assembly
+>   array in the same position. Everything else in the file is
+>   unchanged. Renumbered the `locked_periods` comment header from
+>   `11.` to `12.` to reflect the new slot.
+> - `scripts/phase1-test-slice18f-google-sync-attention.ts` — new.
+>   Seven assertion blocks: (1) misconfigured gsc surfaces, (2) never-
+>   synced ga4 surfaces, (3) stale gsc surfaces with day count ≥ 45,
+>   (4) failed-halted ga4 surfaces with the `failed:` tail and original
+>   error substring preserved, (5) healthy ga4 (pending job far in
+>   future) stays silent, (6) disabled gsc stays silent, plus an
+>   integration check that `loadAdminQueue()` composes the new section
+>   and exposes `queue.counts.google_sync_attention`. Uses three tagged
+>   synthetic contracts (A/B/C) under ZipKit to supply six bindings
+>   without fighting the `UNIQUE(contract_id, source)` constraint.
+>   Cleanup deletes every test scheduled_job both by tracked id and
+>   via belt-and-braces `payload_json LIKE` sweeps.
+
 ## Exact landed slices in this run
 
 - **Slice 15** — multi-contract intake (`provisionClientIntake`, envelope POST

@@ -5,18 +5,18 @@
 // Name + email captured as lead
 ---
 
-<div id="quiz" class="fixed inset-0 z-[70]" style="display:none">
+<div id="quiz" class="fixed inset-0 z-[70]">
   <div id="quiz-backdrop" class="absolute inset-0" style="backdrop-filter:blur(20px) brightness(0.70) contrast(0.88) saturate(0.65);-webkit-backdrop-filter:blur(20px) brightness(0.70) contrast(0.88) saturate(0.65);background:radial-gradient(ellipse at 50% 40%, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.24) 60%, rgba(0,0,0,0.30) 100%)"></div>
   <div class="relative z-10 min-h-screen flex items-center justify-center p-6">
-    <div class="max-w-lg w-full">
+    <div id="quiz-card" class="max-w-lg w-full p-6 md:p-10">
 
       <!-- Step 0: Intro -->
       <div data-step="0" class="quiz-step text-center">
-        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-8" class="quiz-label">Before we start</p>
+        <p class="quiz-label font-mono text-xs tracking-[0.2em] uppercase mb-8">Before we start</p>
         <h2 class="quiz-heading font-serif text-4xl md:text-5xl leading-tight mb-6">
           Want to personalize<br/>your experience?
         </h2>
-        <p class="text-lg mb-12" class="quiz-body">Four questions. Fifteen seconds. The site adapts to you.</p>
+        <p class="quiz-body text-lg mb-12">Four questions. Fifteen seconds. The site adapts to you.</p>
         <div class="flex flex-col sm:flex-row gap-4 justify-center">
           <button data-action="next" class="quiz-btn-primary px-8 py-4 font-semibold text-sm rounded-lg">
             I sure would
@@ -29,7 +29,7 @@
 
       <!-- Step 1: Sun or Moon -->
       <div data-step="1" class="quiz-step text-center" style="display:none">
-        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-10" class="quiz-step-count">1 of 4</p>
+        <p class="quiz-step-count font-mono text-xs tracking-[0.2em] uppercase mb-10">1 of 4</p>
         <h2 class="quiz-heading font-serif text-5xl md:text-6xl mb-14">Sun or moon?</h2>
         <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
           <button data-answer="sun" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
@@ -45,7 +45,7 @@
 
       <!-- Step 2: Beach or Mountain -->
       <div data-step="2" class="quiz-step text-center" style="display:none">
-        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-10" class="quiz-step-count">2 of 4</p>
+        <p class="quiz-step-count font-mono text-xs tracking-[0.2em] uppercase mb-10">2 of 4</p>
         <h2 class="quiz-heading font-serif text-5xl md:text-6xl mb-14">Beach or mountain?</h2>
         <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
           <button data-answer="beach" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
@@ -61,7 +61,7 @@
 
       <!-- Step 3: Spring or Fall -->
       <div data-step="3" class="quiz-step text-center" style="display:none">
-        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-10" class="quiz-step-count">3 of 4</p>
+        <p class="quiz-step-count font-mono text-xs tracking-[0.2em] uppercase mb-10">3 of 4</p>
         <h2 class="quiz-heading font-serif text-5xl md:text-6xl mb-14">Spring or fall?</h2>
         <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
           <button data-answer="spring" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
@@ -77,7 +77,7 @@
 
       <!-- Step 4: Stars or Clouds -->
       <div data-step="4" class="quiz-step text-center" style="display:none">
-        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-10" class="quiz-step-count">4 of 4</p>
+        <p class="quiz-step-count font-mono text-xs tracking-[0.2em] uppercase mb-10">4 of 4</p>
         <h2 class="quiz-heading font-serif text-5xl md:text-6xl mb-14">Stars or clouds?</h2>
         <div class="grid grid-cols-2 gap-4 max-w-sm mx-auto">
           <button data-answer="stars" class="quiz-choice group relative p-8 rounded-xl border cursor-pointer">
@@ -93,28 +93,23 @@
 
       <!-- Step 5: Lead capture -->
       <div data-step="5" class="quiz-step text-center" style="display:none">
-
-        <p class="font-mono text-xs tracking-[0.2em] uppercase mb-8" class="quiz-label">Almost done</p>
-        <h2 class="quiz-heading font-serif text-3xl md:text-4xl leading-tight mb-4">
-          Now I know how to set the room.
-        </h2>
-        <p class="text-lg mb-10" class="quiz-body">Who am I building this for?</p>
-        <form id="quiz-form" class="max-w-xs mx-auto space-y-5">
-          <div>
-            <input type="text" id="quiz-name" placeholder="Your name" required class="quiz-input w-full bg-transparent border-b pb-3 text-lg focus:outline-none transition-colors duration-300 placeholder:opacity-40" />
-          </div>
-          <div>
-            <input type="email" id="quiz-email" placeholder="Email" required class="quiz-input w-full bg-transparent border-b pb-3 text-lg focus:outline-none transition-colors duration-300 placeholder:opacity-40" />
-          </div>
-          <div class="pt-4 space-y-3">
-            <button type="submit" class="quiz-btn-primary w-full px-8 py-4 font-semibold text-sm rounded-lg">
+        <div class="quiz-lead-card">
+          <p class="quiz-lead-label">Almost done</p>
+          <h2 class="quiz-lead-heading">
+            Now I know how to set the room.
+          </h2>
+          <p class="quiz-lead-sub">Who am I building this for?</p>
+          <form id="quiz-form" class="quiz-lead-form">
+            <input type="text" id="quiz-name" placeholder="Your name" required class="quiz-input" />
+            <input type="email" id="quiz-email" placeholder="Email" required class="quiz-input" />
+            <button type="submit" class="quiz-lead-submit">
               Make it mine
             </button>
-            <button type="button" data-action="skip-lead" class="quiz-skip w-full px-4 py-2 text-xs">
+            <button type="button" data-action="skip-lead" class="quiz-skip">
               Skip this part
             </button>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
 
       <!-- Step 6: Reveal interstitial -->
@@ -133,45 +128,58 @@
     const quiz = document.getElementById('quiz');
     if (!quiz) return;
 
-    // Don't show if already completed
-    if (localStorage.getItem('cs-quiz-done')) return;
+    // Head inline script has already hidden the quiz for returning/themed visitors
+    // via <html class="cs-no-quiz">. If that class is present, skip init entirely.
+    if (document.documentElement.classList.contains('cs-no-quiz')) return;
 
-    // Don't show if theme already set via URL
-    if (new URLSearchParams(window.location.search).get('theme')) return;
-
-    quiz.style.display = '';
-    quiz.style.opacity = '0';
-    quiz.style.transition = 'opacity 0.5s ease';
     document.documentElement.classList.add('quiz-active');
-    requestAnimationFrame(() => { quiz.style.opacity = '1'; });
 
     let currentStep = 0;
     let transitioning = false;
     const answers: Record<string, string> = {};
     const steps = quiz.querySelectorAll('.quiz-step');
+    const STEP_EASE = 'cubic-bezier(0.22, 1, 0.36, 1)';
+    const STEP_DUR = 420;
+
+    // Prime every step with the same transition so outgoing/incoming are smooth
+    steps.forEach((s) => {
+      const el = s as HTMLElement;
+      el.style.transition = `opacity ${STEP_DUR}ms ${STEP_EASE}, transform ${STEP_DUR}ms ${STEP_EASE}`;
+      el.style.willChange = 'opacity, transform';
+    });
 
     function showStep(n: number) {
       if (transitioning || n === currentStep) return;
       transitioning = true;
 
-      steps.forEach((s, i) => {
-        const el = s as HTMLElement;
-        if (i === currentStep) {
-          el.style.opacity = '0';
-          setTimeout(() => { el.style.display = 'none'; }, 200);
-        }
-      });
+      const current = steps[currentStep] as HTMLElement | undefined;
+      const next = steps[n] as HTMLElement | undefined;
+
+      if (current) {
+        current.style.opacity = '0';
+        current.style.transform = 'translateY(-8px)';
+      }
+
+      // Crossfade: incoming begins halfway through outgoing
       setTimeout(() => {
-        const next = steps[n] as HTMLElement;
+        if (current) current.style.display = 'none';
         if (next) {
           next.style.display = '';
           next.style.opacity = '0';
-          next.style.transition = 'opacity 0.4s ease';
-          requestAnimationFrame(() => { next.style.opacity = '1'; });
+          next.style.transform = 'translateY(8px)';
+          // Force style flush, then animate in
+          void next.offsetWidth;
+          requestAnimationFrame(() => {
+            next.style.opacity = '1';
+            next.style.transform = 'translateY(0)';
+          });
         }
+      }, STEP_DUR / 2);
+
+      setTimeout(() => {
         currentStep = n;
         transitioning = false;
-      }, 300);
+      }, STEP_DUR);
     }
 
     function closeQuiz() {

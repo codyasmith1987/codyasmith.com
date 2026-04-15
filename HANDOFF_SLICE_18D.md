@@ -21,6 +21,19 @@ Read those before starting new work. They override drift.
 Manual Google sync (GSC + GA4) is code-real end to end. Dashboard narrator is
 traffic-aware.
 
+> **Post-checkpoint repair note.** The original 18d checkpoint carried a
+> Tailwind scan trap: `@tailwindcss/vite` 4.2.2 auto-scanned repo-root
+> `HANDOFF_SLICE_18D.md` and `SLICE_18D_CHECKPOINT.patch`, and Tailwind's CSS
+> unescape helper `he()` greedy-matched the substring `\feedba` inside cited
+> Windows memory-file paths as a 6-hex CSS escape, calling
+> `String.fromCodePoint(0xFEEDBA)` and throwing `RangeError: Invalid code
+> point 16707002`. That produced a misleading `file: src/styles/global.css`
+> error even though `global.css` itself was clean. The narrow fix is two
+> `@source not` directives at the top of `src/styles/global.css` that exclude
+> the two repo-root artifacts from the Tailwind content scan. No product
+> logic was touched. All four verification suites still pass and the build
+> is green in ~3.5 s.
+
 ## Exact landed slices in this run
 
 - **Slice 15** — multi-contract intake (`provisionClientIntake`, envelope POST

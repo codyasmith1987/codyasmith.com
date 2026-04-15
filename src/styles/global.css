@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* Exclude root-level handoff/backup files from Tailwind's content scan.
+   Tailwind 4.2.2's he() unescape treats "\feedba" (from cited Windows paths
+   like "...\feedback_destructive_test_isolation.md") as a 6-hex CSS escape,
+   then calls String.fromCodePoint(0xFEEDBA) → RangeError. These files are
+   docs, not templates — scanning them produces no real utilities. */
+@source not "../../HANDOFF_SLICE_18D.md";
+@source not "../../SLICE_18D_CHECKPOINT.patch";
+
 @theme {
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   --font-serif: "Instrument Serif", Georgia, serif;

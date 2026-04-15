@@ -273,22 +273,67 @@ interface IssueRow {
   affected_urls: number | null;
 }
 
-async function loadPriorityIssues(
+// Severity ordering used by both the narrator (client-narrator.ts
+// loadRankedIssues) and Slice 18i's health summary. Critical lands
+// first so Screaming Frog 4xx/5xx rows outrank Ubersuggest 'high'
+// rows — the pre-18i code silently put 'critical' in the else
+// bucket, burying broken-link rows below less-severe issues.
+function priorityTier(p: string | null): number {
+  const s = (p ?? '').toLowerCase().trim();
+  if (s === 'critical') return 0;
+  if (s === 'high') return 1;
+  if (s === 'medium') return 2;
+  if (s === 'low') return 3;
+  return 4;
+}
+
+// Ranks + dedupes a raw issue_snapshots row list for one period.
+// Two rows with the same normalized issue_name (typically one from
+// Ubersuggest's issues_overview and one from Screaming Frog's
+// response_codes_all) collapse into a single entry: MAX of
+// affected_urls wins the count (the broader-crawl source tells us
+// the real extent), most-severe priority wins the tier (the
+// stricter classification drives action), first-seen casing wins
+// the display. Then the deduped list is sorted by severity, then
+// count desc, then name asc.
+function rankAndDedupeIssues(rows: IssueRow[]): IssueRow[] {
+  const byKey = new Map<string, IssueRow>();
+  for (const r of rows) {
+    const key = r.issue_name.trim().toLowerCase();
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, { ...r });
+      continue;
+    }
+    // Collide: keep max count, strictest priority, first-seen name.
+    const prevCount = existing.affected_urls ?? 0;
+    const newCount = r.affected_urls ?? 0;
+    if (newCount > prevCount) existing.affected_urls = r.affected_urls;
+    if (priorityTier(r.priority) < priorityTier(existing.priority)) {
+      existing.priority = r.priority;
+    }
+  }
+  const list = Array.from(byKey.values());
+  list.sort((a, b) => {
+    const ta = priorityTier(a.priority);
+    const tb = priorityTier(b.priority);
+    if (ta !== tb) return ta - tb;
+    const ca = a.affected_urls ?? 0;
+    const cb = b.affected_urls ?? 0;
+    if (ca !== cb) return cb - ca;
+    return a.issue_name.localeCompare(b.issue_name);
+  });
+  return list;
+}
+
+async function loadIssueSnapshots(
   clientId: string,
   periodId: string
 ): Promise<IssueRow[]> {
   const r = await turso.execute({
     sql: `SELECT issue_name, priority, affected_urls
           FROM issue_snapshots
-          WHERE client_id = ? AND period_id = ?
-          ORDER BY
-            CASE LOWER(COALESCE(priority, ''))
-              WHEN 'high' THEN 0
-              WHEN 'medium' THEN 1
-              WHEN 'low' THEN 2
-              ELSE 3
-            END,
-            COALESCE(affected_urls, 0) DESC`,
+          WHERE client_id = ? AND period_id = ?`,
     args: [clientId, periodId],
   });
   return r.rows.map((row) => ({
@@ -298,8 +343,19 @@ async function loadPriorityIssues(
   }));
 }
 
+// Capitalizes the first letter of a plainIssueLabel() output so
+// the headline reads as a sentence. Labels always start with a
+// number (e.g. "5 broken links") so the first char is already a
+// digit — this is a no-op in practice but is defensive for the
+// fallback "N pages: Raw Name" branch where the first alphabetic
+// character could be lowercase.
+function capitalizeFirst(s: string): string {
+  if (!s) return s;
+  return s[0].toUpperCase() + s.slice(1);
+}
+
 export async function buildHealthSummary(clientId: string): Promise<ClientSummary> {
-  const { current } = await recentPeriods(clientId);
+  const { current, prior } = await recentPeriods(clientId);
   if (!current) {
     return {
       headline: "We haven't checked your site health yet.",
@@ -307,33 +363,52 @@ export async function buildHealthSummary(clientId: string): Promise<ClientSummar
       callout: null,
     };
   }
-  const issues = await loadPriorityIssues(clientId, current);
-  if (issues.length === 0) {
+  const currentRaw = await loadIssueSnapshots(clientId, current);
+  const currentRanked = rankAndDedupeIssues(currentRaw);
+  if (currentRanked.length === 0) {
     return {
       headline: 'No site problems right now.',
       bullets: [],
       callout: null,
     };
   }
-  const highCount = issues.filter((i) => i.priority?.toLowerCase() === 'high').length;
-  const mediumCount = issues.filter((i) => i.priority?.toLowerCase() === 'medium').length;
-  const top = issues[0];
-  const topAffected = top.affected_urls ?? 1;
 
-  const totalLabel = plural(issues.length, 'thing');
-  const headline = `We found ${totalLabel} to look at on your site.`;
+  const top = currentRanked[0];
+  const topCount = top.affected_urls ?? 1;
+  const headline = `${capitalizeFirst(plainIssueLabel(top.issue_name, topCount))} right now.`;
+
   const bullets: string[] = [];
-  bullets.push(`Biggest one: ${plainIssueLabel(top.issue_name, topAffected)}`);
-  if (highCount > 0) {
-    bullets.push(`${plural(highCount, 'high-priority issue')} in the list`);
-  } else if (mediumCount > 0) {
-    bullets.push(`${plural(mediumCount, 'medium-priority issue')} in the list`);
+  for (let i = 1; i < Math.min(3, currentRanked.length); i++) {
+    const row = currentRanked[i];
+    bullets.push(plainIssueLabel(row.issue_name, row.affected_urls ?? 1));
+  }
+  if (currentRanked.length > 3) {
+    const extra = currentRanked.length - 3;
+    bullets.push(`…and ${plural(extra, 'more thing')} to look at.`);
   }
 
-  const callout =
-    highCount > 0
-      ? "The high-priority items are where we'll focus first."
-      : null;
+  // Comparative callout — only for the top issue, only when the same
+  // normalized issue name exists in the prior period with a count
+  // delta of at least 2 pages. A 1-page move is typically noise from
+  // crawler variance and gets filtered out.
+  let callout: string | null = null;
+  if (prior) {
+    const priorRaw = await loadIssueSnapshots(clientId, prior);
+    const priorRanked = rankAndDedupeIssues(priorRaw);
+    const topKey = top.issue_name.trim().toLowerCase();
+    const priorMatch = priorRanked.find(
+      (r) => r.issue_name.trim().toLowerCase() === topKey
+    );
+    if (priorMatch) {
+      const priorCount = priorMatch.affected_urls ?? 0;
+      const delta = topCount - priorCount;
+      if (delta >= 2) {
+        callout = `Up from ${priorCount} last month.`;
+      } else if (delta <= -2) {
+        callout = `Down from ${priorCount} last month.`;
+      }
+    }
+  }
 
   return { headline, bullets, callout };
 }

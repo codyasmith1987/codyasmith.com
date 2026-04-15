@@ -414,6 +414,116 @@ traffic-aware.
 >   in try/finally via tracked ids + belt-and-braces deletes,
 >   plus explicit teardown of the synthetic second client.
 
+> **Slice 18i landed on top of Slice 18h.** The client-facing
+> `/portal/health` summary now reads real `issue_snapshots` rows
+> (which 18h made complete for Screaming Frog) and turns them into
+> sharp plain-language meaning instead of a generic count. This
+> closes the gap between "we have the truth" and "the client can
+> read the truth in a glance." What 18i made real:
+>
+> - **`/portal/health` summary now uses the top named issue as the
+>   headline.** Pre-18i: `"We found 3 things to look at on your
+>   site."` — a count, no named meaning. Post-18i:
+>   `"6 broken links right now."` — the biggest specific story,
+>   sentence-ready, translated via the existing `plainIssueLabel`
+>   helper so "Response Codes: Internal Client Error (4xx)" never
+>   reaches the client as audit jargon.
+> - **Bullets now carry ranks 2 and 3** of the deduped current-
+>   period list, each rendered via `plainIssueLabel`. Capped at
+>   two named bullets. If the list has more than three entries, a
+>   single `"…and N more things to look at."` overflow bullet
+>   acknowledges the excess without burying the main story. For
+>   single-issue states, `bullets === []`.
+> - **Duplicate `issue_name` rows across sources are deduped by
+>   normalized issue name.** Both `issues_overview` (Ubersuggest)
+>   and `screaming_frog_response_codes` (Slice 18h) can emit a row
+>   named exactly `"Response Codes: Internal Client Error (4xx)"`
+>   for the same client+period — they describe the same real
+>   problem, not two different problems. `rankAndDedupeIssues`
+>   collapses them via `issue_name.trim().toLowerCase()` before
+>   ranking so the client sees one broken-link story, not two.
+> - **Dedupe keeps MAX `affected_urls` and the strictest priority.**
+>   On collision: the broader-crawl source (usually Screaming Frog,
+>   which crawls every URL) wins the count; the stricter
+>   classification (usually `'critical'`) wins the priority tier.
+>   First-seen casing wins the display string. Deterministic, no
+>   source weighting.
+> - **`'critical'` now outranks `'high'` in the health summary.**
+>   Pre-18i the SQL-based ordering put `'high'` at tier 0 and
+>   silently dropped `'critical'` into the "else" bucket at tier 3,
+>   meaning Screaming Frog 4xx/5xx rows sorted BEHIND Ubersuggest
+>   `'high'` rows. The new `priorityTier` helper restores the
+>   honest order `critical(0) → high(1) → medium(2) → low(3) →
+>   else(4)`, matching the narrator's own ranking at
+>   `client-narrator.ts:544-558`. Now a Screaming Frog row wins
+>   the headline when it should.
+> - **Comparative callout only when honest.** `"Up from N last
+>   month."` or `"Down from N last month."` appears ONLY when the
+>   top current issue's normalized name exists in the prior period
+>   AND the absolute count delta is ≥ 2. A 1-page delta is
+>   suppressed as noise (crawler variance). No prior period → no
+>   callout. Different top issue in prior period → no callout.
+>   Comparative language is scoped to the top issue only; per-
+>   bullet deltas are out of scope for this slice.
+> - **No-issue fallback stays honest and quiet.** Zero issues in
+>   the current period → `"No site problems right now."` with
+>   empty bullets and `null` callout. Comparative callout is
+>   suppressed on the healthy fallback even when the prior period
+>   had issues — saying "down from 5 last month" would bury the
+>   good news under a comparison.
+> - **No schema changes, no migration, no new endpoint.** The
+>   `ClientSummary` shape is byte-identical; `/portal/health.astro`
+>   still destructures `{headline, bullets, callout}` without a
+>   template edit.
+> - **No narrator / dashboard / admin-queue / Google / scheduler
+>   changes.** 18i is scoped to one function
+>   (`buildHealthSummary`) and its internal helpers. Everything
+>   else sits untouched.
+>
+> **Exact files touched by 18i:**
+>
+> - `src/lib/client-page-summary.ts` — replaced `loadPriorityIssues`
+>   and `buildHealthSummary`. Added three internal helpers:
+>   `priorityTier(p)` (narrator-matching tier map),
+>   `rankAndDedupeIssues(rows)` (single-pass normalized-name
+>   collapse + MAX count + strictest priority + first-seen casing,
+>   then sort by tier ASC, count DESC, name ASC), and
+>   `capitalizeFirst(s)` (defensive headline sentence-start
+>   capitalization). Renamed the raw loader to
+>   `loadIssueSnapshots(clientId, periodId)` — now returns rows
+>   without any SQL ordering because all ranking logic lives in
+>   the helper. `buildHealthSummary` now loads BOTH current and
+>   prior periods (prior only used for the comparative callout
+>   branch), constructs a headline from the top-ranked named issue
+>   via `plainIssueLabel` + `" right now."`, emits up to two
+>   named bullets, and appends a comparative callout only on the
+>   honest-change path. `ClientSummary` shape is unchanged; every
+>   other exported function in the file is untouched.
+> - `scripts/phase1-test-slice18i-health-summary.ts` — new. Seven
+>   assertion blocks covering the four rule paths plus the noise
+>   cases plus the fallback plus a multi-issue integration check:
+>   (1) Screaming Frog 4xx row becomes the top story with
+>   `"5 broken links right now."`, (2) Ubersuggest
+>   `Missing meta description` row becomes the top story with
+>   `"7 pages missing a short description right now."`, (3) same-
+>   name across sources dedupes to one story with MAX count 5 and
+>   no reference to the 3-count, (4) prior period with the same
+>   name and delta +3 produces `"Up from 2 last month."`, (5)
+>   two noise cases — prior has a different issue → no callout,
+>   delta = 1 → no callout — both suppressed, (6) empty current
+>   period → healthy fallback, (7) three-issue integration:
+>   critical 4xx (count 6) wins the headline, high meta
+>   description (count 4) is bullet[0], medium duplicate title
+>   (count 2) is bullet[1], no overflow bullet, no callout.
+>   Uses ONE fully synthetic client Z (created via direct
+>   `INSERT INTO clients`) plus two synthetic periods
+>   (`2099-11-01` current, `2099-10-01` prior) so the test never
+>   reads or mutates ZipKit's real issue state. `imports.uploaded_by`
+>   FK is satisfied via a real admin user id fetched at bootstrap;
+>   every inserted `imports` row is tracked and torn down in the
+>   try/finally, followed by a per-client `DELETE FROM
+>   issue_snapshots / imports / periods / clients` sweep.
+
 ## Exact landed slices in this run
 
 - **Slice 15** — multi-contract intake (`provisionClientIntake`, envelope POST

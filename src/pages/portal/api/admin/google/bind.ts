@@ -12,6 +12,7 @@ import { getBindingById } from '../../../../../lib/data-sources';
 import { getConnectionById } from '../../../../../lib/google/connections';
 import { logActivity } from '../../../../../lib/activity';
 import { logger } from '../../../../../lib/logger';
+import { seedInitialSyncJob } from '../../../../../lib/jobs/google-sync-jobs';
 
 export const prerender = false;
 
@@ -63,7 +64,23 @@ export const POST: APIRoute = async ({ locals, request }) => {
       summary: `${locals.user!.name} bound ${binding.source} to ${property} via connection ${conn.google_account_email}`,
     });
 
-    return json({ ok: true, binding_id: bindingId, property, connection_id: connectionId });
+    // Slice 18e — seed the first recurring sync job for this binding.
+    // Idempotent: if the binding already has a pending sync job (e.g.
+    // admin is re-binding a live binding) this is a no-op. The chain
+    // then self-perpetuates from inside the runner handler.
+    const seeded = await seedInitialSyncJob(
+      bindingId,
+      binding.source,
+      locals.user!.id
+    );
+
+    return json({
+      ok: true,
+      binding_id: bindingId,
+      property,
+      connection_id: connectionId,
+      sync_seeded: seeded,
+    });
   } catch (err) {
     logger.error('google bind error', err);
     return json({ error: String((err as Error)?.message ?? err) }, 500);

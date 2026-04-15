@@ -17,10 +17,16 @@ import turso from '../turso';
 import { logger } from '../logger';
 import { generateRecurringInvoices, sendDueReminders } from '../billing';
 import { getAllContracts, nextBillingRunIso } from '../contracts';
+import { runGscSyncJob, runGa4SyncJob } from './google-sync-jobs';
 
 // --- Types ---
 
-export type JobType = 'generate_invoices' | 'send_reminders' | 'cleanup_stale_imports';
+export type JobType =
+  | 'generate_invoices'
+  | 'send_reminders'
+  | 'cleanup_stale_imports'
+  | 'sync_gsc'
+  | 'sync_ga4';
 
 interface JobRow {
   id: string;
@@ -237,6 +243,12 @@ const handlers: Record<JobType, Handler> = {
     const swept = Number((result as any).rowsAffected ?? 0);
     const reQueued = await ensureStaleSweepQueued(job.id);
     return `swept=${swept} re_queued=${reQueued ? 1 : 0}`;
+  },
+  async sync_gsc(job): Promise<string> {
+    return runGscSyncJob(job);
+  },
+  async sync_ga4(job): Promise<string> {
+    return runGa4SyncJob(job);
   },
 };
 

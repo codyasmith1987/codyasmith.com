@@ -34,6 +34,62 @@ traffic-aware.
 > logic was touched. All four verification suites still pass and the build
 > is green in ~3.5 s.
 
+> **Slice 18e landed on top of the repaired 18d checkpoint.** Scheduled
+> automation for the two manual Google sync paths. What 18e made real:
+>
+> - **Scheduled `sync_gsc` jobs.** New `JobType` in `src/lib/jobs/runner.ts`,
+>   handler delegates to `runGscSyncJob` in the new orchestrator module.
+>   Calls the existing `syncGscForBinding` — no second sync truth.
+> - **Scheduled `sync_ga4` jobs.** Same pattern, delegates to `runGa4SyncJob`,
+>   calls the existing `syncGa4ForBinding`.
+> - **Initial seeding from `/portal/api/admin/google/bind`.** After a
+>   successful bind (`config_json` + `enabled = 1`), `seedInitialSyncJob`
+>   enqueues one sync row for `previousMonth(currentUtcMonth())` with
+>   `scheduled_for = now`, so the admin gets immediate feedback on the
+>   next runner tick. Re-binding a live binding is a no-op.
+> - **One pending-or-running job per (binding, sync type) via idempotent
+>   enqueue.** `ensureSyncJobQueued` runs a `payload_json LIKE
+>   '%"binding_id":"<id>"%'` check against `status IN ('pending','running')`
+>   with a self-exclude clause before inserting. Used at both the seed site
+>   and the handler's next-cycle re-enqueue, so double-clicks, runner crash
+>   + lease-expired re-claims, and duplicate `runDueJobs` calls all collapse
+>   to one pending row.
+> - **Honest halt on failure, no fake re-enqueue.** On any non-`applied`
+>   sync result (locked period, missing config, disabled binding, token
+>   refresh fail, API error), `last_result` records
+>   `sync_{gsc,ga4} binding=<id> month=<yyyy-mm> failed: <real error>` and
+>   the chain stops. Admin has to re-bind or hit `/sync` manually to restart
+>   it — silent retry forever would mask the breakage.
+> - **No schema changes.** No new migration, no new column, no new table.
+>   All scheduling state lives in the existing `scheduled_jobs` table via
+>   `payload_json`. The `(binding, sync type)` invariant is code-enforced,
+>   not DB-enforced — consistent with the existing `ensureRecurringJobsQueued`
+>   pattern for recurring billing.
+>
+> **Exact files touched by 18e:**
+>
+> - `src/lib/jobs/google-sync-jobs.ts` — new. Payload parsing, month
+>   arithmetic (`nextMonth`, `previousMonth`, `currentUtcMonth`,
+>   `syncRunDateFor`), `ensureSyncJobQueued`, `seedInitialSyncJob`,
+>   `runGscSyncJob`, `runGa4SyncJob`, and a `__setGoogleClientsForJobs`
+>   test seam so the runner can be exercised without real HTTP calls.
+> - `src/lib/jobs/runner.ts` — edit. Extended `JobType` union, imported
+>   the two handler entry points, added two tiny handler branches in the
+>   `handlers` map. Claim/lease/dispatch semantics untouched.
+> - `src/pages/portal/api/admin/google/bind.ts` — edit. After the
+>   successful update + `logActivity`, calls `seedInitialSyncJob` and
+>   returns `sync_seeded` so the admin UI can tell whether the chain started.
+> - `scripts/phase1-test-slice18e-sync-jobs.ts` — new. Six test cases:
+>   (0) month-arithmetic unit checks, (1) `sync_gsc` end-to-end through the
+>   runner with `re_queued=1` verification, (2) `sync_ga4` mirror,
+>   (3) duplicate `runDueJobs` calls do not multiply future jobs,
+>   (4) locked-period failure is honest with no re-enqueue, (5)
+>   missing-config failure is honest with no re-enqueue, (6)
+>   `seedInitialSyncJob` is idempotent. Uses `2099-05`/`06`/`07` periods,
+>   disjoint from Slice 18's `01`/`02` and Slice 18b's `03`. Preflight
+>   guard + try/finally cleanup including belt-and-braces
+>   `payload_json LIKE '%binding_id%'` deletes.
+
 ## Exact landed slices in this run
 
 - **Slice 15** — multi-contract intake (`provisionClientIntake`, envelope POST

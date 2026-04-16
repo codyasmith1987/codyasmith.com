@@ -734,6 +734,70 @@ traffic-aware.
 >   today's UTC date, run-tagged charges, full cleanup in
 >   try/finally.
 
+> **Slice 22 landed on top of Slice 21.** The invoice reminder
+> sweep is now self-perpetuating. The entire reminder pipeline
+> (`planDueReminders`, `sendDueReminders`, `nextReminderTick`,
+> `markReminderTickSent`, `resolveReminderRecipients`) was already
+> real before this slice — Slice 22 only closed the scheduling
+> loop. What Slice 22 made real:
+>
+> - **`ensureReminderSweepQueued` helper in `runner.ts`.**
+>   Idempotent: checks for any pending/running `send_reminders`
+>   job (excluding the caller's own id). If none exists, enqueues
+>   one ~24h from now. One pending sweep at a time, same pattern
+>   as `ensureStaleSweepQueued`.
+> - **`send_reminders` handler now self-perpetuates.** Calls
+>   `ensureReminderSweepQueued(job.id)` on every run, so each
+>   daily sweep queues the next one. Chain is self-healing: if
+>   a run fails, the runner marks the job failed, but the next
+>   `generate_invoices` success will re-seed the sweep.
+> - **`generate_invoices` per-contract handler seeds the sweep.**
+>   On success, calls `ensureReminderSweepQueued()` so the first
+>   invoice generation automatically starts the reminder chain.
+>   No manual seed required.
+> - **No new job type.** `send_reminders` was already a real job
+>   type with a real handler. No payload needed — it's a sweep
+>   that checks all sent+unpaid invoices.
+> - **Tick-level idempotency already built.** Each tick (`before:3`,
+>   `after:3`, `after:7`) is recorded in `reminder_ticks_sent_json`
+>   on the invoice. `nextReminderTick` skips already-sent ticks.
+>   Running the sweep twice on the same day sends zero duplicate
+>   emails.
+> - **Cancellation already built.** `planDueReminders` queries
+>   `WHERE status = 'sent' AND amount_paid < total`. Paid invoices
+>   (amount_paid >= total) and non-sent invoices (voided/deleted/
+>   draft) are excluded automatically.
+> - **Contact routing already built.** `resolveReminderRecipients`
+>   — 3-layer fallback: billing-role contacts → primary_contact_email
+>   → portal users.
+> - **No schema changes.** No migration, no new table, no new
+>   column, no new endpoint, no new job type.
+> - **No dead scaffolding.** Every function in the reminder
+>   pipeline was real and complete before this slice.
+> - **No quiz changes.**
+>
+> **Exact files touched by Slice 22:**
+>
+> - `src/lib/jobs/runner.ts` — edit. Added exported
+>   `ensureReminderSweepQueued(excludeJobId?)` helper above
+>   `ensureStaleSweepQueued`. Updated `send_reminders` handler
+>   signature to accept `job` and call
+>   `ensureReminderSweepQueued(job.id)` after
+>   `sendDueReminders()`. Updated `generate_invoices`
+>   per-contract success path to call
+>   `ensureReminderSweepQueued()` after the invoice re-enqueue.
+> - `scripts/phase1-test-slice22-invoice-reminders.ts` — new.
+>   Six assertion blocks: (1) `planDueReminders` returns expected
+>   `before:3` tick for a synthetic sent invoice with due date
+>   3 days out, (2) `markReminderTickSent` records the tick and
+>   prevents re-planning, (3) paid invoice excluded from plan,
+>   (4) `ensureReminderSweepQueued` enqueues one job and is
+>   idempotent on second call, (5) default reminder rule applies
+>   after tick reset, (6) integration: admin queue + work summary
+>   still work. Uses a synthetic contract + sent invoice under
+>   ZipKit with far-future billing period, full cleanup in
+>   try/finally.
+
 ## Exact landed slices in this run
 
 - **Slice 15** — multi-contract intake (`provisionClientIntake`, envelope POST
@@ -768,6 +832,9 @@ traffic-aware.
 - **Slice 21** — per-contract invoice generation (classification-aware
   charge sweep, locked-period guard, idempotent re-enqueue, draft-only
   output, no schema changes, no new job types)
+- **Slice 22** — self-perpetuating invoice reminder sweep
+  (`ensureReminderSweepQueued`, `send_reminders` daily re-enqueue,
+  seeded from `generate_invoices` on success, no new job types)
 
 ## Exact files touched in Slice 18d
 
@@ -967,7 +1034,7 @@ passes before starting any new work.
    cleanup, not polish, not decorative integrations. Every slice must move
    the spine forward.
 2. **Do not reopen closed slices without evidence.** Slices 15, 16, 16b, 17,
-   18, 18b, 18c, 18d, 18e, 18f, 18g, 18h, 18i, 19, 20, 21 are closed.
+   18, 18b, 18c, 18d, 18e, 18f, 18g, 18h, 18i, 19, 20, 21, 22 are closed.
    Reopening them requires a concrete failing assertion or a reproducible
    bug in the live product.
 3. **Source of truth:** the repo + this handoff file. Memory files are

@@ -187,6 +187,31 @@ async function ensureRecurringJobsQueued(
   return enqueued;
 }
 
+// Idempotent re-enqueue for the reminder sweep. Runs once a day.
+// Reminder ticks are day-granularity (before_due_days, after_due_days),
+// so daily cadence is sufficient. Self-perpetuating: each run queues
+// the next. Seeded from the generate_invoices handler so the sweep
+// starts as soon as the first invoice exists.
+export async function ensureReminderSweepQueued(excludeJobId?: string): Promise<boolean> {
+  const existing = await turso.execute({
+    sql: `SELECT id FROM scheduled_jobs
+          WHERE job_type = 'send_reminders'
+            AND status IN ('pending', 'running')
+            AND id != ?
+          LIMIT 1`,
+    args: [excludeJobId ?? ''],
+  });
+  if (existing.rows.length > 0) return false;
+  const next = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  await turso.execute({
+    sql: `INSERT INTO scheduled_jobs
+          (id, job_type, scheduled_for, status, payload_json)
+          VALUES (?, 'send_reminders', ?, 'pending', '{}')`,
+    args: [nanoid(), next],
+  });
+  return true;
+}
+
 // Idempotent re-enqueue for the stale-imports sweep. Runs once an hour.
 // Excludes the currently-running job so self-replacement works.
 async function ensureStaleSweepQueued(excludeJobId?: string): Promise<boolean> {
@@ -256,6 +281,9 @@ const handlers: Record<JobType, Handler> = {
           reQueued = 1;
         }
 
+        // Ensure the reminder sweep is alive so due-date emails fire.
+        await ensureReminderSweepQueued();
+
         if (invoiceId) {
           return `generate_invoice contract=${contractId} applied invoice=${invoiceId} re_queued=${reQueued}`;
         }
@@ -273,9 +301,10 @@ const handlers: Record<JobType, Handler> = {
     const reQueued = await ensureRecurringJobsQueued(createdBy, job.id);
     return `generated=${result.generated.length} skipped=${result.skipped.length} re_queued=${reQueued}`;
   },
-  async send_reminders(): Promise<string> {
+  async send_reminders(job): Promise<string> {
     const sent = await sendDueReminders();
-    return `reminders_sent=${sent}`;
+    const reQueued = await ensureReminderSweepQueued(job.id);
+    return `reminders_sent=${sent} re_queued=${reQueued ? 1 : 0}`;
   },
   // Auto-recovery for crashed ingestions. A pending import row older
   // than 60 minutes means an earlier call to ingestCSVViaSnapshots

@@ -591,6 +591,77 @@ traffic-aware.
 >   against live DB via loadAdminQueue → buildWorkSummary with
 >   structure, anchor, count, and no-duplicate-label checks.
 
+> **Slice 20 landed on top of Slice 19.** The admin expenses page
+> at `/portal/admin/expenses` now shows billing classification
+> state per expense so Cody can see what will auto-bill, what
+> needs his approval, and what needs a manual decision — all from
+> one surface. What Slice 20 made real:
+>
+> - **Classification badges per expense.** Color-coded pills:
+>   `needs_approval` (red), `manual_review` (amber), `auto_bill`
+>   (green). Every open expense now shows its billing state
+>   inline.
+> - **Classification-priority sort within each contract group.**
+>   `needs_approval` rows appear first (blocked until Cody acts),
+>   `manual_review` second (awareness), `auto_bill` third (will
+>   attach automatically). Sort is by classification tier, not by
+>   date, so the items that need action bubble to the top.
+> - **Summary count strip above the list.** One-line counts:
+>   `N needs approval · N manual review · N auto-bill`. Only
+>   non-zero counts are shown. Gives Cody a glance triage before
+>   scrolling.
+> - **Client name in each contract group header.** Format:
+>   `{clientName} · {contractTitle}`. Previously showed contract
+>   title only.
+> - **Category tag per expense.** When a category was assigned at
+>   creation time (drives passthrough-rule classification), it
+>   appears as a small mono tag `[category]` after the
+>   description.
+> - **Approve button for needs_approval AND manual_review items.**
+>   Inline green button on each row whose classification is
+>   `needs_approval` or `manual_review`. Calls the existing
+>   `POST /portal/api/admin/expenses/{id}/approve` endpoint.
+>   Page reloads on success.
+> - **Approve endpoint now accepts manual_review.** Pre-Slice-20
+>   the endpoint refused anything except `classification =
+>   'needs_approval'` with a 409. Now it also accepts
+>   `'manual_review'` and flips both to `auto_bill` with
+>   `needs_approval = 0`. Auto_bill inputs still get a 409 —
+>   you can't approve something that's already cleared for
+>   billing.
+> - **No schema changes.** No migration, no new column, no new
+>   table, no new endpoint.
+> - **No quiz changes.**
+>
+> **Exact files touched by Slice 20:**
+>
+> - `src/pages/portal/admin/expenses.astro` — edit. Extended the
+>   `pending_charges` query with `pc.classification`,
+>   `pc.needs_approval`, `pc.category`, and `cl.name` (via a
+>   new `JOIN clients cl`). Added `classificationOrder`,
+>   `badgeStyle`, `badgeText` helpers in frontmatter. Added
+>   within-group sort by classification priority. Added summary
+>   count strip, client name in group header, classification
+>   badge per row, category tag, and approve button for
+>   needs_approval / manual_review items. Added approve-button
+>   click handler in the client script.
+> - `src/pages/portal/api/admin/expenses/[id]/approve.ts` — edit.
+>   Widened the classification guard from
+>   `classification !== 'needs_approval'` to
+>   `classification !== 'needs_approval' && classification !==
+>   'manual_review'`. One line changed. Error message updated to
+>   list both accepted classifications.
+> - `scripts/phase1-test-slice20-billing-inputs.ts` — new. Six
+>   assertion blocks: (1) classification columns present in query,
+>   (2) approve flips needs_approval → auto_bill, (3) approve
+>   flips manual_review → auto_bill, (4) approve refuses
+>   auto_bill → 409, (5) classification grouping order
+>   (needs_approval < manual_review < auto_bill < null),
+>   (6) integration: loadAdminQueue + buildWorkSummary still
+>   work after the endpoint change. Uses a synthetic contract
+>   under ZipKit with run-tagged pending_charges, full cleanup
+>   in try/finally.
+
 ## Exact landed slices in this run
 
 - **Slice 15** — multi-contract intake (`provisionClientIntake`, envelope POST
@@ -619,6 +690,9 @@ traffic-aware.
 - **Slice 19** — admin work-summary rail (`buildWorkSummary` pure function,
   three-bucket triage on `/portal/admin`, act-now/waiting/upcoming from
   existing queue truth, no schema changes, no new task system)
+- **Slice 20** — billing-input visibility on `/portal/admin/expenses`
+  (classification badges, approve for needs_approval + manual_review,
+  classification-priority sort, summary count strip, client context)
 
 ## Exact files touched in Slice 18d
 
@@ -818,9 +892,9 @@ passes before starting any new work.
    cleanup, not polish, not decorative integrations. Every slice must move
    the spine forward.
 2. **Do not reopen closed slices without evidence.** Slices 15, 16, 16b, 17,
-   18, 18b, 18c, 18d, 18e, 18f, 18g, 18h, 18i, 19 are closed. Reopening
-   them requires a concrete failing assertion or a reproducible bug in the
-   live product.
+   18, 18b, 18c, 18d, 18e, 18f, 18g, 18h, 18i, 19, 20 are closed.
+   Reopening them requires a concrete failing assertion or a reproducible
+   bug in the live product.
 3. **Source of truth:** the repo + this handoff file. Memory files are
    framing. Always verify against current code before citing file paths or
    line numbers.

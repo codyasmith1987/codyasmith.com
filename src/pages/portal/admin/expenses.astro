@@ -29,14 +29,16 @@ const contracts = (await getAllContracts()).filter((c) => c.status === 'active')
 const openRows = await turso.execute({
   sql: `SELECT pc.id, pc.contract_id, c.title AS contract_title, pc.description,
                pc.amount, pc.source_type, pc.billed_invoice_id, pc.created_at,
-               i.invoice_number
+               i.invoice_number,
+               pc.classification, pc.needs_approval, pc.category, cl.name AS client_name
         FROM pending_charges pc
         JOIN contracts c ON c.id = pc.contract_id
+        JOIN clients cl ON cl.id = c.client_id
         LEFT JOIN invoices i ON i.id = pc.billed_invoice_id
         WHERE pc.billed_invoice_id IS NULL
            OR EXISTS (SELECT 1 FROM invoices i2
                       WHERE i2.id = pc.billed_invoice_id AND i2.status = 'draft')
-        ORDER BY c.title, pc.created_at DESC`,
+        ORDER BY cl.name, c.title, pc.created_at DESC`,
 });
 
 interface ExpenseRow {
@@ -49,6 +51,10 @@ interface ExpenseRow {
   billed_invoice_id: string | null;
   invoice_number: string | null;
   created_at: string;
+  classification: string | null;
+  needs_approval: boolean;
+  category: string | null;
+  client_name: string;
 }
 const open: ExpenseRow[] = openRows.rows.map((r) => ({
   id: r[0] as string,
@@ -60,15 +66,53 @@ const open: ExpenseRow[] = openRows.rows.map((r) => ({
   billed_invoice_id: r[6] as string | null,
   invoice_number: r[8] as string | null,
   created_at: r[7] as string,
+  classification: r[9] as string | null,
+  needs_approval: Number(r[10]) === 1,
+  category: r[11] as string | null,
+  client_name: r[12] as string,
 }));
 
-// Group by contract for the list.
-const byContract = new Map<string, { title: string; rows: ExpenseRow[] }>();
+// Classification sort: needs_approval first (red), manual_review (amber), auto_bill (green).
+function classificationOrder(cls: string | null): number {
+  if (cls === 'needs_approval') return 0;
+  if (cls === 'manual_review') return 1;
+  if (cls === 'auto_bill') return 2;
+  return 3;
+}
+
+function badgeStyle(cls: string | null): string {
+  switch (cls) {
+    case 'needs_approval': return 'bg-red-500/10 text-red-300 border-red-500/30';
+    case 'manual_review': return 'bg-amber-500/10 text-amber-300 border-amber-500/30';
+    case 'auto_bill': return 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30';
+    default: return 'bg-neutral-800 text-neutral-400 border-white/10';
+  }
+}
+
+function badgeText(cls: string | null): string {
+  switch (cls) {
+    case 'needs_approval': return 'needs approval';
+    case 'manual_review': return 'manual review';
+    case 'auto_bill': return 'auto-bill';
+    default: return cls ?? 'unknown';
+  }
+}
+
+// Group by contract, sorted by classification within each group.
+const byContract = new Map<string, { title: string; clientName: string; rows: ExpenseRow[] }>();
 for (const e of open) {
-  const g = byContract.get(e.contract_id) ?? { title: e.contract_title, rows: [] };
+  const g = byContract.get(e.contract_id) ?? { title: e.contract_title, clientName: e.client_name, rows: [] };
   g.rows.push(e);
   byContract.set(e.contract_id, g);
 }
+for (const [, group] of byContract) {
+  group.rows.sort((a, b) => classificationOrder(a.classification) - classificationOrder(b.classification));
+}
+
+// Summary counts for the strip above the list.
+const summaryNeedsApproval = open.filter((e) => e.classification === 'needs_approval').length;
+const summaryManualReview = open.filter((e) => e.classification === 'manual_review').length;
+const summaryAutoBill = open.filter((e) => e.classification === 'auto_bill' || (!e.classification && !e.needs_approval)).length;
 
 // Also load draft invoices per contract for the optional "pin to invoice" dropdown.
 const draftInvRows = await turso.execute({
@@ -172,7 +216,22 @@ for (const r of draftInvRows.rows) {
 
     {/* Open expense list */}
     <div>
-      <h2 class="text-[11px] uppercase tracking-wide text-neutral-500 mb-3">Open expenses</h2>
+      <div class="flex items-baseline justify-between mb-3">
+        <h2 class="text-[11px] uppercase tracking-wide text-neutral-500">Open expenses</h2>
+        {open.length > 0 && (
+          <div class="flex gap-3">
+            {summaryNeedsApproval > 0 && (
+              <span class="text-[11px] font-mono text-red-400">{summaryNeedsApproval} needs approval</span>
+            )}
+            {summaryManualReview > 0 && (
+              <span class="text-[11px] font-mono text-amber-400">{summaryManualReview} manual review</span>
+            )}
+            {summaryAutoBill > 0 && (
+              <span class="text-[11px] font-mono text-emerald-400">{summaryAutoBill} auto-bill</span>
+            )}
+          </div>
+        )}
+      </div>
       {byContract.size === 0 ? (
         <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-8 text-center text-sm text-neutral-500">
           No unbilled expenses. Add one above to attach it to the next invoice.
@@ -181,13 +240,23 @@ for (const r of draftInvRows.rows) {
         <div class="space-y-6">
           {[...byContract.entries()].map(([contractId, group]) => (
             <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-4">
-              <p class="text-sm font-medium text-neutral-200 mb-3">{group.title}</p>
+              <p class="text-sm font-medium text-neutral-200 mb-3">
+                <span class="text-neutral-500">{group.clientName} ·</span> {group.title}
+              </p>
               <ul class="divide-y divide-white/5">
                 {group.rows.map((e) => (
-                  <li class="flex items-start justify-between py-2 text-sm">
+                  <li class="flex items-start justify-between py-2.5 text-sm">
                     <div class="flex-1 min-w-0 pr-4">
-                      <p class="text-neutral-200 truncate">{e.description}</p>
-                      <p class="text-[10px] text-neutral-600 mt-0.5">
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <span class={`text-[9px] uppercase tracking-wider font-mono px-1.5 py-0.5 rounded border shrink-0 ${badgeStyle(e.classification)}`}>
+                          {badgeText(e.classification)}
+                        </span>
+                        <p class="text-neutral-200 truncate">{e.description}</p>
+                        {e.category && (
+                          <span class="text-[10px] text-neutral-500 font-mono shrink-0">[{e.category}]</span>
+                        )}
+                      </div>
+                      <p class="text-[10px] text-neutral-600 mt-0.5 ml-0.5">
                         {e.billed_invoice_id
                           ? `pinned to ${e.invoice_number}`
                           : 'attaches to next invoice'}
@@ -195,8 +264,16 @@ for (const r of draftInvRows.rows) {
                         {new Date(e.created_at).toISOString().split('T')[0]}
                       </p>
                     </div>
-                    <div class="flex items-center gap-3 shrink-0">
+                    <div class="flex items-center gap-2 shrink-0">
                       <span class="text-neutral-100 tabular-nums">${e.amount.toFixed(2)}</span>
+                      {(e.classification === 'needs_approval' || e.classification === 'manual_review') && (
+                        <button
+                          data-approve={e.id}
+                          class="text-[11px] text-emerald-400 hover:text-emerald-300 tracking-wide border border-emerald-500/30 bg-emerald-500/[0.04] hover:bg-emerald-500/10 rounded px-2 py-0.5 transition-colors"
+                        >
+                          approve
+                        </button>
+                      )}
                       <button
                         data-delete={e.id}
                         class="text-[11px] text-neutral-500 hover:text-red-400 transition-colors"
@@ -266,6 +343,30 @@ for (const r of draftInvRows.rows) {
         return;
       }
       window.location.reload();
+    });
+
+    document.querySelectorAll('[data-approve]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-approve');
+        if (!id) return;
+        btn.setAttribute('disabled', 'true');
+        try {
+          const res = await fetch(`/portal/api/admin/expenses/${id}/approve`, {
+            method: 'POST',
+            headers: { 'X-CSRF-Token': csrfToken },
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            alert(data.error || `Approve failed (${res.status})`);
+            btn.removeAttribute('disabled');
+            return;
+          }
+          window.location.reload();
+        } catch (err) {
+          alert(`Request failed: ${err}`);
+          btn.removeAttribute('disabled');
+        }
+      });
     });
 
     document.querySelectorAll('[data-delete]').forEach((btn) => {

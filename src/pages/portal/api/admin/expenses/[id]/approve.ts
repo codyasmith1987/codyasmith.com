@@ -47,10 +47,10 @@ export const POST: APIRoute = async ({ locals, params }) => {
     const billedInvoiceId = r[4] as string | null;
     const invoiceStatus = r[5] as string | null;
 
-    if (classification !== 'needs_approval') {
+    if (classification !== 'needs_approval' && classification !== 'manual_review') {
       return json(
         {
-          error: `cannot approve: classification is '${classification ?? 'NULL'}', expected 'needs_approval'`,
+          error: `cannot approve: classification is '${classification ?? 'NULL'}', expected 'needs_approval' or 'manual_review'`,
         },
         409
       );

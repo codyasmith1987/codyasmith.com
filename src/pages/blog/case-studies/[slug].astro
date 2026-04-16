@@ -1,0 +1,229 @@
+---
+import { getCollection, render } from 'astro:content';
+import BlogPost from '../../../layouts/BlogPost.astro';
+import { formatDate, formatMonthYear, getAllEntries, relatedByTags, tagSlug } from '../../../lib/blog';
+
+export const prerender = true;
+
+export async function getStaticPaths() {
+  const all = await getCollection('caseStudies');
+  return all
+    .filter((e) => !e.data.draft)
+    .map((entry) => ({
+      params: { slug: entry.id },
+      props: { entry },
+    }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+const d = entry.data;
+const durationText = d.duration.end
+  ? `${formatMonthYear(d.duration.start)} to ${formatMonthYear(d.duration.end)}`
+  : `${formatMonthYear(d.duration.start)} to ongoing`;
+
+const all = await getAllEntries();
+const currentHref = `/blog/case-studies/${entry.id}`;
+const currentUnified = all.find((e) => e.href === currentHref)!;
+const related = relatedByTags(currentUnified, all, 3);
+
+const clientName = d.clientAnonymized ? 'Confidential client' : d.client;
+const ogImage = `/blog/og/case-studies/${entry.id}.png`;
+---
+
+<BlogPost title={d.title} description={d.description} ogImage={ogImage}>
+  <article data-elm-host data-elm="stars" class="blog-case pt-32 pb-24">
+    <!-- Eyebrow -->
+    <div class="px-6 mb-8">
+      <div class="max-w-5xl mx-auto">
+        <p class="font-mono text-[10px] tracking-[0.25em] uppercase text-amber-400">
+          <a href="/blog/case-studies" class="hover:text-amber-300">Case studies</a>
+          <span class="text-neutral-700 mx-2">/</span>
+          <span class="text-neutral-400">{d.sector}</span>
+        </p>
+      </div>
+    </div>
+
+    <!-- Title + Triad -->
+    <header class="px-6 mb-12">
+      <div class="max-w-5xl mx-auto">
+        <h1 class="font-serif text-5xl md:text-6xl leading-[1.05] text-neutral-100 tracking-tight mb-6">
+          {d.title}
+        </h1>
+        <p class="text-lg text-neutral-400 leading-relaxed max-w-3xl mb-10">{d.description}</p>
+
+        <!-- Problem / Approach / Outcome triad -->
+        <div class="grid md:grid-cols-3 gap-6 md:gap-10 border-t border-b border-white/5 py-8">
+          <div>
+            <p class="font-mono text-[10px] tracking-[0.25em] uppercase text-neutral-500 mb-2">The mess</p>
+            <p class="font-serif text-lg text-neutral-200 leading-snug">{d.problem}</p>
+          </div>
+          <div>
+            <p class="font-mono text-[10px] tracking-[0.25em] uppercase text-neutral-500 mb-2">The move</p>
+            <p class="font-serif text-lg text-neutral-200 leading-snug">{d.approach}</p>
+          </div>
+          <div>
+            <p class="font-mono text-[10px] tracking-[0.25em] uppercase text-amber-400 mb-2">What changed</p>
+            <p class="font-serif text-lg text-neutral-100 leading-snug">{d.outcome}</p>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Metadata strip -->
+    <div class="px-6 mb-12">
+      <div class="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6 text-[0.85rem]">
+        <div>
+          <p class="font-mono text-[9px] tracking-[0.2em] uppercase text-neutral-600 mb-1">Client</p>
+          <p class="text-neutral-200">{clientName}</p>
+        </div>
+        <div>
+          <p class="font-mono text-[9px] tracking-[0.2em] uppercase text-neutral-600 mb-1">Role</p>
+          <p class="text-neutral-200">{d.role}</p>
+        </div>
+        <div>
+          <p class="font-mono text-[9px] tracking-[0.2em] uppercase text-neutral-600 mb-1">Duration</p>
+          <p class="text-neutral-200">{durationText}</p>
+        </div>
+        <div>
+          <p class="font-mono text-[9px] tracking-[0.2em] uppercase text-neutral-600 mb-1">Published</p>
+          <p class="text-neutral-200">{formatDate(d.publishDate)}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metric strip -->
+    {d.metrics.length > 0 && (
+      <section class="px-6 mb-16">
+        <div class="max-w-5xl mx-auto">
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-8 p-8 rounded-lg surface-1 border border-white/5">
+            {d.metrics.map((m) => {
+              const arrow = m.direction === 'up' ? '↑' : m.direction === 'down' ? '↓' : '';
+              return (
+                <div>
+                  <p class="font-mono text-[10px] tracking-[0.2em] uppercase text-neutral-500 mb-2">{m.label}</p>
+                  <p class="font-serif text-4xl md:text-5xl text-neutral-100 leading-none">
+                    {arrow && <span class="text-amber-400 text-3xl md:text-4xl mr-1">{arrow}</span>}
+                    {m.value}
+                  </p>
+                  {m.context && <p class="text-xs text-neutral-500 mt-2 leading-relaxed">{m.context}</p>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+    )}
+
+    <!-- Cover -->
+    {d.cover && (
+      <div class="px-6 mb-14">
+        <div class="max-w-5xl mx-auto">
+          <figure>
+            <img
+              src={d.cover.src}
+              alt={d.cover.alt}
+              class="w-full rounded-lg"
+              loading="eager"
+            />
+            {d.cover.credit && (
+              <figcaption class="text-right mt-2 font-mono text-[10px] tracking-[0.15em] uppercase text-neutral-600">
+                {d.cover.credit}
+              </figcaption>
+            )}
+          </figure>
+        </div>
+      </div>
+    )}
+
+    <!-- Body -->
+    <div class="px-6">
+      <div class="max-w-3xl mx-auto">
+        <div class="blog-prose">
+          <Content />
+        </div>
+      </div>
+    </div>
+
+    <!-- Services / Tags -->
+    <div class="px-6 mt-16">
+      <div class="max-w-3xl mx-auto space-y-6 border-t border-white/5 pt-8">
+        {d.services.length > 0 && (
+          <div>
+            <p class="font-mono text-[10px] tracking-[0.2em] uppercase text-neutral-600 mb-3">Services</p>
+            <div class="flex flex-wrap gap-2">
+              {d.services.map((s) => (
+                <span class="text-xs text-neutral-300 border border-amber-500/30 rounded px-2 py-1 font-mono tracking-wide">{s}</span>
+              ))}
+            </div>
+          </div>
+        )}
+        {d.tags.length > 0 && (
+          <div>
+            <p class="font-mono text-[10px] tracking-[0.2em] uppercase text-neutral-600 mb-3">Tagged</p>
+            <div class="flex flex-wrap gap-2">
+              {d.tags.map((tag) => (
+                <a
+                  href={`/blog/tags/${tagSlug(tag)}`}
+                  class="text-xs text-neutral-400 hover:text-amber-400 transition-colors font-mono tracking-wide border border-white/5 rounded px-2 py-1"
+                >{tag}</a>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+
+    <!-- Closing CTA -->
+    <section class="px-6 mt-20">
+      <div class="max-w-3xl mx-auto p-10 rounded-lg surface-1 border border-amber-500/20">
+        <p class="font-mono text-[10px] tracking-[0.25em] uppercase text-amber-400 mb-4">Sound familiar?</p>
+        <p class="font-serif text-2xl md:text-3xl text-neutral-100 leading-snug mb-6">
+          If the mess rhymes with yours, the move probably does too. Tell me about it.
+        </p>
+        <a
+          href="/contact"
+          class="inline-flex items-center gap-2 text-amber-400 hover:text-amber-300 font-mono text-xs tracking-[0.2em] uppercase transition-colors"
+        >
+          Let's talk <span aria-hidden="true">&rarr;</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- Related -->
+    {related.length > 0 && (
+      <aside class="px-6 mt-20">
+        <div class="max-w-3xl mx-auto">
+          <p class="font-mono text-[10px] tracking-[0.25em] uppercase text-amber-400 mb-6">Related</p>
+          <ul class="space-y-5">
+            {related.map((r) => (
+              <li>
+                <a href={r.href} class="group block">
+                  <p class="font-mono text-[10px] tracking-[0.2em] uppercase text-neutral-600 mb-1">
+                    {r.kind === 'case-study' ? 'Case study' : 'Article'}
+                  </p>
+                  <h3 class="font-serif text-xl text-neutral-200 group-hover:text-amber-400 transition-colors leading-tight">
+                    {r.data.title}
+                  </h3>
+                  <p class="text-sm text-neutral-500 mt-1 leading-relaxed">{r.data.description}</p>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </aside>
+    )}
+
+    <!-- Back -->
+    <div class="px-6 mt-20">
+      <div class="max-w-3xl mx-auto">
+        <a
+          href="/blog/case-studies"
+          class="inline-flex items-center gap-2 font-mono text-[11px] tracking-[0.2em] uppercase text-neutral-500 hover:text-amber-400 transition-colors"
+        >
+          <span aria-hidden="true">&larr;</span> All case studies
+        </a>
+      </div>
+    </div>
+  </article>
+</BlogPost>

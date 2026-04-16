@@ -3,6 +3,7 @@ const links = [
   { href: '/', label: 'Home' },
   { href: '/services', label: 'Services' },
   { href: '/work', label: 'Work' },
+  { href: '/blog', label: 'Blog' },
   { href: '/about', label: 'About' },
   { href: '/contact', label: 'Contact' },
   { href: '/portal/login', label: 'Portal' },
@@ -70,11 +71,12 @@ const links = [
   }
 
   function initNav() {
-    // Active state
+    // Active state — exact for '/', prefix match for sections
     const path = window.location.pathname.replace(/\/$/, '') || '/';
     document.querySelectorAll('[data-nav-link]').forEach(link => {
       const href = link.getAttribute('href')?.replace(/\/$/, '') || '/';
-      if (path === href) {
+      const isActive = href === '/' ? path === '/' : (path === href || path.startsWith(href + '/'));
+      if (isActive) {
         link.classList.remove('text-neutral-500');
         link.classList.add('text-amber-400');
         link.setAttribute('aria-current', 'page');

@@ -1,0 +1,130 @@
+---
+import Base from '../../../layouts/Base.astro';
+import { getArticles, formatDate, readingTime, tagSlug } from '../../../lib/blog';
+
+export const prerender = true;
+
+const articles = await getArticles();
+const tagSet = new Map<string, number>();
+for (const a of articles) {
+  for (const t of a.data.tags) tagSet.set(t, (tagSet.get(t) ?? 0) + 1);
+}
+const tags = Array.from(tagSet.entries())
+  .map(([tag, count]) => ({ tag, count }))
+  .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+---
+
+<Base
+  title="Articles | Cody Smith"
+  description="Thinking out loud about marketing, persuasion, and the craft of getting small businesses found."
+>
+  <section class="relative pt-40 pb-12 px-6 overflow-hidden">
+    <div class="absolute top-0 right-1/4 w-[500px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative max-w-4xl mx-auto">
+      <p class="reveal font-mono text-[11px] tracking-[0.25em] uppercase text-amber-400 mb-8">
+        <a href="/blog" class="hover:text-amber-300">Blog</a>
+        <span class="text-neutral-700 mx-2">/</span>
+        <span class="text-neutral-400">Articles</span>
+      </p>
+      <h1 class="reveal font-serif text-5xl md:text-6xl leading-[1.05] text-neutral-100 tracking-tight">
+        I argue for a living.<br />
+        <span class="font-quote italic">You get what you paid for.</span>
+      </h1>
+      <p class="reveal mt-6 text-lg text-neutral-400 max-w-2xl leading-relaxed">
+        Essays, arguments, the occasional rant. Nothing goes up until I can defend it. A lot of things never go up.
+      </p>
+    </div>
+  </section>
+
+  {tags.length > 0 && (
+    <section class="px-6 pb-8">
+      <div class="max-w-4xl mx-auto">
+        <div id="tag-filter-bar" class="flex flex-wrap gap-2 items-center">
+          <button
+            type="button"
+            data-tag=""
+            class="tag-chip is-active text-xs font-mono tracking-wide px-3 py-1.5 rounded border border-amber-500/30 bg-amber-500/5 text-amber-400"
+          >All</button>
+          {tags.map(({ tag, count }) => (
+            <button
+              type="button"
+              data-tag={tag}
+              class="tag-chip text-xs font-mono tracking-wide px-3 py-1.5 rounded border border-white/5 text-neutral-400 hover:border-amber-500/30 hover:text-amber-400 transition-colors"
+            >{tag} <span class="text-[10px] text-neutral-600 ml-1">{count}</span></button>
+          ))}
+        </div>
+      </div>
+    </section>
+  )}
+
+  <section class="px-6 py-16">
+    <div class="max-w-4xl mx-auto">
+      {articles.length === 0 ? (
+        <div class="p-10 rounded-lg surface-1 border border-white/5 text-center">
+          <p class="font-mono text-[10px] tracking-[0.25em] uppercase text-neutral-500 mb-4">Nothing yet</p>
+          <p class="font-serif text-2xl text-neutral-200 leading-snug">Either nothing's publishable yet, or Cody's been staring at the ceiling again. Hard to say which.</p>
+        </div>
+      ) : (
+        <ul id="article-list" class="divide-y divide-white/5">
+          {articles.map((a) => (
+            <li data-tags={a.data.tags.join('|')} class="article-row">
+              <a href={`/blog/articles/${a.id}`} class="group block py-6 md:py-8 md:grid md:grid-cols-[9rem_1fr] md:gap-8">
+                <div class="font-mono text-[10px] tracking-[0.2em] uppercase text-neutral-500 mb-2 md:mb-0 md:mt-1 flex md:block items-center gap-3">
+                  <time datetime={a.data.publishDate.toISOString()}>{formatDate(a.data.publishDate)}</time>
+                  <span class="md:hidden text-neutral-700">&middot;</span>
+                  <span class="md:block md:mt-1">{readingTime(a.body)} min</span>
+                </div>
+                <div>
+                  <h2 class="font-serif text-2xl md:text-[1.7rem] text-neutral-100 leading-tight group-hover:text-amber-400 transition-colors">
+                    {a.data.title}
+                  </h2>
+                  <p class="text-neutral-400 mt-2 leading-relaxed">{a.data.description}</p>
+                  {a.data.tags.length > 0 && (
+                    <div class="mt-3 flex flex-wrap gap-2">
+                      {a.data.tags.map((tag) => (
+                        <span class="text-[10px] text-neutral-500 font-mono tracking-wide">{tag}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  </section>
+</Base>
+
+<script>
+  function initTagFilter() {
+    const bar = document.getElementById('tag-filter-bar');
+    const list = document.getElementById('article-list');
+    if (!bar || !list) return;
+
+    const applyFilter = (selectedTag: string) => {
+      list.querySelectorAll<HTMLElement>('.article-row').forEach((row) => {
+        const tags = (row.dataset.tags || '').split('|').filter(Boolean);
+        const show = !selectedTag || tags.includes(selectedTag);
+        row.style.display = show ? '' : 'none';
+      });
+      bar.querySelectorAll<HTMLButtonElement>('.tag-chip').forEach((b) => {
+        const isActive = (b.dataset.tag || '') === selectedTag;
+        b.classList.toggle('is-active', isActive);
+        b.classList.toggle('border-amber-500/30', isActive);
+        b.classList.toggle('bg-amber-500/5', isActive);
+        b.classList.toggle('text-amber-400', isActive);
+        b.classList.toggle('border-white/5', !isActive);
+        b.classList.toggle('text-neutral-400', !isActive);
+      });
+    };
+
+    bar.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('button.tag-chip') as HTMLButtonElement | null;
+      if (!btn) return;
+      applyFilter(btn.dataset.tag || '');
+    });
+  }
+  initTagFilter();
+  document.addEventListener('astro:after-swap', initTagFilter);
+</script>

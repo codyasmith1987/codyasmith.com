@@ -1,0 +1,27 @@
+---
+interface Props {
+  label: string;
+  value: string;
+  direction?: 'up' | 'down' | 'neutral';
+  unit?: string;
+  context?: string;
+}
+
+const { label, value, direction = 'neutral', unit, context } = Astro.props;
+
+const arrow = direction === 'up' ? '↑' : direction === 'down' ? '↓' : '';
+const arrowColor =
+  direction === 'up' ? 'text-amber-400' :
+  direction === 'down' ? 'text-amber-400' :
+  'text-neutral-500';
+---
+
+<div class="blog-metric inline-block my-4 mr-6 last:mr-0 align-top">
+  <p class="font-mono text-[10px] tracking-[0.2em] uppercase text-neutral-500 mb-1">{label}</p>
+  <p class="font-serif text-4xl text-neutral-100 leading-none">
+    {arrow && <span class={`mr-1 text-2xl ${arrowColor}`}>{arrow}</span>}
+    {value}
+    {unit && <span class="text-neutral-500 text-2xl ml-1">{unit}</span>}
+  </p>
+  {context && <p class="text-[0.8rem] text-neutral-500 mt-2 max-w-[18rem]">{context}</p>}
+</div>

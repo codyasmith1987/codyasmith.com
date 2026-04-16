@@ -1,0 +1,11 @@
+---
+interface Props {
+  axis: 'vibe' | 'frame' | 'phase' | 'processing';
+  value: string;
+}
+
+const { axis, value } = Astro.props;
+const attr: Record<string, string> = { [`data-${axis}`]: value };
+---
+
+<span class="blog-variant" style="display:none" {...attr}><slot /></span>

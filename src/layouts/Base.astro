@@ -8,10 +8,13 @@ import { ClientRouter } from 'astro:transitions';
 interface Props {
   title: string;
   description?: string;
+  ogImage?: string;
+  ogType?: 'website' | 'article';
 }
 
-const { title, description = "Cody Smith — web management, marketing strategy, and consulting for small businesses in Cedar City, Utah and beyond." } = Astro.props;
+const { title, description = "Cody Smith — web management, marketing strategy, and consulting for small businesses in Cedar City, Utah and beyond.", ogImage, ogType = 'website' } = Astro.props;
 const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
+const resolvedOgImage = ogImage ? new URL(ogImage, 'https://codyasmith.com').href : undefined;
 ---
 
 <!DOCTYPE html>
@@ -27,17 +30,19 @@ const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
     <link rel="canonical" href={canonicalURL.href} />
 
     <!-- Open Graph -->
-    <meta property="og:type" content="website" />
+    <meta property="og:type" content={ogType} />
     <meta property="og:url" content={canonicalURL.href} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:site_name" content="Cody Smith" />
     <meta property="og:locale" content="en_US" />
+    {resolvedOgImage && <meta property="og:image" content={resolvedOgImage} />}
 
     <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:card" content={resolvedOgImage ? "summary_large_image" : "summary"} />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
+    {resolvedOgImage && <meta name="twitter:image" content={resolvedOgImage} />}
 
     <title>{title}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />

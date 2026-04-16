@@ -1,0 +1,158 @@
+---
+import { getCollection, render } from 'astro:content';
+import BlogPost from '../../../layouts/BlogPost.astro';
+import { formatDate, readingTime, getAllEntries, relatedByTags, tagSlug } from '../../../lib/blog';
+
+export const prerender = true;
+
+export async function getStaticPaths() {
+  const all = await getCollection('articles');
+  return all
+    .filter((e) => !e.data.draft)
+    .map((entry) => ({
+      params: { slug: entry.id },
+      props: { entry },
+    }));
+}
+
+const { entry } = Astro.props;
+const { Content, remarkPluginFrontmatter } = await render(entry);
+const body = entry.body ?? '';
+const mins = readingTime(body);
+const published = formatDate(entry.data.publishDate);
+const updated = entry.data.updated ? formatDate(entry.data.updated) : null;
+
+const all = await getAllEntries();
+const currentHref = `/blog/articles/${entry.id}`;
+const currentUnified = all.find((e) => e.href === currentHref)!;
+const related = relatedByTags(currentUnified, all, 3);
+
+const ogImage = `/blog/og/articles/${entry.id}.png`;
+---
+
+<BlogPost title={entry.data.title} description={entry.data.description} ogImage={ogImage}>
+  <article data-elm-host data-elm="stars" class="blog-article pt-32 pb-24">
+    <!-- Eyebrow -->
+    <div class="px-6 mb-10">
+      <div class="max-w-3xl mx-auto">
+        <p class="font-mono text-[10px] tracking-[0.25em] uppercase text-amber-400">
+          <a href="/blog/articles" class="hover:text-amber-300">Articles</a>
+          {entry.data.series && (
+            <>
+              <span class="text-neutral-700 mx-2">/</span>
+              <span class="text-neutral-400">{entry.data.series.name} &middot; Part {entry.data.series.order}</span>
+            </>
+          )}
+        </p>
+      </div>
+    </div>
+
+    <!-- Title -->
+    <header class="px-6 mb-10">
+      <div class="max-w-3xl mx-auto">
+        <h1 class="font-serif text-5xl md:text-6xl leading-[1.05] text-neutral-100 tracking-tight">
+          {entry.data.title}
+        </h1>
+        <p class="mt-6 text-lg text-neutral-400 leading-relaxed max-w-2xl">
+          {entry.data.description}
+        </p>
+      </div>
+    </header>
+
+    <!-- Meta strip -->
+    <div class="px-6 mb-12">
+      <div class="max-w-3xl mx-auto flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-[11px] tracking-[0.15em] uppercase text-neutral-500 border-t border-white/5 pt-5">
+        <time datetime={entry.data.publishDate.toISOString()}>{published}</time>
+        <span class="text-neutral-700">&middot;</span>
+        <span>{mins} min read</span>
+        {updated && (
+          <>
+            <span class="text-neutral-700">&middot;</span>
+            <span class="text-neutral-600">Updated {updated}</span>
+          </>
+        )}
+      </div>
+    </div>
+
+    <!-- Cover -->
+    {entry.data.cover && (
+      <div class="px-6 mb-14">
+        <div class="max-w-4xl mx-auto">
+          <figure>
+            <img
+              src={entry.data.cover.src}
+              alt={entry.data.cover.alt}
+              class="w-full rounded-lg"
+              loading="eager"
+            />
+            {entry.data.cover.credit && (
+              <figcaption class="text-right mt-2 font-mono text-[10px] tracking-[0.15em] uppercase text-neutral-600">
+                {entry.data.cover.credit}
+              </figcaption>
+            )}
+          </figure>
+        </div>
+      </div>
+    )}
+
+    <!-- Body -->
+    <div class="px-6">
+      <div class="max-w-3xl mx-auto">
+        <div class="blog-prose has-dropcap">
+          <Content />
+        </div>
+      </div>
+    </div>
+
+    <!-- Tags -->
+    {entry.data.tags.length > 0 && (
+      <div class="px-6 mt-16">
+        <div class="max-w-3xl mx-auto flex flex-wrap gap-2 items-center pt-6 border-t border-white/5">
+          <span class="font-mono text-[10px] tracking-[0.2em] uppercase text-neutral-600 mr-2">Tagged</span>
+          {entry.data.tags.map((tag) => (
+            <a
+              href={`/blog/tags/${tagSlug(tag)}`}
+              class="text-xs text-neutral-400 hover:text-amber-400 transition-colors font-mono tracking-wide border border-white/5 rounded px-2 py-1"
+            >{tag}</a>
+          ))}
+        </div>
+      </div>
+    )}
+
+    <!-- Related -->
+    {related.length > 0 && (
+      <aside class="px-6 mt-20">
+        <div class="max-w-3xl mx-auto">
+          <p class="font-mono text-[10px] tracking-[0.25em] uppercase text-amber-400 mb-6">Related</p>
+          <ul class="space-y-5">
+            {related.map((r) => (
+              <li>
+                <a href={r.href} class="group block">
+                  <p class="font-mono text-[10px] tracking-[0.2em] uppercase text-neutral-600 mb-1">
+                    {r.kind === 'case-study' ? 'Case study' : 'Article'}
+                  </p>
+                  <h3 class="font-serif text-xl text-neutral-200 group-hover:text-amber-400 transition-colors leading-tight">
+                    {r.data.title}
+                  </h3>
+                  <p class="text-sm text-neutral-500 mt-1 leading-relaxed">{r.data.description}</p>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </aside>
+    )}
+
+    <!-- Back -->
+    <div class="px-6 mt-20">
+      <div class="max-w-3xl mx-auto">
+        <a
+          href="/blog/articles"
+          class="inline-flex items-center gap-2 font-mono text-[11px] tracking-[0.2em] uppercase text-neutral-500 hover:text-amber-400 transition-colors"
+        >
+          <span aria-hidden="true">&larr;</span> All articles
+        </a>
+      </div>
+    </div>
+  </article>
+</BlogPost>

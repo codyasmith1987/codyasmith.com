@@ -1,0 +1,141 @@
+---
+import Base from '../../../layouts/Base.astro';
+import { getCaseStudies, formatMonthYear, tagSlug } from '../../../lib/blog';
+
+export const prerender = true;
+
+const caseStudies = await getCaseStudies();
+const sectorSet = new Map<string, number>();
+for (const c of caseStudies) {
+  sectorSet.set(c.data.sector, (sectorSet.get(c.data.sector) ?? 0) + 1);
+}
+const sectors = Array.from(sectorSet.entries())
+  .map(([sector, count]) => ({ sector, count }))
+  .sort((a, b) => b.count - a.count || a.sector.localeCompare(b.sector));
+---
+
+<Base
+  title="Case studies | Cody Smith"
+  description="Receipts. What the problem was, what we tried, what moved, and what didn't."
+>
+  <section class="relative pt-40 pb-12 px-6 overflow-hidden">
+    <div class="absolute top-0 left-1/4 w-[500px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative max-w-5xl mx-auto">
+      <p class="reveal font-mono text-[11px] tracking-[0.25em] uppercase text-amber-400 mb-8">
+        <a href="/blog" class="hover:text-amber-300">Blog</a>
+        <span class="text-neutral-700 mx-2">/</span>
+        <span class="text-neutral-400">Case studies</span>
+      </p>
+      <h1 class="reveal font-serif text-5xl md:text-6xl leading-[1.05] text-neutral-100 tracking-tight">
+        Jobs my lawyer cleared.<br />
+        <span class="font-quote italic">The rest is for the bar.</span>
+      </h1>
+      <p class="reveal mt-6 text-lg text-neutral-400 max-w-2xl leading-relaxed">
+        What broke. What we tried. What moved. What didn't. In that order, without the PowerPoint.
+      </p>
+    </div>
+  </section>
+
+  {sectors.length > 0 && (
+    <section class="px-6 pb-8">
+      <div class="max-w-5xl mx-auto">
+        <div id="sector-filter-bar" class="flex flex-wrap gap-2 items-center">
+          <button
+            type="button"
+            data-sector=""
+            class="sector-chip is-active text-xs font-mono tracking-wide px-3 py-1.5 rounded border border-amber-500/30 bg-amber-500/5 text-amber-400"
+          >All sectors</button>
+          {sectors.map(({ sector, count }) => (
+            <button
+              type="button"
+              data-sector={sector}
+              class="sector-chip text-xs font-mono tracking-wide px-3 py-1.5 rounded border border-white/5 text-neutral-400 hover:border-amber-500/30 hover:text-amber-400 transition-colors"
+            >{sector} <span class="text-[10px] text-neutral-600 ml-1">{count}</span></button>
+          ))}
+        </div>
+      </div>
+    </section>
+  )}
+
+  <section class="px-6 py-16">
+    <div class="max-w-5xl mx-auto">
+      {caseStudies.length === 0 ? (
+        <div class="p-10 rounded-lg surface-1 border border-white/5 text-center">
+          <p class="font-mono text-[10px] tracking-[0.25em] uppercase text-neutral-500 mb-4">Nothing yet</p>
+          <p class="font-serif text-2xl text-neutral-200 leading-snug">Either the NDAs haven't lifted, or nobody's hired Cody to do anything worth writing up. He'd prefer you assume the first one.</p>
+        </div>
+      ) : (
+        <ul id="case-grid" class="grid md:grid-cols-2 gap-6">
+          {caseStudies.map((c) => (
+            <li data-sector={c.data.sector} class="case-card">
+              <a href={`/blog/case-studies/${c.id}`} class="glow-card block p-8 group h-full">
+                <p class="font-mono text-[10px] tracking-[0.2em] uppercase text-neutral-500 mb-3">
+                  <span>{c.data.clientAnonymized ? 'Confidential' : c.data.client}</span>
+                  <span class="text-neutral-700 mx-2">&middot;</span>
+                  <span>{c.data.sector}</span>
+                </p>
+                <h2 class="font-serif text-2xl md:text-3xl text-neutral-100 leading-tight mb-4 group-hover:text-amber-400 transition-colors">
+                  {c.data.title}
+                </h2>
+                <p class="text-neutral-400 leading-relaxed mb-6">{c.data.description}</p>
+
+                {c.data.metrics.length > 0 && (
+                  <div class="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
+                    {c.data.metrics.slice(0, 2).map((m) => {
+                      const arrow = m.direction === 'up' ? '↑' : m.direction === 'down' ? '↓' : '';
+                      return (
+                        <div>
+                          <p class="font-mono text-[9px] tracking-[0.2em] uppercase text-neutral-600 mb-1">{m.label}</p>
+                          <p class="font-serif text-2xl text-neutral-100 leading-none">
+                            {arrow && <span class="text-amber-400 text-lg mr-1">{arrow}</span>}{m.value}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div class="mt-5 pt-5 border-t border-white/5 flex items-center justify-between text-xs font-mono tracking-wide text-neutral-500">
+                  <span>{formatMonthYear(c.data.duration.start)}{c.data.duration.end ? ` to ${formatMonthYear(c.data.duration.end)}` : ', ongoing'}</span>
+                  <span class="text-amber-400/80 group-hover:text-amber-400">Read &rarr;</span>
+                </div>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  </section>
+</Base>
+
+<script>
+  function initSectorFilter() {
+    const bar = document.getElementById('sector-filter-bar');
+    const grid = document.getElementById('case-grid');
+    if (!bar || !grid) return;
+
+    const applyFilter = (selected: string) => {
+      grid.querySelectorAll<HTMLElement>('.case-card').forEach((card) => {
+        const sector = card.dataset.sector || '';
+        card.style.display = !selected || sector === selected ? '' : 'none';
+      });
+      bar.querySelectorAll<HTMLButtonElement>('.sector-chip').forEach((b) => {
+        const isActive = (b.dataset.sector || '') === selected;
+        b.classList.toggle('is-active', isActive);
+        b.classList.toggle('border-amber-500/30', isActive);
+        b.classList.toggle('bg-amber-500/5', isActive);
+        b.classList.toggle('text-amber-400', isActive);
+        b.classList.toggle('border-white/5', !isActive);
+        b.classList.toggle('text-neutral-400', !isActive);
+      });
+    };
+
+    bar.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('button.sector-chip') as HTMLButtonElement | null;
+      if (!btn) return;
+      applyFilter(btn.dataset.sector || '');
+    });
+  }
+  initSectorFilter();
+  document.addEventListener('astro:after-swap', initSectorFilter);
+</script>

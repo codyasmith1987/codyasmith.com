@@ -1,0 +1,34 @@
+---
+interface Props {
+  fallback?: string;
+  prefix?: string;
+  suffix?: string;
+}
+
+const { fallback = 'you', prefix = '', suffix = '' } = Astro.props;
+---
+
+<span
+  class="blog-reader"
+  data-reader-name
+  data-fallback={fallback}
+  data-prefix={prefix}
+  data-suffix={suffix}
+>{prefix}{fallback}{suffix}</span>
+
+<script>
+  function applyReaderName() {
+    try {
+      const data = JSON.parse(localStorage.getItem('cs-quiz-answers') || '{}');
+      const first = (data.name || '').split(' ')[0];
+      document.querySelectorAll<HTMLElement>('[data-reader-name]').forEach((el) => {
+        const prefix = el.dataset.prefix ?? '';
+        const suffix = el.dataset.suffix ?? '';
+        const fallback = el.dataset.fallback ?? 'you';
+        el.textContent = `${prefix}${first || fallback}${suffix}`;
+      });
+    } catch { /* empty */ }
+  }
+  applyReaderName();
+  document.addEventListener('astro:after-swap', applyReaderName);
+</script>

@@ -1,0 +1,28 @@
+---
+interface Props {
+  n: number;
+  id?: string;
+}
+
+const { n, id } = Astro.props;
+const slug = id ?? `fn-${n}`;
+---
+
+<sup class="blog-footnote-ref">
+  <a
+    href={`#${slug}`}
+    id={`ref-${slug}`}
+    class="text-amber-400 hover:text-amber-300 no-underline font-mono text-[0.7em]"
+    data-fn-ref
+    data-fn-target={slug}
+  >[{n}]</a>
+  <span class="fn-content hidden" data-fn-content>
+    <slot />
+  </span>
+</sup>
+
+<style>
+  .blog-footnote-ref { font-size: 0.85em; }
+  /* Stars: keep refs visible, footnotes list at bottom.
+     Clouds: refs trigger inline popovers on click/focus (handled by post template script). */
+</style>

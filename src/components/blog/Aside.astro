@@ -1,0 +1,30 @@
+---
+interface Props {
+  vibe?: 'beach' | 'mountain';
+  frame?: 'sun' | 'moon';
+  phase?: 'spring' | 'fall';
+  processing?: 'stars' | 'clouds';
+  label?: string;
+}
+
+const { vibe, frame, phase, processing, label = 'Aside' } = Astro.props;
+
+const attrs: Record<string, string> = {};
+if (vibe) attrs['data-vibe'] = vibe;
+if (frame) attrs['data-frame'] = frame;
+if (phase) attrs['data-phase'] = phase;
+if (processing) attrs['data-processing'] = processing;
+
+const isConditional = Boolean(vibe || frame || phase || processing);
+---
+
+<aside
+  class="blog-aside my-8 py-5 px-6 border-l-2 border-amber-500/40 bg-neutral-900/40 rounded-r-lg"
+  style={isConditional ? 'display:none' : undefined}
+  {...attrs}
+>
+  <p class="font-mono text-[10px] tracking-[0.2em] uppercase text-amber-400 mb-2">{label}</p>
+  <div class="text-neutral-300 text-[0.95rem] leading-relaxed">
+    <slot />
+  </div>
+</aside>

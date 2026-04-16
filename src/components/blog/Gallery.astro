@@ -1,0 +1,36 @@
+---
+interface Image {
+  src: string;
+  alt: string;
+  caption?: string;
+  credit?: string;
+}
+
+interface Props {
+  images: Image[];
+  columns?: 2 | 3 | 4;
+}
+
+const { images, columns = 2 } = Astro.props;
+const colClass = columns === 4 ? 'md:grid-cols-4' : columns === 3 ? 'md:grid-cols-3' : 'md:grid-cols-2';
+---
+
+<div class={`blog-gallery my-10 grid grid-cols-1 ${colClass} gap-4`}>
+  {images.map((img) => (
+    <figure class="m-0">
+      <img
+        src={img.src}
+        alt={img.alt}
+        loading="lazy"
+        decoding="async"
+        class="w-full rounded-lg block"
+      />
+      {(img.caption || img.credit) && (
+        <figcaption class="mt-2 text-[0.8rem] text-neutral-500 leading-relaxed">
+          {img.caption}
+          {img.credit && <span class="block font-mono text-[9px] tracking-[0.15em] uppercase text-neutral-600 mt-1">{img.credit}</span>}
+        </figcaption>
+      )}
+    </figure>
+  ))}
+</div>

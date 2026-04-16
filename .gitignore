@@ -31,3 +31,6 @@ backups/
 
 # jetbrains setting folder
 .idea/
+
+# OG smoke-test output (run via: npx tsx scripts/test-og.mjs)
+scripts/test-og-output.png

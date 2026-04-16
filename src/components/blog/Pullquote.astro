@@ -1,0 +1,49 @@
+---
+interface Props {
+  attribution?: string;
+}
+const { attribution } = Astro.props;
+---
+
+<figure class="blog-pullquote my-14">
+  <blockquote class="font-quote italic text-neutral-100 leading-[1.15] text-center">
+    <span class="pq-mark font-serif text-amber-400/60 select-none" aria-hidden="true">&ldquo;</span>
+    <span class="pq-text"><slot /></span>
+    <span class="pq-mark font-serif text-amber-400/60 select-none" aria-hidden="true">&rdquo;</span>
+  </blockquote>
+  {attribution && (
+    <figcaption class="text-center font-mono text-[10px] tracking-[0.2em] uppercase text-neutral-500 mt-5">
+      &mdash; {attribution}
+    </figcaption>
+  )}
+</figure>
+
+<style>
+  .blog-pullquote .pq-text {
+    font-size: clamp(1.5rem, 3.5vw, 2rem);
+  }
+  .blog-pullquote .pq-mark {
+    font-size: clamp(1.75rem, 4vw, 2.5rem);
+    line-height: 0;
+    position: relative;
+    top: 0.25em;
+    margin: 0 0.15em;
+  }
+
+  /* ELM-tuned: clouds promotes pullquotes (bigger, more whitespace);
+     stars keeps them compact and inline-feeling */
+  :global([data-elm="clouds"]) .blog-pullquote {
+    margin-top: 4rem;
+    margin-bottom: 4rem;
+  }
+  :global([data-elm="clouds"]) .blog-pullquote .pq-text {
+    font-size: clamp(1.9rem, 4.5vw, 2.75rem);
+  }
+  :global([data-elm="stars"]) .blog-pullquote {
+    margin-top: 2.5rem;
+    margin-bottom: 2.5rem;
+  }
+  :global([data-elm="stars"]) .blog-pullquote .pq-text {
+    font-size: clamp(1.25rem, 2.5vw, 1.6rem);
+  }
+</style>

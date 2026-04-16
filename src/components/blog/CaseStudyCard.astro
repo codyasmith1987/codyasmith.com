@@ -1,0 +1,30 @@
+---
+import { getEntry } from 'astro:content';
+import { formatDate } from '../../lib/blog';
+
+interface Props {
+  slug: string;
+}
+
+const { slug } = Astro.props;
+const entry = await getEntry('caseStudies', slug);
+---
+
+{entry && (
+  <a
+    href={`/blog/case-studies/${entry.id}`}
+    class="blog-case-card glow-card block my-10 p-6 no-underline group"
+  >
+    <p class="font-mono text-[10px] tracking-[0.2em] uppercase text-amber-400 mb-3">Case study</p>
+    <h3 class="font-serif text-2xl text-neutral-100 leading-tight mb-2 group-hover:text-amber-400 transition-colors">
+      {entry.data.title}
+    </h3>
+    <p class="text-[0.9rem] text-neutral-400 mb-4 leading-relaxed">{entry.data.description}</p>
+    <div class="flex items-center justify-between gap-4 text-[0.8rem] text-neutral-500">
+      <span class="font-mono tracking-wider">
+        {entry.data.clientAnonymized ? 'Confidential' : entry.data.client} &middot; {entry.data.sector}
+      </span>
+      <span>{formatDate(entry.data.publishDate)}</span>
+    </div>
+  </a>
+)}

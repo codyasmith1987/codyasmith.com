@@ -1,0 +1,237 @@
+---
+import Base from './Base.astro';
+
+interface Props {
+  title: string;
+  description: string;
+  ogImage?: string;
+}
+
+const { title, description, ogImage } = Astro.props;
+const pageTitle = `${title} | Cody Smith`;
+---
+
+<Base title={pageTitle} description={description} ogImage={ogImage} ogType="article">
+  <slot />
+</Base>
+
+<script>
+  function applyElm() {
+    try {
+      const data = JSON.parse(localStorage.getItem('cs-quiz-answers') || '{}');
+      const elm = data['4'] === 'clouds' ? 'clouds' : 'stars';
+      document.querySelectorAll<HTMLElement>('[data-elm-host]').forEach((el) => {
+        el.setAttribute('data-elm', elm);
+      });
+    } catch { /* empty */ }
+  }
+
+  function wireFootnotes() {
+    const host = document.querySelector('[data-elm-host]');
+    const isClouds = host?.getAttribute('data-elm') === 'clouds';
+    if (!isClouds) return;
+    document.querySelectorAll<HTMLAnchorElement>('[data-fn-ref]').forEach((ref) => {
+      if ((ref as HTMLAnchorElement & { __wired?: boolean }).__wired) return;
+      (ref as HTMLAnchorElement & { __wired?: boolean }).__wired = true;
+      ref.addEventListener('click', (e) => {
+        e.preventDefault();
+        const content = ref.parentElement?.querySelector<HTMLElement>('[data-fn-content]');
+        if (!content) return;
+        document.querySelectorAll('.fn-popover').forEach((p) => p.remove());
+        const pop = document.createElement('span');
+        pop.className = 'fn-popover';
+        pop.innerHTML = content.innerHTML;
+        ref.parentElement?.appendChild(pop);
+        requestAnimationFrame(() => {
+          const close = (ev: MouseEvent) => {
+            if (!pop.contains(ev.target as Node) && ev.target !== ref) {
+              pop.remove();
+              document.removeEventListener('click', close);
+            }
+          };
+          document.addEventListener('click', close);
+        });
+      });
+    });
+  }
+
+  applyElm();
+  wireFootnotes();
+  document.addEventListener('astro:after-swap', () => { applyElm(); wireFootnotes(); });
+</script>
+
+<style is:global>
+  /* ========== BLOG PROSE ========== */
+  .blog-prose {
+    color: var(--color-neutral-300);
+    font-family: var(--font-quote);
+    font-size: 1.125rem;
+    line-height: 1.75;
+  }
+
+  .blog-prose > * + * { margin-top: 1.4em; }
+
+  .blog-prose p { margin-top: 1.4em; }
+  .blog-prose p:first-child { margin-top: 0; }
+
+  .blog-prose h2 {
+    font-family: var(--font-serif);
+    color: var(--color-neutral-100);
+    font-size: 2rem;
+    line-height: 1.15;
+    margin-top: 3rem;
+    margin-bottom: 1rem;
+    letter-spacing: -0.01em;
+  }
+
+  .blog-prose h3 {
+    font-family: var(--font-serif);
+    color: var(--color-neutral-100);
+    font-size: 1.5rem;
+    line-height: 1.2;
+    margin-top: 2.25rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .blog-prose h4 {
+    font-family: var(--font-sans);
+    color: var(--color-neutral-200);
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-top: 1.75rem;
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.01em;
+  }
+
+  .blog-prose a:not(.blog-case-card):not([data-fn-ref]) {
+    color: var(--color-amber-400);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+    text-decoration-color: color-mix(in srgb, var(--color-amber-400) 50%, transparent);
+    transition: text-decoration-color 0.2s ease, color 0.2s ease;
+  }
+  .blog-prose a:not(.blog-case-card):not([data-fn-ref]):hover {
+    text-decoration-color: var(--color-amber-400);
+  }
+
+  .blog-prose strong { color: var(--color-neutral-100); font-weight: 600; }
+  .blog-prose em { font-style: italic; }
+
+  .blog-prose code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    background: color-mix(in srgb, var(--color-neutral-100) 8%, transparent);
+    color: var(--color-amber-400);
+    padding: 0.15em 0.4em;
+    border-radius: 0.25em;
+  }
+
+  .blog-prose pre {
+    font-family: var(--font-mono);
+    background: var(--color-neutral-900);
+    border: 1px solid color-mix(in srgb, var(--color-neutral-100) 6%, transparent);
+    border-radius: 0.5rem;
+    padding: 1.25rem 1.5rem;
+    overflow-x: auto;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    margin: 2rem 0;
+  }
+  .blog-prose pre code {
+    background: transparent;
+    color: var(--color-neutral-200);
+    padding: 0;
+    font-size: inherit;
+  }
+
+  .blog-prose blockquote {
+    border-left: 2px solid var(--color-amber-500);
+    padding-left: 1.25rem;
+    margin: 2rem 0;
+    color: var(--color-neutral-200);
+    font-style: italic;
+  }
+
+  .blog-prose ul, .blog-prose ol {
+    padding-left: 1.5rem;
+    margin: 1.4em 0;
+  }
+  .blog-prose ul { list-style: disc; }
+  .blog-prose ol { list-style: decimal; }
+  .blog-prose li { margin: 0.5em 0; }
+  .blog-prose li::marker { color: var(--color-neutral-600); }
+
+  .blog-prose hr {
+    border: none;
+    height: 1px;
+    background: linear-gradient(to right, transparent, color-mix(in srgb, var(--color-neutral-100) 10%, transparent), transparent);
+    margin: 3rem auto;
+    width: 50%;
+  }
+
+  .blog-prose img { border-radius: 0.5rem; }
+
+  /* Dropcap for first paragraph of articles */
+  .blog-prose.has-dropcap > p:first-child::first-letter {
+    font-family: var(--font-serif);
+    font-size: 4.5rem;
+    line-height: 0.85;
+    float: left;
+    margin: 0.15rem 0.75rem 0 0;
+    color: var(--color-amber-400);
+  }
+
+  /* Footnote popover (clouds mode) */
+  .fn-popover {
+    display: inline-block;
+    position: absolute;
+    z-index: 40;
+    max-width: 22rem;
+    margin-top: 0.5rem;
+    padding: 0.85rem 1rem;
+    background: var(--color-neutral-900);
+    border: 1px solid color-mix(in srgb, var(--color-amber-500) 25%, transparent);
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.55;
+    color: var(--color-neutral-300);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+    font-style: normal;
+    font-family: var(--font-sans);
+    text-align: left;
+    transform: translate(-50%, 0.25rem);
+    left: 50%;
+  }
+
+  /* Footnotes list at bottom of post */
+  .blog-footnotes {
+    margin-top: 4rem;
+    padding-top: 2rem;
+    border-top: 1px solid color-mix(in srgb, var(--color-neutral-100) 8%, transparent);
+    font-size: 0.875rem;
+    color: var(--color-neutral-400);
+    line-height: 1.6;
+  }
+  .blog-footnotes ol {
+    list-style: decimal;
+    padding-left: 1.5rem;
+  }
+  .blog-footnotes li { margin-bottom: 0.5rem; }
+  .blog-footnotes li::marker { color: var(--color-neutral-600); font-family: var(--font-mono); font-size: 0.8em; }
+
+  /* Stars: promote sidenotes at wide widths */
+  @media (min-width: 1280px) {
+    [data-elm="stars"] .blog-aside {
+      float: right;
+      clear: right;
+      width: 18rem;
+      margin: 0.5rem -20rem 1rem 2rem;
+      border-left: none;
+      border-right: 2px solid color-mix(in srgb, var(--color-amber-500) 40%, transparent);
+      background: transparent;
+      padding: 0 1.25rem 0 0;
+      border-radius: 0;
+    }
+  }
+</style>

@@ -1,0 +1,38 @@
+---
+interface Props {
+  kind?: 'note' | 'insight' | 'warn';
+  title?: string;
+}
+
+const { kind = 'note', title } = Astro.props;
+
+const palette = {
+  note: {
+    border: 'border-neutral-700',
+    bg: 'bg-neutral-900/50',
+    accent: 'text-neutral-400',
+    label: title ?? 'Note',
+  },
+  insight: {
+    border: 'border-amber-500/40',
+    bg: 'bg-amber-500/[0.04]',
+    accent: 'text-amber-400',
+    label: title ?? 'Insight',
+  },
+  warn: {
+    border: 'border-red-500/30',
+    bg: 'bg-red-500/[0.04]',
+    accent: 'text-red-400',
+    label: title ?? 'Heads up',
+  },
+};
+
+const p = palette[kind];
+---
+
+<div class={`blog-callout my-8 rounded-lg border ${p.border} ${p.bg} p-6`}>
+  <p class={`font-mono text-[10px] tracking-[0.2em] uppercase mb-3 ${p.accent}`}>{p.label}</p>
+  <div class="text-neutral-300 text-[0.95rem] leading-relaxed space-y-3">
+    <slot />
+  </div>
+</div>

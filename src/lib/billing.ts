@@ -110,8 +110,16 @@ export async function createPendingCharge(data: {
 }
 
 export async function getPendingChargesForContract(contractId: string): Promise<PendingCharge[]> {
+  // Only sweep auto_bill + legacy/null-classified charges into invoices.
+  // needs_approval and manual_review stay unbilled until Cody acts on them
+  // (approve → auto_bill, or delete). Matches the admin queue's treatment:
+  // auto_bill + unknown are the billing queue; needs_approval and
+  // manual_review are the action queue.
   return queryAll(
-    'SELECT * FROM pending_charges WHERE contract_id = ? AND billed_invoice_id IS NULL ORDER BY created_at',
+    `SELECT * FROM pending_charges
+     WHERE contract_id = ? AND billed_invoice_id IS NULL
+       AND (classification IS NULL OR classification NOT IN ('needs_approval', 'manual_review'))
+     ORDER BY created_at`,
     [contractId]
   );
 }
@@ -225,6 +233,24 @@ export async function generateInvoiceForContract(
   // but we check first to avoid burning an invoice number on a no-op.
   if (await invoiceExistsForPeriod(contract.id, period.start, period.end)) {
     return null;
+  }
+
+  // Locked-period guard: if any data period for this client overlaps the
+  // billing period and is locked, refuse to generate. This prevents
+  // billing mutations against months that Cody has frozen for reporting.
+  const lockedOverlap = await queryOne(
+    `SELECT period_start, locked_at FROM periods
+     WHERE client_id = ?
+       AND locked_at IS NOT NULL
+       AND period_start <= ?
+       AND period_end >= ?
+     LIMIT 1`,
+    [contract.client_id, period.end, period.start]
+  );
+  if (lockedOverlap) {
+    throw new Error(
+      `billing period ${period.start}..${period.end} overlaps locked period ${lockedOverlap.period_start} (locked since ${lockedOverlap.locked_at})`
+    );
   }
 
   // Pre-compute everything we need before opening the transaction so the

@@ -15,8 +15,8 @@
 import { nanoid } from 'nanoid';
 import turso from '../turso';
 import { logger } from '../logger';
-import { generateRecurringInvoices, sendDueReminders } from '../billing';
-import { getAllContracts, nextBillingRunIso } from '../contracts';
+import { generateRecurringInvoices, generateInvoiceForContract, sendDueReminders } from '../billing';
+import { getAllContracts, getContract, nextBillingRunIso } from '../contracts';
 import { runGscSyncJob, runGa4SyncJob } from './google-sync-jobs';
 
 // --- Types ---
@@ -214,10 +214,62 @@ const handlers: Record<JobType, Handler> = {
     // payload: { created_by?: string, contract_id?: string }.
     const payload = job.payload_json ? JSON.parse(job.payload_json) : {};
     const createdBy = payload.created_by ?? 'system';
+    const contractId: string | undefined = payload.contract_id;
+
+    // Per-contract path (Slice 21): generate for one contract, re-enqueue
+    // next cycle on success/skip, halt on failure. This is the modern path
+    // — every job enqueued by provisionContract and ensureRecurringJobsQueued
+    // carries contract_id in its payload.
+    if (contractId) {
+      const contract = await getContract(contractId);
+      if (!contract) {
+        return `generate_invoice contract=${contractId} failed: contract not found`;
+      }
+      if (
+        contract.status !== 'active' ||
+        contract.billing_cadence !== 'monthly' ||
+        !contract.billing_day ||
+        !contract.recurring_amount
+      ) {
+        return `generate_invoice contract=${contractId} skipped: not active monthly`;
+      }
+
+      try {
+        const invoiceId = await generateInvoiceForContract(contract, createdBy);
+        // Re-enqueue next cycle (idempotent: skip if one already exists).
+        const nextRun = nextBillingRunIso(contract.billing_day);
+        const existingNext = await turso.execute({
+          sql: `SELECT id FROM scheduled_jobs
+                WHERE job_type = 'generate_invoices'
+                  AND status IN ('pending', 'running')
+                  AND payload_json LIKE ?
+                  AND id != ?
+                LIMIT 1`,
+          args: [`%"contract_id":"${contractId}"%`, job.id],
+        });
+        let reQueued = 0;
+        if (existingNext.rows.length === 0) {
+          await enqueueJob('generate_invoices', nextRun, {
+            created_by: createdBy,
+            contract_id: contractId,
+          });
+          reQueued = 1;
+        }
+
+        if (invoiceId) {
+          return `generate_invoice contract=${contractId} applied invoice=${invoiceId} re_queued=${reQueued}`;
+        }
+        return `generate_invoice contract=${contractId} skipped re_queued=${reQueued}`;
+      } catch (err: any) {
+        // Locked period, tx failure, or other error → halt, no re-enqueue.
+        const msg = String(err?.message ?? err).slice(0, 300);
+        return `generate_invoice contract=${contractId} failed: ${msg}`;
+      }
+    }
+
+    // Legacy path: no contract_id in payload → generate for all contracts.
+    // Kept for backward compatibility with any jobs enqueued before Slice 21.
     const result = await generateRecurringInvoices(createdBy);
-    // After generating, ensure every active monthly contract has a job
-    // queued for its next cycle — including the one currently running,
-    // which we exclude from the idempotency check via job.id.
     const reQueued = await ensureRecurringJobsQueued(createdBy, job.id);
     return `generated=${result.generated.length} skipped=${result.skipped.length} re_queued=${reQueued}`;
   },

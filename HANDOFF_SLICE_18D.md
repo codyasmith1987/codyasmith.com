@@ -662,6 +662,78 @@ traffic-aware.
 >   under ZipKit with run-tagged pending_charges, full cleanup
 >   in try/finally.
 
+> **Slice 21 landed on top of Slice 20.** Per-contract invoice
+> generation via the scheduled_jobs runner is now real. The billing
+> chain is self-perpetuating: provision a monthly contract, the
+> first job is seeded, each run generates a draft invoice and
+> queues the next cycle. What Slice 21 made real:
+>
+> - **Per-contract handler path.** The `generate_invoices` handler
+>   now reads `contract_id` from the job payload and generates for
+>   that one contract only. Legacy jobs without `contract_id` fall
+>   through to the existing `generateRecurringInvoices` batch path.
+> - **Classification-aware charge sweep.** `getPendingChargesForContract`
+>   now filters: `classification IS NULL OR classification NOT IN
+>   ('needs_approval', 'manual_review')`. Only `auto_bill` and
+>   legacy/null-classified charges get swept into the draft invoice.
+>   `needs_approval` and `manual_review` charges stay unbilled
+>   until Cody acts on them (Slice 20 approve or delete).
+> - **Locked-period guard.** `generateInvoiceForContract` now
+>   queries for any client period whose date range overlaps the
+>   billing period and has `locked_at IS NOT NULL`. If found, it
+>   throws with the lock timestamp so the handler halts honestly.
+> - **Idempotent re-enqueue.** On success or dedupe-skip, the
+>   handler queues the next `generate_invoices` job for this
+>   contract via `nextBillingRunIso`, checking first that no
+>   pending/running job already exists for the same contract_id.
+>   On failure (locked, not found, tx error), no re-enqueue —
+>   the chain halts and `missing_automation` in the admin queue
+>   surfaces the gap.
+> - **Invoice dedupe.** One invoice per `(contract_id,
+>   billing_period_start, billing_period_end)` via the existing
+>   `invoiceExistsForPeriod` check + UNIQUE constraint. Running
+>   the job twice for the same period returns null on the second
+>   run, no duplicate invoice.
+> - **Draft status only.** Invoices are created as `status='draft'`.
+>   No auto-send. Cody reviews and marks sent manually (Slice 20's
+>   admin queue surfaces drafts for review).
+> - **Seeding already done.** `provisionContract` already enqueued
+>   the first per-contract job (contracts.ts lines 344-356). No
+>   provisioning code was changed.
+> - **No schema changes.** No migration, no new table, no new
+>   column, no new endpoint, no new job type.
+> - **No quiz changes.**
+>
+> **Exact files touched by Slice 21:**
+>
+> - `src/lib/billing.ts` — edit. `getPendingChargesForContract`
+>   now filters out `needs_approval` and `manual_review` charges
+>   via an added `AND (classification IS NULL OR classification
+>   NOT IN ('needs_approval', 'manual_review'))` clause.
+>   `generateInvoiceForContract` now has a locked-period overlap
+>   guard between the `invoiceExistsForPeriod` dedupe check and
+>   the transaction: queries `periods` for any locked row whose
+>   date range overlaps the billing period, throws if found.
+> - `src/lib/jobs/runner.ts` — edit. `generate_invoices` handler
+>   now checks for `contract_id` in payload. Per-contract path:
+>   loads contract, validates active/monthly, calls
+>   `generateInvoiceForContract`, idempotently re-enqueues next
+>   cycle on success/skip, returns "failed:" string on error
+>   (no re-enqueue). Added imports for `generateInvoiceForContract`
+>   and `getContract`. Legacy batch path unchanged.
+> - `scripts/phase1-test-slice21-invoice-gen.ts` — new. Seven
+>   assertion blocks: (1) clean recurring-only invoice with correct
+>   total and one line item, (2) auto_bill charge swept in +
+>   needs_approval stays unbilled + correct total 1050, (3)
+>   duplicate run returns null + one invoice per period, (4)
+>   re-enqueue idempotency (one pending job per contract), (5)
+>   locked period blocks generation with honest error, (6)
+>   manual_review stays unbilled, (7) integration: admin queue
+>   drafts section and work summary reflect the new draft. Uses
+>   a synthetic contract under ZipKit with billing_day pegged to
+>   today's UTC date, run-tagged charges, full cleanup in
+>   try/finally.
+
 ## Exact landed slices in this run
 
 - **Slice 15** — multi-contract intake (`provisionClientIntake`, envelope POST
@@ -693,6 +765,9 @@ traffic-aware.
 - **Slice 20** — billing-input visibility on `/portal/admin/expenses`
   (classification badges, approve for needs_approval + manual_review,
   classification-priority sort, summary count strip, client context)
+- **Slice 21** — per-contract invoice generation (classification-aware
+  charge sweep, locked-period guard, idempotent re-enqueue, draft-only
+  output, no schema changes, no new job types)
 
 ## Exact files touched in Slice 18d
 
@@ -892,7 +967,7 @@ passes before starting any new work.
    cleanup, not polish, not decorative integrations. Every slice must move
    the spine forward.
 2. **Do not reopen closed slices without evidence.** Slices 15, 16, 16b, 17,
-   18, 18b, 18c, 18d, 18e, 18f, 18g, 18h, 18i, 19, 20 are closed.
+   18, 18b, 18c, 18d, 18e, 18f, 18g, 18h, 18i, 19, 20, 21 are closed.
    Reopening them requires a concrete failing assertion or a reproducible
    bug in the live product.
 3. **Source of truth:** the repo + this handoff file. Memory files are

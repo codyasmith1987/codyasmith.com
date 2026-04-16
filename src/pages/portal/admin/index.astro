@@ -1,6 +1,7 @@
 ---
 import Portal from '../../../layouts/Portal.astro';
 import { loadAdminQueue } from '../../../lib/admin-queue';
+import { buildWorkSummary } from '../../../lib/admin-work-summary';
 import { getAllClients } from '../../../lib/auth';
 
 export const prerender = false;
@@ -13,6 +14,7 @@ if (user.role !== 'admin') {
 const csrfToken = Astro.locals.csrfToken ?? '';
 const queue = await loadAdminQueue();
 const activeClients = (await getAllClients()).filter((c) => c.active);
+const summary = buildWorkSummary(queue);
 
 // Sections that are real action items get the full dense render.
 // Sections that are empty are still shown but collapsed to one line,
@@ -83,6 +85,93 @@ function accentBg(a: string, n: number) {
         </div>
       )}
     </header>
+
+    {/* Work summary — three-bucket triage rail */}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+      <div class={`border rounded-md p-3 ${summary.actNow.length ? 'border-red-500/20 bg-red-500/[0.03]' : 'border-white/5 bg-neutral-900/30'}`}>
+        <div class="flex items-baseline justify-between mb-2">
+          <h2 class="text-[10px] uppercase tracking-widest text-neutral-500">Act now</h2>
+          {summary.actNow.length > 0 && (
+            <span class="text-[11px] font-mono text-red-400 tabular-nums">
+              {summary.actNow.reduce((a: number, i: { count: number }) => a + i.count, 0)}
+            </span>
+          )}
+        </div>
+        {summary.actNow.length === 0 ? (
+          <p class="text-[11px] text-neutral-600 font-mono">Clear.</p>
+        ) : (
+          <ul class="space-y-1">
+            {summary.actNow.map((item: { count: number; label: string; detail: string | null; anchor: string }) => (
+              <li>
+                <a href={item.anchor} class="text-[11px] text-neutral-300 hover:text-neutral-100 transition-colors block">
+                  <span class="font-mono text-red-400 tabular-nums">{item.count}</span>
+                  <span class="ml-1">{item.label}</span>
+                </a>
+                {item.detail && (
+                  <p class="text-[10px] text-neutral-600 ml-4 truncate">{item.detail}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div class={`border rounded-md p-3 ${summary.waiting.length ? 'border-amber-500/20 bg-amber-500/[0.02]' : 'border-white/5 bg-neutral-900/30'}`}>
+        <div class="flex items-baseline justify-between mb-2">
+          <h2 class="text-[10px] uppercase tracking-widest text-neutral-500">Waiting on others</h2>
+          {summary.waiting.length > 0 && (
+            <span class="text-[11px] font-mono text-amber-400 tabular-nums">
+              {summary.waiting.reduce((a: number, i: { count: number }) => a + i.count, 0)}
+            </span>
+          )}
+        </div>
+        {summary.waiting.length === 0 ? (
+          <p class="text-[11px] text-neutral-600 font-mono">Nothing pending.</p>
+        ) : (
+          <ul class="space-y-1">
+            {summary.waiting.map((item: { count: number; label: string; detail: string | null; anchor: string }) => (
+              <li>
+                <a href={item.anchor} class="text-[11px] text-neutral-300 hover:text-neutral-100 transition-colors block">
+                  <span class="font-mono text-amber-400 tabular-nums">{item.count}</span>
+                  <span class="ml-1">{item.label}</span>
+                </a>
+                {item.detail && (
+                  <p class="text-[10px] text-neutral-600 ml-4 truncate">{item.detail}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div class={`border rounded-md p-3 ${summary.upcoming.length ? 'border-white/10 bg-neutral-900/40' : 'border-white/5 bg-neutral-900/30'}`}>
+        <div class="flex items-baseline justify-between mb-2">
+          <h2 class="text-[10px] uppercase tracking-widest text-neutral-500">Coming up</h2>
+          {summary.upcoming.length > 0 && (
+            <span class="text-[11px] font-mono text-neutral-400 tabular-nums">
+              {summary.upcoming.reduce((a: number, i: { count: number }) => a + i.count, 0)}
+            </span>
+          )}
+        </div>
+        {summary.upcoming.length === 0 ? (
+          <p class="text-[11px] text-neutral-600 font-mono">Nothing on the horizon.</p>
+        ) : (
+          <ul class="space-y-1">
+            {summary.upcoming.map((item: { count: number; label: string; detail: string | null; anchor: string }) => (
+              <li>
+                <a href={item.anchor} class="text-[11px] text-neutral-300 hover:text-neutral-100 transition-colors block">
+                  <span class="font-mono text-neutral-400 tabular-nums">{item.count}</span>
+                  <span class="ml-1">{item.label}</span>
+                </a>
+                {item.detail && (
+                  <p class="text-[10px] text-neutral-600 ml-4 truncate">{item.detail}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
 
     {/* Top strip — one row of tight count chips */}
     <div class="flex flex-wrap gap-1.5 mb-8">

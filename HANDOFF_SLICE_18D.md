@@ -524,6 +524,73 @@ traffic-aware.
 >   try/finally, followed by a per-client `DELETE FROM
 >   issue_snapshots / imports / periods / clients` sweep.
 
+> **Slice 19 landed on top of Slice 18i.** The admin dashboard at
+> `/portal/admin` now has a three-bucket work-summary rail above
+> the strip chips so Cody can see his day in a glance without
+> reading every queue section. What Slice 19 made real:
+>
+> - **Three-bucket triage rail on `/portal/admin`.** Three columns
+>   above the existing strip chips: "Act now" (red accent),
+>   "Waiting on others" (amber accent), "Coming up" (neutral).
+>   Each non-zero queue section becomes one summary line in its
+>   assigned bucket. Each line shows count + label and links to
+>   the detail section below. When a bucket has exactly one
+>   underlying row, the specific detail (what + where) is shown
+>   inline so Cody doesn't even have to scroll.
+> - **Bucket assignment rules.** `buildWorkSummary(queue)` is a
+>   pure function that classifies the existing 18 queue sections
+>   into three buckets:
+>   - **Act now:** failed_jobs, failed_imports, stale_pending,
+>     late invoices, overdue_milestones, unbilled_needs_approval,
+>     unbilled_manual_review, drafts, expired contracts,
+>     missing_automation, google_sync_attention,
+>     csv_source_attention, plus hard blockers.
+>   - **Waiting on others:** pending_approvals, due_soon invoices,
+>     plus soft blockers (known limitations).
+>   - **Coming up:** upcoming_milestones, expiring contracts,
+>     unbilled_auto_bill expenses.
+>   - **Skipped:** locked_periods — informational, not actionable.
+> - **Dedupe is by section, not by row.** 3 late invoices = one
+>   "3 late invoices" line, not 3 lines. Each section maps to
+>   exactly one bucket. No row appears in two buckets.
+> - **Severity ordering within each bucket.** Items sort by a
+>   fixed severity rank so blockers and infrastructure failures
+>   always appear first in "Act now."
+> - **Empty-state messages per bucket.** "Clear." / "Nothing
+>   pending." / "Nothing on the horizon." — honest silence when
+>   a bucket has zero items.
+> - **No schema changes.** No migration, no new table, no new
+>   column, no new endpoint, no new task system.
+> - **No quiz changes.** The quiz commit on top of the branch is
+>   untouched.
+> - **Built from existing queue truth only.** No new DB queries.
+>   The summary is a pure presentation-layer transformation of
+>   the `AdminQueue` that `loadAdminQueue()` already produces.
+>
+> **Exact files touched by Slice 19:**
+>
+> - `src/lib/admin-work-summary.ts` — new. Owns `WorkItem` and
+>   `WorkSummary` types, the `SECTION_MAP` bucket/severity/label
+>   mapping for all 17 classified sections, the `buildWorkSummary`
+>   pure function, and the `MAPPED_SECTION_KEYS` export for test
+>   coverage verification.
+> - `src/pages/portal/admin/index.astro` — edit. Added import of
+>   `buildWorkSummary`, one `const summary = buildWorkSummary(queue)`
+>   call in frontmatter, and a 68-line three-column grid template
+>   between `</header>` and the strip chips. No other changes to
+>   the page — strip, blockers, sections, quick-action script all
+>   untouched.
+> - `scripts/phase1-test-slice19-work-summary.ts` — new. Ten
+>   assertion blocks: (1) failed_jobs → actNow, (2) pending_approvals
+>   → waiting with single-row detail, (3) upcoming_milestones →
+>   upcoming with null detail on multi-row, (4) 3-row section dedupes
+>   to 1 summary item, (5) empty queue → all buckets clear, (6) hard
+>   blocker → actNow / soft blocker → waiting, (7) locked_periods
+>   excluded from all buckets, (8) severity ordering within actNow,
+>   (9) full 17-section bucket assignment coverage, (10) integration
+>   against live DB via loadAdminQueue → buildWorkSummary with
+>   structure, anchor, count, and no-duplicate-label checks.
+
 ## Exact landed slices in this run
 
 - **Slice 15** — multi-contract intake (`provisionClientIntake`, envelope POST
@@ -549,6 +616,9 @@ traffic-aware.
   `buildFacts` traffic branch, `renderFactSentence` + `renderNegativeRankingSentence`
   templates for visits/people/page_views, `'traffic_drop'` slice 3 source,
   6 new narrator test cases)
+- **Slice 19** — admin work-summary rail (`buildWorkSummary` pure function,
+  three-bucket triage on `/portal/admin`, act-now/waiting/upcoming from
+  existing queue truth, no schema changes, no new task system)
 
 ## Exact files touched in Slice 18d
 
@@ -748,8 +818,9 @@ passes before starting any new work.
    cleanup, not polish, not decorative integrations. Every slice must move
    the spine forward.
 2. **Do not reopen closed slices without evidence.** Slices 15, 16, 16b, 17,
-   18, 18b, 18c, 18d are closed. Reopening them requires a concrete failing
-   assertion or a reproducible bug in the live product.
+   18, 18b, 18c, 18d, 18e, 18f, 18g, 18h, 18i, 19 are closed. Reopening
+   them requires a concrete failing assertion or a reproducible bug in the
+   live product.
 3. **Source of truth:** the repo + this handoff file. Memory files are
    framing. Always verify against current code before citing file paths or
    line numbers.
@@ -766,22 +837,18 @@ passes before starting any new work.
 
 ## Likely next slice
 
-**Slice 18e — scheduler automation for `sync_gsc` + `sync_ga4`.**
+Cody determines the next slice. The admin work-summary rail is now live.
+Possible next moves based on the repo's current open gaps:
 
-Cody has validated the code-real manual path through the admin page. The
-next honest move is wiring `sync_gsc` and `sync_ga4` job types into
-`src/lib/jobs/runner.ts` so a monthly cadence fires automatically when
-Cody adds a new contract. `provisionContract()` already seeds scheduled
-`generate_invoices` jobs for monthly cadence; the same pattern extends to
-these two.
+1. **GA4 property picker endpoint** — small `POST /portal/api/admin/google/ga4-properties`
+   so Cody doesn't have to paste the numeric property ID manually.
+2. **Traffic summary on `/portal/keywords`** — `buildTrafficSummary` render
+   beyond the dashboard. Zero new backend.
+3. **Brand accent beyond the sidebar strip** — the column exists, only one
+   render surface reads it.
+4. **Source/medium/channel-grouping breakdowns** in GA4 — totals only for now.
+5. **Wizard "edit staged block"** — staged contract blocks can only be
+   removed, not edited.
 
-Prerequisite: Cody first needs to click through the real OAuth consent and
-prove one real sync lands rows in his production Turso. Without that
-proof the scheduler would run against code that hasn't been exercised
-end-to-end against Google's servers. Do NOT start Slice 18e until Cody
-reports the first real sync worked.
-
-**Alternative next move:** Slice 18f — traffic summary rendered on
-`/portal/keywords` in addition to the dashboard. Requires zero new
-backend, just a small render add to `src/pages/portal/keywords.astro`.
-Lower priority but also low risk.
+Production-dependent gaps (need Cody's action first): real OAuth consent,
+real GSC + GA4 API round-trips, real token refresh edge cases.

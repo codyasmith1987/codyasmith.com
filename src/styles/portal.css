@@ -63,3 +63,54 @@
   opacity: 0;
   animation: fadeUp 0.4s ease-out forwards;
 }
+
+/*
+ * Slice 24 — brand accent extension.
+ *
+ * Five decorative utility classes that consume the --brand-accent
+ * custom property (set by Portal.astro on <body> when the client
+ * has clients.brand_accent configured) with amber-400 as the
+ * fallback when the property is absent. These classes flow the
+ * client's brand color through:
+ *   - active nav pill backgrounds + text
+ *   - hover states on nav + content links
+ *   - decorative borders on KPI cards
+ *   - page eyebrow labels
+ *   - the new main + mobile accent strips
+ *
+ * Admins have brandAccent = null (middleware), so the <body>
+ * never receives the inline style and every rule below falls
+ * through to amber. Clients with brand_accent = null share that
+ * null-path — default portal styling is byte-for-byte unchanged
+ * from pre-Slice-24.
+ *
+ * Solid-fill primary buttons (e.g. /portal/files upload) and
+ * semantic status badges (partial invoice, on_hold project,
+ * medium-priority health indicator) are intentionally not
+ * covered here — their amber carries meaning, not decoration.
+ *
+ * Known limitation: validators upstream enforce hex shape only
+ * (/^#[0-9a-fA-F]{6}$/), not contrast against the dark portal
+ * background. A future slice can add a contrast-safe clamp if
+ * clients in practice pick accents that bleed into the canvas.
+ */
+
+.portal-accent-text {
+  color: var(--brand-accent, rgb(251 191 36));
+}
+
+.portal-accent-bg-soft {
+  background-color: color-mix(in srgb, var(--brand-accent, rgb(251 191 36)) 10%, transparent);
+}
+
+.portal-accent-border {
+  border-color: color-mix(in srgb, var(--brand-accent, rgb(251 191 36)) 25%, transparent);
+}
+
+.portal-accent-bar {
+  background-color: var(--brand-accent, rgb(251 191 36));
+}
+
+.portal-hover-accent:hover {
+  color: var(--brand-accent, rgb(251 191 36));
+}

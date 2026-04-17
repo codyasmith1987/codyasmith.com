@@ -1,8 +1,8 @@
-# Handoff — clean stop after Slice 23
+# Handoff — clean stop after Slice 24
 
 > **File name is retained as `HANDOFF_SLICE_18D.md`** because this is the
 > same living checkpoint file the 18d stop established. Slices 18e
-> through 23 extended it in place. The checkpoint branch name also
+> through 24 extended it in place. The checkpoint branch name also
 > stays `checkpoint/slice-18d`. Both are canonical anchors — do not
 > rename them.
 
@@ -23,19 +23,32 @@ Read those before starting new work. They override drift.
 
 ## Current checkpoint
 
-**Clean stop after Slice 23.** All test suites green. `astro build` clean
-(only pre-existing blog-collection warnings, not failures). Slice 23 sits on
-top of Slice 22 with the unrelated blog commit `a22ebc0` ("Add blog with
-articles and case studies") between them — the blog commit is not part of
-any numbered portal slice and is not portal-product work. Slice 23 does not
-depend on it. The self-perpetuating reminder sweep shipped in Slice 22 is
-now paired with an admin-queue signal that surfaces any active recurring
-contract whose reminder chain would deliver to nobody, closing the
-silent-failure hole that a perpetual chain with zero recipients would
-otherwise create.
+**Clean stop after Slice 24.** All 16 test suites green. `astro build`
+clean (only pre-existing blog-collection warnings, not failures). Slice
+24 sits directly on top of Slice 23.
 
-Manual Google sync (GSC + GA4) is code-real end to end. Dashboard narrator is
-traffic-aware.
+Slice 24 turns `clients.brand_accent` — captured once at intake and
+previously consumed only by a single sidebar-strip render — into a real
+portal-wide personalization signal. Every client-facing portal page
+(dashboard, keywords, health, files, invoices, projects, approvals,
+notifications) now reflects the client's brand color on active nav
+pills, hover states, eyebrow labels, the KPI card on the dashboard, and
+two new decorative strips (top of mobile header, top of `<main>`).
+Admins and clients with no brand_accent see byte-identical pre-Slice-24
+styling via a `var(--brand-accent, rgb(251 191 36))` fallback chain.
+
+Slice 23 (the prior stop) closed the silent-failure hole in Slice 22's
+self-perpetuating reminder sweep by adding the `missing_billing_contact`
+admin-queue section.
+
+The unrelated blog commit `a22ebc0` ("Add blog with articles and case
+studies") sits between Slice 22 and Slice 23 in the branch log. It is
+not part of any numbered portal slice, Slice 23 and Slice 24 do not
+depend on it, and it introduces only pre-existing blog-collection
+warnings during `astro build` (not failures).
+
+Manual Google sync (GSC + GA4) is code-real end to end. Dashboard
+narrator is traffic-aware.
 
 > **Post-checkpoint repair note.** The original 18d checkpoint carried a
 > Tailwind scan trap: `@tailwindcss/vite` 4.2.2 auto-scanned repo-root
@@ -934,6 +947,148 @@ traffic-aware.
 >   teardown of contracts/contacts/users/periods/clients runs
 >   in try/finally.
 
+> **Slice 24 landed on top of Slice 23.** `clients.brand_accent`
+> is no longer a dead field. Pre-Slice-24 the captured intake
+> value drove exactly one render surface — the thin strip at the
+> top of the desktop sidebar. Slice 24 extends the accent across
+> every client-facing portal page without changing the load path,
+> introducing a theming system, or touching body copy. What
+> Slice 24 made real:
+>
+> - **Five decorative utility classes in `src/styles/portal.css`.**
+>   `portal-accent-text`, `portal-accent-bg-soft`,
+>   `portal-accent-border`, `portal-accent-bar`, and
+>   `portal-hover-accent`. Each consumes
+>   `var(--brand-accent, rgb(251 191 36))` so admins and clients
+>   without a brand_accent set continue to see amber (the
+>   pre-Slice-24 appearance is byte-for-byte preserved).
+> - **Load path is unchanged from the pre-existing sidebar
+>   strip.** `clients.brand_accent` → `getClientProfile` in
+>   `src/lib/clients.ts` → `middleware.ts:155-160` →
+>   `Astro.locals.brandAccent` → `Portal.astro` hex re-validation
+>   via `/^#[0-9a-fA-F]{6}$/` (defense-in-depth against a
+>   poisoned DB value) → inline `style="--brand-accent: {hex}"`
+>   on `<body>`. No new locals, no new middleware hook, no new
+>   validator, no new DB call.
+> - **Render surfaces extended (10):** desktop active nav pill;
+>   mobile active nav pill; sidebar title ("Cody Smith") hover;
+>   Notifications link active + hover; "Back to website" hover;
+>   new `h-0.5` accent strip at the top of the mobile
+>   `<header>`; new `h-px w-16` accent bar at the top of
+>   `<main>` (inherited by every client page that uses the
+>   Portal layout); dashboard "page 1" KPI card (gradient +
+>   border + 3xl heading number + 10px sublabel); dashboard
+>   "ALL KEYWORDS →" and "FULL REPORT →" hover links; eyebrow
+>   labels on `/portal/health`, `/portal/keywords`, and
+>   `/portal/files`.
+> - **Null-fallback is honest.** `brandAccent === null` →
+>   `<body>` has no `style` attribute → `--brand-accent` is
+>   undefined → every `portal-accent-*` / `portal-hover-accent`
+>   class falls through to amber-400 via the `var()` fallback
+>   → the conditional strips (sidebar, mobile header, main)
+>   don't render at all. Admins always have `brandAccent =
+>   null` (middleware sets it only for users with `client_id`),
+>   so the admin portal is byte-for-byte unchanged.
+> - **Intentionally out of scope, not drift.** The solid-fill
+>   upload button on `/portal/files` stays literal amber-500 —
+>   a client-chosen accent would change the background but not
+>   the `text-neutral-950` label, risking unreadable black text
+>   on a dark brand accent. Semantic status badges (`partial`
+>   invoice, `on_hold` project, medium-priority health
+>   indicator, keyword-position tier badges) also stay literal
+>   amber because the color there carries meaning, not
+>   decoration. Both exclusions are called out in the
+>   `portal.css` comment block.
+> - **Known limitation.** The wizard's hex validator
+>   (`parseClientProfileInput` in `src/lib/clients.ts:56-61`
+>   and the re-validation in `Portal.astro:25-26`) enforces
+>   shape only, not contrast against the dark portal canvas.
+>   A client who picks a near-background color (`#000000`,
+>   extremely dark hex) will see accent surfaces vanish —
+>   the pre-Slice-24 sidebar strip had the same limitation
+>   and Slice 24 inherits it. A contrast-safe clamp or a
+>   palette constraint in the wizard would be a separate
+>   queued follow-on if clients in practice pick accents
+>   that bleed into the canvas.
+> - **No test file added.** Honest call: the slice is purely
+>   visual. The only pure-function logic is the hex regex
+>   already enforced in two places; extracting it to write a
+>   test would re-assert a regex shape without verifying the
+>   render. Runtime verification is a browser click-through:
+>   set `clients.brand_accent` on a test client, log in as
+>   that client's portal user, confirm the 10 extended
+>   surfaces light up; unset and confirm amber returns; log
+>   in as admin and confirm byte-identical pre-Slice-24
+>   styling.
+> - **No schema changes.** No migration, no new column, no
+>   new table, no new endpoint, no new job type.
+> - **No quiz changes.** No blog changes.
+>
+> **Exact files touched by Slice 24:**
+>
+> - `src/styles/portal.css` — edit. Added a comment block that
+>   documents the slice, the load-path reminder, the
+>   intentional exclusions (solid-fill buttons, semantic
+>   status badges), and the known contrast-clamp limitation.
+>   Added the five utility-class rules
+>   (`portal-accent-text`, `portal-accent-bg-soft`,
+>   `portal-accent-border`, `portal-accent-bar`,
+>   `portal-hover-accent`). No existing rule was modified or
+>   removed — the file's animation keyframes and helper
+>   classes from earlier slices are untouched.
+> - `src/layouts/Portal.astro` — edit. `linkClass` and
+>   `mobileLinkClass` helpers now return
+>   `portal-accent-bg-soft portal-accent-text` for the active
+>   state instead of `bg-amber-500/10 text-amber-400`. The
+>   pre-existing sidebar strip (`<div class="h-0.5 w-full">`)
+>   switched from an inline `style="background: ${brandAccent}"`
+>   to the new `portal-accent-bar` class — one less inline
+>   style, one more class reuse. The orphan `--hover-accent`
+>   custom property on the sidebar title anchor was removed;
+>   that anchor now uses `portal-hover-accent` which consumes
+>   `--brand-accent` directly, one source of truth. The
+>   Notifications link active/hover state and the
+>   "Back to website" link both switched to the new classes.
+>   Added one conditional
+>   `<div class="md:hidden h-0.5 w-full portal-accent-bar">`
+>   at the top of the mobile content column (mirror of the
+>   desktop sidebar strip, for mobile users). Added one
+>   conditional `<div class="h-px w-16 portal-accent-bar
+>   mb-6 -mt-4">` inside `<main>`, above the `<slot />`, so
+>   every client page inherits a short top-of-content accent
+>   bar.
+> - `src/pages/portal/dashboard.astro` — edit. The "page 1"
+>   KPI card (middle of three sibling stat cards with
+>   emerald / amber / neutral themes) had its amber classes
+>   rewritten: container gradient and border now use
+>   `portal-accent-bg-soft` + `portal-accent-border`, the
+>   `text-3xl font-bold` headline uses `portal-accent-text`,
+>   the 10px sublabel uses `portal-accent-text opacity-60`
+>   (preserving the original 50%-opacity look). The two
+>   hover-tail links ("ALL KEYWORDS →", "FULL REPORT →")
+>   switched from `hover:text-amber-400` to
+>   `portal-hover-accent`. The emerald top-3 card and the
+>   neutral reach card on either side of the amber card were
+>   deliberately not touched — they carry different semantic
+>   colors.
+> - `src/pages/portal/health.astro` — edit. The "Technical
+>   Audit" eyebrow label's `text-amber-400` changed to
+>   `portal-accent-text`. No other class on the page was
+>   touched — the health-status badges (Good / Fair / Needs
+>   work) and priority dots keep their semantic colors.
+> - `src/pages/portal/keywords.astro` — edit. The "Search
+>   Visibility" eyebrow label's `text-amber-400` changed to
+>   `portal-accent-text`. The keyword-position tier badges
+>   (emerald for top-3, amber for page-1, neutral for page-2+)
+>   keep their semantic colors — those amber classes were
+>   deliberately not touched.
+> - `src/pages/portal/files.astro` — edit. The "Deliverables"
+>   eyebrow label's `text-amber-400` changed to
+>   `portal-accent-text`. The solid-fill upload button
+>   (`bg-amber-500 text-neutral-950`) was deliberately not
+>   touched — see contrast-risk note in the portal.css
+>   comment block.
+
 ## Exact landed slices in this run
 
 - **Slice 15** — multi-contract intake (`provisionClientIntake`, envelope POST
@@ -976,11 +1131,19 @@ traffic-aware.
   `resolveReminderRecipients`, per-client cache, `actNow` severity
   12, no new job types, no schema changes). Closes the silent-
   failure hole in Slice 22's perpetual sweep.
+- **Slice 24** — brand accent extended from the sidebar strip to
+  every client-facing portal surface (five `portal-accent-*`
+  utility classes consuming `var(--brand-accent, rgb(251 191 36))`,
+  active nav pills + hover states + eyebrow labels + dashboard
+  KPI card + mobile header + top-of-main strips, null-fallback
+  preserves pre-Slice-24 amber, admins and body copy untouched,
+  no schema changes, no test file). Turns `clients.brand_accent`
+  from a single-surface field into real portal-wide personalization.
 
 > Between Slice 22 and Slice 23, commit `a22ebc0` ("Add blog with
 > articles and case studies") landed. It is not a numbered portal
-> slice, not a portal-product change, and Slice 23 does not depend
-> on it. Listed here only so the branch log reads honestly.
+> slice, not a portal-product change, and Slices 23 and 24 do not
+> depend on it. Listed here only so the branch log reads honestly.
 
 ## Exact files touched in Slice 18d
 
@@ -1096,17 +1259,21 @@ action):
    manually. A small `POST /portal/api/admin/google/ga4-properties` that
    calls `analyticsadmin.googleapis.com` would enable a dropdown.
 6. **Source/medium/channel-grouping breakdowns** in GA4. Totals only for now.
-7. **Brand accent beyond the sidebar strip.** Column exists, only one render
-   surface reads it.
-8. **Preview-mode brand accent for admins.**
-9. **Wizard "edit staged block".** Staged contract blocks can only be
+7. **Preview-mode brand accent for admins.** Admins never have a
+   `client_id`, so the middleware never loads an accent for them.
+   Previewing a specific client's branded portal would require a
+   per-request `?client_id=` override. Separate from Slice 24.
+8. **Wizard "edit staged block".** Staged contract blocks can only be
    removed, not edited.
-10. **Traffic summary surfaces beyond the dashboard.** No
-    `buildTrafficSummary` render on `/portal/keywords` or in the narrator
-    beyond slice 1/3 fact selection.
+9. **Traffic summary surfaces beyond the dashboard.** No
+   `buildTrafficSummary` render on `/portal/keywords` or in the narrator
+   beyond slice 1/3 fact selection.
 
-> Previously listed gap #9 ("Admin queue 'missing billing contact'
-> hygiene signal") was closed by Slice 23 and is no longer open.
+> Previously listed gaps that are now closed:
+>
+> - "Admin queue 'missing billing contact' hygiene signal" — closed
+>   by Slice 23.
+> - "Brand accent beyond the sidebar strip" — closed by Slice 24.
 
 ## First-step verification checklist for the next instance
 
@@ -1181,9 +1348,9 @@ passes before starting any new work.
    cleanup, not polish, not decorative integrations. Every slice must move
    the spine forward.
 2. **Do not reopen closed slices without evidence.** Slices 15, 16, 16b, 17,
-   18, 18b, 18c, 18d, 18e, 18f, 18g, 18h, 18i, 19, 20, 21, 22, 23 are closed.
-   Reopening them requires a concrete failing assertion or a reproducible
-   bug in the live product.
+   18, 18b, 18c, 18d, 18e, 18f, 18g, 18h, 18i, 19, 20, 21, 22, 23, 24 are
+   closed. Reopening them requires a concrete failing assertion or a
+   reproducible bug in the live product.
 3. **Source of truth:** the repo + this handoff file. Memory files are
    framing. Always verify against current code before citing file paths or
    line numbers.
@@ -1207,11 +1374,12 @@ Possible next moves based on the repo's current open gaps:
    so Cody doesn't have to paste the numeric property ID manually.
 2. **Traffic summary on `/portal/keywords`** — `buildTrafficSummary` render
    beyond the dashboard. Zero new backend.
-3. **Brand accent beyond the sidebar strip** — the column exists, only one
-   render surface reads it.
-4. **Source/medium/channel-grouping breakdowns** in GA4 — totals only for now.
-5. **Wizard "edit staged block"** — staged contract blocks can only be
+3. **Source/medium/channel-grouping breakdowns** in GA4 — totals only for now.
+4. **Wizard "edit staged block"** — staged contract blocks can only be
    removed, not edited.
+5. **Preview-mode brand accent for admins** — Slice 24 extended accent
+   consumption site-wide, but admins still see default amber since the
+   middleware only loads brand_accent for users with a `client_id`.
 
 Production-dependent gaps (need Cody's action first): real OAuth consent,
 real GSC + GA4 API round-trips, real token refresh edge cases.

@@ -73,16 +73,19 @@ const adminItems = [
   { href: '/portal/admin/activity', label: 'Activity' },
 ];
 
-// Helper to render a nav link
+// Helper to render a nav link. Slice 24: active states consume the
+// --brand-accent custom property via portal-accent-* utility
+// classes; when brandAccent is null the classes fall through to
+// amber (the pre-Slice-24 appearance is byte-for-byte preserved).
 const linkClass = (href: string) => [
   'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all duration-300',
   currentPath.startsWith(href)
-    ? 'bg-amber-500/10 text-amber-400 font-medium'
+    ? 'portal-accent-bg-soft portal-accent-text font-medium'
     : 'text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.03]',
 ];
 const mobileLinkClass = (href: string) => [
   'block px-4 py-2.5 rounded-lg text-sm transition-colors duration-300',
-  currentPath.startsWith(href) ? 'bg-amber-500/10 text-amber-400' : 'text-neutral-500',
+  currentPath.startsWith(href) ? 'portal-accent-bg-soft portal-accent-text' : 'text-neutral-500',
 ];
 ---
 
@@ -103,11 +106,9 @@ const mobileLinkClass = (href: string) => [
     <div class="flex min-h-screen">
       <!-- Sidebar -->
       <aside class="hidden md:flex w-64 flex-col bg-neutral-900/50 border-r border-white/5">
-        {brandAccent && (
-          <div class="h-0.5 w-full" style={`background: ${brandAccent}`}></div>
-        )}
+        {brandAccent && <div class="h-0.5 w-full portal-accent-bar"></div>}
         <div class="p-6 pb-5 border-b border-white/5">
-          <a href="/portal/dashboard" class="font-serif text-xl text-neutral-100 hover:text-amber-400 transition-colors duration-300" style={brandAccent ? `--hover-accent: ${brandAccent}` : undefined}>
+          <a href="/portal/dashboard" class="font-serif text-xl text-neutral-100 portal-hover-accent transition-colors duration-300">
             Cody Smith
           </a>
           <p class="text-[10px] text-neutral-600 font-mono tracking-[0.15em] uppercase mt-1.5">Client Portal</p>
@@ -153,11 +154,11 @@ const mobileLinkClass = (href: string) => [
         </nav>
 
         <div class="p-4 border-t border-white/5 space-y-3">
-          <a href="/portal/notifications" class:list={['flex items-center gap-2 px-4 py-2 text-xs rounded-lg transition-colors duration-300', currentPath === '/portal/notifications' ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-600 hover:text-amber-400 hover:bg-white/[0.03]']}>
+          <a href="/portal/notifications" class:list={['flex items-center gap-2 px-4 py-2 text-xs rounded-lg transition-colors duration-300', currentPath === '/portal/notifications' ? 'portal-accent-text portal-accent-bg-soft' : 'text-neutral-600 portal-hover-accent hover:bg-white/[0.03]']}>
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>
             Notifications
           </a>
-          <a href="/" class="flex items-center gap-2 px-4 py-2 text-xs text-neutral-600 hover:text-amber-400 transition-colors duration-300 rounded-lg hover:bg-white/[0.03]">
+          <a href="/" class="flex items-center gap-2 px-4 py-2 text-xs text-neutral-600 portal-hover-accent transition-colors duration-300 rounded-lg hover:bg-white/[0.03]">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
             Back to website
           </a>
@@ -177,6 +178,7 @@ const mobileLinkClass = (href: string) => [
 
       <!-- Mobile header -->
       <div class="flex flex-col flex-1">
+        {brandAccent && <div class="md:hidden h-0.5 w-full portal-accent-bar"></div>}
         <header class="md:hidden flex items-center justify-between px-6 py-4 bg-neutral-900/50 border-b border-white/5">
           <a href="/portal/dashboard" class="font-serif text-lg text-neutral-100">Portal</a>
           <button id="mobile-menu-btn" class="text-neutral-400 hover:text-neutral-200 transition-colors" aria-label="Menu" aria-expanded="false">
@@ -226,8 +228,8 @@ const mobileLinkClass = (href: string) => [
               </>
             )}
             <div class="pt-4 mt-2 border-t border-white/5 flex items-center justify-between">
-              <a href="/portal/notifications" class="text-xs text-neutral-600 hover:text-amber-400 transition-colors">Notifications</a>
-              <a href="/" class="text-xs text-neutral-600 hover:text-amber-400 transition-colors">Back to website</a>
+              <a href="/portal/notifications" class="text-xs text-neutral-600 portal-hover-accent transition-colors">Notifications</a>
+              <a href="/" class="text-xs text-neutral-600 portal-hover-accent transition-colors">Back to website</a>
               <form method="POST" action="/portal/auth/logout">
                 <button type="submit" class="text-xs text-neutral-600 hover:text-red-400 transition-colors">Log out</button>
               </form>
@@ -237,6 +239,7 @@ const mobileLinkClass = (href: string) => [
 
         <!-- Main content -->
         <main class="flex-1 px-6 py-10 md:px-12 md:py-12 overflow-auto">
+          {brandAccent && <div class="h-px w-16 portal-accent-bar mb-6 -mt-4"></div>}
           <slot />
         </main>
       </div>

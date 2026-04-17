@@ -11,6 +11,7 @@ import turso from './turso';
 import { getLockedPeriods } from './periods';
 import { loadGoogleSyncAttentionSection } from './jobs/google-sync-health';
 import { loadCsvSourceAttentionSection } from './jobs/csv-source-health';
+import { loadMissingBillingContactSection } from './jobs/billing-contact-health';
 
 // --- Types ---
 
@@ -585,7 +586,16 @@ export async function loadAdminQueue(): Promise<AdminQueue> {
   // src/lib/jobs/csv-source-health.ts.
   const csvSourceAttention = await loadCsvSourceAttentionSection();
 
-  // 13. Locked periods (Slice 16) — spine-integrity signal.
+  // 13. Contracts with no reminder route (Slice 23) — surfaces
+  // active recurring contracts where the 3-layer
+  // resolveReminderRecipients fallback produces an empty array.
+  // Slice 22 made the reminder sweep self-perpetuating; this
+  // closes the silent-failure hole where the chain runs forever
+  // but can never reach a recipient. Rules live in
+  // src/lib/jobs/billing-contact-health.ts.
+  const missingBillingContact = await loadMissingBillingContactSection();
+
+  // 14. Locked periods (Slice 16) — spine-integrity signal.
   // Every month Cody has frozen surfaces here with an unlock quick
   // action. No count alarm, no red — locked is a feature, not a
   // failure. The row exists so admins see at a glance which months
@@ -706,6 +716,7 @@ export async function loadAdminQueue(): Promise<AdminQueue> {
     missingAuto,
     googleSyncAttention,
     csvSourceAttention,
+    missingBillingContact,
     lockedPeriodsSection,
   ];
 

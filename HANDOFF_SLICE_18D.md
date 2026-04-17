@@ -1,4 +1,10 @@
-# Handoff — clean stop after Slice 18d
+# Handoff — clean stop after Slice 23
+
+> **File name is retained as `HANDOFF_SLICE_18D.md`** because this is the
+> same living checkpoint file the 18d stop established. Slices 18e
+> through 23 extended it in place. The checkpoint branch name also
+> stays `checkpoint/slice-18d`. Both are canonical anchors — do not
+> rename them.
 
 ## Project truth
 
@@ -17,7 +23,17 @@ Read those before starting new work. They override drift.
 
 ## Current checkpoint
 
-**Clean stop after Slice 18d.** All test suites green. `astro build` clean.
+**Clean stop after Slice 23.** All test suites green. `astro build` clean
+(only pre-existing blog-collection warnings, not failures). Slice 23 sits on
+top of Slice 22 with the unrelated blog commit `a22ebc0` ("Add blog with
+articles and case studies") between them — the blog commit is not part of
+any numbered portal slice and is not portal-product work. Slice 23 does not
+depend on it. The self-perpetuating reminder sweep shipped in Slice 22 is
+now paired with an admin-queue signal that surfaces any active recurring
+contract whose reminder chain would deliver to nobody, closing the
+silent-failure hole that a perpetual chain with zero recipients would
+otherwise create.
+
 Manual Google sync (GSC + GA4) is code-real end to end. Dashboard narrator is
 traffic-aware.
 
@@ -798,6 +814,126 @@ traffic-aware.
 >   ZipKit with far-future billing period, full cleanup in
 >   try/finally.
 
+> **Slice 23 landed on top of Slice 22.** Between Slice 22 and
+> Slice 23 the unrelated commit `a22ebc0` ("Add blog with articles
+> and case studies") was added — it is not part of any numbered
+> portal slice, Slice 23 does not depend on it, and it introduces
+> only pre-existing blog-collection warnings during `astro build`
+> (not failures). Slice 22 closed the reminder sweep's self-
+> perpetuating loop; Slice 23 closes the matching silent-failure
+> hole: a perpetual chain with zero deliverable recipients is
+> strictly worse than no chain because it consumes job slots and
+> looks live in logs without ever producing a delivery. What
+> Slice 23 made real:
+>
+> - **New admin-queue section `missing_billing_contact`.**
+>   Surfaces active recurring contracts whose 3-layer
+>   `resolveReminderRecipients` fallback would return an empty
+>   recipient array. One row per at-risk contract — multiple
+>   at-risk contracts under the same client do not collapse
+>   because the fix lives at the contract level (commercial
+>   truth is per-contract even when contacts are per-client).
+> - **Rules delegate directly to `resolveReminderRecipients`.**
+>   No parallel implementation, no SQL rewrite of the fallback
+>   logic. The health classifier calls the same helper
+>   `billing.ts:518-521` uses with the same caller-side glue
+>   (`getUsersByClientId` + `getClientProfile.primary_contact_email`).
+>   Empty return from that function ⇒ all three layers produced
+>   zero recipients ⇒ surface. Any future shift in how
+>   recipients are assembled flows through this module with
+>   zero edit.
+> - **Per-client cache.** N at-risk contracts under one client
+>   resolve the fallback once, not N times. `Map<clientId,
+>   recipients[]>` inside `loadMissingBillingContactSection`.
+> - **Candidate filter:** `contracts.status = 'active' AND
+>   contracts.billing_cadence IN ('monthly', 'milestone')`.
+>   One-time contracts excluded (single invoice, no perpetual
+>   chain to break). Non-active statuses (`draft`, `sent`,
+>   `completed`, `cancelled`) excluded (can't invoice, can't
+>   produce reminders). NULL cadence excluded (no invoicing
+>   path defined).
+> - **Silence conditions:** any one of the three fallback layers
+>   populated = silent.
+>   - Layer 1: any active contact with `receives_reminders=1`
+>     and `roles_json` containing `billing` or `primary`
+>   - Layer 2: `clients.primary_contact_email` non-null/non-empty
+>   - Layer 3: any row in `users` with `client_id` = this client
+> - **Wired into `loadAdminQueue` between
+>   `csv_source_attention` and `lockedPeriodsSection`.** Same
+>   position in the sections[] assembly array. The existing
+>   count-assembly loop exposes `queue.counts.missing_billing_contact`
+>   automatically.
+> - **`SECTION_MAP` entry:** `{ bucket: 'actNow', severity: 12,
+>   label: 'contracts with no reminder route' }`. Slotted
+>   directly after `csv_source_attention` (severity 11) to keep
+>   the silent-failure canary neighborhood contiguous.
+> - **Slice 19 work-summary coverage updated.** `allSections`
+>   array gained `'missing_billing_contact'`; `actNow` expected
+>   length 12→13; total 17→18; `MAPPED_SECTION_KEYS.length`
+>   17→18. All ten Slice 19 assertions stay green.
+> - **No schema changes.** No migration, no new column, no new
+>   table, no new endpoint, no new job type.
+> - **No quiz changes.** Blog commit was not touched.
+>
+> **Exact files touched by Slice 23:**
+>
+> - `src/lib/jobs/billing-contact-health.ts` — new. Exports
+>   `loadMissingBillingContactSection(): Promise<QueueSection>`.
+>   Owns the candidate SELECT (status=active AND billing_cadence
+>   IN monthly/milestone, JOIN clients for name), a per-client
+>   `Map<clientId, recipients[]>` cache, `resolveForClient()` that
+>   mirrors the caller-site glue from `billing.ts:515-521`
+>   exactly, and a single classifier: empty recipients ⇒ emit a
+>   `QueueRow`, non-empty ⇒ silent. Reuses `QueueSection` and
+>   `QueueRow` types from `admin-queue.ts` without importing
+>   anything else from that module. Does not re-implement the
+>   fallback rules — the single source of truth for reminder
+>   routing remains `resolveReminderRecipients` in
+>   `src/lib/clients.ts:344`.
+> - `src/lib/admin-queue.ts` — 3-line additive edit. Added the
+>   import, one `await loadMissingBillingContactSection()` call
+>   between `csvSourceAttention` and `lockedPeriodsSection`, and
+>   one entry in the `sections[]` assembly array in the same
+>   position. The comment block above the new call was added and
+>   the `lockedPeriodsSection` comment header renumbered from
+>   `13.` to `14.`. Nothing else in the file changed.
+> - `src/lib/admin-work-summary.ts` — one `SECTION_MAP` entry:
+>   `missing_billing_contact: { bucket: 'actNow', severity: 12,
+>   label: 'contracts with no reminder route' }`. No logic
+>   change to `buildWorkSummary`. The `MAPPED_SECTION_KEYS`
+>   export automatically reflects the new key.
+> - `scripts/phase1-test-slice19-work-summary.ts` — coverage
+>   assertion refresh. Added `'missing_billing_contact'` to the
+>   `allSections` array in the 19.9 full-bucket-assignment case;
+>   bumped `s.actNow.length` expected 12→13, `total` 17→18,
+>   `MAPPED_SECTION_KEYS.length` 17→18. No other cases changed.
+> - `scripts/phase1-test-slice23-billing-contact-health.ts` —
+>   new. Eight assertion blocks: (1) bare active monthly
+>   contract with no contacts, no primary_contact_email, no
+>   portal users surfaces with the expected `what`/`where`/
+>   `why`/`link` shape, (2) active monthly + billing-role
+>   contact silences the row (layer 1 populated), (3) active
+>   monthly + `primary_contact_email` silences (layer 2), (4)
+>   active monthly + portal user silences (layer 3), (5) active
+>   one-time contract with all three layers empty stays silent
+>   via the cadence filter, (6) monthly contract with
+>   `status='completed'` stays silent via the status filter,
+>   (7) integration: `loadAdminQueue()` exposes the new section
+>   with correct key, `queue.counts.missing_billing_contact` is
+>   a number, existing `google_sync_attention` and
+>   `csv_source_attention` sections still present, (8)
+>   integration: `buildWorkSummary(queue)` places the item in
+>   the `actNow` bucket with label "contracts with no reminder
+>   route" and does NOT place it in `waiting` or `upcoming`.
+>   Uses six synthetic clients (A..F) created via direct
+>   `INSERT INTO clients` — not ZipKit — because ZipKit already
+>   has portal users and `primary_contact_email` that would
+>   suppress every at-risk case. Each scenario's contract is
+>   provisioned via `provisionContract`, its auto-seeded
+>   `generate_invoices` job is deleted immediately, and full
+>   teardown of contracts/contacts/users/periods/clients runs
+>   in try/finally.
+
 ## Exact landed slices in this run
 
 - **Slice 15** — multi-contract intake (`provisionClientIntake`, envelope POST
@@ -835,6 +971,16 @@ traffic-aware.
 - **Slice 22** — self-perpetuating invoice reminder sweep
   (`ensureReminderSweepQueued`, `send_reminders` daily re-enqueue,
   seeded from `generate_invoices` on success, no new job types)
+- **Slice 23** — admin-queue signal for contracts with no reminder
+  route (`loadMissingBillingContactSection`, delegates to
+  `resolveReminderRecipients`, per-client cache, `actNow` severity
+  12, no new job types, no schema changes). Closes the silent-
+  failure hole in Slice 22's perpetual sweep.
+
+> Between Slice 22 and Slice 23, commit `a22ebc0` ("Add blog with
+> articles and case studies") landed. It is not a numbered portal
+> slice, not a portal-product change, and Slice 23 does not depend
+> on it. Listed here only so the branch log reads honestly.
 
 ## Exact files touched in Slice 18d
 
@@ -953,13 +1099,14 @@ action):
 7. **Brand accent beyond the sidebar strip.** Column exists, only one render
    surface reads it.
 8. **Preview-mode brand accent for admins.**
-9. **Admin queue "missing billing contact" hygiene signal.** Adjacent to
-   Slice 13b's missing-approval flag.
-10. **Wizard "edit staged block".** Staged contract blocks can only be
-    removed, not edited.
-11. **Traffic summary surfaces beyond the dashboard.** No
+9. **Wizard "edit staged block".** Staged contract blocks can only be
+   removed, not edited.
+10. **Traffic summary surfaces beyond the dashboard.** No
     `buildTrafficSummary` render on `/portal/keywords` or in the narrator
     beyond slice 1/3 fact selection.
+
+> Previously listed gap #9 ("Admin queue 'missing billing contact'
+> hygiene signal") was closed by Slice 23 and is no longer open.
 
 ## First-step verification checklist for the next instance
 
@@ -1034,7 +1181,7 @@ passes before starting any new work.
    cleanup, not polish, not decorative integrations. Every slice must move
    the spine forward.
 2. **Do not reopen closed slices without evidence.** Slices 15, 16, 16b, 17,
-   18, 18b, 18c, 18d, 18e, 18f, 18g, 18h, 18i, 19, 20, 21, 22 are closed.
+   18, 18b, 18c, 18d, 18e, 18f, 18g, 18h, 18i, 19, 20, 21, 22, 23 are closed.
    Reopening them requires a concrete failing assertion or a reproducible
    bug in the live product.
 3. **Source of truth:** the repo + this handoff file. Memory files are

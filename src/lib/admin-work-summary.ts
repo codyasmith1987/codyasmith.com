@@ -46,6 +46,7 @@ const SECTION_MAP: Record<string, Mapping> = {
   missing_automation:      { bucket: 'actNow',   severity: 9,  label: 'missing automation' },
   google_sync_attention:   { bucket: 'actNow',   severity: 10, label: 'Google sources unhealthy' },
   csv_source_attention:    { bucket: 'actNow',   severity: 11, label: 'CSV sources unhealthy' },
+  missing_billing_contact: { bucket: 'actNow',   severity: 12, label: 'contracts with no reminder route' },
   pending_approvals:       { bucket: 'waiting',  severity: 0,  label: 'pending approvals' },
   due_soon:                { bucket: 'waiting',  severity: 1,  label: 'invoices due soon' },
   upcoming_milestones:     { bucket: 'upcoming', severity: 0,  label: 'milestones coming up' },

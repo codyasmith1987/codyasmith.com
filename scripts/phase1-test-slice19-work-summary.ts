@@ -168,7 +168,7 @@ console.log('=== Slice 19 test: admin work summary ===\n');
     'failed_jobs', 'failed_imports', 'stale_pending', 'late',
     'overdue_milestones', 'unbilled_needs_approval', 'unbilled_manual_review',
     'drafts', 'expired', 'missing_automation', 'google_sync_attention',
-    'csv_source_attention',
+    'csv_source_attention', 'missing_billing_contact',
     'pending_approvals', 'due_soon',
     'upcoming_milestones', 'expiring', 'unbilled_auto_bill',
     'locked_periods',
@@ -176,17 +176,17 @@ console.log('=== Slice 19 test: admin work summary ===\n');
   const q = makeQueue(allSections.map((k) => makeSection(k, 1)));
   const s = buildWorkSummary(q);
 
-  // 12 actNow (all attention + infrastructure sections)
-  if (s.actNow.length !== 12) throw new Error(`actNow: expected 12, got ${s.actNow.length}`);
+  // 13 actNow (all attention + infrastructure sections)
+  if (s.actNow.length !== 13) throw new Error(`actNow: expected 13, got ${s.actNow.length}`);
   // 2 waiting (pending_approvals + due_soon)
   if (s.waiting.length !== 2) throw new Error(`waiting: expected 2, got ${s.waiting.length}`);
   // 3 upcoming (upcoming_milestones + expiring + unbilled_auto_bill)
   if (s.upcoming.length !== 3) throw new Error(`upcoming: expected 3, got ${s.upcoming.length}`);
-  // Total: 17 items from 17 mapped sections (locked_periods skipped)
+  // Total: 18 items from 18 mapped sections (locked_periods skipped)
   const total = s.actNow.length + s.waiting.length + s.upcoming.length;
-  if (total !== 17) throw new Error(`total: expected 17, got ${total}`);
-  // Verify MAPPED_SECTION_KEYS matches the 17 expected
-  if (MAPPED_SECTION_KEYS.length !== 17) throw new Error(`MAPPED_SECTION_KEYS: expected 17, got ${MAPPED_SECTION_KEYS.length}`);
+  if (total !== 18) throw new Error(`total: expected 18, got ${total}`);
+  // Verify MAPPED_SECTION_KEYS matches the 18 expected
+  if (MAPPED_SECTION_KEYS.length !== 18) throw new Error(`MAPPED_SECTION_KEYS: expected 18, got ${MAPPED_SECTION_KEYS.length}`);
   console.log('  OK\n');
 }
 

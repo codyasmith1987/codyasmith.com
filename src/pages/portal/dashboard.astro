@@ -24,6 +24,7 @@ import {
 } from '../../lib/traffic-metrics';
 import { buildTrafficSummary, type ClientSummary } from '../../lib/client-page-summary';
 import ClientSummaryBlock from '../../components/portal/ClientSummary.astro';
+import { buildProgressSummary, type ProgressSummary } from '../../lib/client-progress-summary';
 export const prerender = false;
 
 const user = Astro.locals.user!;
@@ -109,6 +110,16 @@ let trafficSummary: ClientSummary | null = null;
 if (selectedClientId && trafficPeriodId) {
   trafficSummary = await buildTrafficSummary(selectedClientId);
 }
+
+// Slice 25 — client-facing milestone progress. Three buckets
+// (working on / just finished / coming up), rendered only when
+// at least one bucket is populated. Honors client_visible on
+// both milestones and projects; scopes to active contracts only.
+let progressSummary: ProgressSummary | null = null;
+if (selectedClientId) {
+  const p = await buildProgressSummary(selectedClientId);
+  if (p.hasAny) progressSummary = p;
+}
 ---
 
 <Portal title="Dashboard">
@@ -167,6 +178,37 @@ if (selectedClientId && trafficPeriodId) {
         {verdict.confidence === 'no_data' && (
           <p class="text-[11px] font-mono text-neutral-600 mt-5 tracking-wide">waiting on first import</p>
         )}
+      </section>
+    )}
+
+    {/* ═══════ SLICE 25: PROGRESS SUMMARY ═══════ */}
+    {/* Three-bucket client-facing milestone read surface. Honors
+        client_visible on milestones + projects, scopes to active
+        contracts only. Renders nothing when all buckets empty —
+        no "nothing to report" placeholder. */}
+    {progressSummary && (
+      <section class="mb-16">
+        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-3">Project update</p>
+        <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-6 space-y-4 max-w-[640px]">
+          {progressSummary.inProgress && (
+            <div>
+              <p class="text-[10px] font-mono text-blue-400 tracking-[0.15em] uppercase mb-1">Now</p>
+              <p class="text-sm text-neutral-200 leading-relaxed">{progressSummary.inProgress}</p>
+            </div>
+          )}
+          {progressSummary.justFinished && (
+            <div>
+              <p class="text-[10px] font-mono text-emerald-400 tracking-[0.15em] uppercase mb-1">Recently</p>
+              <p class="text-sm text-neutral-200 leading-relaxed">{progressSummary.justFinished}</p>
+            </div>
+          )}
+          {progressSummary.comingUp && (
+            <div>
+              <p class="text-[10px] font-mono text-neutral-500 tracking-[0.15em] uppercase mb-1">Next</p>
+              <p class="text-sm text-neutral-300 leading-relaxed">{progressSummary.comingUp}</p>
+            </div>
+          )}
+        </div>
       </section>
     )}
 

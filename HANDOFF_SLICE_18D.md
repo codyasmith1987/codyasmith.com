@@ -1,8 +1,8 @@
-# Handoff — clean stop after Slice 24
+# Handoff — clean stop after Slice 25
 
 > **File name is retained as `HANDOFF_SLICE_18D.md`** because this is the
 > same living checkpoint file the 18d stop established. Slices 18e
-> through 24 extended it in place. The checkpoint branch name also
+> through 25 extended it in place. The checkpoint branch name also
 > stays `checkpoint/slice-18d`. Both are canonical anchors — do not
 > rename them.
 
@@ -23,29 +23,37 @@ Read those before starting new work. They override drift.
 
 ## Current checkpoint
 
-**Clean stop after Slice 24.** All 16 test suites green. `astro build`
+**Clean stop after Slice 25.** All 17 test suites green. `astro build`
 clean (only pre-existing blog-collection warnings, not failures). Slice
-24 sits directly on top of Slice 23.
+25 sits directly on top of Slice 24.
 
-Slice 24 turns `clients.brand_accent` — captured once at intake and
-previously consumed only by a single sidebar-strip render — into a real
-portal-wide personalization signal. Every client-facing portal page
-(dashboard, keywords, health, files, invoices, projects, approvals,
-notifications) now reflects the client's brand color on active nav
-pills, hover states, eyebrow labels, the KPI card on the dashboard, and
-two new decorative strips (top of mobile header, top of `<main>`).
-Admins and clients with no brand_accent see byte-identical pre-Slice-24
-styling via a `var(--brand-accent, rgb(251 191 36))` fallback chain.
+Slice 25 turns the existing `milestones` table (populated by Slice 11
+at contract provisioning and written to by the admin milestone edit
+surface) into a real client-facing progress narrative on the dashboard.
+Three buckets — "Working on" (inProgress), "Just finished"
+(justFinished, 30-day recency window), "Coming up" (comingUp) — surface
+plain-language client copy (`client_update_text`) with a fall-back to
+`title`. Internal milestones stay invisible via a hard three-layer
+filter (`milestones.client_visible = 1 AND projects.client_visible = 1
+AND contracts.status = 'active'`). Empty state renders nothing — no
+placeholder. `/portal/projects` remains the deep-view surface and is
+untouched.
 
-Slice 23 (the prior stop) closed the silent-failure hole in Slice 22's
-self-perpetuating reminder sweep by adding the `missing_billing_contact`
-admin-queue section.
+Slice 24 (the prior stop) extended `clients.brand_accent` from the
+single sidebar-strip render to every client-facing portal surface via
+five `portal-accent-*` utility classes consuming
+`var(--brand-accent, rgb(251 191 36))`. Admins and clients with no
+brand_accent see byte-identical pre-Slice-24 styling.
+
+Slice 23 closed the silent-failure hole in Slice 22's self-perpetuating
+reminder sweep by adding the `missing_billing_contact` admin-queue
+section.
 
 The unrelated blog commit `a22ebc0` ("Add blog with articles and case
 studies") sits between Slice 22 and Slice 23 in the branch log. It is
-not part of any numbered portal slice, Slice 23 and Slice 24 do not
-depend on it, and it introduces only pre-existing blog-collection
-warnings during `astro build` (not failures).
+not part of any numbered portal slice, Slices 23/24/25 do not depend on
+it, and it introduces only pre-existing blog-collection warnings during
+`astro build` (not failures).
 
 Manual Google sync (GSC + GA4) is code-real end to end. Dashboard
 narrator is traffic-aware.
@@ -1089,6 +1097,132 @@ narrator is traffic-aware.
 >   touched — see contrast-risk note in the portal.css
 >   comment block.
 
+> **Slice 25 landed on top of Slice 24.** The original ask explicitly
+> included "updates on tasks." The admin milestone edit surface
+> (`PUT /portal/api/admin/milestones/[id]`), the `client_update_text`
+> column (Slice 11 seed), and the `client_visible` flag were all real
+> before this slice — what was missing was a top-of-dashboard read
+> surface that translates that truth into plain 7th-grade-reading-
+> level sentences the client sees when they log in. `/portal/projects`
+> covers the deep view; the dashboard block covers glance-level state.
+> What Slice 25 made real:
+>
+> - **Three-bucket progress summary on `/portal/dashboard`.**
+>   "Now" (inProgress), "Recently" (justFinished), "Next" (comingUp)
+>   — each is an optional string on the `ProgressSummary` return
+>   shape with a `hasAny: boolean` flag that drives the render
+>   gate. When all three are empty, the dashboard renders nothing
+>   (no "no updates" placeholder). Block is wrapped in a
+>   `max-w-[640px]` card and slots between the narrator section
+>   and the Slice 18c traffic summary.
+> - **Rules (one row per bucket):**
+>   - `inProgress`: first `milestones.status = 'in_progress'`
+>     row, `ORDER BY sort_order ASC, id ASC LIMIT 1`. Sentence
+>     `"Working on {client_update_text || title}"`.
+>   - `justFinished`: most recent
+>     `milestones.status = 'completed'` row where
+>     `completed_at >= datetime('now','-30 days')`,
+>     `ORDER BY completed_at DESC LIMIT 1`. Sentence
+>     `"Just finished {client_update_text || title}"`.
+>   - `comingUp`: first `milestones.status = 'not_started'`
+>     row, `ORDER BY (due_date IS NULL) ASC, due_date ASC,
+>     sort_order ASC, id ASC LIMIT 1` (NULLS LAST via CASE).
+>     Sentence `"Coming up: {client_update_text || title}"`.
+>   - `on_hold` / `cancelled` / `draft` statuses are excluded
+>     — they are not honest in-flight narrative.
+> - **Three-layer client-visibility filter, hard.** Every loader
+>   applies `milestones.client_visible = 1
+>   AND projects.client_visible = 1
+>   AND contracts.status = 'active'`. Internal-only rows never
+>   reach the client. Contracts that are `draft`, `sent`,
+>   `completed`, or `cancelled` never contribute milestones —
+>   a post-contract milestone would create a false "coming up"
+>   promise. This mirrors the access pattern used by
+>   `/portal/projects` and the narrator's
+>   `loadRecentCompletedMilestone`.
+> - **Plain-language rules.** `client_update_text` is preferred
+>   when present and non-whitespace; empty or null falls back
+>   to `title`. The three sentence templates use "Working on",
+>   "Just finished", "Coming up:" — no jargon, no percentages,
+>   no fake statuses, no pluralization. 7th-grade reading
+>   level matches the voice rule enforced across the narrator
+>   and the Slice 17 summaries.
+> - **No narrator rewrite.** Considered adding progress as a
+>   narrator candidate fact and rejected — the narrator picks
+>   one sentence by priority, and progress needs to surface
+>   three buckets at once. A narrator fact would lose that
+>   structural clarity. The dashboard block is additive to
+>   the narrator, not a replacement.
+> - **No new page.** Considered a new `/portal/progress` page
+>   and rejected — `/portal/projects` already renders the
+>   complete milestone detail surface (active, upcoming,
+>   completed, with tasks and client_update_text) and adding
+>   another page would fragment client navigation.
+> - **No new admin surface.** Admin-side milestone status
+>   writes already exist at `/portal/api/admin/milestones/[id]`
+>   (PUT with `status`/`client_visible`/`client_update_text`/
+>   `due_date`/`sort_order`/`title`/`description`, auto-stamps
+>   `completed_at`, calls `onMilestoneCompleted` trigger, logs
+>   activity). Slice 25 reads from that truth — it does not
+>   add new writes.
+> - **No schema changes.** No migration, no new column, no
+>   new table, no new endpoint, no new job type.
+> - **No admin-queue / SECTION_MAP / work-summary touches.**
+>   This is a client-facing slice. The admin-queue
+>   `overdue_milestones` and `upcoming_milestones` sections
+>   are distinct concerns (admin operational pressure) and
+>   were not modified.
+> - **No brand-accent / blog / quiz changes.**
+>
+> **Exact files touched by Slice 25:**
+>
+> - `src/lib/client-progress-summary.ts` — new. Exports the
+>   `ProgressSummary` interface and
+>   `buildProgressSummary(clientId: string, contractId?: string)
+>   : Promise<ProgressSummary>`. Three independent loaders
+>   (`loadInProgress`, `loadJustFinished`, `loadComingUp`)
+>   each run the same three-layer client_visible +
+>   active-contract filter and return a single `MilestoneRow`
+>   or null. The public builder runs them in parallel via
+>   `Promise.all` and assembles sentences via the `copyFor`
+>   helper (prefers `client_update_text.trim()` when
+>   non-empty, falls back to `title`). Exports
+>   `JUST_FINISHED_WINDOW_DAYS = 30` so future slices can
+>   dial the recency window in one place without changing
+>   rule logic. Optional `contractId` scopes each loader to
+>   a single contract; omitted, the loader surveys every
+>   active contract under the client.
+> - `src/pages/portal/dashboard.astro` — edit. Added one
+>   import (`buildProgressSummary`, `ProgressSummary`),
+>   one await call gated on `selectedClientId`, one
+>   `progressSummary` variable assigned only when
+>   `p.hasAny === true` (so the render path reads a single
+>   null-check), and a 28-line `{progressSummary && ...}`
+>   `<section>` block between the narrator section
+>   (closes at line ~171) and the Slice 18c traffic summary
+>   (opens at line ~174 pre-edit). The block uses NOW
+>   (blue), RECENTLY (emerald), NEXT (neutral) typographic
+>   labels. Existing narrator / traffic / KPI blocks are
+>   unchanged.
+> - `scripts/phase1-test-slice25-progress-summary.ts` — new.
+>   Nine assertion blocks: (1) in_progress only → inProgress
+>   set, others undefined; (2) recently completed only →
+>   justFinished set; (3) completed outside the 30-day window
+>   → excluded, `hasAny=false`; (4) not_started only →
+>   comingUp set; (5) mixed state → all three populated; (6)
+>   all `client_visible=0` → `hasAny=false`; (7) contract
+>   with `status='completed'` → excluded even with an
+>   `in_progress` milestone; (8) `client_update_text`
+>   preferred over `title` — title must not leak into the
+>   sentence; (9) null / whitespace-only `client_update_text`
+>   falls back to title. Uses one synthetic client per
+>   scenario (9 total, direct `INSERT INTO clients` because
+>   ZipKit already has real milestones that would
+>   cross-pollinate), direct INSERTs for contract + project
+>   + milestones (no `provisionContract` defaults to fight),
+>   and full teardown in try/finally of
+>   milestones/projects/activity_log/contracts/clients.
+
 ## Exact landed slices in this run
 
 - **Slice 15** — multi-contract intake (`provisionClientIntake`, envelope POST
@@ -1139,6 +1273,15 @@ narrator is traffic-aware.
   preserves pre-Slice-24 amber, admins and body copy untouched,
   no schema changes, no test file). Turns `clients.brand_accent`
   from a single-surface field into real portal-wide personalization.
+- **Slice 25** — client-facing milestone progress summary on the
+  dashboard (`buildProgressSummary`, three buckets Now / Recently /
+  Next, three-layer `client_visible + active-contract` filter,
+  30-day justFinished recency window, `client_update_text || title`
+  sentence rule, `hasAny=false` empty state renders nothing,
+  no schema changes, no new endpoints, no narrator rewrite).
+  Turns the existing `milestones` table into real client-facing
+  narrative about "what's being worked on" — the original ask's
+  "updates on tasks" requirement.
 
 > Between Slice 22 and Slice 23, commit `a22ebc0` ("Add blog with
 > articles and case studies") landed. It is not a numbered portal
@@ -1348,7 +1491,7 @@ passes before starting any new work.
    cleanup, not polish, not decorative integrations. Every slice must move
    the spine forward.
 2. **Do not reopen closed slices without evidence.** Slices 15, 16, 16b, 17,
-   18, 18b, 18c, 18d, 18e, 18f, 18g, 18h, 18i, 19, 20, 21, 22, 23, 24 are
+   18, 18b, 18c, 18d, 18e, 18f, 18g, 18h, 18i, 19, 20, 21, 22, 23, 24, 25 are
    closed. Reopening them requires a concrete failing assertion or a
    reproducible bug in the live product.
 3. **Source of truth:** the repo + this handoff file. Memory files are

@@ -80,8 +80,34 @@ Run all six. If any step fails, STOP there and report the failure. Do not fake c
 
 ## Project-specific notes
 
-<!-- Add project-specific context here. Examples: -->
-<!-- - This project deploys to Netlify on push to main -->
-<!-- - The primary stakeholder for this repo is [person] -->
-<!-- - Known integrations: [list] -->
-<!-- - Ports or services this project expects running locally -->
+This repo is shared. It holds the portal (admin and client surfaces), the personal-site quiz, and the blog. Portal sessions do not touch quiz or blog files.
+
+**Off-limits in portal sessions without explicit approval:**
+
+- `src/components/Quiz.astro`
+- The quiz propagation engine
+- `_backup/quiz-bg-*/`
+- The blog collection
+- Anything under `src/lib/` that the quiz also imports from. Surface before writing and get approval.
+
+**Portal-side hard rules:**
+
+- No schema changes unless the code forces it. Build with the existing tables (contracts, clients, client_contacts, projects, milestones, users, and the rest) first. Propose a schema change only after showing why it's impossible without one.
+- No new theming systems or CSS architectures. Extend the existing `portal-accent-*` utility classes, the `--brand-accent` custom property, `src/layouts/Portal.astro`, and `src/styles/portal.css`.
+- No inventing systems that duplicate existing ones. No second health-check loader, no parallel admin queue, no client-facing comments or threading or messaging, no Gantt UI, no new task-management surface when the milestones table already exists.
+- Captured fields must drive real behavior. A contract field that exists but changes nothing downstream is fake completeness and gets deleted.
+- Do not reopen closed slices without evidence of a failing verification step or a concrete mismatch between the handoff's claims and the repo's reality. "It works but I'd refactor it" is not evidence.
+
+**Slice definition of done** (all seven must hold):
+
+1. The captured truth (contract field, intake answer, etc.) actually drives the behavior it should.
+2. The client side communicates the change in plain language, or says nothing if there's nothing honest to say.
+3. The admin side either surfaces a new queue item, resolves one, or is intentionally untouched.
+4. The full phase-1 test suite is green, including the new slice's test.
+5. `npx astro build` is green.
+6. `HANDOFF_SLICE_18D.md` reflects the new state: commit hash, what shipped, what's still open.
+7. Commits are pushed and `git ls-remote` confirms origin matches local HEAD.
+
+**Handoff file:** `HANDOFF_SLICE_18D.md` at the repo root.
+
+**Authoritative vision document:** `PORTAL-VISION-AND-RULES.md` lives in the Claude Project that hosts the controller, not in this repo. The rules above are the CC-operational subset. Controllers read the full vision doc every session.

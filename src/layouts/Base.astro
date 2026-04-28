@@ -164,14 +164,16 @@ const resolvedOgImage = ogImage ? new URL(ogImage, 'https://codyasmith.com').hre
         swapAxis('processing', processing); // Stars/Clouds (ELM)
 
         // ---- Returning visitor detection ----
-        const visitCount = parseInt(localStorage.getItem('cs-visit-count') || '0', 10);
-        const isReturning = visitCount > 1;
-
-        if (visitCount > 0) {
-          localStorage.setItem('cs-visit-count', String(visitCount + 1));
-        } else {
-          localStorage.setItem('cs-visit-count', '1');
+        // Count one visit per browser session, not one per page navigation.
+        // sessionStorage is per-tab and survives view-transition swaps but
+        // resets when the tab closes, which matches "a new visit" intent.
+        let visitCount = parseInt(localStorage.getItem('cs-visit-count') || '0', 10);
+        if (!sessionStorage.getItem('cs-session-counted')) {
+          visitCount += 1;
+          localStorage.setItem('cs-visit-count', String(visitCount));
+          sessionStorage.setItem('cs-session-counted', '1');
         }
+        const isReturning = visitCount > 1;
 
         if (isReturning && localStorage.getItem('cs-quiz-done')) {
           // Show returning visitor elements, hide first-visit ones

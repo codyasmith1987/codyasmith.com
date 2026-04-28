@@ -128,8 +128,16 @@
     const quiz = document.getElementById('quiz');
     if (!quiz) return;
 
-    // Head inline script has already hidden the quiz for returning/themed visitors
-    // via <html class="cs-no-quiz">. If that class is present, skip init entirely.
+    // ClientRouter swaps the body without re-running the inline head script,
+    // so re-evaluate the gate against localStorage on every call. Without this,
+    // a completed quiz reappears on the next navigation because the fresh quiz
+    // DOM has no inline display:none and <html> may not carry cs-no-quiz yet.
+    if (localStorage.getItem('cs-quiz-done')) {
+      document.documentElement.classList.add('cs-no-quiz');
+      document.documentElement.classList.remove('quiz-active');
+      return;
+    }
+
     if (document.documentElement.classList.contains('cs-no-quiz')) return;
 
     document.documentElement.classList.add('quiz-active');
@@ -203,6 +211,7 @@
         setTimeout(() => {
           quiz.style.display = 'none';
           document.documentElement.classList.remove('quiz-active');
+          document.documentElement.classList.add('cs-no-quiz');
           if (typeof (window as any).__initPersonalization === 'function') {
             (window as any).__initPersonalization();
           }
@@ -224,6 +233,7 @@
         setTimeout(() => {
           quiz.style.display = 'none';
           document.documentElement.classList.remove('quiz-active');
+          document.documentElement.classList.add('cs-no-quiz');
           if (typeof (window as any).__initPersonalization === 'function') {
             (window as any).__initPersonalization();
           }

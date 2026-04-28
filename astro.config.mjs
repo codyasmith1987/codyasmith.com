@@ -8,7 +8,12 @@ import mdx from '@astrojs/mdx';
 // https://astro.build/config
 export default defineConfig({
   site: 'https://codyasmith.com',
-  integrations: [mdx(), sitemap()],
+  integrations: [
+    mdx(),
+    sitemap({
+      filter: (page) => !page.includes('/portal/'),
+    }),
+  ],
   adapter: node({ mode: 'standalone' }),
   security: {
     checkOrigin: true

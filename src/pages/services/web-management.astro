@@ -122,8 +122,14 @@ const faqSchema = JSON.stringify({
               <span class="text-amber-400/60 text-[10px] font-mono font-bold">2</span>
             </div>
             <h3 class="text-neutral-100 text-xl font-medium mb-3">I take the thing apart.</h3>
-            <p class="text-neutral-400 leading-relaxed">
+            <p class="text-neutral-400 leading-relaxed" data-frame="default">
               Plugin conflicts, outdated dependencies, security holes, performance problems nobody told you about. Everything gets documented. This becomes your first Site Health Report and the baseline for everything that comes after.
+            </p>
+            <p class="text-neutral-400 leading-relaxed" style="display:none" data-frame="sun">
+              I take the site apart and find what's slowing it down, what's redundant, what's underused. The fixes compound from there: faster site, leaner stack, more headroom for the things you actually want to do.
+            </p>
+            <p class="text-neutral-400 leading-relaxed" style="display:none" data-frame="moon">
+              A diagnostic teardown of the whole stack. Plugin conflicts, dependencies, security gaps, performance issues, all documented. Nothing on the site is undocumented after this.
             </p>
           </div>
 
@@ -131,9 +137,15 @@ const faqSchema = JSON.stringify({
             <div class="absolute left-3 md:left-5 top-1 w-6 h-6 rounded-full border-2 border-amber-500/40 bg-neutral-950 flex items-center justify-center">
               <span class="text-amber-400/40 text-[10px] font-mono font-bold">3</span>
             </div>
-            <h3 class="text-neutral-100 text-xl font-medium mb-3">Then it becomes invisible to you.</h3>
-            <p class="text-neutral-400 leading-relaxed">
+            <h3 class="text-neutral-100 text-xl font-medium mb-3">Then it starts pulling its weight.</h3>
+            <p class="text-neutral-400 leading-relaxed" data-frame="default">
               Updates get tested before they touch your live site. Security monitoring runs around the clock. Backups happen daily. And when something breaks, because eventually something always does, my phone buzzes. Not yours.
+            </p>
+            <p class="text-neutral-400 leading-relaxed" style="display:none" data-frame="sun">
+              Stable infrastructure that lets the business move faster. The site stops being the bottleneck. You ship the campaign, push the page, run the promotion. The site keeps up.
+            </p>
+            <p class="text-neutral-400 leading-relaxed" style="display:none" data-frame="moon">
+              Updates tested in staging, logged, deployed. Security monitoring with alerts. Daily backups with point-in-time restore. When something breaks, the incident is documented end to end. Your phone stays quiet.
             </p>
           </div>
 
@@ -190,22 +202,52 @@ const faqSchema = JSON.stringify({
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" /></svg>
           </div>
           <h3 class="text-neutral-100 font-medium mb-2">Daily backups</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed">Automated daily. Point-in-time restoration. If something goes wrong, we roll back in minutes, not days.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">Automated daily. Point-in-time restoration. If something goes wrong, we roll back in minutes, not days.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">The site can always go back to the way it was yesterday. That's the floor.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">Automated daily snapshot of files and database. 30-day retention, off-site storage, point-in-time restore tested every quarter. Disaster recovery is not theoretical.</p>
         </div>
         <div class="reveal glow-card p-6" style="--i:4">
           <div class="text-amber-400 mb-4">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
           </div>
           <h3 class="text-neutral-100 font-medium mb-2">Uptime monitoring</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed">Checked every 60 seconds. If your site goes down, I know before your customers do.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">Checked every 60 seconds. If your site goes down, I know before your customers do.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">If the site goes down, I know about it before your customers do. They almost never see a downtime moment that wasn't planned.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">UptimeRobot probes the site every 60 seconds from multiple regions. Alerts route to me by SMS and email within seconds of any failed check. Public status data available on request.</p>
         </div>
         <div class="reveal glow-card p-6" style="--i:5">
           <div class="text-amber-400 mb-4">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
           </div>
           <h3 class="text-neutral-100 font-medium mb-2">Site Health Report</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed">Monthly. What happened, what's next, how performance compares. The proof that the work gets done.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">Monthly. What happened, what's next, how performance compares. The proof that the work gets done.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">The work is visible every month. You never have to wonder if the retainer is earning its keep.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">Monthly written deliverable with sections for completed work, identified issues, Core Web Vitals trend, uptime metric, security log summary, and next-cycle priorities. Comparable month over month.</p>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Portal block: where the engagement lives -->
+  <section class="py-28 px-6">
+    <div class="max-w-4xl mx-auto">
+      <div class="reveal mb-12 text-center">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">The portal</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">The receipt for the engagement.</h2>
+      </div>
+      <div class="reveal glow-card p-8 md:p-10">
+        <p class="text-neutral-300 leading-relaxed text-lg" data-frame="default">
+          Every engagement runs through one portal: contracts, change orders, invoices, files, milestones, approvals, notifications. One log-in, one source of truth, one place to find anything I've ever done for you.
+        </p>
+        <p class="text-neutral-300 leading-relaxed text-lg" style="display:none" data-frame="sun">
+          The portal puts the engagement on rails. Approvals move faster, milestones land cleaner, and the work compounds because nothing's stuck waiting for someone to chase it down.
+        </p>
+        <p class="text-neutral-300 leading-relaxed text-lg" style="display:none" data-frame="moon">
+          The portal is the receipt for the engagement. Contracts, change orders, invoices, approvals, every milestone, every file. Nothing the engagement produces lives in a thread you'd lose.
+        </p>
+        <p class="text-neutral-300 leading-relaxed text-lg mt-6 pt-6 border-t border-white/5" style="display:none" data-vibe="mountain">
+          Magic-link sign-in (no passwords to leak). Sessions hashed. Files in encrypted storage. Activity log behind every action. Your data stays yours, end to end.
+        </p>
       </div>
     </div>
   </section>

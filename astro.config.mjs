@@ -16,7 +16,7 @@ export default defineConfig({
   ],
   adapter: node({ mode: 'standalone' }),
   security: {
-    checkOrigin: false
+    checkOrigin: true
   },
   vite: {
     plugins: [tailwindcss()]

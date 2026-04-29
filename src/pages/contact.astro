@@ -175,8 +175,14 @@ import Base from '../layouts/Base.astro';
             <div>
               <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">What to expect</p>
               <div class="space-y-4 text-neutral-400 text-sm leading-relaxed">
-                <p>
+                <p data-frame="default">
                   I reply within one business day. Usually same day. If I can't help, I'll say that in the first email instead of dragging you through a call to find out.
+                </p>
+                <p style="display:none" data-frame="sun">
+                  I reply fast. Same day if I can, one business day at the latest. The reply has substance: what fits, what it would take, what's next. Not a placeholder thanks-for-reaching-out.
+                </p>
+                <p style="display:none" data-frame="moon">
+                  I reply fast. Same day if I can, one business day at the latest. If it's not a fit, the reply says so directly. No 'let's get on a call' to find that out two weeks later.
                 </p>
               </div>
             </div>
@@ -198,6 +204,15 @@ import Base from '../layouts/Base.astro';
       <div class="reveal mb-16">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">How it starts</p>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">What happens after you reach out.</h2>
+        <p class="text-neutral-400 mt-4 max-w-2xl" data-phase="default">
+          Three steps. Same shape every time. No mystery, no surprises.
+        </p>
+        <p class="text-neutral-400 mt-4 max-w-2xl" style="display:none" data-phase="spring">
+          It's a path, not a procedure. Each step earns the next, the shape is consistent, and you always know where you're heading.
+        </p>
+        <p class="text-neutral-400 mt-4 max-w-2xl" style="display:none" data-phase="fall">
+          Three discrete steps in defined order. Each step has a named action and a named output. The sequence runs the same way every time.
+        </p>
       </div>
       <div class="grid md:grid-cols-3 gap-8 reveal-stagger">
         <div class="reveal glow-card p-6" style="--i:0">
@@ -431,7 +446,12 @@ import Base from '../layouts/Base.astro';
           });
 
           if (res.ok) {
-            status.textContent = 'Sent. I\'ll be in touch.';
+            const theme = localStorage.getItem('cs-theme') || '';
+            const frame = theme.split('-')[0];
+            let statusText = 'Sent. I\'ll be in touch.';
+            if (frame === 'sun') statusText = 'Sent. Reply within one business day, usually faster.';
+            else if (frame === 'moon') statusText = 'Sent. Reply within one business day. Honest read, fit or not.';
+            status.textContent = statusText;
             status.classList.remove('opacity-0');
             status.classList.add('text-amber-400');
             status.classList.remove('text-red-400');

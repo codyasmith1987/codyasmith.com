@@ -8,6 +8,28 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function getConfirmationEmailBody(name: string, quizTheme: string): string {
+  const safeName = escapeHtml(name);
+  const frame = quizTheme.split('-')[0];
+
+  if (frame === 'sun') {
+    return `<p>Hey ${safeName},</p>
+<p>Message received. Within one business day you'll have my read on whether this fits, what it would take, and the rough timeline. Then we figure out the next move.</p>
+<p>Reply here if anything else comes up.</p>
+<p>Cody</p>`;
+  }
+  if (frame === 'moon') {
+    return `<p>Hey ${safeName},</p>
+<p>Got it. Within one business day I'll come back with an honest read: whether this fits what I do, what it would actually take to address, and what I'd recommend if it isn't my work.</p>
+<p>Anything else, reply to this.</p>
+<p>Cody</p>`;
+  }
+  return `<p>Hey ${safeName},</p>
+<p>Got your message. I'll take a look and get back to you within one business day. Usually faster.</p>
+<p>If anything changes or you want to add context, just reply to this email.</p>
+<p>Talk soon,<br>Cody</p>`;
+}
+
 export const POST: APIRoute = async ({ request, clientAddress }) => {
   const ip = clientAddress || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
   if (!await rateLimit(`contact:${ip}`, 5, 60 * 60 * 1000)) {
@@ -97,12 +119,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
           sender: { name: 'Cody Smith', email: 'cody@codyasmith.com' },
           to: [{ email: email, name: name }],
           subject: 'Got your message',
-          htmlContent: `
-            <p>Hey ${escapeHtml(name)},</p>
-            <p>Got your message. I'll take a look and get back to you within one business day. Usually faster.</p>
-            <p>If anything changes or you want to add context, just reply to this email.</p>
-            <p>Talk soon,<br>Cody</p>
-          `,
+          htmlContent: getConfirmationEmailBody(name, quizTheme),
         }),
       });
       if (!confirmRes.ok) {

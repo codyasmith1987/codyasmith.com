@@ -56,11 +56,17 @@ import Base from '../../layouts/Base.astro';
           <div class="grid lg:grid-cols-3 gap-8">
             <div class="lg:col-span-2">
               <h3 class="text-neutral-100 text-xl font-medium mb-4">Integrations</h3>
-              <p class="text-neutral-400 leading-relaxed mb-4">
+              <p class="text-neutral-400 leading-relaxed mb-4" data-processing="default">
                 Your forms submit but nothing happens on the other end. Leads don't reach your CRM. Email sequences never fire. Payment confirmations vanish. The connections between your site and your business tools are either broken or they never existed.
               </p>
-              <p class="text-neutral-400 leading-relaxed">
+              <p class="text-neutral-400 leading-relaxed" data-processing="default">
                 I build those connections. Form submissions that land in your CRM tagged and ready. Email sequences that trigger when someone downloads a guide. Payment links that actually track conversions.
+              </p>
+              <p class="text-neutral-400 leading-relaxed" style="display:none" data-processing="stars">
+                Most integrations break in failure modes nobody tested: timeouts, malformed payloads, silent failures. The connections I build assume the failure modes happen, log them, and recover. Every integration ships with a runbook for what to check when something looks off.
+              </p>
+              <p class="text-neutral-400 leading-relaxed" style="display:none" data-processing="clouds">
+                Form submissions land in your CRM. Email sequences fire when they should. Payment confirmations don't disappear. The connections work, and they keep working.
               </p>
             </div>
             <div class="border-l border-white/5 pl-8">
@@ -91,11 +97,17 @@ import Base from '../../layouts/Base.astro';
           <div class="grid lg:grid-cols-3 gap-8">
             <div class="lg:col-span-2">
               <h3 class="text-neutral-100 text-xl font-medium mb-4">Page builds</h3>
-              <p class="text-neutral-400 leading-relaxed mb-4">
+              <p class="text-neutral-400 leading-relaxed mb-4" data-frame="default">
                 The pages that need to exist for your marketing to work. You need location pages for three markets you're entering. Your homepage hasn't been rewritten since 2020 and it shows. Your pricing page reads like a legal document and converts at 0.3%.
               </p>
-              <p class="text-neutral-400 leading-relaxed">
+              <p class="text-neutral-400 leading-relaxed" data-frame="default">
                 I handle everything from the keyword-targeted content architecture to the actual build in WordPress. You review, approve, and it goes live.
+              </p>
+              <p class="text-neutral-400 leading-relaxed" style="display:none" data-frame="sun">
+                Pages built to compound over time. Location pages with the local search architecture each region needs, service pages structured for organic ranking on their own terms, homepage rewrites that close the gap between what the business does and what visitors think it does.
+              </p>
+              <p class="text-neutral-400 leading-relaxed" style="display:none" data-frame="moon">
+                Pages that reclaim what's leaking. Underperforming pricing pages, homepages stuck two years behind your business, location pages that should exist but don't. The build covers keyword research, content architecture, and WordPress implementation; what ships is a page that earns its slot.
               </p>
             </div>
             <div class="border-l border-white/5 pl-8">
@@ -126,11 +138,17 @@ import Base from '../../layouts/Base.astro';
           <div class="grid lg:grid-cols-3 gap-8">
             <div class="lg:col-span-2">
               <h3 class="text-neutral-100 text-xl font-medium mb-4">Analytics setup</h3>
-              <p class="text-neutral-400 leading-relaxed mb-4">
+              <p class="text-neutral-400 leading-relaxed mb-4" data-processing="default">
                 Most sites have analytics installed. Very few have analytics configured correctly. Your GA4 might be running, but if events, conversions, and filters aren't set up right, the data is just noise pretending to be signal.
               </p>
-              <p class="text-neutral-400 leading-relaxed">
+              <p class="text-neutral-400 leading-relaxed" data-processing="default">
                 I configure GA4, Google Search Console, Microsoft Clarity, and conversion tracking so the numbers you see actually mean something.
+              </p>
+              <p class="text-neutral-400 leading-relaxed" style="display:none" data-processing="stars">
+                The configuration question isn't "is it installed" but "is it tuned." Events fire on actions that match a buyer decision. Conversions trigger only when the action completes. Every dashboard cleans up because every input is intentional.
+              </p>
+              <p class="text-neutral-400 leading-relaxed" style="display:none" data-processing="clouds">
+                Analytics that answer the question instead of producing noise. Configured once, kept clean, so the next decision you make can come from data instead of vibes.
               </p>
             </div>
             <div class="border-l border-white/5 pl-8">
@@ -245,7 +263,7 @@ import Base from '../../layouts/Base.astro';
       <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Have a project in mind?</h2>
       <p class="reveal text-neutral-400 text-lg mb-10" data-processing="default">Tell me what needs to happen and I'll tell you what it takes.</p>
       <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-processing="stars">Most projects scope in 1-2 weeks and deliver in 2-4. You'll get a fixed quote, a timeline, and a written scope before any work begins.</p>
-      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-processing="clouds">Tell me what needs to happen and I'll figure out the cleanest way to make it work. No jargon, no mystery — just a conversation about what you need.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-processing="clouds">Tell me what needs to happen and I'll figure out the cleanest way to make it work. No jargon, no mystery. Just a conversation about what you need.</p>
       <a href="/contact?interest=implementation" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
         Scope it out
       </a>

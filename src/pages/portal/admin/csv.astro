@@ -147,7 +147,7 @@ function formatLabel(format: string): string {
                 <p class="text-sm font-medium text-neutral-200">${file.name}</p>
                 <p class="text-xs text-neutral-600 mt-1">
                   ${data.format !== 'unknown' ? `Detected: <span class="text-emerald-400">${data.format.replace(/_/g, ' ')}</span>` : ''}
-                  ${data.row_count ? ` — ${data.row_count} rows processed` : ''}
+                  ${data.row_count ? `, ${data.row_count} rows processed` : ''}
                 </p>
               </div>
               ${data.error ? `<span class="text-xs text-red-400">${data.error}</span>` : '<span class="text-[10px] font-mono text-emerald-400 tracking-wide uppercase">Done</span>'}
@@ -163,7 +163,7 @@ function formatLabel(format: string): string {
         }
       }
 
-      progress.textContent = `Done — ${files.length} file(s) processed`;
+      progress.textContent = `Done. ${files.length} file(s) processed.`;
       btn.disabled = false;
     });
 

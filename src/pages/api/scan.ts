@@ -109,7 +109,7 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
           // Step 3: Analyze
           emit('analyze', 'active', `Analyzing sentiment across ${scraped.length} mentions...`);
           const report = generateReport(scraped);
-          emit('analyze', 'done', `Sentiment analysis complete — score: ${report.overall_score}`);
+          emit('analyze', 'done', `Sentiment analysis complete. Score: ${report.overall_score}`);
 
           // Step 4: Report
           emit('report', 'active', 'Building your report...');

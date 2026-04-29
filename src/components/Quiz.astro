@@ -1,5 +1,5 @@
 ---
-// Quiz lightbox - shown on first visit
+// Quiz lightbox: shown on first visit
 // Four binary questions determine the site theme and persona
 // Sun/Moon (energy) + Beach/Mountain (orientation) + Spring/Fall (phase) + Stars/Clouds (processing)
 // Name + email captured as lead
@@ -343,7 +343,7 @@
           body: JSON.stringify({ name, email, theme, answers }),
         });
       } catch {
-        // Fail silently - the theme still applies
+        // Fail silently. The theme still applies
       }
 
       showRevealThenClose(name);

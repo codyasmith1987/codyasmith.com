@@ -84,14 +84,14 @@ const clients = isAdmin ? await getAllClients() : [];
 
     const ISSUE_EXPLAIN = {
       'images: missing alt text': 'Images need text descriptions so Google can understand them and screen readers can describe them to visitors. This is the #1 accessibility fix on most sites.',
-      'images: over 100 kb': 'Large images slow your site down, especially on phones. Compressing them makes every page feel faster — and Google rewards fast sites.',
+      'images: over 100 kb': 'Large images slow your site down, especially on phones. Compressing them makes every page feel faster. Google rewards fast sites.',
       'images: alt text over 100 characters': 'Keep image descriptions concise. Long alt text gets ignored by screen readers.',
-      'meta description: missing': 'The summary that appears under your link in Google search results. Without one, Google picks random text from the page — usually not what you\'d choose.',
+      'meta description: missing': 'The summary that appears under your link in Google search results. Without one, Google picks random text from the page, usually not what you\'d choose.',
       'h2: multiple': 'Multiple subheadings of the same level. Not a major issue, but cleaning up the heading structure helps Google understand your page hierarchy.',
       'h2: duplicate': 'Same heading text used more than once on a page. Makes the content structure look repetitive.',
       'h2: missing': 'Pages without subheadings. Subheadings break up content and help both visitors and Google scan the page.',
       'h2: non-sequential': 'Heading levels that skip (H2 → H4). Like a book outline that jumps from chapters to sub-sub-sections.',
-      'h1: multiple': 'More than one main title on a page. Google expects exactly one H1 per page — it\'s the title of that page\'s content.',
+      'h1: multiple': 'More than one main title on a page. Google expects exactly one H1 per page. It\'s the title of that page\'s content.',
       'page titles: below 30 characters': 'Page titles too short to be useful in search results. A good title is 50-60 characters.',
       'page titles: below 200 pixels': 'Page titles that may get cut off when displayed in search results.',
       'content: low content pages': 'Pages with very little text. Google may treat thin content as low quality, which can hurt your rankings.',
@@ -164,7 +164,7 @@ const clients = isAdmin ? await getAllClients() : [];
           headline = `Site health: ${grade.label}`;
           desc = `Your site is in good shape. ${issues.length} issues found across ${totalUrls.toLocaleString()} page instances, but nothing critical. The items below are opportunities to polish, not emergencies.`;
         } else if (grade.label === 'Fair') {
-          headline = `Site health: ${grade.label} — fixable issues`;
+          headline = `Site health: ${grade.label} (fixable issues)`;
           desc = `${issues.length} issues found, with ${high > 0 ? `${high} high-priority item${high !== 1 ? 's' : ''} that should be addressed soon` : `${medium} medium-priority items worth cleaning up`}. These are affecting ${totalUrls.toLocaleString()} page instances. None of this is unusual for a site that's actively being worked on.`;
         } else {
           headline = `Site health: ${grade.label}`;

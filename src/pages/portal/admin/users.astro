@@ -197,8 +197,8 @@ const clients = await getAllClients();
       const data = await res.json();
       if (res.ok) {
         msg.textContent = data.invite_sent
-          ? `Created "${name}" — invite sent to ${email}`
-          : `Created "${name}" — no invite sent`;
+          ? `Created "${name}". Invite sent to ${email}.`
+          : `Created "${name}". No invite sent.`;
         msg.className = 'mt-4 text-sm text-emerald-400';
         msg.classList.remove('hidden');
         form.reset();

@@ -310,7 +310,7 @@ export async function sendDueReminders(): Promise<number> {
       const portalUrl = import.meta.env.SITE || 'https://codyasmith.com';
       const ok = await sendEmail(
         users.map(u => ({ email: u.email, name: u.name })),
-        `Invoice ${invoice.invoice_number} — payment due ${invoice.due_date}`,
+        `Invoice ${invoice.invoice_number}: payment due ${invoice.due_date}`,
         `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
           <h2 style="color: #171717; margin-bottom: 16px;">Payment reminder</h2>

@@ -12,7 +12,7 @@ interface Props {
   ogType?: 'website' | 'article';
 }
 
-const { title, description = "Cody Smith — web management, marketing strategy, and consulting for small businesses in Cedar City, Utah and beyond.", ogImage, ogType = 'website' } = Astro.props;
+const { title, description = "Cody Smith: web management, marketing strategy, and consulting for small businesses in Cedar City, Utah and beyond.", ogImage, ogType = 'website' } = Astro.props;
 const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
 const resolvedOgImage = new URL(ogImage ?? '/og-default.png', 'https://codyasmith.com').href;
 ---

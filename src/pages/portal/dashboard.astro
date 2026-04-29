@@ -122,8 +122,8 @@ const clients = isAdmin ? await getAllClients() : [];
     // Friendly issue summaries
     const FRIENDLY = {
       'images': {
-        high: 'Some images are causing real problems — broken, way too large, or completely inaccessible.',
-        med: 'A number of images could be better — smaller files, better descriptions.',
+        high: 'Some images are causing real problems: broken, way too large, or completely inaccessible.',
+        med: 'A number of images could be better: smaller files, better descriptions.',
         low: 'Small image tweaks. Nothing urgent.',
       },
       'content': {
@@ -132,7 +132,7 @@ const clients = isAdmin ? await getAllClients() : [];
         low: 'Minor heading and content cleanups.',
       },
       'links': {
-        high: 'Broken links on your site — visitors and Google are hitting dead ends.',
+        high: 'Broken links on your site. Visitors and Google are hitting dead ends.',
         med: 'Some links need cleanup or better anchor text.',
         low: 'Minor link housekeeping.',
       },
@@ -236,13 +236,13 @@ const clients = isAdmin ? await getAllClients() : [];
         sub = 'People are finding you on Google, your site is technically sound, and you\'re ahead of most competitors in your space. Let\'s keep it there.';
       } else if (score >= 65) {
         verdict = 'Looking good. A few things to tighten up.';
-        sub = 'You\'re showing up where it counts. Cleaning up the items below will push you further — these are quick wins, not overhauls.';
+        sub = 'You\'re showing up where it counts. Cleaning up the items below will push you further. These are quick wins, not overhauls.';
       } else if (score >= 45) {
         verdict = 'Solid foundation. Room to grow.';
         sub = 'The building blocks are in place. The issues flagged below are what\'s standing between you and stronger Google visibility.';
       } else {
         verdict = 'Let\'s get to work.';
-        sub = 'There are a handful of real issues keeping your site from performing the way it should. Every one of them is fixable — that\'s what we\'re here for.';
+        sub = 'There are a handful of real issues keeping your site from performing the way it should. Every one of them is fixable. That\'s what we\'re here for.';
       }
       document.getElementById('verdict').textContent = verdict;
       document.getElementById('verdict-sub').textContent = sub;
@@ -290,7 +290,7 @@ const clients = isAdmin ? await getAllClients() : [];
             html += `
               <div class="sim-result rounded-lg border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3" style="animation-delay:${delay}s">
                 <p class="text-xs text-emerald-400/70 mb-0.5">${best.url ? best.url.replace('https://', '').replace(/\/$/, '') : 'yoursite.com'}</p>
-                <p class="text-sm text-emerald-300 font-medium">${best.keyword.charAt(0).toUpperCase() + best.keyword.slice(1)} — Your Site</p>
+                <p class="text-sm text-emerald-300 font-medium">${best.keyword.charAt(0).toUpperCase() + best.keyword.slice(1)} | Your Site</p>
                 <p class="text-xs text-emerald-500/40 mt-0.5">This is you, position #${pos}</p>
               </div>`;
           } else {

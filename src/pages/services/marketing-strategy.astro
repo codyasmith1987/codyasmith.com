@@ -179,8 +179,14 @@ import Base from '../../layouts/Base.astro';
               <span class="text-amber-400/20 text-[10px] font-mono font-bold">4</span>
             </div>
             <h3 class="text-neutral-100 text-xl font-medium mb-3">Every three months, the numbers go on the table.</h3>
-            <p class="text-neutral-400 leading-relaxed">
+            <p class="text-neutral-400 leading-relaxed" data-frame="default">
               Rankings, traffic, conversions, and what it all means. If something isn't working, I say so. You won't get a report that makes bad news sound like progress.
+            </p>
+            <p class="text-neutral-400 leading-relaxed" style="display:none" data-frame="sun">
+              Every three months, the numbers go on the table. Where you gained ground, what's compounding, where the next bets are. The pages and priorities worth doubling down on.
+            </p>
+            <p class="text-neutral-400 leading-relaxed" style="display:none" data-frame="moon">
+              Quarterly: what didn't move. The pages that flatlined, the keywords that lost position, the channels not earning their cost. The list of things to drop or rework.
             </p>
           </div>
         </div>
@@ -211,20 +217,50 @@ import Base from '../../layouts/Base.astro';
         </div>
         <div class="reveal glow-card p-6" style="--i:2">
           <h3 class="text-neutral-100 font-medium mb-2">Content briefs</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed">Page-level briefs with target keywords, structure recommendations, and competitive context. Hand these to your writer.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-processing="default">Page-level briefs with target keywords, structure recommendations, and competitive context. Hand these to your writer.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="stars">Briefs your writer can use. Keyword cluster sized, intent layered, content outline built around the SERP that's actually showing up. The questions that delay a draft, pre-answered.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="clouds">Briefs your writer can hand off and execute. They get a doc; you get a piece of content.</p>
         </div>
         <div class="reveal glow-card p-6" style="--i:3">
           <h3 class="text-neutral-100 font-medium mb-2">SEO roadmap</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed">Technical fixes, content priorities, and link opportunities, sequenced by impact and effort. Updated quarterly.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-processing="default">Technical fixes, content priorities, and link opportunities, sequenced by impact and effort. Updated quarterly.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="stars">Roadmap sequenced by impact-vs-effort scoring: each item ranked, each ranking traceable to the data behind it. Refreshed quarterly when the data shifts.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="clouds">Priorities ranked by impact and effort. Updated every quarter.</p>
         </div>
         <div class="reveal glow-card p-6" style="--i:4">
           <h3 class="text-neutral-100 font-medium mb-2">Strategy memos</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed">When something needs your attention, a competitor move or an algorithm update, you get a clear memo with what to do about it.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-processing="default">When something needs your attention, a competitor move or an algorithm update, you get a clear memo with what to do about it.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="stars">Memos function as strategic pulses between calls. Algorithm updates flagged with the strategic implication. Competitor moves flagged with the recommended response. Ranking shifts past significance flagged with what to investigate.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="clouds">Strategic pulses between calls. When something matters, you hear about it before you'd notice it yourself.</p>
         </div>
         <div class="reveal glow-card p-6" style="--i:5">
           <h3 class="text-neutral-100 font-medium mb-2">Quarterly reports</h3>
           <p class="text-neutral-500 text-sm leading-relaxed">Rankings, traffic, conversions, and what it means. Written for decision-makers, not analysts. Executive brief up front, data behind it.</p>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Portal block: where the strategic engagement lives -->
+  <section class="py-28 px-6">
+    <div class="max-w-4xl mx-auto">
+      <div class="reveal mb-12 text-center">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">The portal</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">The receipt for the engagement.</h2>
+      </div>
+      <div class="reveal glow-card p-8 md:p-10">
+        <p class="text-neutral-300 leading-relaxed text-lg" data-frame="default">
+          Every engagement runs through one portal: contracts, change orders, invoices, files, milestones, approvals, notifications. One log-in, one source of truth, one place to find anything I've ever done for you.
+        </p>
+        <p class="text-neutral-300 leading-relaxed text-lg" style="display:none" data-frame="sun">
+          Strategy you can watch happen. Each audit finding traces forward to the recommendation, the brief, the call decision, what got built or dropped. The portal is the engagement made visible.
+        </p>
+        <p class="text-neutral-300 leading-relaxed text-lg" style="display:none" data-frame="moon">
+          The portal is the audit trail of the strategic engagement. Every recommendation logged, every decision dated, every brief tied to the call it came out of. Nothing the strategy work produces gets forgotten or argued about.
+        </p>
+        <p class="text-neutral-300 leading-relaxed text-lg mt-6 pt-6 border-t border-white/5" style="display:none" data-vibe="mountain">
+          Magic-link sign-in (no passwords to leak). Sessions hashed. Files in encrypted storage. Activity log behind every action. Your data stays yours, end to end.
+        </p>
       </div>
     </div>
   </section>

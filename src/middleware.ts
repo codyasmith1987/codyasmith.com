@@ -3,6 +3,7 @@ import { validateSession, SESSION_COOKIE, isClientActive } from './lib/auth';
 import { setRequestId } from './lib/logger';
 import { runMigrations } from './lib/migrate';
 import { generateCsrfToken, validateCsrfToken } from './lib/csrf';
+import { logRequest, shouldLog } from './lib/request-log';
 
 let reqCounter = 0;
 
@@ -32,6 +33,19 @@ export const onRequest = defineMiddleware(async (context, next) => {
     "connect-src 'self'",
     "frame-ancestors 'none'",
   ].join('; '));
+
+  // First-party request log for the public surface. Fire and forget so the
+  // response isn't blocked. Portal pages and assets are excluded.
+  if (shouldLog(context.url.pathname)) {
+    void logRequest({
+      path: context.url.pathname,
+      method: context.request.method,
+      referrer: context.request.headers.get('referer'),
+      userAgent: context.request.headers.get('user-agent'),
+      country: context.request.headers.get('cf-ipcountry'),
+      statusCode: response.status,
+    });
+  }
 
   return response;
 });

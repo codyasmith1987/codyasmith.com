@@ -7,7 +7,7 @@ import Base from '../layouts/Base.astro';
     <div class="relative max-w-3xl mx-auto">
       <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Legal</p>
       <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10">Privacy Policy</h1>
-      <p class="reveal text-neutral-500 text-sm">Last updated: April 10, 2026</p>
+      <p class="reveal text-neutral-500 text-sm">Last updated: April 28, 2026</p>
     </div>
   </section>
 
@@ -33,25 +33,35 @@ import Base from '../layouts/Base.astro';
           <p>When you use the free scanner tool, I store the brand name you searched and the results. If you unlock the full report by providing your email, that email is stored and used to send you the report via Brevo. Your IP address is used for rate limiting (3 scans per day) and is not stored permanently.</p>
 
           <h3 class="text-neutral-200 font-medium text-base mt-6 mb-2">Client portal</h3>
-          <p>If you're a client with portal access, I store your name, email, and the files and data associated with your account. Authentication uses magic links — no passwords are stored. Session tokens are hashed. Files are stored on DigitalOcean Spaces (S3-compatible storage) and access is restricted to your account.</p>
+          <p>If you're a client with portal access, I store your name, email, and the files and data associated with your account. Authentication uses magic links. No passwords are stored. Session tokens are hashed. Files are stored on DigitalOcean Spaces (S3-compatible storage) and access is restricted to your account.</p>
+
+          <h3 class="text-neutral-200 font-medium text-base mt-6 mb-2">Anonymous request logs</h3>
+          <p>Every request to a public page on this site (not portal pages, not static assets) is logged server-side. Captured: the URL path, HTTP method, referring URL if any, your user-agent string, your country (provided by Cloudflare), and the response status code. No IP address is stored. No cookies are set for this. No data leaves my server. I use it for traffic patterns and debugging. My target retention is 90 days; I delete older logs periodically.</p>
         </div>
 
         <div class="reveal">
           <h2 class="text-neutral-100 font-serif text-2xl mb-4">Third-party services</h2>
           <ul class="list-disc list-inside space-y-2">
-            <li><strong class="text-neutral-200">Brevo</strong> — transactional email delivery (contact form, magic links, scanner reports)</li>
-            <li><strong class="text-neutral-200">DigitalOcean Spaces</strong> — file storage for client portal documents</li>
-            <li><strong class="text-neutral-200">Turso</strong> — database hosting for portal data</li>
-            <li><strong class="text-neutral-200">Serper</strong> — web search API used by the sentiment scanner</li>
-            <li><strong class="text-neutral-200">Google Fonts</strong> — font loading (Inter, Instrument Serif, Lora, JetBrains Mono)</li>
-            <li><strong class="text-neutral-200">jsDelivr</strong> — CDN for Chart.js (portal dashboard)</li>
+            <li><strong class="text-neutral-200">Brevo</strong>: transactional email delivery (contact form, magic links, scanner reports)</li>
+            <li><strong class="text-neutral-200">Cloudflare</strong>: CDN, DNS, and bot management in front of this site</li>
+            <li><strong class="text-neutral-200">DigitalOcean App Platform</strong>: hosts this site</li>
+            <li><strong class="text-neutral-200">DigitalOcean Spaces</strong>: file storage for client portal documents</li>
+            <li><strong class="text-neutral-200">Turso</strong>: database hosting for portal data and the request log</li>
+            <li><strong class="text-neutral-200">Serper</strong>: web search API used by the sentiment scanner</li>
+            <li><strong class="text-neutral-200">Google Fonts</strong>: font loading (Inter, Instrument Serif, Lora, JetBrains Mono)</li>
+            <li><strong class="text-neutral-200">jsDelivr</strong>: CDN for Chart.js (portal dashboard)</li>
           </ul>
-          <p class="mt-4">I don't use Google Analytics, Facebook Pixel, or any tracking/advertising scripts.</p>
+          <p class="mt-4">I don't load Google Analytics, Microsoft Clarity, Facebook Pixel, or any other third-party tracking or advertising scripts on this site.</p>
         </div>
 
         <div class="reveal">
           <h2 class="text-neutral-100 font-serif text-2xl mb-4">Cookies</h2>
-          <p>The only cookie this site sets is <code class="text-amber-400/60 text-xs bg-neutral-900 px-1.5 py-0.5 rounded">portal_session</code>, used to keep you logged into the client portal. It's httpOnly, secure, SameSite=lax, and expires after 30 days. No tracking cookies. No third-party cookies.</p>
+          <p>Two cookies are set when you visit this site:</p>
+          <ul class="list-disc list-inside space-y-2 mt-3">
+            <li><code class="text-amber-400/60 text-xs bg-neutral-900 px-1.5 py-0.5 rounded">portal_session</code>: set only after a portal client signs in. Keeps you logged in. httpOnly, secure, SameSite=lax, 30-day expiry. First-party.</li>
+            <li><code class="text-amber-400/60 text-xs bg-neutral-900 px-1.5 py-0.5 rounded">__cf_bm</code>: set by Cloudflare for bot management on every request. Helps separate human visitors from automated traffic. 30-minute expiry. First-party on this domain, controlled by Cloudflare.</li>
+          </ul>
+          <p class="mt-4">No analytics cookies. No advertising cookies. No Google or Microsoft or Facebook tracking pixels.</p>
         </div>
 
         <div class="reveal">

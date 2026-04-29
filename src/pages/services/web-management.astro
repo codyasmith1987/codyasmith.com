@@ -112,8 +112,14 @@ const faqSchema = JSON.stringify({
               <span class="text-amber-400 text-[10px] font-mono font-bold">1</span>
             </div>
             <h3 class="text-neutral-100 text-xl font-medium mb-3">I move everything.</h3>
-            <p class="text-neutral-400 leading-relaxed">
+            <p class="text-neutral-400 leading-relaxed" data-frame="default">
               DNS, hosting, email routing, plugins, database. Your site comes off whatever shared box it's been sitting on and onto dedicated cloud infrastructure under my management. Zero downtime. You don't touch anything. You don't even notice it happened, except the site gets faster.
+            </p>
+            <p class="text-neutral-400 leading-relaxed" style="display:none" data-frame="sun">
+              Off the shared box, onto cloud infrastructure that can grow with you. Faster pages. Headroom for traffic spikes. The site stops being a constraint and starts being a foundation.
+            </p>
+            <p class="text-neutral-400 leading-relaxed" style="display:none" data-frame="moon">
+              I move everything off the shared box that's been one bad neighbor away from a problem. DNS, email, plugins, database, all migrated under my management with zero downtime and a written record of every change.
             </p>
           </div>
 
@@ -154,8 +160,14 @@ const faqSchema = JSON.stringify({
               <span class="text-amber-400/20 text-[10px] font-mono font-bold">4</span>
             </div>
             <h3 class="text-neutral-100 text-xl font-medium mb-3">First of every month, the report lands.</h3>
-            <p class="text-neutral-400 leading-relaxed">
+            <p class="text-neutral-400 leading-relaxed" data-frame="default">
               Plain language. What I did, what I found, what's coming next, and how performance compares to last month. You never have to wonder if the money's doing anything. The report is the receipt.
+            </p>
+            <p class="text-neutral-400 leading-relaxed" style="display:none" data-frame="sun">
+              Every month, a clear read on where the site is gaining ground: load times trending down, Core Web Vitals improving, security clean, work queued. You see what's improving and decide what to push on next.
+            </p>
+            <p class="text-neutral-400 leading-relaxed" style="display:none" data-frame="moon">
+              First of every month, a written report lands. What I did, what I found, what's coming, with month-over-month comparisons. The receipt for the work, in your inbox, in writing.
             </p>
           </div>
         </div>
@@ -195,7 +207,9 @@ const faqSchema = JSON.stringify({
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
           </div>
           <h3 class="text-neutral-100 font-medium mb-2">Updates</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed">WordPress core, themes, and plugins. Tested in staging first. No "update all and pray" approach.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">WordPress core, themes, and plugins. Tested in staging first. No "update all and pray" approach.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">Updates handled the way they should be: tested before they touch your live site. You never see the broken version.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">WordPress core, theme, and plugin updates are staged, regression-tested, screenshotted, and deployed with a rollback plan in place. No "update all and pray."</p>
         </div>
         <div class="reveal glow-card p-6" style="--i:3">
           <div class="text-amber-400 mb-4">

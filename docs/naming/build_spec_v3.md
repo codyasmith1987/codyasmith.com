@@ -161,7 +161,7 @@ Single Namecheap API call: `namecheap.users.getPricing` with `ProductType=DOMAIN
 DuckDuckGo HTML search per top 30 names plus the term ` trademark`. Parses for uspto.gov, trademarkia.com, justia.com, exact-match brand domains. Returns `concernLevel: 'none' | 'possible' | 'likely'` plus evidence URLs. Always labeled as heuristic, not legal clearance.
 
 ### `report.ts` (Phase 4)
-Imports existing `pdfkit` (already in package.json, used by `/api/report` for the Listener). Generates PDF with dashboard top (top 5 picks with reasoning), full ranked table, methodology footer. Reads existing styling and layout patterns from the Listener's PDF generator before writing this. Generates CSV via `papaparse`. Uploads both to existing DO Spaces via existing `storage.ts`. Returns `{ pdfUrl, csvUrl }`.
+Imports `pdfkit` (already in package.json from the portal's invoice generator at src/lib/pdf.ts). Generates PDF with dashboard top (top 5 picks with reasoning), full ranked table, methodology footer. The portal's invoice PDF is the only existing pdfkit usage in the codebase; naming Phase 4's report PDF will be the second. Read src/lib/pdf.ts to understand the existing pdfkit conventions before writing this, but do not assume any of its layout, fonts, or styling apply to a public-facing report deliverable. Generates CSV via `papaparse`. Uploads both to existing DO Spaces via existing `storage.ts`. Returns `{ pdfUrl, csvUrl }`.
 
 ### `storage.ts`
 Wraps existing Turso client. Schema additions, applied as the first step of Phase 1:

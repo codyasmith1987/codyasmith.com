@@ -129,9 +129,11 @@ codyasmith.com/                              (existing repo, main branch)
 |           +- anti-patterns.ts              NEW Phase 1, forbidden suffixes by creativity
 |           +- types.ts                      NEW Phase 1, shared types
 |           +- config.ts                     NEW Phase 1, defaults, scoring weights
-+- migrations/
-|   +- <ts>_naming.sql                       NEW Phase 1, Turso schema additions
-|   +- <ts>_naming_rename_to_<brand>.sql     NEW Phase 4, table prefix rename
+|       +- migrations/
+|           +- 012-naming.ts                 NEW Phase 1, TypeScript Migration module (export id, up())
+|           +- 013-naming-rename-to-<brand>.ts  NEW Phase 4, table prefix rename
++- scripts/
+|   +- migrate-naming.ts                     NEW Phase 1, tsx-runnable helper to apply 012 schema from process.env
 +- package.json                              MODIFIED Phase 1, add @google/generative-ai
 +- (everything else unchanged)
 ```
@@ -141,7 +143,7 @@ Sixteen new TypeScript files plus three new Astro pages, one new package depende
 ## Engine Module Specs
 
 ### `generator.ts`
-Imports `GoogleGenerativeAI` from `@google/generative-ai`. Loads system prompt from `prompts/generate.ts`. Calls `gemini-2.5-flash-lite` by default with `responseMimeType: 'application/json'` and a `responseSchema` describing the 10 by 10 structure. Temperature mapping: creativity 1 to 0.3, creativity 5 to 0.7, creativity 10 to 1.0. Validates response with Zod (or hand-written runtime validation if Zod is not in the project). Cache layer: SHA-256 of (seed + creativity + prompt version + model) into Turso `naming_gemini_cache` table with 7-day TTL. Cache hits return immediately, no API call. Quota fallback: catches `RESOURCE_EXHAUSTED` (429), retries once on Anthropic Haiku 4.5 if `ANTHROPIC_API_KEY` is set in env, otherwise throws with a clear message visible to the API route.
+Imports `GoogleGenerativeAI` from `@google/generative-ai`. Loads system prompt from `prompts/generate.ts`. Calls `gemini-2.5-flash-lite` by default with `responseMimeType: 'application/json'` and a `responseSchema` describing the 10 by 10 structure. Temperature mapping: creativity 1 to 0.3, creativity 5 to 0.7, creativity 10 to 1.0. Validates response with hand-rolled runtime validation. Zod is not a direct dependency in this repo. Cache layer: SHA-256 of (seed + creativity + prompt version + model) into Turso `naming_gemini_cache` table with 7-day TTL. Cache hits return immediately, no API call. Quota fallback: catches `RESOURCE_EXHAUSTED` (429), retries once on Anthropic Haiku 4.5 if `ANTHROPIC_API_KEY` is set in env, otherwise throws with a clear message visible to the API route.
 
 ### `availability.ts`
 RDAP lookups against IANA's bootstrap registry, cached at module load. Concurrency via `Promise.all` chunks of 20 simultaneous fetches, throttled to roughly 10 req/sec across all RDAP servers combined. 200 means registered, 404 means available, anything else means unknown (do not mark as available). Returns `{ name, tld, available, checkedAt }` per entry.
@@ -345,7 +347,7 @@ All but the last two are already implemented for the Listener. Read those module
 Each phase is shippable. Phases are smaller than v2 because there is no infrastructure work.
 
 ### Phase 1: Engine modules (target: one focused session, 3 to 4 hours)
-Build `lib/naming/`: generator, availability, ranker, prompts, types, config. Add Vitest unit tests with mocked Gemini and RDAP responses. Real-API integration tests sit behind an `INTEGRATION=1` env flag and a separate npm script (`npm run test:integration`), so the default test suite costs zero quota. Run the migration that adds the `naming_*` Turso tables.
+Build `lib/naming/`: generator, availability, ranker, prompts, types, config. Add hand-rolled `.mjs` test runners in `tests/` matching the existing `tests/run-billing-tests.mjs` style. Run them via `tsx` because the runners import `.ts` engine modules. Default `npm test` runs mocks only with zero quota burn. Real-API integration test runs via a separate `npm run test:integration` script that skips with a clear message if `GEMINI_API_KEY` is missing or placeholder. Run the migration that adds the `naming_*` Turso tables.
 
 Validation: `npm test` passes against mocks. `INTEGRATION=1 npm run test:integration` calls real Gemini once and returns a parsed 10 by 10 structure for "marketing strategy" creativity 7. Tables exist in Turso.
 
@@ -402,6 +404,7 @@ Decisions made on your behalf. Override any of them and the spec updates accordi
 6. Lead storage: reuse existing leads table with `source='naming'` until Phase 4 rename.
 7. Pricing deferred to Phase 6, contingent on Namecheap API research. Phases 1 through 5 ship without pricing data in any output.
 8. Codebase identifier `naming` is internal only. It does not appear in any public-facing copy, marketing, or domain. The Phase 2 unlinked route is the only public-ish surface and only people who know the URL can reach it.
+9. Local development uses libsql in `file://` mode pointed at `data/dev2.db`, with `TURSO_AUTH_TOKEN` intentionally empty. `@libsql/client` treats `file://` URLs as embedded SQLite and ignores auth. Production uses cloud Turso with a real auth token. Both surface through `src/lib/turso.ts` for production code paths; tooling (the migration helper, the integration test runner) creates its own client from `process.env` to bypass Vite's `import.meta.env`.
 
 ## Phase 1 Starter Prompt for Claude Code
 
@@ -429,18 +432,19 @@ Then create:
 - src/lib/naming/config.ts: defaults, scoring weights, anti-pattern lists
 - src/lib/naming/anti-patterns.ts: forbidden-suffix logic
 - src/lib/naming/prompts/generate.ts: system prompt as exported string
-- src/lib/naming/generator.ts: Gemini call via @google/generative-ai (add to package.json), with responseMimeType=application/json and a Zod schema (or runtime check) for the 10x10 output, plus 7-day cache via the existing turso client
+- src/lib/naming/generator.ts: Gemini call via @google/generative-ai (add to package.json), with responseMimeType=application/json and hand-rolled runtime validation for the 10x10 output, plus 7-day cache via the existing turso client. Zod is not a direct dependency.
 - src/lib/naming/availability.ts: RDAP lookups via Promise.all chunks of 20, throttled to roughly 10 req/sec
 - src/lib/naming/ranker.ts: Phase 1 simple ranker, sort by percent of TLDs available DESC, name length ASC
 - src/lib/naming/storage.ts: typed wrappers around Turso queries for runs, names, availability, cache
-- migrations/<timestamp>_naming.sql: the Turso schema additions per the spec
+- src/lib/migrations/NNN-naming.ts: the Turso schema additions in the existing TypeScript Migration module format (default export of { id, up() }), matching the style of src/lib/migrations/011-request-log.ts. Next available number is 012.
+- scripts/migrate-naming.ts: a tsx-runnable helper that imports the schema constant from the migration module and applies it via process.env. Exists because src/lib/turso.ts uses Vite's import.meta.env and is not callable from plain Node tooling. Production cold-start path through src/lib/migrate.ts is untouched.
 
 Add @google/generative-ai to package.json dependencies. Set GEMINI_API_KEY in .env.example.
 
 Tests:
-- Default test suite (npm test or whatever the repo uses) runs only mocked tests against mocked Gemini and mocked RDAP responses. Zero quota burn on a normal run.
-- Real-API integration test sits behind INTEGRATION=1 and a separate script (npm run test:integration). When invoked, it calls real Gemini once with seed "marketing strategy" creativity 7, TLDs com,net,co, and verifies the engine returns a parsed 10x10 structure with availability data per (name, tld).
-- Run the migration against the local Turso instance, then npm test, then INTEGRATION=1 npm run test:integration. Show me the output of all three.
+- Default test suite is a hand-rolled .mjs runner at tests/run-naming-unit-tests.mjs, run via npm test (which invokes tsx, since the runner imports .ts engine modules). Mocked Gemini, mocked RDAP, in-memory libsql for the storage round-trip. Zero quota burn on a normal run.
+- Real-API integration test is a separate hand-rolled .mjs runner at tests/run-naming-integration-tests.mjs, run via npm run test:integration. Skips with a clear message if GEMINI_API_KEY is missing or still a placeholder. When the key is present, calls real Gemini once with seed "marketing strategy" creativity 7, TLDs com,net,co, and verifies the engine returns a parsed 10x10 structure with availability data per (name, tld).
+- Run the migration via npm run migrate:naming (which invokes tsx scripts/migrate-naming.ts), then npm test, then npm run test:integration. Show me the output of all three.
 
 Do NOT build pricing, scoring, trademark, the API endpoints, the Astro page, or the report generation in this phase.
 

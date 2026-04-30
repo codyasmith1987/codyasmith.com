@@ -63,9 +63,13 @@ const personSchema = JSON.stringify({
     <div class="max-w-6xl mx-auto">
       <div class="reveal mb-16">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">What I do</p>
+        <!-- Stacked H2 variants are intentional. Each is server-rendered for SEO weight on
+             segment-targeted copy (data-vibe axis: default / beach / mountain). swapAxis in
+             Base.astro toggles display and aria-hidden so one variant is visible and announced
+             per session. See swapAxis comment for the full rationale. -->
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100" data-vibe="default">I close the gap between the business you've built and the website representing it.</h2>
-        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100" style="display:none" data-vibe="beach">I help businesses look as good online as they actually are.</h2>
-        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100" style="display:none" data-vibe="mountain">I make sure the infrastructure under your business is as solid as the business itself.</h2>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100" style="display:none" aria-hidden="true" data-vibe="beach">I help businesses look as good online as they actually are.</h2>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100" style="display:none" aria-hidden="true" data-vibe="mountain">I make sure the infrastructure under your business is as solid as the business itself.</h2>
       </div>
       <div class="grid md:grid-cols-2 gap-6 reveal-stagger">
         <a href="/services/web-management" class="reveal glow-card p-8 block group cursor-pointer" style="--i:0">

@@ -7,15 +7,19 @@ import Base from '../layouts/Base.astro';
     <div class="absolute top-0 right-0 w-[400px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
     <div class="relative max-w-4xl mx-auto">
       <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Services</p>
+      <!-- Stacked H1 variants are intentional. Each is server-rendered for SEO weight on
+           segment-targeted copy (data-vibe axis: default / beach / mountain). swapAxis in
+           Base.astro toggles display and aria-hidden so one variant is visible and announced
+           per session. See swapAxis comment for the full rationale. -->
       <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10" data-vibe="default">
         Four things I do.<br />
         <span class="gradient-text">Here's how each one works.</span>
       </h1>
-      <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10" style="display:none" data-vibe="beach">
+      <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10" style="display:none" aria-hidden="true" data-vibe="beach">
         Four ways I make your<br />
         <span class="gradient-text">business visible.</span>
       </h1>
-      <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10" style="display:none" data-vibe="mountain">
+      <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10" style="display:none" aria-hidden="true" data-vibe="mountain">
         Four ways I strengthen<br />
         <span class="gradient-text">what's under the hood.</span>
       </h1>

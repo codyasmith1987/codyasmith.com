@@ -147,15 +147,25 @@ const resolvedOgImage = new URL(ogImage ?? '/og-default.png', 'https://codyasmit
         // ---- Personality-aware copy (composable variant system) ----
         // Each axis swaps its own data-attribute independently
 
-        // Generic swap helper — shows matching variant, hides default
+        // Variant elements (h1, h2, p) stack server-rendered for SEO weight on
+        // segment-targeted copy and for no-JS access. swapAxis reveals the active
+        // variant and hides the default; non-active alternates stay hidden via the
+        // static inline display:none on their markup.
+        // aria-hidden tracks what assistive tech announces: the active variant has
+        // it removed, the default gets it set when hidden, alternates carry it from
+        // the static markup. This keeps multi-H1/H2 patterns accessible without
+        // collapsing variants into a single element (which would lose SEO weight on
+        // segment-targeted copy).
         function swapAxis(attr: string, value: string) {
           if (!value) return;
           document.querySelectorAll(`[data-${attr}]`).forEach(el => {
             const v = (el as HTMLElement).dataset[attr];
             if (v === value) {
               (el as HTMLElement).style.removeProperty('display');
+              (el as HTMLElement).removeAttribute('aria-hidden');
             } else if (v === 'default') {
               (el as HTMLElement).style.display = 'none';
+              (el as HTMLElement).setAttribute('aria-hidden', 'true');
             }
           });
         }

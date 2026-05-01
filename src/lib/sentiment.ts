@@ -1,7 +1,14 @@
-import Sentiment from 'sentiment';
-import type { ScrapedMention } from './scraper';
+// Aggregation and scan-level reporting for the Listener.
+// Per-mention scoring lives in src/lib/sentiment-gemini.ts (Gemini cascade
+// with AFINN fallback). This module retains the rolled-up score, source
+// breakdown, top phrases, summary, sample mentions, and teaser lines.
 
-const analyzer = new Sentiment();
+import type { ScrapedMention } from './scraper';
+import {
+  scoreMention,
+  type ScoredBy,
+  type ScoreMentionDeps,
+} from './sentiment-gemini';
 
 export interface MentionSentiment {
   url: string;
@@ -12,6 +19,7 @@ export interface MentionSentiment {
   sentiment_label: string;
   key_phrases: string[];
   query_type: string;
+  scored_by: ScoredBy;
 }
 
 export interface ScanReport {
@@ -28,19 +36,6 @@ export interface ScanReport {
   teaser_lines: string[];
 }
 
-function analyzeSingleMention(text: string): { score: number; label: string; positive: string[]; negative: string[] } {
-  const result = analyzer.analyze(text);
-  const raw = result.comparative;
-  const normalized = Math.max(-1, Math.min(1, raw * 2));
-  const label = normalized > 0.1 ? 'positive' : normalized < -0.1 ? 'negative' : 'neutral';
-  return {
-    score: Math.round(normalized * 100) / 100,
-    label,
-    positive: [...new Set(result.positive)],
-    negative: [...new Set(result.negative)],
-  };
-}
-
 function scoreToLabel(score: number): string {
   if (score >= 75) return 'Strong';
   if (score >= 55) return 'Positive';
@@ -48,24 +43,67 @@ function scoreToLabel(score: number): string {
   return 'Poor';
 }
 
+export interface GenerateReportDeps extends ScoreMentionDeps {
+  scorer?: typeof scoreMention;
+  onMentionScored?: (idx: number, total: number) => void;
+}
+
 /**
- * Generate a complete scan report from scraped mentions.
+ * Generate a complete scan report from scraped mentions. Per-mention scoring
+ * runs through the Gemini cascade with AFINN fallback. Aggregation is invariant
+ * to which path scored each mention.
  */
-export function generateReport(scrapedMentions: (ScrapedMention & { query_type: string })[]): ScanReport {
-  // Analyze each mention
-  const mentions: MentionSentiment[] = scrapedMentions.map(m => {
-    const analysis = analyzeSingleMention(m.full_text);
-    return {
+export async function generateReport(
+  scrapedMentions: (ScrapedMention & { query_type: string })[],
+  brand: string,
+  deps: GenerateReportDeps = {},
+): Promise<ScanReport> {
+  const scorer = deps.scorer ?? scoreMention;
+  const total = scrapedMentions.length;
+
+  // Score each mention through the cascade. Carry the scored shape through to
+  // both the per-mention array AND the phrase aggregation, so we never run the
+  // scorer twice on the same text.
+  const mentions: MentionSentiment[] = [];
+  const allPositive: Record<string, number> = {};
+  const allNegative: Record<string, number> = {};
+
+  for (let i = 0; i < total; i += 1) {
+    const m = scrapedMentions[i];
+    const scored = await scorer(
+      brand,
+      {
+        url: m.url,
+        source_name: m.source_name,
+        source_type: m.source_type,
+        full_text: m.full_text,
+      },
+      deps,
+    );
+
+    mentions.push({
       url: m.url,
       source_name: m.source_name,
       source_type: m.source_type,
       snippet: m.snippet,
-      sentiment_score: analysis.score,
-      sentiment_label: analysis.label,
-      key_phrases: [...analysis.positive.slice(0, 2), ...analysis.negative.slice(0, 2)],
+      sentiment_score: scored.score,
+      sentiment_label: scored.label,
+      key_phrases: scored.key_phrases,
       query_type: m.query_type,
-    };
-  });
+      scored_by: scored.scored_by,
+    });
+
+    for (const w of scored.positive) {
+      const k = w.toLowerCase();
+      allPositive[k] = (allPositive[k] || 0) + 1;
+    }
+    for (const w of scored.negative) {
+      const k = w.toLowerCase();
+      allNegative[k] = (allNegative[k] || 0) + 1;
+    }
+
+    if (deps.onMentionScored) deps.onMentionScored(i, total);
+  }
 
   // Overall score: convert -1..1 average to 0..100
   const avgScore = mentions.length > 0
@@ -80,27 +118,15 @@ export function generateReport(scrapedMentions: (ScrapedMention & { query_type: 
     if (!source_breakdown[m.source_type]) {
       source_breakdown[m.source_type] = { count: 0, avg_score: 0 };
     }
-    source_breakdown[m.source_type].count++;
+    source_breakdown[m.source_type].count += 1;
     source_breakdown[m.source_type].avg_score += m.sentiment_score;
   }
   for (const key in source_breakdown) {
     source_breakdown[key].avg_score = Math.round(
-      (source_breakdown[key].avg_score / source_breakdown[key].count) * 100
+      (source_breakdown[key].avg_score / source_breakdown[key].count) * 100,
     ) / 100;
   }
 
-  // Aggregate phrase analysis across all mentions
-  const allPositive: Record<string, number> = {};
-  const allNegative: Record<string, number> = {};
-  for (const m of scrapedMentions) {
-    const analysis = analyzer.analyze(m.full_text);
-    for (const w of analysis.positive) {
-      allPositive[w.toLowerCase()] = (allPositive[w.toLowerCase()] || 0) + 1;
-    }
-    for (const w of analysis.negative) {
-      allNegative[w.toLowerCase()] = (allNegative[w.toLowerCase()] || 0) + 1;
-    }
-  }
   const top_positive_phrases = Object.entries(allPositive)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 8)
@@ -110,7 +136,7 @@ export function generateReport(scrapedMentions: (ScrapedMention & { query_type: 
     .slice(0, 8)
     .map(([word]) => word);
 
-  // Build summary
+  // Summary
   const posCount = mentions.filter(m => m.sentiment_label === 'positive').length;
   const negCount = mentions.filter(m => m.sentiment_label === 'negative').length;
   const neuCount = mentions.filter(m => m.sentiment_label === 'neutral').length;
@@ -133,7 +159,6 @@ export function generateReport(scrapedMentions: (ScrapedMention & { query_type: 
   if (pos) sample_mentions.push(pos);
   if (neg) sample_mentions.push(neg);
   if (neu && sample_mentions.length < 3) sample_mentions.push(neu);
-  // If we still need samples, add the first ones we haven't used
   if (sample_mentions.length < 2) {
     for (const m of mentions) {
       if (!sample_mentions.includes(m)) {

@@ -11,8 +11,9 @@
     "preview": "astro preview",
     "astro": "astro",
     "migrate:naming": "tsx scripts/migrate-naming.ts",
-    "test": "tsx tests/run-naming-unit-tests.mjs",
-    "test:integration": "tsx tests/run-naming-integration-tests.mjs"
+    "migrate:listener": "tsx scripts/migrate-listener.ts",
+    "test": "tsx tests/run-naming-unit-tests.mjs && tsx tests/run-listener-sentiment-unit-tests.mjs",
+    "test:integration": "tsx tests/run-naming-integration-tests.mjs && tsx tests/run-listener-sentiment-integration-tests.mjs"
   },
   "dependencies": {
     "@astrojs/mdx": "^5.0.3",

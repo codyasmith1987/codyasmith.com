@@ -108,7 +108,13 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
 
           // Step 3: Analyze
           emit('analyze', 'active', `Analyzing sentiment across ${scraped.length} mentions...`);
-          const report = generateReport(scraped);
+          const report = await generateReport(scraped, brand, {
+            onMentionScored: (idx, total) => {
+              if (total > 10) {
+                emit('analyze', 'progress', `Scoring ${idx + 1} of ${total} mentions`);
+              }
+            },
+          });
           emit('analyze', 'done', `Sentiment analysis complete. Score: ${report.overall_score}`);
 
           // Step 4: Report

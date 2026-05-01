@@ -1,16 +1,17 @@
 ---
 import Base from '../layouts/Base.astro';
+import NamingQuiz from '../components/NamingQuiz.astro';
 export const prerender = false;
 ---
 
-<Base title="Naming preview | Cody Smith" description="100 domain names. Real availability. Ranked. Free preview.">
+<Base title="Naming preview | Cody Smith" description="100 names. Real availability. Filtered to fit you. Free preview.">
   <!-- Hero -->
   <section class="relative pt-40 pb-16 px-6 overflow-hidden">
     <div class="absolute top-0 left-1/3 w-[400px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
     <div class="relative max-w-4xl mx-auto">
       <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Naming preview</p>
       <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10">
-        100 domain names.<br />Real availability.<br />Ranked.
+        100 names.<br />Real availability.<br />Filtered to fit you.
       </h1>
       <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl">
         Free preview.
@@ -21,22 +22,77 @@ export const prerender = false;
   <!-- Form -->
   <section class="pb-12 px-6">
     <div class="max-w-4xl mx-auto">
-      <form id="naming-form" class="reveal flex gap-3">
+      <form id="naming-form" class="reveal space-y-6">
         <!-- Honeypot field for bots -->
         <input type="text" name="website" style="display:none" tabindex="-1" autocomplete="off" aria-hidden="true" />
-        <div class="flex-1">
-          <label for="seed-input" class="sr-only">Seed term</label>
+        <div>
+          <label for="seed-input" class="block text-neutral-500 text-xs tracking-[0.1em] uppercase mb-2">Your seed</label>
           <input
             type="text"
             id="seed-input"
             name="seed"
             required
             aria-required="true"
-            placeholder="marketing strategy"
+            placeholder="marketing consulting, rock climbing guide service, neighborhood pizza shop"
             maxlength="200"
             class="w-full bg-transparent border-b border-white/10 pb-3 text-neutral-100 text-lg focus:border-amber-400 focus:outline-none transition-colors duration-300 placeholder:text-neutral-700"
           />
+          <p class="text-neutral-600 text-xs mt-2">A short phrase describing what you do. The more specific, the better the names.</p>
         </div>
+
+        <!-- Tonality dial. Five axes, default to center (3). User input here -->
+        <!-- becomes scoring input downstream; the dominant axis (the one moved -->
+        <!-- furthest from 3) drives slider labels in the result. -->
+        <details class="group" open>
+          <summary class="cursor-pointer text-neutral-400 text-sm hover:text-neutral-300 transition-colors flex items-center gap-2">
+            <span class="text-amber-400/60 group-open:rotate-90 transition-transform duration-200 inline-block">&#9654;</span>
+            Tonality
+            <span class="text-neutral-600 text-xs">(adjust if you have a strong preference)</span>
+          </summary>
+          <div class="mt-4 space-y-4">
+            <div data-tonality-row data-axis="serious_playful" data-label-low="Serious" data-label-high="Playful">
+              <div class="flex items-center justify-between text-neutral-500 text-xs mb-1">
+                <span>Serious</span>
+                <span class="text-neutral-300 font-mono" data-tonality-value>3</span>
+                <span>Playful</span>
+              </div>
+              <input type="range" min="1" max="5" value="3" step="1" data-tonality-input class="w-full accent-amber-500" />
+            </div>
+            <div data-tonality-row data-axis="modern_classical" data-label-low="Modern" data-label-high="Classical">
+              <div class="flex items-center justify-between text-neutral-500 text-xs mb-1">
+                <span>Modern</span>
+                <span class="text-neutral-300 font-mono" data-tonality-value>3</span>
+                <span>Classical</span>
+              </div>
+              <input type="range" min="1" max="5" value="3" step="1" data-tonality-input class="w-full accent-amber-500" />
+            </div>
+            <div data-tonality-row data-axis="descriptive_abstract" data-label-low="Descriptive" data-label-high="Abstract">
+              <div class="flex items-center justify-between text-neutral-500 text-xs mb-1">
+                <span>Descriptive</span>
+                <span class="text-neutral-300 font-mono" data-tonality-value>3</span>
+                <span>Abstract</span>
+              </div>
+              <input type="range" min="1" max="5" value="3" step="1" data-tonality-input class="w-full accent-amber-500" />
+            </div>
+            <div data-tonality-row data-axis="technical_emotional" data-label-low="Technical" data-label-high="Emotional">
+              <div class="flex items-center justify-between text-neutral-500 text-xs mb-1">
+                <span>Technical</span>
+                <span class="text-neutral-300 font-mono" data-tonality-value>3</span>
+                <span>Emotional</span>
+              </div>
+              <input type="range" min="1" max="5" value="3" step="1" data-tonality-input class="w-full accent-amber-500" />
+            </div>
+            <div data-tonality-row data-axis="conservative_bold" data-label-low="Conservative" data-label-high="Bold">
+              <div class="flex items-center justify-between text-neutral-500 text-xs mb-1">
+                <span>Conservative</span>
+                <span class="text-neutral-300 font-mono" data-tonality-value>3</span>
+                <span>Bold</span>
+              </div>
+              <input type="range" min="1" max="5" value="3" step="1" data-tonality-input class="w-full accent-amber-500" />
+            </div>
+          </div>
+        </details>
+
         <button
           type="submit"
           id="submit-btn"
@@ -45,26 +101,6 @@ export const prerender = false;
           Generate
         </button>
       </form>
-
-      <!-- Advanced toggle (hides creativity slider) -->
-      <button id="advanced-toggle" type="button" class="mt-4 text-neutral-500 text-xs hover:text-neutral-400 transition-colors flex items-center gap-1">
-        <span id="advanced-arrow" class="transition-transform duration-200">&#9654;</span> Advanced <span class="text-neutral-500">(optional)</span>
-      </button>
-      <div id="advanced-fields" class="hidden mt-4">
-        <label for="creativity-slider" class="block text-neutral-500 text-xs tracking-[0.1em] uppercase mb-2">
-          Creativity: <span id="creativity-value" class="text-neutral-300 font-mono">5</span>
-        </label>
-        <input
-          type="range"
-          id="creativity-slider"
-          min="1"
-          max="10"
-          value="5"
-          step="1"
-          class="w-full max-w-md accent-amber-500"
-        />
-        <p class="text-neutral-600 text-xs mt-2">1 stays grounded and literal. 10 drifts toward inventive and abstract.</p>
-      </div>
 
       <p id="form-error" class="hidden text-red-400 text-sm mt-4"></p>
     </div>
@@ -76,17 +112,47 @@ export const prerender = false;
       <div class="glow-card p-8">
         <div class="flex items-center gap-3">
           <div class="w-5 h-5 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
-          <p id="loading-text" class="text-neutral-300 text-sm font-medium">Forging names...</p>
+          <p id="loading-text" class="text-neutral-300 text-sm font-medium">Drafting candidates across four typological positions...</p>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Results -->
+  <!-- Results: slider with 5 positions, 5 cards per position -->
   <section id="results" class="hidden pb-12 px-6">
     <div class="max-w-4xl mx-auto">
-      <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Top 5 .com candidates</p>
+      <div class="mb-8">
+        <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-2">Results</p>
+        <p id="results-summary" class="text-neutral-300 text-base"></p>
+      </div>
+
+      <div class="mb-8">
+        <div class="flex items-center justify-between mb-3">
+          <span id="slider-label-low" class="text-neutral-500 text-xs"></span>
+          <span id="slider-position-name" class="text-amber-400 text-sm font-mono"></span>
+          <span id="slider-label-high" class="text-neutral-500 text-xs"></span>
+        </div>
+        <input type="range" id="slider" min="1" max="5" value="3" step="1" class="w-full accent-amber-500" />
+        <div class="flex items-center justify-between mt-1 text-neutral-700 text-xs font-mono">
+          <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+        </div>
+      </div>
+
       <div id="results-list" class="space-y-3"></div>
+
+      <div class="mt-10 pt-8 border-t border-white/5 text-center">
+        <p class="text-neutral-400 text-sm mb-4">
+          We picked these from 100. Take a 30-second quiz so we can email you the personalized top 5.
+        </p>
+        <button
+          type="button"
+          id="open-quiz-btn"
+          class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]"
+        >
+          Get your personalized recommendation
+        </button>
+      </div>
+
       <button id="reset-btn" type="button" class="mt-8 text-neutral-500 text-xs hover:text-amber-400 transition-colors">
         Run another &#8594;
       </button>
@@ -105,10 +171,66 @@ export const prerender = false;
     </div>
   </section>
 
-  <!-- Bottom spacer -->
+  <!-- Quiz lightbox (component) -->
+  <NamingQuiz />
+
   <div class="pb-20"></div>
 
   <script>
+    type Typology = 'descriptive' | 'suggestive' | 'associative' | 'abstract';
+    interface TonalityVector {
+      serious_playful: number;
+      modern_classical: number;
+      descriptive_abstract: number;
+      technical_emotional: number;
+      conservative_bold: number;
+    }
+    interface PreviewName {
+      name: string;
+      typology: Typology;
+      rationale: string;
+      tonality: TonalityVector;
+      score: number;
+      domain: { available: boolean | null; secondaryPriceUsd: number | null };
+    }
+
+    const TONALITY_AXES: Array<keyof TonalityVector> = [
+      'serious_playful', 'modern_classical', 'descriptive_abstract',
+      'technical_emotional', 'conservative_bold',
+    ];
+
+    // Hardcoded fixture for ?demo=1 dev mode. Realistic 25-candidate shape so
+    // the UI can be exercised without hitting the API. Replaced by real data
+    // once Gemini quota is available and smoke passes.
+    const FIXTURE_RUN_ID = 'demo';
+    const FIXTURE_CANDIDATES: PreviewName[] = [
+      { name: 'GroundedPlan', typology: 'descriptive', rationale: 'Direct: tells the buyer what to expect, plain and grounded.', tonality: { serious_playful: 1, modern_classical: 4, descriptive_abstract: 1, technical_emotional: 2, conservative_bold: 1 }, score: 12.4, domain: { available: true, secondaryPriceUsd: null } },
+      { name: 'StraightLine', typology: 'descriptive', rationale: 'Suggests a clear path from problem to plan, no detours.', tonality: { serious_playful: 1, modern_classical: 3, descriptive_abstract: 1, technical_emotional: 2, conservative_bold: 1 }, score: 12.1, domain: { available: true, secondaryPriceUsd: null } },
+      { name: 'PlainBrief', typology: 'descriptive', rationale: 'Names the deliverable in language the client already uses.', tonality: { serious_playful: 1, modern_classical: 4, descriptive_abstract: 1, technical_emotional: 2, conservative_bold: 1 }, score: 11.8, domain: { available: true, secondaryPriceUsd: null } },
+      { name: 'TwoMinutes', typology: 'suggestive', rationale: 'Implies speed and accessibility without spelling out the service.', tonality: { serious_playful: 3, modern_classical: 2, descriptive_abstract: 2, technical_emotional: 3, conservative_bold: 3 }, score: 11.5, domain: { available: true, secondaryPriceUsd: null } },
+      { name: 'NorthFinder', typology: 'suggestive', rationale: 'Carries the "guide you to the answer" feeling without naming consulting.', tonality: { serious_playful: 2, modern_classical: 4, descriptive_abstract: 2, technical_emotional: 4, conservative_bold: 2 }, score: 11.3, domain: { available: false, secondaryPriceUsd: 1500 } },
+      { name: 'BrightStep', typology: 'suggestive', rationale: 'A quietly optimistic name that reads as forward motion.', tonality: { serious_playful: 3, modern_classical: 3, descriptive_abstract: 2, technical_emotional: 4, conservative_bold: 3 }, score: 11.1, domain: { available: true, secondaryPriceUsd: null } },
+      { name: 'TwoTalents', typology: 'suggestive', rationale: 'Compact and pluralized in a way that signals capability without bragging.', tonality: { serious_playful: 2, modern_classical: 4, descriptive_abstract: 2, technical_emotional: 3, conservative_bold: 2 }, score: 10.9, domain: { available: true, secondaryPriceUsd: null } },
+      { name: 'AdmiralMap', typology: 'associative', rationale: 'Borrows from naval-charting metaphor: confident, deliberate plotting.', tonality: { serious_playful: 1, modern_classical: 5, descriptive_abstract: 4, technical_emotional: 2, conservative_bold: 3 }, score: 10.7, domain: { available: true, secondaryPriceUsd: null } },
+      { name: 'CompassRose', typology: 'associative', rationale: 'Evokes navigation and direction with classic visual identity hooks.', tonality: { serious_playful: 2, modern_classical: 5, descriptive_abstract: 4, technical_emotional: 3, conservative_bold: 2 }, score: 10.5, domain: { available: false, secondaryPriceUsd: 8500 } },
+      { name: 'CedarCraft', typology: 'associative', rationale: 'Borrows woodworking imagery: deliberate, unhurried, lasting.', tonality: { serious_playful: 2, modern_classical: 5, descriptive_abstract: 4, technical_emotional: 4, conservative_bold: 2 }, score: 10.3, domain: { available: true, secondaryPriceUsd: null } },
+      { name: 'SmithCraft', typology: 'associative', rationale: 'Plays on the smith metaphor: making something useful by hand.', tonality: { serious_playful: 2, modern_classical: 5, descriptive_abstract: 4, technical_emotional: 4, conservative_bold: 3 }, score: 10.1, domain: { available: true, secondaryPriceUsd: null } },
+      { name: 'Lighthouse', typology: 'associative', rationale: 'Stands for guidance and reliability, hard to mistake the metaphor.', tonality: { serious_playful: 1, modern_classical: 5, descriptive_abstract: 4, technical_emotional: 4, conservative_bold: 2 }, score: 9.9, domain: { available: false, secondaryPriceUsd: null } },
+      { name: 'Lyca', typology: 'abstract', rationale: 'A short phonetic compression of "lycaena" (a butterfly genus); compact and clean.', tonality: { serious_playful: 3, modern_classical: 2, descriptive_abstract: 5, technical_emotional: 4, conservative_bold: 4 }, score: 9.7, domain: { available: true, secondaryPriceUsd: null } },
+      { name: 'Brevia', typology: 'abstract', rationale: 'A coined word; portmanteau of "brevity" and "via" suggesting a short clear way through.', tonality: { serious_playful: 2, modern_classical: 4, descriptive_abstract: 5, technical_emotional: 3, conservative_bold: 3 }, score: 9.5, domain: { available: true, secondaryPriceUsd: null } },
+      { name: 'Kortek', typology: 'abstract', rationale: 'A blend of "core" and "tech"; phonetic compression with a hard, confident sound.', tonality: { serious_playful: 2, modern_classical: 1, descriptive_abstract: 5, technical_emotional: 1, conservative_bold: 4 }, score: 9.3, domain: { available: true, secondaryPriceUsd: null } },
+      { name: 'Quora', typology: 'abstract', rationale: 'A coined word that compresses "quorum" into something short and memorable.', tonality: { serious_playful: 3, modern_classical: 2, descriptive_abstract: 5, technical_emotional: 3, conservative_bold: 4 }, score: 9.1, domain: { available: false, secondaryPriceUsd: null } },
+      { name: 'Vanto', typology: 'abstract', rationale: 'A coined name; phonetic compression that feels italian, confident, brief.', tonality: { serious_playful: 3, modern_classical: 4, descriptive_abstract: 5, technical_emotional: 4, conservative_bold: 4 }, score: 8.9, domain: { available: true, secondaryPriceUsd: null } },
+      { name: 'Faroe', typology: 'associative', rationale: 'Borrows the cold-clarity feel of the Faroe Islands without claiming geography.', tonality: { serious_playful: 1, modern_classical: 5, descriptive_abstract: 4, technical_emotional: 3, conservative_bold: 3 }, score: 8.7, domain: { available: true, secondaryPriceUsd: null } },
+      { name: 'BrightLines', typology: 'suggestive', rationale: 'Implies clarity and demarcation; carries a positive professional read.', tonality: { serious_playful: 2, modern_classical: 4, descriptive_abstract: 2, technical_emotional: 4, conservative_bold: 3 }, score: 8.6, domain: { available: false, secondaryPriceUsd: 3000 } },
+      { name: 'CleanRead', typology: 'descriptive', rationale: 'A compact promise: the buyer leaves with a clean read on what to do.', tonality: { serious_playful: 2, modern_classical: 3, descriptive_abstract: 1, technical_emotional: 3, conservative_bold: 2 }, score: 8.4, domain: { available: true, secondaryPriceUsd: null } },
+      { name: 'Plumb', typology: 'associative', rationale: 'Borrows construction-tools imagery: straight and true, no nonsense.', tonality: { serious_playful: 2, modern_classical: 5, descriptive_abstract: 4, technical_emotional: 3, conservative_bold: 2 }, score: 8.2, domain: { available: false, secondaryPriceUsd: 12000 } },
+      { name: 'Vulcanic', typology: 'associative', rationale: 'Borrows volcanic imagery for force and quiet pressure: powerful but contained.', tonality: { serious_playful: 1, modern_classical: 4, descriptive_abstract: 4, technical_emotional: 2, conservative_bold: 5 }, score: 8.0, domain: { available: true, secondaryPriceUsd: null } },
+      { name: 'Lumis', typology: 'abstract', rationale: 'A coined word; portmanteau of "lumens" and "summit" suggesting clarity at altitude.', tonality: { serious_playful: 3, modern_classical: 4, descriptive_abstract: 5, technical_emotional: 4, conservative_bold: 4 }, score: 7.8, domain: { available: true, secondaryPriceUsd: null } },
+      { name: 'TaughtNew', typology: 'suggestive', rationale: 'A pivot phrase: implies a teach-and-learn relationship without spelling it out.', tonality: { serious_playful: 3, modern_classical: 3, descriptive_abstract: 2, technical_emotional: 4, conservative_bold: 3 }, score: 7.7, domain: { available: true, secondaryPriceUsd: null } },
+      { name: 'PlainTalk', typology: 'descriptive', rationale: 'Says exactly what the consultant brings: plain talk on hard problems.', tonality: { serious_playful: 2, modern_classical: 4, descriptive_abstract: 1, technical_emotional: 3, conservative_bold: 2 }, score: 7.5, domain: { available: false, secondaryPriceUsd: null } },
+    ];
+
     function initNamingPreview() {
       const pageLoadTime = Date.now();
 
@@ -120,33 +242,47 @@ export const prerender = false;
       const loadingText = document.getElementById('loading-text')!;
       const results = document.getElementById('results')!;
       const resultsList = document.getElementById('results-list')!;
+      const resultsSummary = document.getElementById('results-summary')!;
       const errorState = document.getElementById('error-state')!;
       const resetBtn = document.getElementById('reset-btn')!;
       const tryAgainBtn = document.getElementById('try-again-btn')!;
+      const slider = document.getElementById('slider') as HTMLInputElement;
+      const sliderLabelLow = document.getElementById('slider-label-low')!;
+      const sliderLabelHigh = document.getElementById('slider-label-high')!;
+      const sliderPositionName = document.getElementById('slider-position-name')!;
+      const openQuizBtn = document.getElementById('open-quiz-btn')!;
 
       if (!form || !submitBtn) return;
 
-      // Advanced toggle (creativity slider)
-      const advancedToggle = document.getElementById('advanced-toggle');
-      const advancedFields = document.getElementById('advanced-fields');
-      const advancedArrow = document.getElementById('advanced-arrow');
-      if (advancedToggle && advancedFields) {
-        advancedToggle.addEventListener('click', () => {
-          const open = !advancedFields.classList.contains('hidden');
-          advancedFields.classList.toggle('hidden');
-          if (advancedArrow) advancedArrow.style.transform = open ? '' : 'rotate(90deg)';
+      // Live tonality value display
+      const tonalityRows = document.querySelectorAll('[data-tonality-row]');
+      tonalityRows.forEach((row) => {
+        const input = row.querySelector('[data-tonality-input]') as HTMLInputElement | null;
+        const value = row.querySelector('[data-tonality-value]') as HTMLSpanElement | null;
+        if (input && value) {
+          input.addEventListener('input', () => { value.textContent = input.value; });
+        }
+      });
+
+      function readUserTonality(): TonalityVector {
+        const t: TonalityVector = {
+          serious_playful: 3, modern_classical: 3, descriptive_abstract: 3,
+          technical_emotional: 3, conservative_bold: 3,
+        };
+        tonalityRows.forEach((row) => {
+          const axis = row.getAttribute('data-axis') as keyof TonalityVector | null;
+          const input = row.querySelector('[data-tonality-input]') as HTMLInputElement | null;
+          if (axis && input) t[axis] = parseInt(input.value, 10) || 3;
         });
+        return t;
       }
 
-      const creativitySlider = document.getElementById('creativity-slider') as HTMLInputElement | null;
-      const creativityValue = document.getElementById('creativity-value');
-      if (creativitySlider && creativityValue) {
-        creativitySlider.addEventListener('input', () => {
-          creativityValue.textContent = creativitySlider.value;
-        });
-      }
-
-      const LOADING_MESSAGES = ['Forging names...', 'Checking availability...', 'Filtering the obvious...'];
+      // Loading text rotation
+      const LOADING_MESSAGES = [
+        'Drafting candidates across four typological positions...',
+        'Checking .com availability...',
+        'Filtering the obvious...',
+      ];
       let loadingIntervalId: number | null = null;
       function startLoadingMessages() {
         let i = 0;
@@ -163,26 +299,120 @@ export const prerender = false;
         }
       }
 
-      function availabilityBadge(available: boolean | null): string {
-        if (available === true) {
-          return '<span class="px-2 py-0.5 rounded-full text-xs font-medium border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">available</span>';
+      // Slider state
+      let currentRunId: string | null = null;
+      let currentCandidates: PreviewName[] = [];
+      let dominantAxis: keyof TonalityVector = 'descriptive_abstract';
+      let axisLabelLow = 'Descriptive';
+      let axisLabelHigh = 'Abstract';
+
+      function pickDominantAxis(user: TonalityVector): { axis: keyof TonalityVector; low: string; high: string } {
+        // Pick the axis the user moved furthest from 3. Tie-broken by axis order.
+        let bestAxis: keyof TonalityVector = 'descriptive_abstract';
+        let bestDistance = 0;
+        for (const axis of TONALITY_AXES) {
+          const d = Math.abs(user[axis] - 3);
+          if (d > bestDistance) { bestDistance = d; bestAxis = axis; }
         }
-        if (available === false) {
-          return '<span class="px-2 py-0.5 rounded-full text-xs font-medium border bg-red-500/10 text-red-400 border-red-500/20">taken</span>';
-        }
-        return '<span class="px-2 py-0.5 rounded-full text-xs font-medium border bg-neutral-500/10 text-neutral-400 border-neutral-500/20">couldn\'t check</span>';
+        const labelMap: Record<keyof TonalityVector, [string, string]> = {
+          serious_playful: ['Serious', 'Playful'],
+          modern_classical: ['Modern', 'Classical'],
+          descriptive_abstract: ['Descriptive', 'Abstract'],
+          technical_emotional: ['Technical', 'Emotional'],
+          conservative_bold: ['Conservative', 'Bold'],
+        };
+        const [low, high] = labelMap[bestAxis];
+        return { axis: bestAxis, low, high };
       }
 
-      function renderResults(names: Array<{ name: string; available: boolean | null; rationale: string }>) {
-        resultsList.innerHTML = names.map((n) => `
+      function positionLabel(pos: number, low: string, high: string): string {
+        if (pos === 1) return `Most ${low.toLowerCase()}`;
+        if (pos === 2) return `Slightly ${low.toLowerCase()}`;
+        if (pos === 3) return 'Balanced';
+        if (pos === 4) return `Slightly ${high.toLowerCase()}`;
+        return `Most ${high.toLowerCase()}`;
+      }
+
+      function bucketByAxis(candidates: PreviewName[], axis: keyof TonalityVector): PreviewName[][] {
+        // Sort 25 by axis ascending, slice into 5 buckets of 5 each.
+        const sorted = [...candidates].sort((a, b) => a.tonality[axis] - b.tonality[axis]);
+        const buckets: PreviewName[][] = [[], [], [], [], []];
+        for (let i = 0; i < sorted.length; i += 1) {
+          const idx = Math.min(4, Math.floor(i / 5));
+          buckets[idx].push(sorted[i]);
+        }
+        return buckets;
+      }
+
+      function availabilityBadge(d: { available: boolean | null; secondaryPriceUsd: number | null }): string {
+        if (d.available === true) {
+          return '<span class="px-2 py-0.5 rounded-full text-xs font-medium border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">.com available</span>';
+        }
+        if (d.available === false) {
+          if (d.secondaryPriceUsd && d.secondaryPriceUsd > 0) {
+            return `<span class="px-2 py-0.5 rounded-full text-xs font-medium border bg-amber-500/10 text-amber-400 border-amber-500/20">.com owned, ~$${d.secondaryPriceUsd.toLocaleString()} to acquire</span>`;
+          }
+          return '<span class="px-2 py-0.5 rounded-full text-xs font-medium border bg-red-500/10 text-red-400 border-red-500/20">.com owned</span>';
+        }
+        return '<span class="px-2 py-0.5 rounded-full text-xs font-medium border bg-neutral-500/10 text-neutral-400 border-neutral-500/20">availability unknown</span>';
+      }
+
+      function typologyBadge(t: Typology): string {
+        const colors: Record<Typology, string> = {
+          descriptive: 'text-neutral-400 border-neutral-500/30',
+          suggestive: 'text-amber-400/80 border-amber-500/30',
+          associative: 'text-emerald-400/80 border-emerald-500/30',
+          abstract: 'text-violet-400/80 border-violet-500/30',
+        };
+        return `<span class="px-2 py-0.5 rounded-full text-xs font-mono uppercase tracking-wider border ${colors[t]}">${t}</span>`;
+      }
+
+      function renderBucket(bucket: PreviewName[]) {
+        if (bucket.length === 0) {
+          resultsList.innerHTML = '<p class="text-neutral-500 text-sm text-center py-8">No candidates in this position.</p>';
+          return;
+        }
+        resultsList.innerHTML = bucket.map((c) => `
           <div class="bg-neutral-900/30 border border-white/5 rounded-lg p-5 hover:border-white/10 transition-all duration-300">
             <div class="flex items-start justify-between gap-4 mb-2">
-              <p class="text-neutral-100 text-lg font-semibold font-serif">${n.name}.com</p>
-              ${availabilityBadge(n.available)}
+              <div class="min-w-0">
+                <p class="text-neutral-100 text-lg font-semibold font-serif inline">${c.name}</p>
+                <span class="text-neutral-700 text-sm ml-1">.com</span>
+                <span class="ml-3 inline-flex items-center gap-2">${typologyBadge(c.typology)}</span>
+              </div>
+              <span class="shrink-0">${availabilityBadge(c.domain)}</span>
             </div>
-            <p class="text-neutral-400 text-sm leading-relaxed">${n.rationale}</p>
+            <p class="text-neutral-400 text-sm leading-relaxed">${c.rationale}</p>
           </div>
         `).join('');
+      }
+
+      function refreshSlider() {
+        const pos = parseInt(slider.value, 10) || 3;
+        const buckets = bucketByAxis(currentCandidates, dominantAxis);
+        const bucket = buckets[pos - 1] ?? [];
+        sliderPositionName.textContent = positionLabel(pos, axisLabelLow, axisLabelHigh);
+        renderBucket(bucket);
+      }
+
+      slider.addEventListener('input', refreshSlider);
+
+      function showResults(runId: string, candidates: PreviewName[], userTonality: TonalityVector) {
+        currentRunId = runId;
+        currentCandidates = candidates;
+        const dom = pickDominantAxis(userTonality);
+        dominantAxis = dom.axis;
+        axisLabelLow = dom.low;
+        axisLabelHigh = dom.high;
+        sliderLabelLow.textContent = dom.low;
+        sliderLabelHigh.textContent = dom.high;
+        slider.value = '3';
+        const summary = candidates.length > 0
+          ? `Showing 5 of ${candidates.length}, sorted on the axis you moved most. Drag the slider to see different positions on the ${dom.low.toLowerCase()}-to-${dom.high.toLowerCase()} range.`
+          : 'No candidates returned. Try a different seed or try again.';
+        resultsSummary.textContent = summary;
+        refreshSlider();
+        results.classList.remove('hidden');
       }
 
       function showError() {
@@ -196,69 +426,86 @@ export const prerender = false;
         results.classList.add('hidden');
         loading.classList.add('hidden');
         errorEl.classList.add('hidden');
+        currentRunId = null;
+        currentCandidates = [];
         seedInput.focus();
       }
 
       resetBtn.addEventListener('click', resetToIdle);
       tryAgainBtn.addEventListener('click', resetToIdle);
 
+      openQuizBtn.addEventListener('click', () => {
+        if (!currentRunId || currentCandidates.length === 0) return;
+        const evt = new CustomEvent('naming-quiz:open', {
+          detail: {
+            runId: currentRunId,
+            candidates: currentCandidates,
+          },
+        });
+        window.dispatchEvent(evt);
+      });
+
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
-
-        // Honeypot
         const honeypot = (form.querySelector('input[name="website"]') as HTMLInputElement)?.value;
         if (honeypot) return;
-
-        // Bot guard: require at least 2 seconds between page load and submission
         if (Date.now() - pageLoadTime < 2000) {
           errorEl.textContent = 'Please wait a moment before submitting.';
           errorEl.classList.remove('hidden');
           return;
         }
-
         const seed = seedInput.value.trim();
         if (!seed) {
           errorEl.textContent = 'Enter a seed term.';
           errorEl.classList.remove('hidden');
           return;
         }
-
-        const creativity = creativitySlider ? parseInt(creativitySlider.value, 10) || 5 : 5;
+        const userTonality = readUserTonality();
 
         errorEl.classList.add('hidden');
         results.classList.add('hidden');
         errorState.classList.add('hidden');
         submitBtn.disabled = true;
         submitBtn.textContent = 'Generating...';
-
         loading.classList.remove('hidden');
         startLoadingMessages();
 
+        // Demo mode via ?demo=1 returns the fixture without hitting the API.
+        const params = new URLSearchParams(window.location.search);
+        const demoMode = params.get('demo') === '1';
+
         try {
+          if (demoMode) {
+            await new Promise(r => setTimeout(r, 800)); // brief simulated latency
+            stopLoadingMessages();
+            loading.classList.add('hidden');
+            showResults(FIXTURE_RUN_ID, FIXTURE_CANDIDATES, userTonality);
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Generate';
+            return;
+          }
           const res = await fetch('/api/naming/preview', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ seed, creativity }),
+            body: JSON.stringify({ seed, tonality: userTonality }),
           });
-
           stopLoadingMessages();
           loading.classList.add('hidden');
-
           if (!res.ok) {
-            // Read but do not surface backend error verbatim
-            try { await res.json(); } catch { /* ignore parse errors */ }
+            try { await res.json(); } catch { /* ignore */ }
             showError();
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Generate';
             return;
           }
-
           const data = await res.json();
-          if (!data || !Array.isArray(data.names)) {
+          if (!data || !Array.isArray(data.candidates)) {
             showError();
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Generate';
             return;
           }
-
-          renderResults(data.names);
-          results.classList.remove('hidden');
+          showResults(String(data.runId), data.candidates as PreviewName[], userTonality);
         } catch {
           stopLoadingMessages();
           showError();

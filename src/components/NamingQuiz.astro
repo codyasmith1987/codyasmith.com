@@ -1,0 +1,281 @@
+---
+// NamingQuiz.astro
+// Lightbox component for the post-preview quiz. Loaded into naming-preview.astro.
+// Opens via window 'naming-quiz:open' custom event; receives { runId, candidates }.
+// Five questions, posts to /api/naming/quiz on submit, replaces with confirmation.
+---
+
+<div id="naming-quiz-overlay" class="hidden fixed inset-0 z-50 bg-neutral-950/80 backdrop-blur-sm overflow-y-auto">
+  <div class="min-h-full flex items-start justify-center p-4 md:p-8">
+    <div class="w-full max-w-2xl bg-neutral-900 border border-white/10 rounded-2xl shadow-2xl my-8">
+      <div class="p-6 md:p-8">
+        <div class="flex items-start justify-between mb-6">
+          <div>
+            <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-2">Quick quiz</p>
+            <h2 class="font-serif text-2xl text-neutral-100">Help me sharpen the recommendation.</h2>
+            <p class="text-neutral-500 text-sm mt-2">Five questions. About 30 seconds. Then we'll email you a personalized top 5 and a PDF with all 100 candidates.</p>
+          </div>
+          <button id="naming-quiz-close" type="button" class="text-neutral-500 hover:text-neutral-300 text-2xl leading-none">&times;</button>
+        </div>
+
+        <form id="naming-quiz-form" class="space-y-8">
+          <!-- Q1: select 3 of 25 -->
+          <div>
+            <label class="block text-neutral-300 text-sm font-medium mb-2">
+              Of the 25 names you saw, which 3 caught your eye?
+            </label>
+            <p class="text-neutral-500 text-xs mb-3">Pick exactly 3.</p>
+            <div id="naming-quiz-checkboxes" class="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-2">
+              <!-- Populated dynamically when modal opens -->
+            </div>
+            <p id="naming-quiz-q1-error" class="hidden text-red-400 text-xs mt-2"></p>
+          </div>
+
+          <!-- Q2: audience -->
+          <div>
+            <label for="naming-quiz-audience" class="block text-neutral-300 text-sm font-medium mb-2">
+              Who's your customer?
+            </label>
+            <p class="text-neutral-500 text-xs mb-2">In your own words. A sentence or two.</p>
+            <textarea
+              id="naming-quiz-audience"
+              name="audience"
+              required
+              minlength="10"
+              maxlength="500"
+              rows="2"
+              placeholder="Small businesses in Cedar City who need a website that actually shows up in search."
+              class="w-full bg-transparent border border-white/10 rounded-lg p-3 text-neutral-100 text-sm focus:border-amber-400 focus:outline-none transition-colors duration-300 placeholder:text-neutral-700"
+            ></textarea>
+            <p id="naming-quiz-q2-error" class="hidden text-red-400 text-xs mt-1"></p>
+          </div>
+
+          <!-- Q3: density -->
+          <div>
+            <label class="block text-neutral-300 text-sm font-medium mb-3">
+              How crowded is your space?
+            </label>
+            <div class="space-y-2">
+              <label class="flex items-center gap-3 cursor-pointer text-neutral-400 text-sm hover:text-neutral-300">
+                <input type="radio" name="density" value="crowded" required class="accent-amber-500" />
+                <span>Very crowded (lots of competitors)</span>
+              </label>
+              <label class="flex items-center gap-3 cursor-pointer text-neutral-400 text-sm hover:text-neutral-300">
+                <input type="radio" name="density" value="moderate" class="accent-amber-500" />
+                <span>Moderate</span>
+              </label>
+              <label class="flex items-center gap-3 cursor-pointer text-neutral-400 text-sm hover:text-neutral-300">
+                <input type="radio" name="density" value="open" class="accent-amber-500" />
+                <span>Open or new space</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Q4: brand kind -->
+          <div>
+            <label class="block text-neutral-300 text-sm font-medium mb-3">
+              What kind of brand are you building?
+            </label>
+            <div class="space-y-2">
+              <label class="flex items-center gap-3 cursor-pointer text-neutral-400 text-sm hover:text-neutral-300">
+                <input type="radio" name="brandKind" value="premium" required class="accent-amber-500" />
+                <span>Premium or specialized</span>
+              </label>
+              <label class="flex items-center gap-3 cursor-pointer text-neutral-400 text-sm hover:text-neutral-300">
+                <input type="radio" name="brandKind" value="mainstream" class="accent-amber-500" />
+                <span>Mainstream or accessible</span>
+              </label>
+              <label class="flex items-center gap-3 cursor-pointer text-neutral-400 text-sm hover:text-neutral-300">
+                <input type="radio" name="brandKind" value="utilitarian" class="accent-amber-500" />
+                <span>Utilitarian or functional</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Q5: email -->
+          <div>
+            <label for="naming-quiz-email" class="block text-neutral-300 text-sm font-medium mb-2">
+              Where should we send your personalized report?
+            </label>
+            <input
+              type="email"
+              id="naming-quiz-email"
+              name="email"
+              required
+              placeholder="you@example.com"
+              class="w-full bg-transparent border border-white/10 rounded-lg p-3 text-neutral-100 text-sm focus:border-amber-400 focus:outline-none transition-colors duration-300 placeholder:text-neutral-700"
+            />
+            <p id="naming-quiz-q5-error" class="hidden text-red-400 text-xs mt-1"></p>
+            <p class="text-neutral-600 text-xs mt-2">No spam. One email with the report.</p>
+          </div>
+
+          <button
+            type="submit"
+            id="naming-quiz-submit"
+            class="w-full inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Send my report
+          </button>
+
+          <p id="naming-quiz-form-error" class="hidden text-red-400 text-sm text-center"></p>
+        </form>
+
+        <div id="naming-quiz-confirmation" class="hidden text-center py-8">
+          <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+            <span class="text-emerald-400 text-3xl">&#10003;</span>
+          </div>
+          <h3 class="font-serif text-xl text-neutral-100 mb-3">Check your email.</h3>
+          <p class="text-neutral-400 text-sm mb-6">The report's on its way. PDF attached.</p>
+          <button id="naming-quiz-confirm-close" type="button" class="text-neutral-500 text-xs hover:text-amber-400 transition-colors">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  type Typology = 'descriptive' | 'suggestive' | 'associative' | 'abstract';
+  interface PreviewCandidate {
+    name: string;
+    typology: Typology;
+    rationale: string;
+  }
+
+  function initNamingQuiz() {
+    const overlay = document.getElementById('naming-quiz-overlay');
+    if (!overlay) return;
+    const closeBtn = document.getElementById('naming-quiz-close');
+    const checkboxesContainer = document.getElementById('naming-quiz-checkboxes')!;
+    const form = document.getElementById('naming-quiz-form') as HTMLFormElement;
+    const submitBtn = document.getElementById('naming-quiz-submit') as HTMLButtonElement;
+    const audienceInput = document.getElementById('naming-quiz-audience') as HTMLTextAreaElement;
+    const emailInput = document.getElementById('naming-quiz-email') as HTMLInputElement;
+    const formError = document.getElementById('naming-quiz-form-error')!;
+    const q1Error = document.getElementById('naming-quiz-q1-error')!;
+    const q2Error = document.getElementById('naming-quiz-q2-error')!;
+    const q5Error = document.getElementById('naming-quiz-q5-error')!;
+    const confirmation = document.getElementById('naming-quiz-confirmation')!;
+    const confirmCloseBtn = document.getElementById('naming-quiz-confirm-close');
+
+    let currentRunId: string | null = null;
+    let currentCandidates: PreviewCandidate[] = [];
+
+    function open(runId: string, candidates: PreviewCandidate[]) {
+      currentRunId = runId;
+      currentCandidates = candidates;
+      // Render the 25 checkboxes
+      checkboxesContainer.innerHTML = candidates.map((c, idx) => `
+        <label class="flex items-center gap-2 cursor-pointer text-neutral-400 text-sm hover:text-neutral-300 px-2 py-1 rounded hover:bg-white/5">
+          <input type="checkbox" name="selectedNames" value="${c.name}" data-idx="${idx}" class="accent-amber-500" />
+          <span class="font-mono text-sm">${c.name}</span>
+        </label>
+      `).join('');
+      form.classList.remove('hidden');
+      confirmation.classList.add('hidden');
+      formError.classList.add('hidden');
+      q1Error.classList.add('hidden');
+      q2Error.classList.add('hidden');
+      q5Error.classList.add('hidden');
+      form.reset();
+      // Re-render after reset cleared the checkboxes html (reset wouldn't but be safe)
+      overlay.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function close() {
+      overlay.classList.add('hidden');
+      document.body.style.overflow = '';
+    }
+
+    closeBtn?.addEventListener('click', close);
+    confirmCloseBtn?.addEventListener('click', close);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close();
+    });
+
+    window.addEventListener('naming-quiz:open', ((e: Event) => {
+      const detail = (e as CustomEvent).detail || {};
+      if (typeof detail.runId === 'string' && Array.isArray(detail.candidates)) {
+        open(detail.runId, detail.candidates as PreviewCandidate[]);
+      }
+    }) as EventListener);
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      formError.classList.add('hidden');
+      q1Error.classList.add('hidden');
+      q2Error.classList.add('hidden');
+      q5Error.classList.add('hidden');
+
+      const checked = Array.from(checkboxesContainer.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked'));
+      if (checked.length !== 3) {
+        q1Error.textContent = checked.length < 3 ? 'Pick 3 names.' : 'Pick only 3 names.';
+        q1Error.classList.remove('hidden');
+        return;
+      }
+      const selectedNames = checked.map(cb => cb.value);
+
+      const audience = audienceInput.value.trim();
+      if (audience.length < 10) {
+        q2Error.textContent = 'Tell me a bit more (at least 10 characters).';
+        q2Error.classList.remove('hidden');
+        return;
+      }
+
+      const fd = new FormData(form);
+      const density = fd.get('density') as string | null;
+      const brandKind = fd.get('brandKind') as string | null;
+      if (!density || !brandKind) {
+        formError.textContent = 'Pick one option for each radio question.';
+        formError.classList.remove('hidden');
+        return;
+      }
+
+      const email = emailInput.value.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        q5Error.textContent = 'Enter a valid email address.';
+        q5Error.classList.remove('hidden');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending...';
+
+      try {
+        const res = await fetch('/api/naming/quiz', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            runId: currentRunId,
+            selectedNames,
+            audience,
+            density,
+            brandKind,
+            email,
+          }),
+        });
+        if (!res.ok) {
+          try { await res.json(); } catch { /* ignore */ }
+          formError.textContent = 'Something went wrong. Try again in a minute.';
+          formError.classList.remove('hidden');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Send my report';
+          return;
+        }
+        // Show confirmation, hide form
+        form.classList.add('hidden');
+        confirmation.classList.remove('hidden');
+      } catch {
+        formError.textContent = 'Something went wrong. Try again in a minute.';
+        formError.classList.remove('hidden');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Send my report';
+      }
+    });
+  }
+
+  initNamingQuiz();
+  document.addEventListener('astro:after-swap', () => { initNamingQuiz(); });
+</script>

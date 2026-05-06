@@ -3,7 +3,9 @@ import { glob } from 'astro/loaders';
 
 const baseFields = {
   title: z.string(),
+  seoTitle: z.string().optional(),
   description: z.string(),
+  dek: z.string().optional(),
   publishDate: z.coerce.date(),
   updated: z.coerce.date().optional(),
   draft: z.boolean().default(false),

@@ -31,7 +31,7 @@ const clientName = d.clientAnonymized ? 'Confidential client' : d.client;
 const ogImage = `/blog/og/case-studies/${entry.id}.png`;
 ---
 
-<BlogPost title={d.title} description={d.description} ogImage={ogImage}>
+<BlogPost title={d.seoTitle ?? d.title} description={d.description} ogImage={ogImage}>
   <article data-elm-host data-elm="stars" class="blog-case pt-32 pb-24">
     <!-- Eyebrow -->
     <div class="px-6 mb-8">
@@ -50,7 +50,7 @@ const ogImage = `/blog/og/case-studies/${entry.id}.png`;
         <h1 class="font-serif text-5xl md:text-6xl leading-[1.05] text-neutral-100 tracking-tight mb-6">
           {d.title}
         </h1>
-        <p class="text-lg text-neutral-400 leading-relaxed max-w-3xl mb-10">{d.description}</p>
+        <p class="text-lg text-neutral-400 leading-relaxed max-w-3xl mb-10">{d.dek ?? d.description}</p>
 
         <!-- Problem / Approach / Outcome triad -->
         <div class="grid md:grid-cols-3 gap-6 md:gap-10 border-t border-b border-white/5 py-8">

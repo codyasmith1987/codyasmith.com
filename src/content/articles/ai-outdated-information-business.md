@@ -22,13 +22,13 @@ That answer is the architecture of every AI search product, briefly visible.
 
 When an AI chatbot answers a question by searching the web, it isn't searching the web. It's searching one specific search engine's index of the web. The UI never says so. The distinction is invisible. It also determines everything the AI can and cannot see.
 
-Claude reads through Brave Search. Anthropic confirmed it in March 2025 by adding Brave to its subprocessor list, and software engineer Simon Willison verified it independently by running matching queries through Claude and Brave and comparing the citations.
+Claude reads through Brave Search. Anthropic confirmed it in March 2025 by adding Brave to [its subprocessor list](https://trust.anthropic.com/subprocessors), and software engineer [Simon Willison](https://simonwillison.net/2025/Mar/21/anthropic-use-brave/) verified it independently by running matching queries through Claude and Brave and comparing the citations.
 
-ChatGPT reads through Bing. OpenAI's VP of Engineering said as much in a public AMA: "we use a set of services and Bing is an important one." Independent log analysis shows Bing handling most of ChatGPT's web retrieval, supplemented by OpenAI's own crawler, OAI-SearchBot.
+ChatGPT reads through Bing. OpenAI's VP of Engineering said as much in a [public AMA](https://community.openai.com/t/reddit-ama-with-sam-altman-kevin-weil-srinivas-narayanan-and-mark-chen/999448): "we use a set of services and Bing is an important one." Independent log analysis shows Bing handling most of ChatGPT's web retrieval, supplemented by OpenAI's own crawler, [OAI-SearchBot](https://developers.openai.com/api/docs/bots).
 
-Gemini and AI Overviews read through Google's index. The same pipeline that powers Search. Google publishes the API in Gemini's developer documentation. A tool called "Grounding with Google Search" returns search results as structured citations the model writes around.
+Gemini and AI Overviews read through Google's index. The same pipeline that powers Search. Google publishes the API in Gemini's developer documentation. A tool called ["Grounding with Google Search"](https://ai.google.dev/gemini-api/docs/google-search) returns search results as structured citations the model writes around.
 
-Perplexity is the messy one. It maintains its own crawler, PerplexityBot, with its own index. It also uses third-party search APIs, and independent analysis found about half of Perplexity's cited domains overlap with Google's results for the same query.
+Perplexity is the messy one. It maintains its own crawler, PerplexityBot, with its own index. It also uses third-party search APIs.
 
 Three separate webs. Plus Perplexity standing somewhere between them.
 
@@ -38,7 +38,7 @@ That's the architecture problem. The deeper problem is what the architecture is 
 
 ## Why it's getting worse, not better
 
-In April 2025, Ahrefs analyzed 900,000 newly created web pages and found that 74.2% of them contained AI-generated content. Three out of four. That's not a forecast. That's what the live web actually looked like a year ago. The percentage is higher now.
+In April 2025, [Ahrefs analyzed 900,000 newly created web pages](https://ahrefs.com/blog/what-percentage-of-new-content-is-ai-generated/) and found that 74.2% of them contained AI-generated content. Three out of four. That's not a forecast. That's what the live web actually looked like a year ago. The percentage is higher now.
 
 The training data for the next generation of these models is the same pool. The next generation reads a pool more synthetic than this generation read. The generation after that reads a pool more synthetic still. The arrow points one direction.
 
@@ -46,7 +46,7 @@ This is not a cache lag problem. This is a representation system feeding on itse
 
 AI eats stale and produces branches of stale. The next AI eats those branches and produces branches of branches. The image of the image of the image. Each generation sees less of the live web and more of the previous generation's interpretation of the live web.
 
-Baudrillard called this the procession of simulacra: the image leaves the thing behind and starts standing in for it. The endpoint is a representation that bears no relation to the thing it once represented. We have a working example now, deployed at scale, with marketing budgets pointed at it.
+Baudrillard called this [the procession of simulacra](https://en.wikipedia.org/wiki/Simulacra_and_Simulation): the image leaves the thing behind and starts standing in for it. The endpoint is a representation that bears no relation to the thing it once represented. We have a working example now, deployed at scale, with marketing budgets pointed at it.
 
 ## What this means for your marketing budget
 

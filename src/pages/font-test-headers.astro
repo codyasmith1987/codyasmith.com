@@ -1,0 +1,202 @@
+---
+// Diagnostic page for the security-header hypothesis. Identical
+// content to /font-test (10 typeface samples, self-hosted woff2,
+// inline <style>, no JS, no shared layout). The only difference is
+// `prerender = false`, which forces this page through the SSR path
+// at request time. That makes src/middleware.ts run, which adds
+// Content-Security-Policy, X-Frame-Options: DENY,
+// X-Content-Type-Options: nosniff, Referrer-Policy, and
+// Permissions-Policy to the response.
+//
+// The middleware does not currently set Strict-Transport-Security,
+// so the page sets it directly via Astro.response.headers below.
+// This keeps the test self-contained — middleware.ts and every other
+// page is untouched.
+//
+// /font-test, /font-test-base, /font-test-quiz, /font-test-quiz-nobackdrop
+// stay in place unchanged.
+export const prerender = false;
+Astro.response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Font test (with security headers)</title>
+  <style is:inline>
+    @font-face {
+      font-family: "Instrument Serif";
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: url("/fonts/instrument-serif-400.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Inter";
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: url("/fonts/inter-400.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Inter";
+      font-style: italic;
+      font-weight: 400;
+      font-display: swap;
+      src: url("/fonts/inter-400-italic.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Inter";
+      font-style: normal;
+      font-weight: 500;
+      font-display: swap;
+      src: url("/fonts/inter-500.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Inter";
+      font-style: normal;
+      font-weight: 600;
+      font-display: swap;
+      src: url("/fonts/inter-600.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Inter";
+      font-style: normal;
+      font-weight: 700;
+      font-display: swap;
+      src: url("/fonts/inter-700.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Lora";
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: url("/fonts/lora-400.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Lora";
+      font-style: italic;
+      font-weight: 400;
+      font-display: swap;
+      src: url("/fonts/lora-400-italic.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "Lora";
+      font-style: normal;
+      font-weight: 600;
+      font-display: swap;
+      src: url("/fonts/lora-600.woff2") format("woff2");
+    }
+    @font-face {
+      font-family: "JetBrains Mono";
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: url("/fonts/jetbrains-mono-400.woff2") format("woff2");
+    }
+    body {
+      background: #0a0a0a;
+      color: #f5f5f5;
+      margin: 0;
+      padding: 24px;
+      font-family: system-ui, sans-serif;
+      line-height: 1.4;
+    }
+    h1 {
+      font-family: system-ui, sans-serif;
+      font-size: 22px;
+      margin: 0 0 12px;
+    }
+    p.intro {
+      font-family: system-ui, sans-serif;
+      color: #a3a3a3;
+      margin: 0 0 24px;
+      max-width: 640px;
+    }
+    .block {
+      margin: 16px 0;
+      padding: 16px;
+      border: 1px solid #333;
+      border-radius: 4px;
+    }
+    .label {
+      font-family: system-ui, sans-serif;
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #737373;
+      margin: 0 0 8px;
+    }
+    .sample {
+      font-size: 24px;
+      line-height: 1.35;
+      margin: 0;
+    }
+    .is-400 { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; }
+    .in-400 { font-family: "Inter", system-ui, sans-serif; font-weight: 400; }
+    .in-400i { font-family: "Inter", system-ui, sans-serif; font-weight: 400; font-style: italic; }
+    .in-500 { font-family: "Inter", system-ui, sans-serif; font-weight: 500; }
+    .in-600 { font-family: "Inter", system-ui, sans-serif; font-weight: 600; }
+    .in-700 { font-family: "Inter", system-ui, sans-serif; font-weight: 700; }
+    .lo-400 { font-family: "Lora", Georgia, serif; font-weight: 400; }
+    .lo-400i { font-family: "Lora", Georgia, serif; font-weight: 400; font-style: italic; }
+    .lo-600 { font-family: "Lora", Georgia, serif; font-weight: 600; }
+    .jb-400 { font-family: "JetBrains Mono", monospace; font-weight: 400; }
+  </style>
+</head>
+<body>
+  <h1>Font test, security headers added</h1>
+  <p class="intro">Same as /font-test but served SSR so the Astro middleware fires and the response carries CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy. HSTS is set in this page's frontmatter directly. If the ATFP banner is gone here, the security-header gap was the trigger.</p>
+
+  <div class="block">
+    <p class="label">Instrument Serif 400</p>
+    <p class="sample is-400">The fluorescent over my desk had a flicker on the left tube.</p>
+  </div>
+
+  <div class="block">
+    <p class="label">Inter 400</p>
+    <p class="sample in-400">The fluorescent over my desk had a flicker on the left tube.</p>
+  </div>
+
+  <div class="block">
+    <p class="label">Inter 400 italic</p>
+    <p class="sample in-400i">The fluorescent over my desk had a flicker on the left tube.</p>
+  </div>
+
+  <div class="block">
+    <p class="label">Inter 500</p>
+    <p class="sample in-500">The fluorescent over my desk had a flicker on the left tube.</p>
+  </div>
+
+  <div class="block">
+    <p class="label">Inter 600</p>
+    <p class="sample in-600">The fluorescent over my desk had a flicker on the left tube.</p>
+  </div>
+
+  <div class="block">
+    <p class="label">Inter 700</p>
+    <p class="sample in-700">The fluorescent over my desk had a flicker on the left tube.</p>
+  </div>
+
+  <div class="block">
+    <p class="label">Lora 400</p>
+    <p class="sample lo-400">The fluorescent over my desk had a flicker on the left tube.</p>
+  </div>
+
+  <div class="block">
+    <p class="label">Lora 400 italic</p>
+    <p class="sample lo-400i">The fluorescent over my desk had a flicker on the left tube.</p>
+  </div>
+
+  <div class="block">
+    <p class="label">Lora 600</p>
+    <p class="sample lo-600">The fluorescent over my desk had a flicker on the left tube.</p>
+  </div>
+
+  <div class="block">
+    <p class="label">JetBrains Mono 400</p>
+    <p class="sample jb-400">The fluorescent over my desk had a flicker on the left tube.</p>
+  </div>
+</body>
+</html>

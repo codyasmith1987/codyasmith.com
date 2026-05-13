@@ -7,6 +7,29 @@ import Base from '../layouts/Base.astro';
 ---
 
 <Base title="Sentiment Scanner | Cody Smith" description="Free brand sentiment analysis. Enter your business name and see what the web says about you." ogImage="/og/listener.png" ogImageAlt="Sentiment Scanner: what does the web say about you?">
+  <script type="application/ld+json" set:html={JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Sentiment Scanner",
+    "url": "https://codyasmith.com/listener",
+    "description": "Free brand sentiment analysis. Enter your business name and the scanner searches the web, analyzes the sentiment of mentions, and shows you how your business comes across online.",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Any",
+    "browserRequirements": "Requires JavaScript and a modern browser.",
+    "isAccessibleForFree": true,
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "provider": { "@id": "https://codyasmith.com/#organization" },
+    "creator": { "@id": "https://codyasmith.com/about#person" }
+  })} />
+  <script type="application/ld+json" set:html={JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://codyasmith.com/" },
+      { "@type": "ListItem", "position": 2, "name": "Sentiment Scanner", "item": "https://codyasmith.com/listener" }
+    ]
+  })} />
+
   <section class="pt-40 pb-16 px-6">
     <div class="max-w-4xl mx-auto">
       <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Sentiment Scanner</p>

@@ -18,7 +18,11 @@ export const GET: APIRoute = async ({ locals, url }) => {
   const sort = url.searchParams.get('sort') || 'position';
   const order = url.searchParams.get('order') || 'ASC';
   const source = url.searchParams.get('source') || 'position_tracking';
-  const limit = parseInt(url.searchParams.get('limit') || '100');
+  // Clamp limit to [1, 500]. Without this an attacker could request
+  // tens of thousands of rows in a single LIMIT clause and DoS the DB.
+  // See security-audit-2026-05-12 round 2 SEC2-004.
+  const rawLimit = parseInt(url.searchParams.get('limit') || '100', 10);
+  const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 500) : 100;
 
   // Get latest month with keyword data
   const monthResult = await turso.execute({

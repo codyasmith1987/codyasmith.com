@@ -93,19 +93,27 @@ export async function handlePreview(
     creativity = c;
   }
 
-  // IP / rate limit
+  // IP / rate limit. Fail-closed because each preview costs a Gemini call
+  // and a Turso write; a transient DB outage should not open the door to
+  // unlimited Gemini cost. See security-audit-2026-05-12 round 2 SEC2-007.
   if (!ip || ip === 'unknown') {
     return { status: 400, body: { error: 'Could not verify your request' } };
   }
   const rl = deps.rateLimit ?? rateLimitFn;
-  const hourOk = await rl(`naming-preview:hour:${ip}`, HOURLY_LIMIT, HOUR_MS);
+  // Pass failClosed=true via positional arg 4 of the production rateLimit
+  // function. Tests pass a mock that ignores extra args.
+  const hourOk = await (rl as (k: string, m: number, w: number, fc?: boolean) => Promise<boolean>)(
+    `naming-preview:hour:${ip}`, HOURLY_LIMIT, HOUR_MS, true,
+  );
   if (!hourOk) {
     return {
       status: 429,
       body: { error: "You've reached the hourly preview limit. Try again in an hour." },
     };
   }
-  const dayOk = await rl(`naming-preview:day:${ip}`, DAILY_LIMIT, DAY_MS);
+  const dayOk = await (rl as (k: string, m: number, w: number, fc?: boolean) => Promise<boolean>)(
+    `naming-preview:day:${ip}`, DAILY_LIMIT, DAY_MS, true,
+  );
   if (!dayOk) {
     return {
       status: 429,

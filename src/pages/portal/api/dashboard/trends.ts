@@ -16,7 +16,10 @@ export const GET: APIRoute = async ({ locals, url }) => {
   if (!clientId) return json({ error: 'No client specified' }, 400);
 
   const category = url.searchParams.get('category') || 'traffic';
-  const months = parseInt(url.searchParams.get('months') || '6');
+  // Clamp months to [1, 36] so the multiplier below (months * 20) never
+  // explodes into an unbounded SQL LIMIT. See SEC2-004.
+  const rawMonths = parseInt(url.searchParams.get('months') || '6', 10);
+  const months = Number.isFinite(rawMonths) ? Math.min(Math.max(rawMonths, 1), 36) : 6;
 
   const result = await turso.execute({
     sql: `SELECT month, metric_key, metric_value

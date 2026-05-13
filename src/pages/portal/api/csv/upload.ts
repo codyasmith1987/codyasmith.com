@@ -67,6 +67,6 @@ export const POST: APIRoute = async ({ locals, request }) => {
     });
   } catch (err: any) {
     logger.error('CSV upload error', err);
-    return json({ error: err.message || 'Upload failed' }, 500);
+    return json({ error: 'Upload failed' }, 500);
   }
 };

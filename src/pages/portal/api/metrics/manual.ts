@@ -39,6 +39,6 @@ export const POST: APIRoute = async ({ locals, request }) => {
     return json({ ok: true });
   } catch (err: any) {
     logger.error('Manual metric error', err);
-    return json({ error: err.message || 'Failed' }, 500);
+    return json({ error: 'Failed to save metric' }, 500);
   }
 };

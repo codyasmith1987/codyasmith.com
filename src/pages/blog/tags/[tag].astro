@@ -37,6 +37,8 @@ const itemListJsonLd = entries.length > 0 ? JSON.stringify({
 <Base
   title={`${tagLabel} | Blog | Cody Smith`}
   description={`Articles and case studies tagged ${tagLabel}.`}
+  ogImage="/og/blog/tag.png"
+  ogImageAlt={`Tagged: ${tagLabel}`}
   breadcrumbs={breadcrumbs}
 >
   {itemListJsonLd && (

@@ -1,9 +1,9 @@
 ---
 import Base from '../layouts/Base.astro';
-import { getRecentScans } from '../lib/db';
-export const prerender = false;
 
-const recentScans = await getRecentScans(5);
+// Static page. The scanner UI is fully client-side and talks to
+// /api/scan, /api/unlock, and /api/report at runtime; no server data
+// needs to be fetched on render. See seo-audit-2026-05-12 SEO-017.
 ---
 
 <Base title="Sentiment Scanner | Cody Smith" description="Free brand sentiment analysis. Enter your business name and see what the web says about you.">

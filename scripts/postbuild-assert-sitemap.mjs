@@ -20,8 +20,11 @@ if (!fs.existsSync(sitemap0)) {
 
 const xml = fs.readFileSync(sitemap0, 'utf8');
 
+// astro.config.mjs has trailingSlash: 'never', so the sitemap emits the
+// canonical home URL as `https://codyasmith.com` (no trailing slash) and
+// every other route also bare. Match the bare form here.
 const expected = [
-  'https://codyasmith.com/',
+  'https://codyasmith.com',
   'https://codyasmith.com/about',
   'https://codyasmith.com/services',
   'https://codyasmith.com/services/web-management',

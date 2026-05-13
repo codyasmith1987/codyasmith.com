@@ -1,8 +1,122 @@
 ---
 import Base from '../../layouts/Base.astro';
+
+const faqSchema = JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "How do you scope a project?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "You describe the problem. I write a scope document listing every deliverable, integration point, testing criteria, and exclusion. Then I quote a fixed price against that scope. Nothing ambiguous. You know what you're getting and what it costs before you sign anything."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What happens if scope changes mid-build?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Change orders get quoted separately before any additional work begins. I don't surprise you with a bigger invoice at the end. If you want to add something or pivot, we talk about it, I quote it, you approve, and then I build it. The original scope stays the original scope."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How long does a typical project take?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Most projects scope in one to two weeks and deliver in two to four. Bigger builds run longer. The scope document includes the timeline so there's no guessing. If something is going to slip, you hear about it before the deadline, not after."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What happens after delivery?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "You get written handoff documentation covering configuration, credentials, and maintenance procedures. There's a short warranty window where I fix anything that breaks because of how it was built. After that, ongoing support is either a separate retainer or you handle it in-house. Your call."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Do you work with our existing systems or replace them?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Almost always I work with what you have. Most clients already have a CRM, an email tool, an analytics setup. They're just not connected to each other or configured correctly. Replacing a working system is usually the wrong move. I'll tell you when it isn't."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Do you fix things or only build new things?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Both. A lot of implementation work is fixing what's already there. Form submissions disappearing into a folder nobody checks. Analytics that's installed but not configured. Integrations that broke six months ago and nobody noticed. If it's a scoped project, I can take it on."
+      }
+    }
+  ]
+});
+
+const serviceSchema = JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "Service",
+  "name": "Implementation",
+  "url": "https://codyasmith.com/services/implementation",
+  "description": "CRM integrations, page builds, analytics setup. Scoped projects with a start and a finish.",
+  "provider": { "@id": "https://codyasmith.com/#organization" },
+  "serviceType": "Implementation",
+  "areaServed": { "@type": "Country", "name": "United States" },
+  "offers": [
+    {
+      "@type": "Offer",
+      "name": "Implementation work",
+      "priceSpecification": {
+        "@type": "UnitPriceSpecification",
+        "price": 125,
+        "priceCurrency": "USD",
+        "unitText": "hour",
+        "referenceQuantity": { "@type": "QuantitativeValue", "value": 1, "unitText": "hour" }
+      }
+    },
+    {
+      "@type": "Offer",
+      "name": "Advisory work",
+      "priceSpecification": {
+        "@type": "UnitPriceSpecification",
+        "price": 150,
+        "priceCurrency": "USD",
+        "unitText": "hour",
+        "referenceQuantity": { "@type": "QuantitativeValue", "value": 1, "unitText": "hour" }
+      }
+    },
+    {
+      "@type": "Offer",
+      "name": "Rush implementation",
+      "priceSpecification": {
+        "@type": "UnitPriceSpecification",
+        "price": 187.50,
+        "priceCurrency": "USD",
+        "unitText": "hour",
+        "referenceQuantity": { "@type": "QuantitativeValue", "value": 1, "unitText": "hour" }
+      }
+    },
+    {
+      "@type": "Offer",
+      "name": "Emergency implementation",
+      "priceSpecification": {
+        "@type": "UnitPriceSpecification",
+        "price": 250,
+        "priceCurrency": "USD",
+        "unitText": "hour",
+        "referenceQuantity": { "@type": "QuantitativeValue", "value": 1, "unitText": "hour" }
+      }
+    }
+  ]
+});
 ---
 
 <Base title="Implementation | CRM Integrations, Page Builds & Analytics" description="CRM integrations, page builds, analytics setup. Scoped projects with a start and a finish.">
+  <script type="application/ld+json" set:html={faqSchema} />
+  <script type="application/ld+json" set:html={serviceSchema} />
   <script type="application/ld+json" set:html={JSON.stringify({"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Services","item":"https://codyasmith.com/services"},{"@type":"ListItem","position":2,"name":"Implementation","item":"https://codyasmith.com/services/implementation"}]})} />
 
   <section class="pt-40 pb-24 px-6">
@@ -247,6 +361,77 @@ import Base from '../../layouts/Base.astro';
         <p class="text-neutral-500 text-sm">
           Most projects are scoped at a fixed price so you know the cost before work begins.
         </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="py-28 px-6">
+    <div class="max-w-3xl mx-auto">
+      <div class="mb-16">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Questions</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Things people ask.</h2>
+      </div>
+
+      <div class="space-y-4">
+        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            How do you scope a project?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            You describe the problem. I write a scope document listing every deliverable, integration point, testing criteria, and exclusion. Then I quote a fixed price against that scope. Nothing ambiguous. You know what you're getting and what it costs before you sign anything.
+          </div>
+        </details>
+
+        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            What happens if scope changes mid-build?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            Change orders get quoted separately before any additional work begins. I don't surprise you with a bigger invoice at the end. If you want to add something or pivot, we talk about it, I quote it, you approve, and then I build it. The original scope stays the original scope.
+          </div>
+        </details>
+
+        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            How long does a typical project take?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            Most projects scope in one to two weeks and deliver in two to four. Bigger builds run longer. The scope document includes the timeline so there's no guessing. If something is going to slip, you hear about it before the deadline, not after.
+          </div>
+        </details>
+
+        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            What happens after delivery?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            You get written handoff documentation covering configuration, credentials, and maintenance procedures. There's a short warranty window where I fix anything that breaks because of how it was built. After that, ongoing support is either a separate retainer or you handle it in-house. Your call.
+          </div>
+        </details>
+
+        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            Do you work with our existing systems or replace them?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            Almost always I work with what you have. Most clients already have a CRM, an email tool, an analytics setup. They're just not connected to each other or configured correctly. Replacing a working system is usually the wrong move. I'll tell you when it isn't.
+          </div>
+        </details>
+
+        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            Do you fix things or only build new things?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            Both. A lot of implementation work is fixing what's already there. Form submissions disappearing into a folder nobody checks. Analytics that's installed but not configured. Integrations that broke six months ago and nobody noticed. If it's a scoped project, I can take it on.
+          </div>
+        </details>
       </div>
     </div>
   </section>

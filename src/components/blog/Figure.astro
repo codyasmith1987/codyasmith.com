@@ -5,9 +5,14 @@ interface Props {
   caption?: string;
   credit?: string;
   wide?: boolean;
+  // Optional explicit dimensions. When passed, the browser reserves
+  // layout space before the image loads, eliminating CLS. See
+  // seo-audit-2026-05-12 round 2 SEO2-004.
+  width?: number;
+  height?: number;
 }
 
-const { src, alt, caption, credit, wide = false } = Astro.props;
+const { src, alt, caption, credit, wide = false, width, height } = Astro.props;
 ---
 
 <figure class={`blog-figure my-10 ${wide ? 'blog-figure-wide' : ''}`}>
@@ -16,6 +21,8 @@ const { src, alt, caption, credit, wide = false } = Astro.props;
     alt={alt}
     loading="lazy"
     decoding="async"
+    width={width}
+    height={height}
     class="w-full rounded-lg block"
   />
   {(caption || credit) && (

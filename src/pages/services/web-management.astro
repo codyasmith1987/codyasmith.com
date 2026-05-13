@@ -257,7 +257,7 @@ const faqSchema = JSON.stringify({
           The portal is the receipt for the engagement. Contracts, change orders, invoices, approvals, every milestone, every file. Nothing the engagement produces lives in a thread you'd lose.
         </p>
         <p class="text-neutral-300 leading-relaxed text-lg mt-6 pt-6 border-t border-white/5" style="display:none" data-vibe="mountain">
-          Magic-link sign-in (no passwords to leak). Sessions hashed. Files in encrypted storage. Activity log behind every action. Your data stays yours, end to end.
+          Password sign-in with bcrypt hashing. Sessions stored as SHA-256 hashes. Files in encrypted storage with signed time-bound download links. Activity log behind every action. Your data stays yours, end to end.
         </p>
       </div>
     </div>

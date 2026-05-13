@@ -1,8 +1,56 @@
 ---
 import Base from '../../layouts/Base.astro';
+
+const faqSchema = JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Do you actually do the marketing, or just consult?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "I direct it. You execute it. I build the roadmap, write the briefs, and tell you what to do next. Your writer writes. Your ad person runs the ads. Your social person posts. I'm the one keeping all of it pointed in the same direction. If you don't have those people yet, I'll tell you what to hire for."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What do I have to commit to?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "The initial audit and roadmap is a fixed scope. After that it's month-to-month. No annual contracts. If a quarter goes by and you're not getting value, you can stop. I'd rather keep clients who want to be there than lock people into something they've outgrown."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How do you measure success?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Rankings, organic traffic, conversions. Numbers that tie back to revenue, not vanity metrics. Quarterly, the data goes on the table. If something isn't working, I say so. You won't get a report that makes bad news sound like progress."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can you work with my existing SEO or content vendor?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. I do this often. Most agencies are fine at execution but light on direction. I bring the strategy, hand them briefs they can actually use, and stay in the loop on what's shipping. If your current vendor is the problem, I'll tell you that too."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How is this different from hiring a marketing agency?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Agencies sell hours and deliverables. I sell direction. You're not paying for a team of account managers and junior strategists. You're paying for one person who's been doing this for fifteen years to tell you what to focus on and what to stop doing. Smaller scope, sharper output."
+      }
+    }
+  ]
+});
 ---
 
 <Base title="Marketing Strategy | SEO, Competitive Analysis & Content Direction" description="SEO, competitive analysis, content direction, and keyword strategy. I direct the marketing. You execute it.">
+  <script type="application/ld+json" set:html={faqSchema} />
   <script type="application/ld+json" set:html={JSON.stringify({"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Services","item":"https://codyasmith.com/services"},{"@type":"ListItem","position":2,"name":"Marketing Strategy","item":"https://codyasmith.com/services/marketing-strategy"}]})} />
 
   <section class="pt-40 pb-24 px-6">
@@ -255,7 +303,7 @@ import Base from '../../layouts/Base.astro';
           The portal is the audit trail of the strategic engagement. Every recommendation logged, every decision dated, every brief tied to the call it came out of. Nothing the strategy work produces gets forgotten or argued about.
         </p>
         <p class="text-neutral-300 leading-relaxed text-lg mt-6 pt-6 border-t border-white/5" style="display:none" data-vibe="mountain">
-          Magic-link sign-in (no passwords to leak). Sessions hashed. Files in encrypted storage. Activity log behind every action. Your data stays yours, end to end.
+          Password sign-in with bcrypt hashing. Sessions stored as SHA-256 hashes. Files in encrypted storage with signed time-bound download links. Activity log behind every action. Your data stays yours, end to end.
         </p>
       </div>
     </div>
@@ -282,6 +330,67 @@ import Base from '../../layouts/Base.astro';
         <a href="/contact?interest=marketing-strategy" class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-colors duration-200">
           Tell me where you're at
         </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="py-28 px-6">
+    <div class="max-w-3xl mx-auto">
+      <div class="mb-16">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Questions</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Things people ask.</h2>
+      </div>
+
+      <div class="space-y-4">
+        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            Do you actually do the marketing, or just consult?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            I direct it. You execute it. I build the roadmap, write the briefs, and tell you what to do next. Your writer writes. Your ad person runs the ads. Your social person posts. I'm the one keeping all of it pointed in the same direction. If you don't have those people yet, I'll tell you what to hire for.
+          </div>
+        </details>
+
+        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            What do I have to commit to?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            The initial audit and roadmap is a fixed scope. After that it's month-to-month. No annual contracts. If a quarter goes by and you're not getting value, you can stop. I'd rather keep clients who want to be there than lock people into something they've outgrown.
+          </div>
+        </details>
+
+        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            How do you measure success?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            Rankings, organic traffic, conversions. Numbers that tie back to revenue, not vanity metrics. Quarterly, the data goes on the table. If something isn't working, I say so. You won't get a report that makes bad news sound like progress.
+          </div>
+        </details>
+
+        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            Can you work with my existing SEO or content vendor?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            Yes. I do this often. Most agencies are fine at execution but light on direction. I bring the strategy, hand them briefs they can actually use, and stay in the loop on what's shipping. If your current vendor is the problem, I'll tell you that too.
+          </div>
+        </details>
+
+        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            How is this different from hiring a marketing agency?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            Agencies sell hours and deliverables. I sell direction. You're not paying for a team of account managers and junior strategists. You're paying for one person who's been doing this for fifteen years to tell you what to focus on and what to stop doing. Smaller scope, sharper output.
+          </div>
+        </details>
       </div>
     </div>
   </section>

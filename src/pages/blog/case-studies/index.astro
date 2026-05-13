@@ -61,16 +61,19 @@ const itemListJsonLd = caseStudies.length > 0 ? JSON.stringify({
     <section class="px-6 pb-8">
       <div class="max-w-5xl mx-auto">
         <div id="sector-filter-bar" class="flex flex-wrap gap-2 items-center">
+          {/* No sector landing pages exist, so chips stay as buttons. Tap
+              target raised to 44px min-height per WCAG 2.5.5. See
+              seo-audit-2026-05-12 round 2 SEO2-008. */}
           <button
             type="button"
             data-sector=""
-            class="sector-chip is-active text-xs font-mono tracking-wide px-3 py-1.5 rounded border border-amber-500/30 bg-amber-500/5 text-amber-400"
+            class="sector-chip is-active inline-flex items-center min-h-[44px] text-xs font-mono tracking-wide px-3 py-2.5 rounded border border-amber-500/30 bg-amber-500/5 text-amber-400"
           >All sectors</button>
           {sectors.map(({ sector, count }) => (
             <button
               type="button"
               data-sector={sector}
-              class="sector-chip text-xs font-mono tracking-wide px-3 py-1.5 rounded border border-white/5 text-neutral-400 hover:border-amber-500/30 hover:text-amber-400 transition-colors"
+              class="sector-chip inline-flex items-center min-h-[44px] text-xs font-mono tracking-wide px-3 py-2.5 rounded border border-white/5 text-neutral-400 hover:border-amber-500/30 hover:text-amber-400 transition-colors"
             >{sector} <span class="text-[10px] text-neutral-600 ml-1">{count}</span></button>
           ))}
         </div>

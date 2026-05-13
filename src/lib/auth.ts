@@ -234,6 +234,19 @@ export async function getUserByEmail(email: string) {
   };
 }
 
+// Used by send-link.ts to avoid mailing an alternate auth path
+// (magic link) to a user who already has a password set. Magic links
+// stay available for the initial-onboarding case (users with no
+// password yet) but are not a steady-state login mechanism.
+export async function userHasPassword(userId: string): Promise<boolean> {
+  const result = await turso.execute({
+    sql: 'SELECT password_hash FROM users WHERE id = ?',
+    args: [userId],
+  });
+  if (result.rows.length === 0) return false;
+  return result.rows[0][0] != null;
+}
+
 export async function createClient(name: string, slug: string): Promise<string> {
   const id = nanoid();
   await turso.execute({

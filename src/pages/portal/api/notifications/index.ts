@@ -41,7 +41,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     }
 
     if (id) {
-      await markAsRead(id);
+      await markAsRead(id, locals.user.id);
       return json({ ok: true });
     }
 

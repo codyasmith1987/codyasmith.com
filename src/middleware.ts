@@ -21,9 +21,26 @@ export const onRequest = defineMiddleware(async (context, next) => {
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('X-Frame-Options', 'DENY');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  response.headers.set('Permissions-Policy', [
+    'accelerometer=()', 'ambient-light-sensor=()', 'autoplay=()', 'battery=()',
+    'camera=()', 'cross-origin-isolated=()', 'display-capture=()', 'document-domain=()',
+    'encrypted-media=()', 'execution-while-not-rendered=()', 'execution-while-out-of-viewport=()',
+    'fullscreen=(self)', 'geolocation=()', 'gyroscope=()', 'keyboard-map=()',
+    'magnetometer=()', 'microphone=()', 'midi=()', 'navigation-override=()',
+    'payment=()', 'picture-in-picture=()', 'publickey-credentials-get=()',
+    'screen-wake-lock=()', 'sync-xhr=()', 'usb=()', 'web-share=()',
+    'xr-spatial-tracking=()', 'clipboard-read=()', 'clipboard-write=(self)',
+  ].join(', '));
 
-  // CSP: allow self, inline scripts (Astro needs them), Google Fonts, jsDelivr for Chart.js
+  // Portal pages should never be indexed. Belt-and-suspenders the
+  // <meta name="robots"> tag on /portal/login with an HTTP-level signal
+  // that also covers redirect responses with no HTML body.
+  if (context.url.pathname.startsWith('/portal')) {
+    response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+  }
+
+  // CSP: allow self, inline scripts (Astro needs them), Google Fonts, jsDelivr for Chart.js.
+  // base-uri, form-action, object-src tightened per OWASP guidance.
   response.headers.set('Content-Security-Policy', [
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
@@ -32,6 +49,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
     "img-src 'self' data: blob:",
     "connect-src 'self'",
     "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
   ].join('; '));
 
   // First-party request log for the public surface. Fire and forget so the

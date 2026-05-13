@@ -1,8 +1,24 @@
 import type { APIRoute } from 'astro';
-import { getUserByEmail, createMagicLink } from '../../../lib/auth';
+import { getUserByEmail, createMagicLink, userHasPassword } from '../../../lib/auth';
 import { rateLimit } from '../../../lib/rate-limit';
 import { logger } from '../../../lib/logger';
 import { logActivity } from '../../../lib/activity';
+
+// Escape HTML for safe interpolation into Brevo email htmlContent.
+function escapeHtml(s: string | null | undefined): string {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function stripCRLF(s: string | null | undefined): string {
+  if (s == null) return '';
+  return String(s).replace(/[\r\n]+/g, ' ').trim();
+}
 
 export const prerender = false;
 
@@ -30,6 +46,13 @@ export const POST: APIRoute = async ({ request, url, clientAddress }) => {
       return json({ ok: true });
     }
 
+    // Users with a password set use the password flow. Magic-link issuance
+    // is reserved for initial onboarding (no password yet). Returning ok
+    // here is intentional to keep response timing uniform.
+    if (await userHasPassword(user.id)) {
+      return json({ ok: true });
+    }
+
     const token = await createMagicLink(user.id);
 
     await logActivity({
@@ -54,15 +77,15 @@ export const POST: APIRoute = async ({ request, url, clientAddress }) => {
         },
         body: JSON.stringify({
           sender: { name: 'Cody Smith', email: 'cody@codyasmith.com' },
-          to: [{ email: user.email, name: user.name }],
-          subject: 'Your Portal Login Link',
+          to: [{ email: user.email, name: stripCRLF(user.name) }],
+          subject: stripCRLF('Your Portal Login Link'),
           htmlContent: `
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-              <h2 style="color: #171717; margin-bottom: 16px;">Hey ${user.name.split(' ')[0]},</h2>
+              <h2 style="color: #171717; margin-bottom: 16px;">Hey ${escapeHtml(user.name.split(' ')[0])},</h2>
               <p style="color: #525252; line-height: 1.6; margin-bottom: 24px;">
                 Here's your login link for the client portal. It expires in 15 minutes.
               </p>
-              <a href="${loginUrl}" style="display: inline-block; background: #f59e0b; color: #0a0a0a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">
+              <a href="${escapeHtml(loginUrl)}" style="display: inline-block; background: #f59e0b; color: #0a0a0a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">
                 Log in to Portal
               </a>
               <p style="color: #a3a3a3; font-size: 12px; margin-top: 32px; line-height: 1.5;">

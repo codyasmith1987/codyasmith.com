@@ -1,5 +1,31 @@
 User-agent: *
 Allow: /
 Disallow: /portal/
+Disallow: /api/
+Disallow: /naming-preview
+
+# AI training and grounding crawlers. The site welcomes assistants
+# that respect robots.txt; opt-outs go below as we identify ones we
+# do not want, per current 2026 conventions.
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-User
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: CCBot
+Allow: /
 
 Sitemap: https://codyasmith.com/sitemap-index.xml

@@ -132,6 +132,7 @@ const mobileLinkClass = (href: string) => [
               <p class="text-xs text-neutral-600 truncate">{user?.email}</p>
             </div>
             <form method="POST" action="/portal/auth/logout">
+              <input type="hidden" name="csrf-token" value={csrfToken} />
               <button type="submit" class="text-xs text-neutral-600 hover:text-red-400 transition-colors duration-300 whitespace-nowrap ml-3">
                 Log out
               </button>
@@ -190,6 +191,7 @@ const mobileLinkClass = (href: string) => [
               <a href="/portal/notifications" class="text-xs text-neutral-600 hover:text-amber-400 transition-colors">Notifications</a>
               <a href="/" class="text-xs text-neutral-600 hover:text-amber-400 transition-colors">Back to website</a>
               <form method="POST" action="/portal/auth/logout">
+              <input type="hidden" name="csrf-token" value={csrfToken} />
                 <button type="submit" class="text-xs text-neutral-600 hover:text-red-400 transition-colors">Log out</button>
               </form>
             </div>

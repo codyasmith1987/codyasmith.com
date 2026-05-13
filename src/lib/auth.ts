@@ -142,10 +142,13 @@ export async function verifyPassword(email: string, password: string): Promise<s
 
 // --- Sessions ---
 
-export async function createSession(userId: string): Promise<string> {
+export async function createSession(userId: string, durationMs: number = SESSION_DURATION_MS): Promise<string> {
+  // durationMs lets callers issue short sessions for pre-password
+  // magic-link arrivals; default is the rolling 30-day TTL used by the
+  // password flow. See security-audit-2026-05-12 round 6 SEC6-001.
   const token = nanoid(40);
   const sessionId = hashToken(token);
-  const expiresAt = new Date(Date.now() + SESSION_DURATION_MS).toISOString();
+  const expiresAt = new Date(Date.now() + durationMs).toISOString();
 
   await turso.execute({
     sql: 'INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)',

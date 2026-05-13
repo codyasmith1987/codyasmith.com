@@ -18,7 +18,12 @@ export const GET: APIRoute = async ({ url, cookies, redirect }) => {
     return redirect('/portal/login?error=expired');
   }
 
-  const sessionToken = await createSession(userId);
+  // 1-hour session for magic-link arrivals. Middleware bounces them to
+  // /portal/set-password where setPassword revokes the row on completion;
+  // the short DB-side TTL is the failsafe when the user abandons before
+  // setting a password. See security-audit-2026-05-12 round 6 SEC6-001.
+  const ONE_HOUR_MS = 60 * 60 * 1000;
+  const sessionToken = await createSession(userId, ONE_HOUR_MS);
 
   await logActivity({
     userId,

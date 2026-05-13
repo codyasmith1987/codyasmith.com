@@ -18,19 +18,18 @@ const tags = Array.from(tagSet.entries())
   title="Articles | Cody Smith"
   description="Thinking out loud about marketing, persuasion, and the craft of getting small businesses found."
 >
-  <section class="relative pt-40 pb-12 px-6 overflow-hidden">
-    <div class="absolute top-0 right-1/4 w-[500px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
-    <div class="relative max-w-4xl mx-auto">
-      <p class="reveal font-mono text-[11px] tracking-[0.25em] uppercase text-amber-400 mb-8">
+  <section class="pt-40 pb-12 px-6">
+    <div class="max-w-4xl mx-auto">
+      <p class="font-mono text-[11px] tracking-[0.25em] uppercase text-amber-400 mb-8">
         <a href="/blog" class="hover:text-amber-300">Blog</a>
         <span class="text-neutral-700 mx-2">/</span>
         <span class="text-neutral-400">Articles</span>
       </p>
-      <h1 class="reveal font-serif text-5xl md:text-6xl leading-[1.05] text-neutral-100 tracking-tight">
+      <h1 class="font-serif text-5xl md:text-6xl leading-[1.05] text-neutral-100 tracking-tight">
         I argue for a living.<br />
         <span class="font-quote italic">You get what you paid for.</span>
       </h1>
-      <p class="reveal mt-6 text-lg text-neutral-400 max-w-2xl leading-relaxed">
+      <p class="mt-6 text-lg text-neutral-400 max-w-2xl leading-relaxed">
         Essays, arguments, the occasional rant. Nothing goes up until I can defend it. A lot of things never go up.
       </p>
     </div>
@@ -128,3 +127,5 @@ const tags = Array.from(tagSet.entries())
   initTagFilter();
   document.addEventListener('astro:after-swap', initTagFilter);
 </script>
+</content>
+</invoke>

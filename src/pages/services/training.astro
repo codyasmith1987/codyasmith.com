@@ -65,6 +65,7 @@ const serviceSchema = JSON.stringify({
   "provider": { "@id": "https://codyasmith.com/#organization" },
   "serviceType": "Training",
   "areaServed": { "@type": "Country", "name": "United States" },
+  "termsOfService": "Three-session guided programs delivered remotely. Assignments between sessions. Reference materials delivered at the end. Single sessions and ongoing advisory retainers available.",
   "offers": [
     {
       "@type": "Offer",
@@ -108,7 +109,7 @@ const serviceSchema = JSON.stringify({
 });
 ---
 
-<Base title="Training | WordPress, SEO & AI Workflow Guided Programs" description="WordPress, SEO, and AI workflow training built on learning science. Not a webinar. A guided program.">
+<Base title="Training | WordPress, SEO & AI Workflow Guided Programs" description="WordPress, SEO, and AI workflow training built on learning science. Not a webinar. A guided program." ogImage="/og/services/training.png" ogImageAlt="Training: built on learning science, not slide decks.">
   <script type="application/ld+json" set:html={faqSchema} />
   <script type="application/ld+json" set:html={serviceSchema} />
   <script type="application/ld+json" set:html={JSON.stringify({"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Services","item":"https://codyasmith.com/services"},{"@type":"ListItem","position":2,"name":"Training","item":"https://codyasmith.com/services/training"}]})} />

@@ -50,7 +50,7 @@ export const POST: APIRoute = async ({ request, cookies, clientAddress }) => {
       path: '/portal',
       httpOnly: true,
       secure: true,
-      sameSite: 'lax',
+      sameSite: 'strict',
       maxAge: 30 * 24 * 60 * 60,
     });
 

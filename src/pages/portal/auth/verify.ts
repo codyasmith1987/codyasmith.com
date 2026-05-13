@@ -32,7 +32,7 @@ export const GET: APIRoute = async ({ url, cookies, redirect }) => {
     path: '/portal',
     httpOnly: true,
     secure: true,
-    sameSite: 'lax',
+    sameSite: 'strict',
     maxAge: 30 * 24 * 60 * 60, // 30 days in seconds
   });
 

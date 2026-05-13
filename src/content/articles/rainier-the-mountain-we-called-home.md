@@ -3,7 +3,7 @@ title: "Rainier: The Mountain We Called Home"
 description: "Five days at Camp Muir with the Seattle Glacier School, a 21-hour summit bid up the Nisqually, and a long bus ride home."
 publishDate: 2018-11-21T12:00:00Z
 draft: false
-tags: []
+tags: [journalism, photography, essay]
 cover:
   src: /images/blog/rainier-the-mountain-we-called-home/cover.jpg
   alt: Mt. Rainier at sunset with smaller Cascade peaks in the distance, Washington

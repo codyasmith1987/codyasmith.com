@@ -5,7 +5,7 @@ description: "Why AI shows outdated information about your business, and how tha
 dek: "And how that bug is changing the world as we know it."
 publishDate: 2026-05-06T12:00:00Z
 draft: false
-tags: []
+tags: [ai, seo, search]
 ---
 
 AI search shows outdated information about your business because every AI chatbot pulls from a third-party search index with its own crawl schedule. The index lags the live web by days or weeks. The gap is widening, not closing, because the web AI is reading from is increasingly written by other AI systems reading older versions of the web.

@@ -26,6 +26,7 @@ interface Props {
   ogType?: 'website' | 'article';
   article?: ArticleMeta;
   breadcrumbs?: Breadcrumb[];   // when set, emits BreadcrumbList JSON-LD
+  noIndex?: boolean;            // when true, emits robots noindex,nofollow
 }
 
 const DEFAULT_DESCRIPTION = "Cody Smith: web management, marketing strategy, and consulting for small businesses in Cedar City, Utah and beyond.";
@@ -37,6 +38,7 @@ const {
   ogType = 'website',
   article,
   breadcrumbs,
+  noIndex = false,
 } = Astro.props;
 
 const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
@@ -66,7 +68,9 @@ const breadcrumbJsonLd = breadcrumbs && breadcrumbs.length > 0 ? JSON.stringify(
     <link rel="manifest" href="/manifest.json" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
+    <meta name="theme-color" content="#0a0a0a" />
     <link rel="canonical" href={canonicalURL.href} />
+    {noIndex && <meta name="robots" content="noindex, nofollow" />}
 
     <!-- Open Graph -->
     <meta property="og:type" content={ogType} />
@@ -106,7 +110,23 @@ const breadcrumbJsonLd = breadcrumbs && breadcrumbs.length > 0 ? JSON.stringify(
     <title>{title}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Lora:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+    {/* Preload the fonts CSS as a stylesheet, then load it non-render-blocking.
+        The print-media trick promotes it to all media once the browser parses it,
+        eliminating one critical-path round trip without dropping font-display:swap. */}
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Lora:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Lora:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400&display=swap"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Lora:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+    </noscript>
     <ClientRouter />
     <script is:inline>
       (function() {

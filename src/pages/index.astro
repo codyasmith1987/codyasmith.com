@@ -1,31 +1,71 @@
 ---
 import Base from '../layouts/Base.astro';
 
-const personSchema = JSON.stringify({
+// Graph node for the consultancy. ProfessionalService gives Google the
+// service-business chip; Organization gives it the entity (logo, sameAs,
+// founder) so the knowledge panel can disambiguate; WebSite anchors the
+// site identity so AI assistants can connect citation chunks back to the
+// canonical entity. Sitelinks SearchAction is intentionally omitted:
+// Google retired the sitelinks search box from SERPs on 2024-11-21, so
+// it produces no rich result. The three nodes are merged into a single
+// @graph response so crawlers consume them together.
+const homepageGraph = JSON.stringify({
   "@context": "https://schema.org",
-  "@type": "ProfessionalService",
-  "name": "Cody Smith",
-  "url": "https://codyasmith.com",
-  "description": "Web management, marketing strategy, and training for businesses that have outgrown their website.",
-  "address": {
-    "@type": "PostalAddress",
-    "addressLocality": "Cedar City",
-    "addressRegion": "UT",
-    "addressCountry": "US"
-  },
-  "email": "cody@codyasmith.com",
-  "telephone": "+1-435-868-7133",
-  "priceRange": "$$",
-  "serviceType": ["Web Management", "Marketing Strategy", "Implementation", "Training"],
-  "areaServed": {
-    "@type": "Country",
-    "name": "United States"
-  }
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://codyasmith.com/#organization",
+      "name": "Cody Smith",
+      "url": "https://codyasmith.com",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://codyasmith.com/icon-512.png",
+        "width": 512,
+        "height": 512
+      },
+      "founder": { "@id": "https://codyasmith.com/about#person" },
+      "email": "cody@codyasmith.com",
+      "telephone": "+1-435-868-7133",
+      "address": {
+        "@type": "PostalAddress",
+        "addressLocality": "Cedar City",
+        "addressRegion": "UT",
+        "addressCountry": "US"
+      }
+    },
+    {
+      "@type": "ProfessionalService",
+      "@id": "https://codyasmith.com/#service",
+      "name": "Cody Smith",
+      "url": "https://codyasmith.com",
+      "description": "Web management, marketing strategy, and training for businesses that have outgrown their website.",
+      "address": {
+        "@type": "PostalAddress",
+        "addressLocality": "Cedar City",
+        "addressRegion": "UT",
+        "addressCountry": "US"
+      },
+      "email": "cody@codyasmith.com",
+      "telephone": "+1-435-868-7133",
+      "priceRange": "$$",
+      "serviceType": ["Web Management", "Marketing Strategy", "Implementation", "Training"],
+      "areaServed": { "@type": "Country", "name": "United States" }
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://codyasmith.com/#website",
+      "url": "https://codyasmith.com",
+      "name": "Cody Smith",
+      "description": "Web management, marketing strategy, and consulting for small businesses in Cedar City, Utah and beyond.",
+      "publisher": { "@id": "https://codyasmith.com/#organization" },
+      "inLanguage": "en-US"
+    }
+  ]
 });
 ---
 
 <Base title="Cody Smith | Web Management & Marketing Consulting in Cedar City, UT">
-  <script type="application/ld+json" set:html={personSchema} />
+  <script type="application/ld+json" set:html={homepageGraph} />
 
   <section class="pt-40 pb-32 px-6">
     <div class="max-w-4xl mx-auto">

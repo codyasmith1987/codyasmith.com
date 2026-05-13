@@ -3,7 +3,7 @@ title: "Standing Rock: It's Not Over Yet"
 description: "Dispatch from the Standing Rock encampment in late 2016. The people, the cold, the schoolhouse going up in the snow, and why nobody in camp thought the federal ruling ended anything."
 publishDate: 2016-12-08T12:00:00Z
 draft: false
-tags: []
+tags: [journalism, photography]
 cover:
   src: /images/blog/standing-rock-its-not-over-yet/cover.jpg
   alt: Construction of the Sacred Stone Community School at the Standing Rock encampment, with a "Volunteer Builders Needed" sign

@@ -11,7 +11,14 @@ export default defineConfig({
   integrations: [
     mdx(),
     sitemap({
-      filter: (page) => !page.includes('/portal/'),
+      // Exclude portal, API endpoints, the OG image endpoints (PNGs do not
+      // belong in an HTML sitemap), and the still-experimental naming
+      // preview route. See seo-audit-2026-05-12 SEO-014 and SEO-015.
+      filter: (page) =>
+        !page.includes('/portal/')
+        && !page.includes('/api/')
+        && !page.endsWith('.png')
+        && !page.includes('/naming-preview'),
     }),
   ],
   adapter: node({ mode: 'standalone' }),

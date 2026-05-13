@@ -141,16 +141,23 @@ function formatLabel(format: string): string {
           const card = document.createElement('div');
           card.className = `csv-result bg-neutral-900/30 border rounded-xl p-5 ${data.error ? 'border-red-500/15' : 'border-emerald-500/15'}`;
           card.style.animationDelay = `${i * 0.1}s`;
+          // Defensively escape every interpolation. data.error in particular
+          // can carry user-controlled bytes from CSV parser exceptions, and
+          // data.format / row_count / file.name pass through innerHTML.
+          // See security-audit-2026-05-12 round 4 SEC4-008.
+          const esc = (s: any) => String(s ?? '')
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
           card.innerHTML = `
             <div class="flex items-center justify-between">
               <div>
-                <p class="text-sm font-medium text-neutral-200">${file.name}</p>
+                <p class="text-sm font-medium text-neutral-200">${esc(file.name)}</p>
                 <p class="text-xs text-neutral-600 mt-1">
-                  ${data.format !== 'unknown' ? `Detected: <span class="text-emerald-400">${data.format.replace(/_/g, ' ')}</span>` : ''}
-                  ${data.row_count ? `, ${data.row_count} rows processed` : ''}
+                  ${data.format !== 'unknown' ? `Detected: <span class="text-emerald-400">${esc(String(data.format).replace(/_/g, ' '))}</span>` : ''}
+                  ${data.row_count ? `, ${esc(data.row_count)} rows processed` : ''}
                 </p>
               </div>
-              ${data.error ? `<span class="text-xs text-red-400">${data.error}</span>` : '<span class="text-[10px] font-mono text-emerald-400 tracking-wide uppercase">Done</span>'}
+              ${data.error ? `<span class="text-xs text-red-400">${esc(data.error)}</span>` : '<span class="text-[10px] font-mono text-emerald-400 tracking-wide uppercase">Done</span>'}
             </div>
           `;
           resultsDiv.appendChild(card);
@@ -158,7 +165,10 @@ function formatLabel(format: string): string {
           const card = document.createElement('div');
           card.className = 'csv-result bg-neutral-900/30 border border-red-500/15 rounded-xl p-5';
           card.style.animationDelay = `${i * 0.1}s`;
-          card.innerHTML = `<p class="text-sm text-red-400">${file.name}: ${err.message}</p>`;
+          const escErr = (s: any) => String(s ?? '')
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+          card.innerHTML = `<p class="text-sm text-red-400">${escErr(file.name)}: ${escErr(err.message)}</p>`;
           resultsDiv.appendChild(card);
         }
       }

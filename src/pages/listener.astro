@@ -622,10 +622,12 @@ const recentScans = await getRecentScans(5);
       }
     }
 
-    // Check for ?report= param and auto-load the full report
+    // Check for ?report=&token= params and auto-load the full report.
+    // The token comes from the unlock email and gates Tier 2 data on the server.
     async function loadSavedReport() {
       const params = new URLSearchParams(window.location.search);
       const reportId = params.get('report');
+      const reportToken = params.get('token');
       if (!reportId) return;
 
       initScanner(); // set up event listeners first
@@ -639,7 +641,10 @@ const recentScans = await getRecentScans(5);
       });
 
       try {
-        const res = await fetch(`/api/report?id=${reportId}`);
+        const reportUrl = reportToken
+          ? `/api/report?id=${encodeURIComponent(reportId)}&token=${encodeURIComponent(reportToken)}`
+          : `/api/report?id=${encodeURIComponent(reportId)}`;
+        const res = await fetch(reportUrl);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
 

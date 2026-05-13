@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build && node scripts/postbuild-security-headers.mjs",
+    "build": "astro build && node scripts/postbuild-security-headers.mjs && node scripts/postbuild-assert-sitemap.mjs",
     "preview": "astro preview",
     "astro": "astro",
     "migrate:naming": "tsx scripts/migrate-naming.ts",

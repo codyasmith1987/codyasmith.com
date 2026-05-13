@@ -199,8 +199,16 @@ export async function validateSession(token: string): Promise<{
     return null;
   }
 
-  // Extend session if within refresh window
-  if (expiresAt.getTime() - Date.now() < SESSION_REFRESH_MS) {
+  // Extend session if within refresh window. Pre-password (magic-link)
+  // sessions have a 1-hour total lifespan and are bounced to
+  // /portal/set-password by middleware; they must NOT auto-refresh to
+  // 30 days on first request. Detect them by their original duration:
+  // any session whose initial expires_at - created_at is less than the
+  // full SESSION_DURATION_MS was created with a short TTL on purpose.
+  // See security-audit-2026-05-12 round 7 SEC7-001.
+  const originalDurationMs = expiresAt.getTime() - createdAt.getTime();
+  const isFullDurationSession = originalDurationMs >= SESSION_DURATION_MS - 1000;
+  if (isFullDurationSession && expiresAt.getTime() - Date.now() < SESSION_REFRESH_MS) {
     const newExpiry = new Date(Date.now() + SESSION_DURATION_MS).toISOString();
     await turso.execute({
       sql: 'UPDATE sessions SET expires_at = ? WHERE id = ?',

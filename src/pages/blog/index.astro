@@ -20,15 +20,14 @@ const hasAny = articles.length + caseStudies.length > 0;
   title="Blog | Cody Smith"
   description="Articles and case studies from a working consultancy. Thinking, evidence, and receipts from the projects that shaped how I work."
 >
-  <section class="relative pt-40 pb-16 px-6 overflow-hidden">
-    <div class="absolute top-0 left-1/3 w-[600px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
-    <div class="relative max-w-5xl mx-auto">
-      <p class="reveal font-mono text-[11px] tracking-[0.25em] uppercase text-amber-400 mb-8">Blog</p>
-      <h1 class="reveal font-serif text-5xl md:text-7xl leading-[1.05] text-neutral-100 tracking-tight">
+  <section class="pt-40 pb-16 px-6">
+    <div class="max-w-5xl mx-auto">
+      <p class="font-mono text-[11px] tracking-[0.25em] uppercase text-amber-400 mb-8">Blog</p>
+      <h1 class="font-serif text-5xl md:text-7xl leading-[1.05] text-neutral-100 tracking-tight">
         Fifteen years writing nice things for other people's businesses.<br />
         <span class="font-quote italic">Not here.</span>
       </h1>
-      <p class="reveal mt-8 text-lg md:text-xl text-neutral-400 leading-relaxed max-w-3xl">
+      <p class="mt-8 text-lg md:text-xl text-neutral-400 leading-relaxed max-w-3xl">
         Articles on whatever I can't stop thinking about. Case studies on clients my lawyer cleared. LinkedIn voice barred at the door.
       </p>
     </div>
@@ -50,7 +49,7 @@ const hasAny = articles.length + caseStudies.length > 0;
           <p class="font-mono text-[11px] tracking-[0.25em] uppercase text-amber-400">Latest receipt</p>
           <a href="/blog/case-studies" class="font-mono text-[10px] tracking-[0.2em] uppercase text-neutral-500 hover:text-amber-400 transition-colors">All case studies &rarr;</a>
         </div>
-        <a href={`/blog/case-studies/${latestCase.id}`} class="block glow-card p-8 md:p-10 group">
+        <a href={`/blog/case-studies/${latestCase.id}`} class="block rounded-xl bg-neutral-900 border border-neutral-800 p-8 md:p-10 group hover:border-amber-500/40 transition-colors duration-200">
           <div class="flex items-center gap-3 mb-4 font-mono text-[10px] tracking-[0.2em] uppercase text-neutral-500">
             <span>{latestCase.data.clientAnonymized ? 'Confidential' : latestCase.data.client}</span>
             <span class="text-neutral-700">&middot;</span>
@@ -125,7 +124,7 @@ const hasAny = articles.length + caseStudies.length > 0;
         <p class="font-mono text-[11px] tracking-[0.25em] uppercase text-amber-400 mb-10">Other receipts</p>
         <div class="grid md:grid-cols-3 gap-6">
           {otherCases.map((c) => (
-            <a href={`/blog/case-studies/${c.id}`} class="glow-card p-6 block group">
+            <a href={`/blog/case-studies/${c.id}`} class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 block group hover:border-amber-500/40 transition-colors duration-200">
               <p class="font-mono text-[10px] tracking-[0.2em] uppercase text-neutral-500 mb-3">{c.data.sector}</p>
               <h3 class="font-serif text-xl text-neutral-100 leading-tight mb-3 group-hover:text-amber-400 transition-colors">
                 {c.data.title}
@@ -159,3 +158,5 @@ const hasAny = articles.length + caseStudies.length > 0;
 
 
 </Base>
+</content>
+</invoke>

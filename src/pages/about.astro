@@ -4,64 +4,59 @@ import Base from '../layouts/Base.astro';
 
 <Base title="About Cody Smith | Writer, Strategist, Consultant in Cedar City" description="The longer version. Writer, strategist, consultant. Cedar City, Utah.">
   <script type="application/ld+json" set:html={JSON.stringify({"@context":"https://schema.org","@type":"Person","name":"Cody Smith","jobTitle":"Web Management & Marketing Consultant","url":"https://codyasmith.com","address":{"@type":"PostalAddress","addressLocality":"Cedar City","addressRegion":"UT","addressCountry":"US"},"email":"cody@codyasmith.com","telephone":"+1-435-868-7133","sameAs":["https://codyasmith.com"]})} />
-  <!-- Hero -->
-  <section class="relative pt-40 pb-16 px-6 overflow-hidden">
-    <div class="absolute top-0 right-1/4 w-[500px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
-    <div class="relative max-w-4xl mx-auto">
-      <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">About</p>
-      <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05]">
+
+  <section class="pt-40 pb-16 px-6">
+    <div class="max-w-4xl mx-auto">
+      <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">About</p>
+      <h1 class="font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05]">
         The longer version.
       </h1>
     </div>
   </section>
 
-  <!-- Story -->
   <section class="pb-28 px-6">
     <div class="max-w-3xl mx-auto space-y-8 text-neutral-400 text-lg leading-relaxed">
-      <p class="reveal">
+      <p>
         I'm a writer who became a marketer who became a strategist who became a consultant. Though if you asked me on any given Tuesday, I'd probably tell you I'm still mostly a writer.
       </p>
-      <p class="reveal">
+      <p>
         I live in Cedar City, Utah. I have two sons. I hold an MBA from Southern Utah University and a degree in Communications from the same place, which is convenient because it means I only had to learn one campus.
       </p>
-      <p class="reveal">
+      <p>
         The career looks scattered if you read it as a list of job titles. Staff writer, copywriter, photographer, technical writer, SEO specialist, creative director, senior director of marketing, marketing representative. The titles ran in parallel as often as in sequence, and at no point did any one of them accurately describe what I was actually doing.
       </p>
     </div>
   </section>
 
-  <!-- The Pattern -->
   <section class="py-28 px-6 surface-1">
     <div class="max-w-3xl mx-auto">
-      <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-12">The pattern</p>
+      <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-12">The pattern</p>
       <div class="space-y-8 text-neutral-400 text-lg leading-relaxed">
-        <p class="reveal" data-processing="default">
+        <p data-processing="default">
           Here's what actually happened: every role, I was hired for one thing and ended up doing three others. At Iron County Today, I was a staff writer. By the time I left, I'd built their digital presence from nothing and grown their online following 200%. Vitality Medical was copywriting on the medical e-commerce side, product copy in a regulated category. At AllenComm, a copywriting contract turned into designing a training program that 50,000 teachers completed across the country. Won four awards for it. The car got the awards.
         </p>
-        <p class="reveal" style="display:none" data-processing="stars">
+        <p style="display:none" data-processing="stars">
           The numbers tell the story better than I can. Online following up 200% at Iron County Today. 50,000 teachers trained at AllenComm, four national awards. 120% sales increase on a $90K budget at MCC Apparel. NPS from 35 to 60 in six months at Truvy. 30,500 members served at SC Broadband. Every role, the scope expanded because the results demanded it.
         </p>
-        <p class="reveal" style="display:none" data-processing="clouds">
+        <p style="display:none" data-processing="clouds">
           Here's what actually happened: every role, I walked in for one thing and stayed for three others. Not because of scope creep, but because someone said "can you also look at this?" and it turned out looking at it was the thing that mattered most. That's the pattern. Hired for the title, kept for the instinct.
         </p>
-        <p class="reveal">
+        <p>
           At MCC Apparel, creative direction turned into analytics, data strategy, and a 120% sales increase on a $90K budget. At Truvy, I moved the NPS from 35 to 60 in six months while managing a $2.5M budget and fifteen people. Six months. Long enough to prove the model. Short enough to know the company wasn't where I needed to be. SEO Design Chicago was agency-side SEO, client-account work across a portfolio.
         </p>
-        <p class="reveal">
+        <p>
           And at SC Broadband, where my business card says "Marketing Representative," strategy, web development, SEO, and brand architecture for a fiber cooperative serving 30,500 members across two states all sit on me.
         </p>
-        <p class="reveal text-neutral-100 text-xl">
+        <p class="text-neutral-100 text-xl">
           The practice exists because I got tired of pretending the pattern was accidental.
         </p>
       </div>
     </div>
   </section>
 
-  <!-- Quote -->
-  <section class="relative py-24 px-6 overflow-hidden">
-    <div class="absolute inset-0 dot-grid"></div>
-    <div class="relative max-w-3xl mx-auto text-center">
-      <div class="reveal">
+  <section class="py-24 px-6 surface-2">
+    <div class="max-w-3xl mx-auto text-center">
+      <div>
         <p class="font-quote text-3xl md:text-4xl text-neutral-200 italic leading-snug mb-4">
           "The best stories happen when you're<br class="hidden md:block" /> too tired to make them up."
         </p>
@@ -70,30 +65,28 @@ import Base from '../layouts/Base.astro';
     </div>
   </section>
 
-  <!-- Before -->
   <section class="py-28 px-6 surface-1">
     <div class="max-w-3xl mx-auto space-y-8 text-neutral-400 text-lg leading-relaxed">
-      <p class="reveal">
+      <p>
         Before any of this made sense as a career, I was filing dispatches from the Standing Rock camps at 2am with frozen fingers and a press badge I'd printed at a FedEx in Bismarck. I spent a week on Mt. Rainier as an expedition photographer, writing field notes at 12,000 feet because the best stories happen when you're too tired to make them up. I drove a pedicab through downtown Salt Lake for tips. Lived out of a van for a while. Started college with a 1.7 GPA from high school, made the Dean's List, finished with an MBA fifteen years later.
       </p>
-      <p class="reveal">
+      <p>
         I don't tell you that because adversity is a credential. I tell you because it's the same pattern. Show up to a thing you're not quite qualified for, figure it out faster than anyone expects, leave it better than you found it.
       </p>
-      <p class="reveal font-quote text-neutral-100 text-2xl italic">
+      <p class="font-quote text-neutral-100 text-2xl italic">
         That's what I do for clients now. Smaller scale, higher stakes, better invoicing.
       </p>
     </div>
   </section>
 
-  <!-- Education & Awards -->
   <section class="py-28 px-6">
     <div class="max-w-5xl mx-auto">
-      <div class="reveal mb-16">
+      <div class="mb-16">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Credentials</p>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">If you need them.</h2>
       </div>
-      <div class="grid md:grid-cols-2 gap-8 reveal-stagger">
-        <div class="reveal glow-card p-8" style="--i:0">
+      <div class="grid md:grid-cols-2 gap-8">
+        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-8 hover:border-amber-500/40 transition-colors duration-200">
           <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-6">Education</p>
           <div class="space-y-6">
             <div>
@@ -106,7 +99,7 @@ import Base from '../layouts/Base.astro';
             </div>
           </div>
         </div>
-        <div class="reveal glow-card p-8" style="--i:1">
+        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-8 hover:border-amber-500/40 transition-colors duration-200">
           <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-6">Awards</p>
           <div class="space-y-6">
             <div>
@@ -130,7 +123,7 @@ import Base from '../layouts/Base.astro';
                 href="https://allencomm.com/portfolio/spts-provides-suicide-prevention-training"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="inline-flex items-center gap-1.5 text-amber-400/70 text-xs hover:text-amber-400 transition-colors duration-300"
+                class="inline-flex items-center gap-1.5 text-amber-400/70 text-xs hover:text-amber-400 transition-colors duration-200"
               >
                 View on AllenComm portfolio
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -148,14 +141,12 @@ import Base from '../layouts/Base.astro';
     </div>
   </section>
 
-  <!-- CTA -->
-  <section class="relative py-32 px-6 surface-1 overflow-hidden">
-    <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
-    <div class="relative max-w-3xl mx-auto text-center">
-      <p class="reveal text-neutral-400 text-lg mb-10" data-frame="default">If you've read this far<span data-personalize="name-comma" style="display:none"></span>, you probably have a reason. Let's talk about it.</p>
-      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-frame="sun">If you've read this far<span data-personalize="name-comma" style="display:none"></span>, you probably see something here. Let's talk about what's next for your business.</p>
-      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-frame="moon">If you've read this far<span data-personalize="name-comma" style="display:none"></span>, you probably have a reason. Tell me what's going on and I'll tell you if I can help.</p>
-      <a href="/contact" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
+  <section class="py-32 px-6 surface-1">
+    <div class="max-w-3xl mx-auto text-center">
+      <p class="text-neutral-400 text-lg mb-10" data-frame="default">If you've read this far<span data-personalize="name-comma" style="display:none"></span>, you probably have a reason. Let's talk about it.</p>
+      <p class="text-neutral-400 text-lg mb-10" style="display:none" data-frame="sun">If you've read this far<span data-personalize="name-comma" style="display:none"></span>, you probably see something here. Let's talk about what's next for your business.</p>
+      <p class="text-neutral-400 text-lg mb-10" style="display:none" data-frame="moon">If you've read this far<span data-personalize="name-comma" style="display:none"></span>, you probably have a reason. Tell me what's going on and I'll tell you if I can help.</p>
+      <a href="/contact" class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-colors duration-200">
         Get in touch
       </a>
     </div>

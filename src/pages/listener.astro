@@ -280,6 +280,20 @@ const recentScans = await getRecentScans(5);
   <div class="pb-20"></div>
 
   <script>
+    function escapeHtml(s: any): string {
+      if (s == null) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function isSafeHttpUrl(u: any): boolean {
+      return typeof u === 'string' && /^https?:\/\//i.test(u);
+    }
+
     function initScanner() {
       const pageLoadTime = Date.now();
       let currentScanId: number | null = null;
@@ -327,20 +341,33 @@ const recentScans = await getRecentScans(5);
 
         // Service cards
         const servicesEl = document.getElementById('rec-services')!;
-        servicesEl.innerHTML = rec.services.map((s: any) => `
-          <a href="${s.url}" class="block bg-neutral-900/50 border border-white/5 rounded-lg p-5 hover:border-amber-500/20 transition-all duration-300 group">
-            <div class="flex items-center gap-2 mb-2">
-              <p class="text-neutral-100 text-sm font-semibold group-hover:text-amber-400 transition-colors">${s.name}</p>
-              <span class="text-neutral-700 group-hover:text-amber-500/50 transition-colors">\u2192</span>
-            </div>
-            <p class="text-neutral-500 text-xs leading-relaxed">${s.why}</p>
-          </a>
-        `).join('');
+        servicesEl.innerHTML = rec.services.map((s: any) => {
+          const safeUrl = isSafeHttpUrl(s.url);
+          const openTag = safeUrl
+            ? `<a href="${escapeHtml(s.url)}" class="block bg-neutral-900/50 border border-white/5 rounded-lg p-5 hover:border-amber-500/20 transition-all duration-300 group">`
+            : `<div class="block bg-neutral-900/50 border border-white/5 rounded-lg p-5 group">`;
+          const closeTag = safeUrl ? '</a>' : '</div>';
+          return `
+            ${openTag}
+              <div class="flex items-center gap-2 mb-2">
+                <p class="text-neutral-100 text-sm font-semibold group-hover:text-amber-400 transition-colors">${escapeHtml(s.name)}</p>
+                <span class="text-neutral-700 group-hover:text-amber-500/50 transition-colors">\u2192</span>
+              </div>
+              <p class="text-neutral-500 text-xs leading-relaxed">${escapeHtml(s.why)}</p>
+            ${closeTag}
+          `;
+        }).join('');
 
         // CTA
         const ctaEl = document.getElementById('rec-cta') as HTMLAnchorElement;
         ctaEl.textContent = rec.cta_text;
-        ctaEl.href = rec.cta_url;
+        // cta_url comes from API. Validate scheme; allow internal paths or http(s).
+        const ctaUrl = String(rec.cta_url || '');
+        if (isSafeHttpUrl(ctaUrl) || ctaUrl.startsWith('/')) {
+          ctaEl.href = ctaUrl;
+        } else {
+          ctaEl.removeAttribute('href');
+        }
 
         recSection.classList.remove('hidden');
       }
@@ -383,12 +410,12 @@ const recentScans = await getRecentScans(5);
         for (const [type, info] of Object.entries(data.source_breakdown as Record<string, { count: number; avg_score: number }>)) {
           const pct = Math.round((info.count / totalMentions) * 100);
           const barColor = info.avg_score > 0.1 ? 'bg-emerald-500' : info.avg_score < -0.1 ? 'bg-red-500' : 'bg-neutral-500';
-          sourceBars.innerHTML += `<div class="flex items-center gap-3"><span class="text-neutral-400 text-xs w-24 shrink-0">${SOURCE_LABELS[type] || type}</span><div class="flex-1 bg-neutral-800 rounded-full h-2 relative"><div class="${barColor} h-2 rounded-full transition-all duration-700" style="width: ${pct}%"></div></div><span class="text-neutral-600 text-xs font-mono w-8 text-right">${info.count}</span></div>`;
+          sourceBars.innerHTML += `<div class="flex items-center gap-3"><span class="text-neutral-400 text-xs w-24 shrink-0">${escapeHtml(SOURCE_LABELS[type] || type)}</span><div class="flex-1 bg-neutral-800 rounded-full h-2 relative"><div class="${barColor} h-2 rounded-full transition-all duration-700" style="width: ${pct}%"></div></div><span class="text-neutral-600 text-xs font-mono w-8 text-right">${info.count}</span></div>`;
         }
 
         document.getElementById('t1-sample-cards')!.innerHTML = (data.sample_mentions || []).map((m: any) => mentionCard(m)).join('');
         document.getElementById('t1-teasers')!.innerHTML = (data.teaser_lines || []).map((t: string) =>
-          `<div class="flex items-center gap-2 text-amber-400/60 text-xs"><span class="text-amber-500">&#128274;</span> ${t}</div>`
+          `<div class="flex items-center gap-2 text-amber-400/60 text-xs"><span class="text-amber-500">&#128274;</span> ${escapeHtml(t)}</div>`
         ).join('');
 
         tier1.classList.remove('hidden');
@@ -399,18 +426,18 @@ const recentScans = await getRecentScans(5);
         document.getElementById('t2-all-mentions')!.innerHTML = (data.mentions || []).map((m: any) => mentionCard(m, true)).join('');
 
         document.getElementById('t2-positive-phrases')!.innerHTML = (data.top_positive_phrases || []).map((p: string) =>
-          `<span class="px-3 py-1.5 bg-emerald-500/5 border border-emerald-500/20 rounded-full text-xs text-emerald-400">${p}</span>`
+          `<span class="px-3 py-1.5 bg-emerald-500/5 border border-emerald-500/20 rounded-full text-xs text-emerald-400">${escapeHtml(p)}</span>`
         ).join('') || '<span class="text-neutral-600 text-xs">None detected</span>';
 
         document.getElementById('t2-negative-phrases')!.innerHTML = (data.top_negative_phrases || []).map((p: string) =>
-          `<span class="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-full text-xs text-red-400">${p}</span>`
+          `<span class="px-3 py-1.5 bg-red-500/5 border border-red-500/20 rounded-full text-xs text-red-400">${escapeHtml(p)}</span>`
         ).join('') || '<span class="text-neutral-600 text-xs">None detected</span>';
 
         const sourceDetail = document.getElementById('t2-source-detail')!;
         sourceDetail.innerHTML = '';
         for (const [type, info] of Object.entries(data.source_breakdown as Record<string, { count: number; avg_score: number }>)) {
           const sc = info.avg_score > 0.1 ? 'text-emerald-400' : info.avg_score < -0.1 ? 'text-red-400' : 'text-neutral-400';
-          sourceDetail.innerHTML += `<div class="bg-neutral-900/30 border border-white/5 rounded-lg p-4"><p class="text-neutral-300 text-sm font-medium">${SOURCE_LABELS[type] || type}</p><p class="text-neutral-600 text-xs mt-1">${info.count} mention${info.count !== 1 ? 's' : ''}</p><p class="${sc} font-mono text-sm mt-1">${info.avg_score > 0 ? '+' : ''}${info.avg_score.toFixed(2)} avg</p></div>`;
+          sourceDetail.innerHTML += `<div class="bg-neutral-900/30 border border-white/5 rounded-lg p-4"><p class="text-neutral-300 text-sm font-medium">${escapeHtml(SOURCE_LABELS[type] || type)}</p><p class="text-neutral-600 text-xs mt-1">${info.count} mention${info.count !== 1 ? 's' : ''}</p><p class="${sc} font-mono text-sm mt-1">${info.avg_score > 0 ? '+' : ''}${info.avg_score.toFixed(2)} avg</p></div>`;
         }
 
         tier2.classList.remove('hidden');
@@ -454,23 +481,29 @@ const recentScans = await getRecentScans(5);
       function mentionCard(m: any, showFull = false): string {
         const badge = badgeClasses(m.sentiment_label);
         const score = m.sentiment_score > 0 ? '+' + m.sentiment_score.toFixed(2) : m.sentiment_score.toFixed(2);
+        const rawUrl = String(m.url || '');
+        const displayUrl = rawUrl.length > 60 ? rawUrl.slice(0, 60) + '...' : rawUrl;
+        const urlLink = isSafeHttpUrl(rawUrl)
+          ? `<a href="${escapeHtml(rawUrl)}" target="_blank" rel="noopener noreferrer" class="text-neutral-600 text-xs font-mono hover:text-amber-400 transition-colors truncate block">${escapeHtml(displayUrl)}</a>`
+          : `<span class="text-neutral-600 text-xs font-mono truncate block">${escapeHtml(displayUrl)}</span>`;
+        const snippet = (m.snippet || '').slice(0, 200) + ((m.snippet || '').length > 200 ? '...' : '');
         return `
           <div class="bg-neutral-900/30 border border-white/5 rounded-lg p-5 hover:border-white/10 transition-all duration-300">
             <div class="flex items-start justify-between gap-4 mb-2">
               <div class="min-w-0">
                 <div class="flex items-center gap-2 mb-1">
-                  <span class="text-neutral-500 text-xs font-medium">${m.source_name}</span>
-                  <span class="text-neutral-700 text-xs">${m.source_type}</span>
+                  <span class="text-neutral-500 text-xs font-medium">${escapeHtml(m.source_name)}</span>
+                  <span class="text-neutral-700 text-xs">${escapeHtml(m.source_type)}</span>
                 </div>
-                <a href="${m.url}" target="_blank" class="text-neutral-600 text-xs font-mono hover:text-amber-400 transition-colors truncate block">${m.url.length > 60 ? m.url.slice(0, 60) + '...' : m.url}</a>
+                ${urlLink}
               </div>
               <div class="flex items-center gap-2 shrink-0">
                 <span class="text-neutral-500 font-mono text-xs">${score}</span>
-                <span class="px-2 py-0.5 rounded-full text-xs font-medium border ${badge}">${m.sentiment_label}</span>
+                <span class="px-2 py-0.5 rounded-full text-xs font-medium border ${badge}">${escapeHtml(m.sentiment_label)}</span>
               </div>
             </div>
-            <p class="text-neutral-400 text-xs leading-relaxed mt-2">${(m.snippet || '').slice(0, 200)}${(m.snippet || '').length > 200 ? '...' : ''}</p>
-            ${showFull && m.key_phrases ? `<div class="flex flex-wrap gap-1 mt-2">${((() => { try { return typeof m.key_phrases === 'string' ? JSON.parse(m.key_phrases) : m.key_phrases; } catch { return []; } })()).map((p: string) => `<span class="px-2 py-0.5 bg-white/5 border border-white/10 rounded text-[10px] text-neutral-500">${p}</span>`).join('')}</div>` : ''}
+            <p class="text-neutral-400 text-xs leading-relaxed mt-2">${escapeHtml(snippet)}</p>
+            ${showFull && m.key_phrases ? `<div class="flex flex-wrap gap-1 mt-2">${((() => { try { return typeof m.key_phrases === 'string' ? JSON.parse(m.key_phrases) : m.key_phrases; } catch { return []; } })()).map((p: string) => `<span class="px-2 py-0.5 bg-white/5 border border-white/10 rounded text-[10px] text-neutral-500">${escapeHtml(p)}</span>`).join('')}</div>` : ''}
           </div>`;
       }
 

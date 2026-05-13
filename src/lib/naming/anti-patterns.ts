@@ -1,13 +1,52 @@
-// Forbidden suffixes scaled by creativity dial.
-// Lower creativity = more conservative, more suffixes excluded.
-// Higher creativity = looser constraints, fewer exclusions.
+// Phase 3 forbidden-suffix list. Hard rejection at validation time.
+// Diagnosed in Phase 2: the model rotates through a small pool of generic
+// startup-ese suffixes, producing names like StratoFlow, CatalystEdge, NexusCore.
+// The structural fix is a flat hard-reject list applied at validation, not a
+// soft creativity-conditioned hint inside the prompt.
 
+export const FORBIDDEN_SUFFIXES: readonly string[] = [
+  'Lab',
+  'HQ',
+  'Studio',
+  'Works',
+  'Co',
+  'Hub',
+  'Pro',
+  'Plus',
+  'Apex',
+  'Edge',
+  'Core',
+  'Mark',
+  'Flow',
+  'Forge',
+  'Sync',
+  'Wave',
+  'Sphere',
+  'Logic',
+  'Sense',
+  'Path',
+  'Drive',
+  'Shift',
+  'ly',
+  'ify',
+] as const;
+
+const FORBIDDEN_LOWER = new Set(FORBIDDEN_SUFFIXES.map((s) => s.toLowerCase()));
+
+export function endsWithForbiddenSuffix(name: string): string | null {
+  const lower = name.toLowerCase();
+  for (const suffix of FORBIDDEN_LOWER) {
+    if (lower.endsWith(suffix)) return suffix;
+  }
+  return null;
+}
+
+// Legacy exports kept for backward compatibility with Phase 1 test runners.
+// Phase 3 does not use these; the prompt embeds the suffix list and the
+// validator rejects against FORBIDDEN_SUFFIXES.
 export const ANTI_PATTERNS = {
-  // Creativity 1 to 3: exclude tired startup-ese
   basic: ['ly', 'ify', 'er', 'io', 'app', 'hub', 'box', 'kit', 'lab', 'works'],
-  // Creativity 4 to 7: relax most, keep the worst offenders
   mid: ['ly', 'ify'],
-  // Creativity 8 to 10: minimal restrictions
   high: [] as string[],
 } as const;
 

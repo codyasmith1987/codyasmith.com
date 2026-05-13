@@ -1,10 +1,10 @@
 // POST /api/naming/preview
-// Phase 2 of the naming pipeline. Public preview endpoint.
+// Phase 3 endpoint: 200-candidate generation, two-tier scoring, top-25 with
+// tonality vectors returned for the slider UI.
 //
-// The route handler is thin: parse JSON body, derive client IP, defer to the
-// exported handlePreview function for all logic. handlePreview takes a deps
-// object so the unit-test runner can mock the engine, RDAP, and rate limiter
-// without touching the network or the real DB.
+// The route handler stays thin: parse JSON body, derive client IP, defer to
+// handlePreview. handlePreview takes a deps object so unit tests mock the
+// engine, RDAP, scorer, rate limiter, and storage.
 
 import type { APIRoute } from 'astro';
 import { rateLimit as rateLimitFn } from '../../../lib/rate-limit';
@@ -12,13 +12,19 @@ import { logger } from '../../../lib/logger';
 import {
   generate,
   createGeminiClient,
+  GeneratorValidationError,
   type GeminiClient,
 } from '../../../lib/naming/generator';
-import {
-  checkAvailability as checkAvailabilityFn,
-} from '../../../lib/naming/availability';
-import { rankPhase1 } from '../../../lib/naming/ranker';
+import { checkAvailability as checkAvailabilityFn } from '../../../lib/naming/availability';
+import { scoreAllCandidates, topK } from '../../../lib/naming/scorer';
 import { createStorage, type NamingStorage } from '../../../lib/naming/storage';
+import { DEFAULTS } from '../../../lib/naming/config';
+import {
+  DEFAULT_TONALITY,
+  TONALITY_AXES,
+  type ScoredCandidate,
+  type TonalityVector,
+} from '../../../lib/naming/types';
 import turso from '../../../lib/turso';
 
 export const prerender = false;
@@ -40,16 +46,23 @@ export interface PreviewDeps {
 
 export interface PreviewName {
   name: string;
-  available: boolean | null;
+  typology: string;
   rationale: string;
+  tonality: TonalityVector;
+  score: number;
+  domain: {
+    available: boolean | null;
+    secondaryPriceUsd: number | null;
+  };
 }
 
 export interface PreviewResult {
   status: number;
   body: {
     runId?: string;
-    names?: PreviewName[];
+    candidates?: PreviewName[];
     error?: string;
+    validationRule?: string;
   };
 }
 
@@ -60,43 +73,44 @@ function readGeminiApiKey(): string {
   return (env.GEMINI_API_KEY ?? '').trim();
 }
 
+function parseTonalityFromBody(raw: unknown): TonalityVector {
+  if (!raw || typeof raw !== 'object') return { ...DEFAULT_TONALITY };
+  const obj = raw as Record<string, unknown>;
+  const result: TonalityVector = { ...DEFAULT_TONALITY };
+  for (const axis of TONALITY_AXES) {
+    const v = obj[axis];
+    if (typeof v === 'number' && Number.isFinite(v) && v >= 1 && v <= 5) {
+      result[axis] = v;
+    }
+  }
+  return result;
+}
+
 export async function handlePreview(
   rawBody: unknown,
   ip: string,
   deps: PreviewDeps = {},
 ): Promise<PreviewResult> {
-  // Body shape
   if (!rawBody || typeof rawBody !== 'object') {
     return { status: 400, body: { error: 'Invalid request body' } };
   }
-  const body = rawBody as { seed?: unknown; creativity?: unknown };
+  const body = rawBody as { seed?: unknown; tonality?: unknown };
 
-  // Seed
   const seed = typeof body.seed === 'string' ? body.seed.trim() : '';
-  if (!seed) {
-    return { status: 400, body: { error: 'Seed term is required' } };
-  }
+  if (!seed) return { status: 400, body: { error: 'Seed term is required' } };
   if (seed.length > SEED_MAX_LENGTH) {
-    return { status: 400, body: { error: `Seed term must be ${SEED_MAX_LENGTH} characters or fewer` } };
+    return {
+      status: 400,
+      body: { error: `Seed term must be ${SEED_MAX_LENGTH} characters or fewer` },
+    };
   }
 
-  // Creativity (default 5, clamp to 1..10, integer)
-  let creativity = 5;
-  if (body.creativity !== undefined && body.creativity !== null) {
-    if (typeof body.creativity !== 'number' || !Number.isFinite(body.creativity)) {
-      return { status: 400, body: { error: 'Creativity must be a number' } };
-    }
-    const c = Math.round(body.creativity);
-    if (c < 1 || c > 10) {
-      return { status: 400, body: { error: 'Creativity must be between 1 and 10' } };
-    }
-    creativity = c;
-  }
+  const userTonality = parseTonalityFromBody(body.tonality);
 
-  // IP / rate limit
   if (!ip || ip === 'unknown') {
     return { status: 400, body: { error: 'Could not verify your request' } };
   }
+
   const rl = deps.rateLimit ?? rateLimitFn;
   const hourOk = await rl(`naming-preview:hour:${ip}`, HOURLY_LIMIT, HOUR_MS);
   if (!hourOk) {
@@ -113,7 +127,6 @@ export async function handlePreview(
     };
   }
 
-  // Storage and Gemini client
   const storage = deps.storage ?? createStorage(turso);
 
   let gemini: GeminiClient;
@@ -133,55 +146,75 @@ export async function handlePreview(
     }
   }
 
-  // Cache adapter on top of storage's gemini cache
   const cache = {
     async get(key: string) {
       const entry = await storage.getCache(key);
       if (!entry) return null;
-      return { value: entry.value as Awaited<ReturnType<typeof generate>>, expiresAt: entry.expiresAt };
+      return {
+        value: entry.value as Awaited<ReturnType<typeof generate>>,
+        expiresAt: entry.expiresAt,
+      };
     },
     async set(key: string, value: Awaited<ReturnType<typeof generate>>, ttlDays: number) {
       await storage.setCache(key, value, ttlDays);
     },
   };
 
-  // Engine pipeline
   try {
     const generateFn = deps.generate ?? generate;
-    const generation = await generateFn(
-      { seed, creativity },
-      { gemini, cache },
-    );
+    const generation = await generateFn({ seed }, { gemini, cache });
 
-    const allNames = generation.parents.flatMap((p) => p.variants.map((v) => v.name));
-
+    const allNames = generation.candidates.map((c) => c.name);
     const avFn = deps.checkAvailability ?? checkAvailabilityFn;
     const availability = await avFn(allNames, ['com']);
 
-    const ranked = rankPhase1(generation, availability, {
-      tlds: ['com'],
-      includeUnavailable: true,
-    });
-    const top5 = ranked.slice(0, 5);
+    // Score all 200, then take the top-K from the non-excluded subset.
+    const allScored: ScoredCandidate[] = await scoreAllCandidates(
+      generation,
+      availability,
+      { userTonality },
+    );
+    const topScored = topK(allScored, DEFAULTS.TOP_K_FOR_SLIDER);
 
-    const names: PreviewName[] = top5.map((r) => ({
-      name: r.name,
-      available: r.availabilityByTld.com ?? null,
-      rationale: r.variantRationale,
-    }));
-
-    // Persist the run, names, and availability
+    // Persist run, all candidates (with score and excluded reason), and availability.
     const runId = await storage.insertRun({
       seedTerm: seed,
-      creativity,
+      creativity: 5, // legacy column; tonality replaces creativity in Phase 3
       tlds: ['com'],
       source: 'preview',
+      configSnapshot: JSON.stringify({ tonality: userTonality }),
     });
-    const idMap = await storage.insertNames(runId, generation);
+
+    const idMap = await storage.insertScoredCandidates(runId, allScored);
     await storage.insertAvailability(idMap, availability);
 
-    return { status: 200, body: { runId: String(runId), names } };
+    const responseCandidates: PreviewName[] = topScored.map((s) => ({
+      name: s.candidate.name,
+      typology: s.candidate.typology,
+      rationale: s.candidate.rationale,
+      tonality: s.candidate.tonality,
+      score: Math.round(s.score * 100) / 100,
+      domain: {
+        available: s.domain.available,
+        secondaryPriceUsd: s.domain.secondaryPriceUsd,
+      },
+    }));
+
+    return {
+      status: 200,
+      body: { runId: String(runId), candidates: responseCandidates },
+    };
   } catch (err) {
+    if (err instanceof GeneratorValidationError) {
+      logger.error(`Naming preview validation failed: ${err.rule} - ${err.details}`);
+      return {
+        status: 500,
+        body: {
+          error: 'Something went wrong. Try again in a minute.',
+          validationRule: err.rule,
+        },
+      };
+    }
     logger.error('Naming preview engine error', err);
     return {
       status: 500,

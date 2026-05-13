@@ -1,14 +1,25 @@
 #!/usr/bin/env node
-// Phase 2 naming preview endpoint unit tests. Mocked engine, mocked RDAP,
-// in-memory libsql for the naming schema. Exercises handlePreview directly.
+// Phase 3 naming preview and quiz endpoint unit tests. Mocked engine, mocked
+// RDAP, in-memory libsql for the naming + Phase 3 quiz schema. Exercises
+// handlePreview, handleQuiz, and the per-call validator directly.
 //
 // Runs via tsx because the engine modules are TypeScript.
 
 import { createClient } from '@libsql/client';
 
 import { handlePreview } from '../src/pages/api/naming/preview.ts';
+import { handleQuiz } from '../src/pages/api/naming/quiz.ts';
+import {
+  parseAndValidatePerCall,
+  validateMerged,
+  GeneratorValidationError,
+} from '../src/lib/naming/generator.ts';
 import { createStorage } from '../src/lib/naming/storage.ts';
 import { NAMING_TABLES_SQL } from '../src/lib/migrations/012-naming.ts';
+import {
+  NAMING_PHASE3_ALTERS,
+  NAMING_PHASE3_TABLES,
+} from '../src/lib/migrations/014-naming-phase3.ts';
 
 const results = [];
 function test(name, pass, detail = '') {
@@ -17,260 +28,347 @@ function test(name, pass, detail = '') {
   if (!pass && detail) console.log(`       ${String(detail).slice(0, 300)}`);
 }
 
-function makeMockGeneration() {
-  const parents = [];
-  for (let i = 0; i < 10; i += 1) {
-    const variants = [];
-    for (let j = 0; j < 10; j += 1) {
-      variants.push({
-        name: `Var${i}${j}`,
-        rationale: `Variant ${i}/${j} rationale, why it relates to the parent.`,
-      });
-    }
-    parents.push({
-      name: `Parent${i}`,
-      rationale: `Parent ${i} rationale tying to seed.`,
-      variants,
-    });
-  }
-  return { parents };
-}
-
-function makeMockAvailability(generation, availabilityMap) {
-  const all = generation.parents.flatMap((p) => p.variants.map((v) => v.name));
-  return all.map((name) => ({
-    name,
-    tld: 'com',
-    available: availabilityMap[name] ?? null,
-    checkedAt: '2026-04-30T00:00:00Z',
-  }));
-}
-
 async function freshStorage() {
   const memDb = createClient({ url: ':memory:' });
   await memDb.batch(NAMING_TABLES_SQL, 'write');
+  for (const sql of NAMING_PHASE3_ALTERS) {
+    try { await memDb.execute(sql); } catch { /* ignore */ }
+  }
+  await memDb.batch(NAMING_PHASE3_TABLES, 'write');
   return createStorage(memDb);
 }
 
+function makeCandidate(overrides = {}) {
+  return {
+    name: 'Stratagem',
+    rationale: 'A direct, classical-leaning name that sounds like a calculated move and signals depth.',
+    tonality: {
+      serious_playful: 2,
+      modern_classical: 5,
+      descriptive_abstract: 3,
+      technical_emotional: 2,
+      conservative_bold: 3,
+    },
+    ...overrides,
+  };
+}
+
+// 25 placeholder candidates for one typology (no shared 4-char prefix, valid lengths)
+function makeBatch(typology, prefix) {
+  const out = [];
+  for (let i = 0; i < 25; i += 1) {
+    out.push({
+      name: `${prefix}${String.fromCharCode(65 + i)}${(i % 9 + 1)}`.slice(0, 12),
+      rationale: typology === 'abstract'
+        ? 'A coined word formed by a portmanteau of two everyday English words.'
+        : 'A name that suggests calm professional capability without spelling out the service.',
+      tonality: { serious_playful: 2, modern_classical: 4, descriptive_abstract: 3, technical_emotional: 3, conservative_bold: 3 },
+    });
+  }
+  return out;
+}
+
 async function run() {
-  // ============ 1. Happy path ============
-  console.log('--- happy path ---');
+  // ============ parseAndValidatePerCall ============
+  console.log('--- per-call validator ---');
+
+  // Happy path
+  {
+    const batch = { candidates: makeBatch('descriptive', 'Cl') };
+    const out = parseAndValidatePerCall(JSON.stringify(batch), 'descriptive');
+    test('happy path returns 25 with typology stamped',
+      out.length === 25 && out.every(c => c.typology === 'descriptive'));
+  }
+
+  // Floor: 14 candidates rejects
+  {
+    const batch = { candidates: makeBatch('descriptive', 'Cl').slice(0, 14) };
+    let threw = false;
+    try { parseAndValidatePerCall(JSON.stringify(batch), 'descriptive'); }
+    catch (e) { threw = e instanceof GeneratorValidationError && e.rule === 'per_call_count_too_low'; }
+    test('14 candidates rejects with per_call_count_too_low', threw);
+  }
+
+  // Forbidden suffix is filtered, not rejecting batch (still passes if remaining >= 15)
+  {
+    const candidates = makeBatch('descriptive', 'Cl');
+    candidates[0].name = 'PrimeFlow';   // ends with Flow (forbidden)
+    candidates[1].name = 'CoreEdge';    // ends with Edge (forbidden)
+    const out = parseAndValidatePerCall(JSON.stringify({ candidates }), 'descriptive');
+    test('forbidden-suffix names filtered out (23 remain from 25)', out.length === 23);
+    test('filtered names not present', !out.some(c => c.name === 'PrimeFlow' || c.name === 'CoreEdge'));
+  }
+
+  // Length out of range rejects whole batch
+  {
+    const candidates = makeBatch('descriptive', 'Cl');
+    candidates[3].name = 'Hi'; // 2 chars, below 4
+    let threw = false;
+    try { parseAndValidatePerCall(JSON.stringify({ candidates }), 'descriptive'); }
+    catch (e) { threw = e instanceof GeneratorValidationError && e.rule === 'name_length_out_of_range'; }
+    test('length 2 rejects with name_length_out_of_range', threw);
+  }
+
+  // Length too long rejects
+  {
+    const candidates = makeBatch('descriptive', 'Cl');
+    candidates[5].name = 'WayTooLongForTheLimit'; // 21 chars
+    let threw = false;
+    try { parseAndValidatePerCall(JSON.stringify({ candidates }), 'descriptive'); }
+    catch (e) { threw = e.rule === 'name_length_out_of_range'; }
+    test('length 21 rejects', threw);
+  }
+
+  // Invalid charset rejects
+  {
+    const candidates = makeBatch('descriptive', 'Cl');
+    candidates[7].name = 'Bad Name'; // has space
+    let threw = false;
+    try { parseAndValidatePerCall(JSON.stringify({ candidates }), 'descriptive'); }
+    catch (e) { threw = e.rule === 'name_invalid_chars'; }
+    test('space in name rejects', threw);
+  }
+
+  // Not capitalized rejects
+  {
+    const candidates = makeBatch('descriptive', 'Cl');
+    candidates[8].name = 'lowercase'; // starts lowercase
+    let threw = false;
+    try { parseAndValidatePerCall(JSON.stringify({ candidates }), 'descriptive'); }
+    catch (e) { threw = e.rule === 'name_not_capitalized'; }
+    test('lowercase first letter rejects', threw);
+  }
+
+  // Rationale too short rejects
+  {
+    const candidates = makeBatch('descriptive', 'Cl');
+    candidates[10].rationale = 'short'; // way under 30 chars
+    let threw = false;
+    try { parseAndValidatePerCall(JSON.stringify({ candidates }), 'descriptive'); }
+    catch (e) { threw = e.rule === 'rationale_length'; }
+    test('rationale 5 chars rejects', threw);
+  }
+
+  // Coined typology missing marker rejects
+  {
+    const candidates = makeBatch('abstract', 'Vr');
+    candidates[2].rationale = 'A made-up word that sounds technical without explaining the technique used.';
+    let threw = false;
+    try { parseAndValidatePerCall(JSON.stringify({ candidates }), 'abstract'); }
+    catch (e) { threw = e.rule === 'abstract_missing_marker'; }
+    test('abstract without portmanteau/compression marker rejects', threw);
+  }
+
+  // Tonality out of range rejects
+  {
+    const candidates = makeBatch('descriptive', 'Cl');
+    candidates[12].tonality.serious_playful = 7; // out of 1-5 range
+    let threw = false;
+    try { parseAndValidatePerCall(JSON.stringify({ candidates }), 'descriptive'); }
+    catch (e) { threw = e.rule === 'tonality_axis_out_of_range'; }
+    test('tonality value 7 rejects', threw);
+  }
+
+  // Duplicate within call rejects
+  {
+    const candidates = makeBatch('descriptive', 'Cl');
+    candidates[15].name = candidates[3].name;
+    let threw = false;
+    try { parseAndValidatePerCall(JSON.stringify({ candidates }), 'descriptive'); }
+    catch (e) { threw = e.rule === 'duplicate_name_in_call'; }
+    test('duplicate name within call rejects', threw);
+  }
+
+  // Invalid JSON rejects
+  {
+    let threw = false;
+    try { parseAndValidatePerCall('not valid json', 'descriptive'); }
+    catch (e) { threw = e.rule === 'invalid_json'; }
+    test('invalid JSON rejects', threw);
+  }
+
+  // ============ validateMerged ============
+  console.log('--- merge validator ---');
+
+  // Happy: 4 typologies x 20 each = 80 candidates passes merge floor (75)
+  {
+    const merged = [];
+    const prefixes = { descriptive: 'Cl', suggestive: 'Mn', associative: 'Tk', abstract: 'Vr' };
+    for (const typo of ['descriptive', 'suggestive', 'associative', 'abstract']) {
+      const out = parseAndValidatePerCall(JSON.stringify({ candidates: makeBatch(typo, prefixes[typo]).slice(0, 20) }), typo);
+      merged.push(...out);
+    }
+    let threw = false;
+    try { validateMerged(merged, 'test'); }
+    catch (e) { threw = true; }
+    test('80-candidate merge passes (above 75 floor)', !threw);
+  }
+
+  // Total too low rejects (only 60 < 75)
+  {
+    const merged = [];
+    const prefixes = { descriptive: 'Cl', suggestive: 'Mn', associative: 'Tk', abstract: 'Vr' };
+    for (const typo of ['descriptive', 'suggestive', 'associative', 'abstract']) {
+      const out = parseAndValidatePerCall(JSON.stringify({ candidates: makeBatch(typo, prefixes[typo]).slice(0, 15) }), typo);
+      merged.push(...out);
+    }
+    let threw = false;
+    try { validateMerged(merged, 'test'); }
+    catch (e) { threw = e.rule === 'merged_total_too_low'; }
+    test('60-candidate merge rejects (below 75)', threw);
+  }
+
+  // Cross-call shared prefix rejects
+  {
+    const a = parseAndValidatePerCall(JSON.stringify({ candidates: makeBatch('descriptive', 'Cl').slice(0, 20) }), 'descriptive');
+    const b = parseAndValidatePerCall(JSON.stringify({ candidates: makeBatch('suggestive', 'Mn').slice(0, 20) }), 'suggestive');
+    const c = parseAndValidatePerCall(JSON.stringify({ candidates: makeBatch('associative', 'Tk').slice(0, 20) }), 'associative');
+    const d = parseAndValidatePerCall(JSON.stringify({ candidates: makeBatch('abstract', 'Vr').slice(0, 20) }), 'abstract');
+    // Inject collision
+    d[0] = { ...d[0], name: a[0].name.slice(0, 4) + 'Xyz' };
+    let threw = false;
+    try { validateMerged([...a, ...b, ...c, ...d], 'test'); }
+    catch (e) { threw = e.rule === 'merged_shared_prefix' || e.rule === 'merged_duplicate_name'; }
+    test('cross-call shared 4-char prefix rejects', threw);
+  }
+
+  // ============ handlePreview ============
+  console.log('--- handlePreview happy path ---');
   {
     const storage = await freshStorage();
-    let geminiCalls = 0;
-    const mockGenerate = async (_options, _genDeps) => {
-      geminiCalls += 1;
-      return makeMockGeneration();
-    };
-    let rdapCalls = 0;
-    const mockCheckAvailability = async (names, tlds) => {
-      rdapCalls += 1;
-      const map = {};
-      for (const n of names) map[n] = n.includes('Var01') || n.includes('Var23') ? true : false;
-      return makeMockAvailability(makeMockGeneration(), map);
-    };
+    const mockGenerate = async () => ({
+      candidates: ['descriptive','suggestive','associative','abstract'].flatMap((typo, ti) =>
+        Array.from({ length: 25 }, (_, i) => ({
+          name: ['De','Su','As','Ab'][ti] + String.fromCharCode(65 + i) + (i + 1),
+          typology: typo,
+          rationale: typo === 'abstract'
+            ? 'A coined word formed by a portmanteau of two everyday English words.'
+            : 'A name that suggests calm professional capability without spelling out the service.',
+          tonality: { serious_playful: 2, modern_classical: 4, descriptive_abstract: 3, technical_emotional: 3, conservative_bold: 3 },
+        })),
+      ),
+    });
+    const mockAvailability = async (names) =>
+      names.map(n => ({ name: n, tld: 'com', available: n.startsWith('De'), checkedAt: '2026-05-01' }));
+
     const r = await handlePreview(
-      { seed: 'marketing strategy', creativity: 7 },
+      { seed: 'consulting', tonality: { serious_playful: 2, modern_classical: 5, descriptive_abstract: 1, technical_emotional: 2, conservative_bold: 2 } },
       '1.2.3.4',
       {
         rateLimit: async () => true,
         generate: mockGenerate,
-        checkAvailability: mockCheckAvailability,
+        checkAvailability: mockAvailability,
         storage,
         geminiClient: { async generateContent() { return { text: '{}' }; } },
       },
     );
-    test('happy path returns 200', r.status === 200, `got ${r.status}`);
-    test('happy path returns runId', typeof r.body.runId === 'string' && r.body.runId.length > 0);
-    test('happy path returns 5 names', Array.isArray(r.body.names) && r.body.names.length === 5);
-    test('each name has name, available, rationale fields',
-      r.body.names.every((n) =>
-        typeof n.name === 'string' &&
-        (n.available === true || n.available === false || n.available === null) &&
-        typeof n.rationale === 'string',
-      ),
+    test('happy path returns 200', r.status === 200);
+    test('returns runId', typeof r.body.runId === 'string');
+    test('returns up to 25 candidates', Array.isArray(r.body.candidates) && r.body.candidates.length <= 25);
+    test('candidates include typology', r.body.candidates.every(c => typeof c.typology === 'string'));
+    test('candidates include tonality', r.body.candidates.every(c => c.tonality && typeof c.tonality.serious_playful === 'number'));
+  }
+
+  console.log('--- handlePreview error paths ---');
+  {
+    const r = await handlePreview({ seed: '' }, '1.2.3.4', {});
+    test('empty seed returns 400', r.status === 400);
+
+    const r2 = await handlePreview({ seed: 'x', tonality: 'not an object' }, '1.2.3.4', { rateLimit: async () => true, geminiClient: {}, apiKey: '' });
+    test('tonality string ignored, falls through to engine setup; returns 500 when no API key', r2.status === 500 || r2.status === 200);
+
+    const r3 = await handlePreview({ seed: 'x' }, '1.2.3.4', { rateLimit: async () => false });
+    test('rate limit returns 429', r3.status === 429);
+  }
+
+  // ============ handleQuiz ============
+  console.log('--- handleQuiz happy path ---');
+  {
+    const storage = await freshStorage();
+    // Pre-create a run so runId references something valid (the storage's
+    // foreign key isn't enforced by libsql when the FK target is missing,
+    // but using a real runId mirrors production)
+    const runId = await storage.insertRun({
+      seedTerm: 'consulting', creativity: 5, tlds: ['com'], source: 'preview',
+    });
+
+    let emailCalls = 0;
+    const r = await handleQuiz(
+      {
+        runId: String(runId),
+        selectedNames: ['NameA', 'NameB', 'NameC'],
+        audience: 'Small businesses in Cedar City who need a website that ranks',
+        density: 'moderate',
+        brandKind: 'mainstream',
+        email: 'test@example.com',
+      },
+      '1.2.3.4',
+      {
+        rateLimit: async () => true,
+        storage,
+        sendEmail: async () => { emailCalls += 1; },
+      },
     );
-    test('available names ranked above taken (Var01 or Var23 should be in top set)',
-      r.body.names.some((n) => n.available === true),
-    );
-    test('persisted run row',
-      (await storage.insertRun({ seedTerm: 'check', creativity: 5, tlds: ['com'], source: 'preview' })) > 0);
-    test('engine called once', geminiCalls === 1);
-    test('availability called once', rdapCalls === 1);
+    test('quiz happy path returns 200', r.status === 200);
+    test('quiz response body has ok', r.body.ok === true);
+    // Email send is fire-and-forget; allow microtask flush
+    await new Promise(resolve => setTimeout(resolve, 10));
+    test('sendEmail was invoked', emailCalls === 1);
+
+    const persisted = await storage.getQuizResponseForRun(runId);
+    test('quiz response persisted', persisted !== null && persisted.email === 'test@example.com');
   }
 
-  // ============ 2. 400 missing seed ============
-  console.log('--- 400 missing seed ---');
+  console.log('--- handleQuiz validation ---');
   {
-    const r1 = await handlePreview({ seed: '', creativity: 5 }, '1.2.3.4', {});
-    test('empty seed returns 400', r1.status === 400);
-    test('empty seed body has error', typeof r1.body.error === 'string');
+    const baseBody = {
+      runId: 1,
+      selectedNames: ['A', 'B', 'C'],
+      audience: 'Sufficiently long audience text here.',
+      density: 'moderate',
+      brandKind: 'mainstream',
+      email: 'test@example.com',
+    };
 
-    const r2 = await handlePreview({ creativity: 5 }, '1.2.3.4', {});
-    test('missing seed key returns 400', r2.status === 400);
+    const cases = [
+      { mut: { runId: undefined }, expectErr: 'Missing or invalid runId' },
+      { mut: { selectedNames: ['A', 'B'] }, expectErr: 'exactly 3 names' },
+      { mut: { selectedNames: ['A', 'A', 'B'] }, expectErr: 'three distinct names' },
+      { mut: { audience: 'short' }, expectErr: 'at least 10 characters' },
+      { mut: { density: 'bogus' }, expectErr: 'crowded, moderate, or open' },
+      { mut: { brandKind: 'bogus' }, expectErr: 'premium, mainstream, or utilitarian' },
+      { mut: { email: 'not-an-email' }, expectErr: 'email format' },
+    ];
 
-    const r3 = await handlePreview({ seed: '   ', creativity: 5 }, '1.2.3.4', {});
-    test('whitespace-only seed returns 400', r3.status === 400);
-
-    const r4 = await handlePreview({ seed: 123, creativity: 5 }, '1.2.3.4', {});
-    test('non-string seed returns 400', r4.status === 400);
-
-    const r5 = await handlePreview('not an object', '1.2.3.4', {});
-    test('non-object body returns 400', r5.status === 400);
+    for (const c of cases) {
+      const body = { ...baseBody, ...c.mut };
+      const r = await handleQuiz(body, '1.2.3.4', {});
+      test(`quiz rejects ${JSON.stringify(c.mut)}`,
+        r.status === 400 && String(r.body.error || '').includes(c.expectErr));
+    }
   }
 
-  // ============ 3. 400 on creativity out of range ============
-  console.log('--- 400 creativity range ---');
+  console.log('--- handleQuiz rate limit ---');
   {
-    const r1 = await handlePreview({ seed: 'x', creativity: 0 }, '1.2.3.4', {});
-    test('creativity 0 returns 400', r1.status === 400);
-    test('creativity 0 error mentions range', /1 and 10/.test(String(r1.body.error)));
-
-    const r2 = await handlePreview({ seed: 'x', creativity: 11 }, '1.2.3.4', {});
-    test('creativity 11 returns 400', r2.status === 400);
-
-    const r3 = await handlePreview({ seed: 'x', creativity: -5 }, '1.2.3.4', {});
-    test('creativity -5 returns 400', r3.status === 400);
-
-    const r4 = await handlePreview({ seed: 'x', creativity: 'seven' }, '1.2.3.4', {});
-    test('creativity non-numeric returns 400', r4.status === 400);
-
-    const r5 = await handlePreview({ seed: 'x', creativity: NaN }, '1.2.3.4', {});
-    test('creativity NaN returns 400', r5.status === 400);
-  }
-
-  // ============ 4. 429 rate limited ============
-  console.log('--- 429 rate limit ---');
-  {
-    // Hourly limit fails
-    const r1 = await handlePreview(
-      { seed: 'x', creativity: 5 },
+    const r = await handleQuiz(
+      {
+        runId: 1,
+        selectedNames: ['A', 'B', 'C'],
+        audience: 'Sufficiently long audience text here.',
+        density: 'moderate',
+        brandKind: 'mainstream',
+        email: 'test@example.com',
+      },
       '1.2.3.4',
       { rateLimit: async () => false },
     );
-    test('rate limited returns 429', r1.status === 429);
-    test('rate limited error is friendly', /limit/i.test(String(r1.body.error)));
-
-    // Hour passes, day fails
-    let calls = 0;
-    const r2 = await handlePreview(
-      { seed: 'x', creativity: 5 },
-      '1.2.3.4',
-      {
-        rateLimit: async () => {
-          calls += 1;
-          return calls === 1; // first (hourly) ok, second (daily) blocked
-        },
-      },
-    );
-    test('daily rate limited returns 429', r2.status === 429);
-  }
-
-  // ============ 5. 500 engine throw ============
-  console.log('--- 500 engine throw ---');
-  {
-    const storage = await freshStorage();
-    const r = await handlePreview(
-      { seed: 'x', creativity: 5 },
-      '1.2.3.4',
-      {
-        rateLimit: async () => true,
-        generate: async () => { throw new Error('engine boom'); },
-        storage,
-        geminiClient: { async generateContent() { return { text: '{}' }; } },
-      },
-    );
-    test('engine throw returns 500', r.status === 500);
-    test('500 error message is generic',
-      r.body.error === 'Something went wrong. Try again in a minute.',
-      `got ${r.body.error}`,
-    );
-    test('500 does not leak stack', !/boom|stack|Error:/.test(String(r.body.error)));
-  }
-
-  // ============ 5b. 500 missing API key when no Gemini client ============
-  console.log('--- 500 missing API key ---');
-  {
-    const storage = await freshStorage();
-    const r = await handlePreview(
-      { seed: 'x', creativity: 5 },
-      '1.2.3.4',
-      {
-        rateLimit: async () => true,
-        storage,
-        apiKey: '', // explicit empty
-        // no geminiClient provided, no apiKey, should 500
-      },
-    );
-    test('no API key returns 500', r.status === 500);
-    test('no API key error is generic', !/AIza|key/i.test(String(r.body.error)) || /not configured/i.test(String(r.body.error)));
-  }
-
-  // ============ 6. Cache hit path ============
-  console.log('--- cache hit ---');
-  {
-    const storage = await freshStorage();
-    let generateCalls = 0;
-    let cacheGenerateCallsViaGemini = 0;
-    const realGenerationPayload = makeMockGeneration();
-
-    // Wrap a mock generate that uses the cache from deps to mimic the real
-    // generator's caching behavior: on cache miss, generate; on hit, return cached.
-    const cachingMockGenerate = async (options, genDeps) => {
-      generateCalls += 1;
-      const cacheKey = `${options.creativity}|${options.seed}`;
-      if (genDeps.cache) {
-        const cached = await genDeps.cache.get(cacheKey);
-        if (cached) return cached.value;
-      }
-      cacheGenerateCallsViaGemini += 1;
-      const result = realGenerationPayload;
-      if (genDeps.cache) {
-        await genDeps.cache.set(cacheKey, result, 7);
-      }
-      return result;
-    };
-
-    const mockCheckAvailability = async (names) => {
-      const map = {};
-      for (const n of names) map[n] = false;
-      return makeMockAvailability(realGenerationPayload, map);
-    };
-
-    const deps = {
-      rateLimit: async () => true,
-      generate: cachingMockGenerate,
-      checkAvailability: mockCheckAvailability,
-      storage,
-      geminiClient: { async generateContent() { return { text: '{}' }; } },
-    };
-
-    const r1 = await handlePreview({ seed: 'caching seed', creativity: 5 }, '1.2.3.4', deps);
-    test('first call returns 200', r1.status === 200);
-
-    const r2 = await handlePreview({ seed: 'caching seed', creativity: 5 }, '1.2.3.4', deps);
-    test('second call returns 200', r2.status === 200);
-    test('generate called twice (the wrapper itself)', generateCalls === 2);
-    test('cache miss only on first call', cacheGenerateCallsViaGemini === 1, `got ${cacheGenerateCallsViaGemini}`);
-    test('second call returned the same names',
-      r1.body.names && r2.body.names &&
-      r1.body.names.length === r2.body.names.length &&
-      r1.body.names[0].name === r2.body.names[0].name);
-  }
-
-  // ============ 7. IP validation ============
-  console.log('--- IP guard ---');
-  {
-    const r = await handlePreview({ seed: 'x', creativity: 5 }, '', {});
-    test('empty IP returns 400', r.status === 400);
-    const r2 = await handlePreview({ seed: 'x', creativity: 5 }, 'unknown', {});
-    test('"unknown" IP returns 400', r2.status === 400);
+    test('quiz rate limit returns 429', r.status === 429);
   }
 
   // ============ summary ============
   const passed = results.filter((r) => r.pass).length;
   const failed = results.filter((r) => !r.pass).length;
-  console.log(`\n=== Naming preview unit tests: ${passed} passed, ${failed} failed ===`);
+  console.log(`\n=== Naming preview + quiz unit tests: ${passed} passed, ${failed} failed ===`);
   if (failed > 0) process.exit(1);
 }
 

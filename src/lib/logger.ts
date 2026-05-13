@@ -6,20 +6,20 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 const als = new AsyncLocalStorage<string>();
 
-export function setRequestId(id: string) {
-  // Legacy setter — still used by middleware for backward compatibility
-  // Actual correlation happens via runWithRequestId
-  _fallbackId = id;
+// Deprecated. Kept exported so any older call site does not crash; logs
+// from outside an ALS scope are now unprefixed rather than picking up a
+// shared fallback that cross-correlates concurrent requests. See
+// security-audit-2026-05-12 round 4 SEC4-004.
+export function setRequestId(_id: string) {
+  // intentionally a no-op.
 }
-
-let _fallbackId = '';
 
 export function runWithRequestId<T>(id: string, fn: () => T): T {
   return als.run(id, fn);
 }
 
 function prefix(): string {
-  const id = als.getStore() || _fallbackId;
+  const id = als.getStore();
   return id ? `[${id}]` : '';
 }
 

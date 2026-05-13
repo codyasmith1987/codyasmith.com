@@ -1,6 +1,6 @@
 import { defineMiddleware } from 'astro:middleware';
 import { validateSession, SESSION_COOKIE, isClientActive, userHasPassword } from './lib/auth';
-import { setRequestId } from './lib/logger';
+import { runWithRequestId } from './lib/logger';
 import { runMigrations } from './lib/migrate';
 import { generateCsrfToken, validateCsrfToken } from './lib/csrf';
 import { logRequest, shouldLog } from './lib/request-log';
@@ -13,13 +13,12 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // Run migrations once at cold start (race-safe, idempotent)
   await runMigrations();
 
-  // Generate request ID for correlation logging
+  // Generate request ID for correlation logging and wrap the entire
+  // handler chain in an AsyncLocalStorage scope so concurrent requests
+  // never cross-correlate. See security-audit-2026-05-12 round 4
+  // SEC4-004 (logger fallbackId was shared across requests).
   const requestId = `r${Date.now().toString(36)}-${(++reqCounter).toString(36)}`;
-  setRequestId(requestId);
-
-  // Add security headers to all responses. Single source of truth is
-  // src/lib/security-headers.ts; the postbuild wrapper reads the same
-  // module via tsx import. See SEC4-003.
+  return runWithRequestId(requestId, async () => {
   const response = await handleRequest(context, next);
   response.headers.set('X-Request-Id', requestId);
   for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
@@ -51,10 +50,27 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // days and rate_limits rows older than 30 days. See SEC-020.
   maybeSweepRetention();
 
-  return response;
+    return response;
+  });
 });
 
 async function handleRequest(context: Parameters<Parameters<typeof defineMiddleware>[0]>[0], next: Parameters<Parameters<typeof defineMiddleware>[0]>[1]): Promise<Response> {
+  // Body-size cap on public API endpoints. Portal API also enforces this
+  // below, but the public /api/* routes (quiz, contact, scan, unlock,
+  // naming/preview) had no cap and could memory-pressure the process
+  // with a single multi-megabyte JSON body. See security-audit-2026-05-12
+  // round 4 SEC4-006.
+  if (context.url.pathname.startsWith('/api/')) {
+    const PUBLIC_API_MAX_BODY = 256 * 1024; // 256KB; public payloads are small
+    const len = parseInt(context.request.headers.get('content-length') || '0', 10);
+    if (len > PUBLIC_API_MAX_BODY) {
+      return new Response(JSON.stringify({ error: 'Request body too large' }), {
+        status: 413,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+  }
+
   // Only protect /portal/* routes
   if (!context.url.pathname.startsWith('/portal')) {
     return next();

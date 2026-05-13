@@ -66,173 +66,271 @@ const homepageGraph = JSON.stringify({
 
 <Base title="Cody Smith | Web Management & Marketing Consulting in Cedar City, UT">
   <script type="application/ld+json" set:html={homepageGraph} />
-  <!-- Hero -->
-  <section class="relative pt-40 pb-32 px-6 overflow-hidden">
-    <!-- Ambient glow -->
-    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
 
-    <div class="relative max-w-4xl mx-auto">
-      <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Cedar City, Utah</p>
-      <h1 class="reveal font-serif text-5xl md:text-7xl lg:text-8xl text-neutral-100 leading-[1.05] mb-10" style="--i:1">
-        <span data-personalize="hero-name" style="display:none"></span>Your business outgrew<br />
-        its website<br class="hidden md:block" />
-        a while ago.
-      </h1>
-      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl mb-14" style="--i:2" data-vibe="default">
-        You know it. You've known it for a while. The site hasn't been touched in months. The analytics might be good or bad but nobody can tell you which. The developer who built the thing stopped returning emails. And every week you think "I need to do something about the website" and then something more urgent lands on your desk and you don't.
+  {/* ============================================
+       MASTHEAD
+       Asymmetric broadsheet opening. Dateline at
+       the top, hairline rule, dramatic h1 with the
+       italic "a while ago." pulled into its own
+       optical-axis treatment. No card, no eyebrow.
+       ============================================ */}
+  <section class="broadsheet pt-ed-7 pb-ed-6">
+    <div class="reveal" style="--i:0">
+      <p class="dateline">
+        <span>No. 01</span>
+        <span class="dateline-divider"></span>
+        <span>Cedar City, Utah</span>
+        <span class="dateline-divider"></span>
+        <span>Established by hand</span>
       </p>
-      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl mb-14" style="--i:2;display:none" data-vibe="beach">
-        You've built something people are finding. Traffic is up, referrals are growing, the reputation is real. But the website doesn't reflect any of that. It looks like a business half the size you actually are. The world is starting to pay attention and your front door still looks like 2019.
-      </p>
-      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl mb-14" style="--i:2;display:none" data-vibe="mountain">
-        The business is already working but the infrastructure under it isn't ready for what comes next. The hosting is someone else's problem. The analytics are somebody's guess. The last developer left and took the passwords with them. Meanwhile you're growing on top of a foundation you can't see and can't control.
-      </p>
-      <div class="reveal flex flex-col sm:flex-row gap-4" style="--i:3">
-        <a href="/services" class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
-          See how I work
-        </a>
-        <a href="/contact" class="inline-flex items-center justify-center px-8 py-4 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-white/25 hover:text-neutral-100 transition-all duration-300">
-          Get in touch
-        </a>
+    </div>
+
+    <hr class="masthead-rule-thick reveal mt-ed-3" style="--i:0" />
+
+    <h1 class="display-h1 reveal mt-ed-5" style="--i:1">
+      <span data-personalize="hero-name" style="display:none"></span>Your business outgrew<br />
+      its website <em>a while ago.</em>
+    </h1>
+
+    <hr class="masthead-rule-hair mt-ed-5" />
+
+    <div class="editorial-grid mt-ed-5">
+      <aside class="reveal pt-ed-2" style="--i:2">
+        <p class="byline">Filed under</p>
+        <p class="byline mt-ed-1" style="color: var(--color-neutral-300); letter-spacing: 0.14em">
+          Consulting · Web · Marketing
+        </p>
+        <p class="byline mt-ed-4">Issue</p>
+        <p class="byline mt-ed-1" style="color: var(--color-neutral-300); letter-spacing: 0.14em">
+          Vol. 01
+        </p>
+      </aside>
+
+      <div>
+        <p class="lede reveal" style="--i:2" data-vibe="default">
+          You know it. You've known it for a while. The site hasn't been touched in months. The analytics might be good or bad but nobody can tell you which. The developer who built the thing stopped returning emails. And every week you think "I need to do something about the website" and then something more urgent lands on your desk and you don't.
+        </p>
+        <p class="lede reveal" style="--i:2;display:none" data-vibe="beach">
+          You've built something people are finding. Traffic is up, referrals are growing, the reputation is real. But the website doesn't reflect any of that. It looks like a business half the size you actually are. The world is starting to pay attention and your front door still looks like 2019.
+        </p>
+        <p class="lede reveal" style="--i:2;display:none" data-vibe="mountain">
+          The business is already working but the infrastructure under it isn't ready for what comes next. The hosting is someone else's problem. The analytics are somebody's guess. The last developer left and took the passwords with them. Meanwhile you're growing on top of a foundation you can't see and can't control.
+        </p>
+
+        <div class="reveal flex flex-wrap items-center gap-ed-5 mt-ed-5" style="--i:3">
+          <a href="/services" class="cta-stamp">
+            See how I work
+            <span aria-hidden="true">→</span>
+          </a>
+          <a href="/contact" class="cta-link">or just get in touch</a>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- What I do -->
-  <section class="py-32 px-6 surface-1">
-    <div class="max-w-6xl mx-auto">
-      <div class="reveal mb-16">
-        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">What I do</p>
-        <!-- Stacked H2 variants are intentional. Each is server-rendered for SEO weight on
-             segment-targeted copy (data-vibe axis: default / beach / mountain). swapAxis in
-             Base.astro toggles display and aria-hidden so one variant is visible and announced
-             per session. See swapAxis comment for the full rationale. -->
-        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100" data-vibe="default">I close the gap between the business you've built and the website representing it.</h2>
-        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100" style="display:none" aria-hidden="true" data-vibe="beach">I help businesses look as good online as they actually are.</h2>
-        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100" style="display:none" aria-hidden="true" data-vibe="mountain">I make sure the infrastructure under your business is as solid as the business itself.</h2>
-      </div>
-      <div class="grid md:grid-cols-2 gap-6 reveal-stagger">
-        <a href="/services/web-management" class="reveal glow-card p-8 block group cursor-pointer" style="--i:0">
-          <div class="flex items-center gap-3 mb-4">
-            <span class="text-amber-400 font-mono text-xs">01</span>
-            <h3 class="text-neutral-100 text-lg font-medium group-hover:text-amber-400 transition-colors duration-300">Web Management</h3>
-            <svg class="w-5 h-5 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-1 transition-all duration-300 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-          </div>
-          <p class="text-neutral-400 text-sm leading-relaxed" data-phase="default">
-            Most of my clients don't know who hosts their website. The SSL expired two months ago and a customer mentioned the warning screen before anyone on staff noticed. I take over the infrastructure, keep it alive, and send you proof every month that it's handled.
-          </p>
-          <p class="text-neutral-400 text-sm leading-relaxed" style="display:none" data-phase="spring">
-            Your website should be the one thing you never worry about. I take over the hosting, security, updates, and monitoring so you can focus on the business itself. One less thing on your plate. Every month you get proof it's handled.
-          </p>
-          <p class="text-neutral-400 text-sm leading-relaxed" style="display:none" data-phase="fall">
-            Dedicated cloud hosting, daily backups, SSL management, uptime monitoring, core and plugin updates. Monthly plain-language reports showing exactly what happened. I take over the infrastructure so you stop finding out something broke from a customer.
-          </p>
-        </a>
-        <a href="/services/marketing-strategy" class="reveal glow-card p-8 block group cursor-pointer" style="--i:1">
-          <div class="flex items-center gap-3 mb-4">
-            <span class="text-amber-400 font-mono text-xs">02</span>
-            <h3 class="text-neutral-100 text-lg font-medium group-hover:text-amber-400 transition-colors duration-300">Marketing Strategy</h3>
-            <svg class="w-5 h-5 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-1 transition-all duration-300 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-          </div>
-          <p class="text-neutral-400 text-sm leading-relaxed" data-phase="default">
-            You've got twelve opinions about what your marketing should be doing and no way to tell which ones are right. The analytics were set up wrong three years ago and your competitor just showed up on page one. I pull the data, name the priorities, and tell you what to do first. Strategy only. I steer, you execute.
-          </p>
-          <p class="text-neutral-400 text-sm leading-relaxed" style="display:none" data-phase="spring">
-            Your marketing needs direction, not more tactics. I look at where you are, where you should be, and build the roadmap to get there. You'll know what to do first and why it matters. Strategy only. I steer, you execute.
-          </p>
-          <p class="text-neutral-400 text-sm leading-relaxed" style="display:none" data-phase="fall">
-            SEO audit, competitive analysis, keyword research, content briefs, monthly strategy calls, quarterly reporting. I sort through the noise, name the priorities with data behind them, and tell you what to do first. Strategy only. I steer, you execute.
-          </p>
-        </a>
-        <a href="/services/implementation" class="reveal glow-card p-8 block group cursor-pointer" style="--i:2">
-          <div class="flex items-center gap-3 mb-4">
-            <span class="text-amber-400 font-mono text-xs">03</span>
-            <h3 class="text-neutral-100 text-lg font-medium group-hover:text-amber-400 transition-colors duration-300">Implementation</h3>
-            <svg class="w-5 h-5 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-1 transition-all duration-300 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-          </div>
-          <p class="text-neutral-400 text-sm leading-relaxed">
-            Someone fills out your contact form and the submission goes into a folder nobody checks. Your CRM doesn't know it happened. The lead calls a competitor the next day. I build the connections between your website and the tools your business actually runs on.
-          </p>
-        </a>
-        <a href="/services/training" class="reveal glow-card p-8 block group cursor-pointer" style="--i:3">
-          <div class="flex items-center gap-3 mb-4">
-            <span class="text-amber-400 font-mono text-xs">04</span>
-            <h3 class="text-neutral-100 text-lg font-medium group-hover:text-amber-400 transition-colors duration-300">Training</h3>
-            <svg class="w-5 h-5 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-1 transition-all duration-300 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
-          </div>
-          <p class="text-neutral-400 text-sm leading-relaxed">
-            Your team sat through a webinar last year. Two hours of someone sharing their screen and saying "any questions?" three times. A week later nobody remembered how to add a blog post. I build guided programs where people learn by doing real work on their own systems, not by watching someone else do it.
-          </p>
-        </a>
+  {/* ============================================
+       SECTION 01: THE WORK
+       Typographic service list with a sticky
+       section marker on the left. Each row is a
+       hairline-separated typographic entry with
+       a numeric column, a display-serif heading,
+       a body paragraph, and an italic arrow. No
+       cards.
+       ============================================ */}
+  <section class="broadsheet pt-ed-6 pb-ed-6">
+    <div class="editorial-grid">
+      <aside class="section-marker reveal" style="--i:0">
+        <span class="section-marker__num">01</span>
+        <span class="section-marker__label">The work</span>
+      </aside>
+
+      <div>
+        <h2 class="display-h2 reveal" style="--i:1" data-vibe="default">
+          I close the gap between the business you've built and the website representing it.
+        </h2>
+        <h2 class="display-h2 reveal" style="--i:1;display:none" aria-hidden="true" data-vibe="beach">
+          I help businesses look as good online as they actually are.
+        </h2>
+        <h2 class="display-h2 reveal" style="--i:1;display:none" aria-hidden="true" data-vibe="mountain">
+          I make sure the infrastructure under your business is as solid as the business itself.
+        </h2>
+
+        <ol class="service-ol reveal-stagger mt-ed-5">
+          <li class="reveal" style="--i:0">
+            <a href="/services/web-management">
+              <span class="service-ol__num">01</span>
+              <span class="service-ol__name">Web Management</span>
+              <span class="service-ol__arrow" aria-hidden="true">⤳</span>
+              <p class="service-ol__body" data-phase="default">
+                Most of my clients don't know who hosts their website. The SSL expired two months ago and a customer mentioned the warning screen before anyone on staff noticed. I take over the infrastructure, keep it alive, and send you proof every month that it's handled.
+              </p>
+              <p class="service-ol__body" style="display:none" data-phase="spring">
+                Your website should be the one thing you never worry about. I take over the hosting, security, updates, and monitoring so you can focus on the business itself. One less thing on your plate. Every month you get proof it's handled.
+              </p>
+              <p class="service-ol__body" style="display:none" data-phase="fall">
+                Dedicated cloud hosting, daily backups, SSL management, uptime monitoring, core and plugin updates. Monthly plain-language reports showing exactly what happened. I take over the infrastructure so you stop finding out something broke from a customer.
+              </p>
+            </a>
+          </li>
+
+          <li class="reveal" style="--i:1">
+            <a href="/services/marketing-strategy">
+              <span class="service-ol__num">02</span>
+              <span class="service-ol__name">Marketing Strategy</span>
+              <span class="service-ol__arrow" aria-hidden="true">⤳</span>
+              <p class="service-ol__body" data-phase="default">
+                You've got twelve opinions about what your marketing should be doing and no way to tell which ones are right. The analytics were set up wrong three years ago and your competitor just showed up on page one. I pull the data, name the priorities, and tell you what to do first. Strategy only. I steer, you execute.
+              </p>
+              <p class="service-ol__body" style="display:none" data-phase="spring">
+                Your marketing needs direction, not more tactics. I look at where you are, where you should be, and build the roadmap to get there. You'll know what to do first and why it matters. Strategy only. I steer, you execute.
+              </p>
+              <p class="service-ol__body" style="display:none" data-phase="fall">
+                SEO audit, competitive analysis, keyword research, content briefs, monthly strategy calls, quarterly reporting. I sort through the noise, name the priorities with data behind them, and tell you what to do first. Strategy only. I steer, you execute.
+              </p>
+            </a>
+          </li>
+
+          <li class="reveal" style="--i:2">
+            <a href="/services/implementation">
+              <span class="service-ol__num">03</span>
+              <span class="service-ol__name">Implementation</span>
+              <span class="service-ol__arrow" aria-hidden="true">⤳</span>
+              <p class="service-ol__body">
+                Someone fills out your contact form and the submission goes into a folder nobody checks. Your CRM doesn't know it happened. The lead calls a competitor the next day. I build the connections between your website and the tools your business actually runs on.
+              </p>
+            </a>
+          </li>
+
+          <li class="reveal" style="--i:3">
+            <a href="/services/training">
+              <span class="service-ol__num">04</span>
+              <span class="service-ol__name">Training</span>
+              <span class="service-ol__arrow" aria-hidden="true">⤳</span>
+              <p class="service-ol__body">
+                Your team sat through a webinar last year. Two hours of someone sharing their screen and saying "any questions?" three times. A week later nobody remembered how to add a blog post. I build guided programs where people learn by doing real work on their own systems, not by watching someone else do it.
+              </p>
+            </a>
+          </li>
+        </ol>
       </div>
     </div>
   </section>
 
-  <!-- Who I am -->
-  <section class="relative py-32 px-6 dot-grid">
-    <div class="max-w-3xl mx-auto">
-      <div class="reveal">
-        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">The short version</p>
-        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100 mb-12">How I got here.</h2>
-      </div>
-      <div class="space-y-8 text-neutral-400 text-lg leading-relaxed">
-        <p class="reveal">
+  {/* ============================================
+       SECTION 02: THE COLUMNIST
+       Editorial profile. Drop cap on the opening
+       paragraph, two body paragraphs in the reading
+       face, then the pull-quote moment.
+       ============================================ */}
+  <section class="broadsheet pt-ed-6 pb-ed-6">
+    <div class="editorial-grid">
+      <aside class="section-marker reveal" style="--i:0">
+        <span class="section-marker__num">02</span>
+        <span class="section-marker__label">How I got here</span>
+      </aside>
+
+      <div>
+        <p class="body-news-large dropcap reveal" style="--i:1">
           I got hired as a staff writer at a small newspaper in southern Utah. Within a year I was running their entire digital presence. The same thing happened at every job after that. Copywriting gig turned into a training program for 50,000 teachers. Creative director role turned into analytics and data strategy. "Marketing Representative" at a fiber co-op turned into running strategy, web development, and brand architecture for 30,500 members across two states.
         </p>
-        <p class="reveal">
+
+        <p class="body-news-large mt-ed-4 reveal" style="--i:2">
           The titles never described the work. The work was always the same: walk into a room, find the three things nobody's handling, handle them.
         </p>
-        <p class="reveal text-neutral-100 font-quote text-2xl md:text-3xl italic">
-          Now I do it on purpose.
-        </p>
-      </div>
-      <a href="/about" class="reveal inline-flex items-center gap-3 text-amber-400 text-sm mt-12 hover:text-amber-300 transition-colors duration-300 group">
-        The longer version
-        <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-        </svg>
-      </a>
-    </div>
-  </section>
 
-  <!-- Free tool -->
-  <section class="py-24 px-6 surface-1">
-    <div class="max-w-3xl mx-auto">
-      <div class="reveal glow-card p-8 md:p-10 flex flex-col md:flex-row md:items-center gap-6 md:gap-10">
-        <div class="flex-1">
-          <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-3">Free tool</p>
-          <h3 class="text-neutral-100 text-xl font-medium mb-2">What does the internet think of your business?</h3>
-          <p class="text-neutral-400 text-sm leading-relaxed" data-processing="default">
-            Type in your business name. I'll pull every mention I can find, read the sentiment, and show you what people are actually saying. Free. No login. No pitch afterward.
-          </p>
-          <p class="text-neutral-400 text-sm leading-relaxed" style="display:none" data-processing="stars">
-            Enter your brand name and get a scored sentiment report. Reviews, forums, news mentions, social. All pulled from across the web, analyzed, and scored 0 to 100. Free. No login. No pitch afterward.
-          </p>
-          <p class="text-neutral-400 text-sm leading-relaxed" style="display:none" data-processing="clouds">
-            Ever wonder what people say about your business when you're not in the room? Type in your name and find out. I'll read every mention I can find and tell you the story the internet is telling about you. Free. No strings.
-          </p>
+        <div class="reveal mt-ed-6" style="--i:3">
+          <p class="pull-quote">Now I do it on purpose.</p>
         </div>
-        <a href="/listener" class="inline-flex items-center justify-center px-6 py-3 border border-amber-500/30 text-amber-400 font-medium text-sm rounded-lg hover:bg-amber-500/10 hover:border-amber-500/50 transition-all duration-300 whitespace-nowrap shrink-0">
-          Try the scanner
+
+        <a href="/about" class="cta-link reveal inline-flex items-baseline gap-ed-2 mt-ed-5" style="--i:4">
+          Read the longer version
+          <span aria-hidden="true">→</span>
         </a>
       </div>
     </div>
   </section>
 
-  <!-- CTA -->
-  <section class="relative py-32 px-6 overflow-hidden">
-    <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
-    <div class="relative max-w-3xl mx-auto text-center">
-      <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Get started</p>
-      <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6" data-personalize="first-visit">Sound familiar<span data-personalize="name-comma" style="display:none"></span>?</h2>
-      <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6" data-personalize="returning" style="display:none">Still thinking about it<span data-personalize="name-comma" style="display:none"></span>?</h2>
-      <p class="reveal text-neutral-400 text-lg mb-10" data-personalize="first-visit" data-frame="default">If you read three of those and thought "that's us," we should probably talk. No pitch deck. No discovery call theater. Just tell me what's going on.</p>
-      <p class="reveal text-neutral-400 text-lg mb-10" data-personalize="first-visit" style="display:none" data-frame="sun">You've got the business. Let's get you the website it deserves. No pitch deck. No discovery call theater. Just a conversation about where you're headed.</p>
-      <p class="reveal text-neutral-400 text-lg mb-10" data-personalize="first-visit" style="display:none" data-frame="moon">If you read three of those and thought "that's us," we should probably talk. No pitch deck. No discovery call theater. Just tell me what's broken and I'll tell you what I'd do about it.</p>
-      <p class="reveal text-neutral-400 text-lg mb-10" data-personalize="returning" style="display:none">No pressure. But the website isn't fixing itself. Whenever you're ready, I'm here.</p>
-      <a href="/contact" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
-        Start a conversation
-      </a>
+  {/* ============================================
+       SECTION 03: TEAR-OUT COUPON
+       The free tool, framed like a torn-out page
+       coupon. Dashed border, rotated 0.6deg, FREE
+       COUPON tab on the upper edge. Hover
+       straightens the block and warms the border.
+       ============================================ */}
+  <section class="broadsheet pt-ed-6 pb-ed-6">
+    <div class="max-w-3xl mx-auto reveal" style="--i:0">
+      <div class="coupon">
+        <p class="byline">Compliments of the house</p>
+        <h3 class="display-h2 mt-ed-3" style="font-size: clamp(1.5rem, 3.2vw, 2.625rem);">
+          What does the internet think of your business?
+        </h3>
+
+        <p class="body-news mt-ed-3" data-processing="default">
+          Type in your business name. I'll pull every mention I can find, read the sentiment, and show you what people are actually saying. Free. No login. No pitch afterward.
+        </p>
+        <p class="body-news mt-ed-3" style="display:none" data-processing="stars">
+          Enter your brand name and get a scored sentiment report. Reviews, forums, news mentions, social. All pulled from across the web, analyzed, and scored 0 to 100. Free. No login. No pitch afterward.
+        </p>
+        <p class="body-news mt-ed-3" style="display:none" data-processing="clouds">
+          Ever wonder what people say about your business when you're not in the room? Type in your name and find out. I'll read every mention I can find and tell you the story the internet is telling about you. Free. No strings.
+        </p>
+
+        <div class="mt-ed-4 flex items-baseline justify-between">
+          <a href="/listener" class="cta-link">Run the scanner →</a>
+          <span class="folio-num" style="color: var(--color-amber-400)">Redeemable anytime</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {/* ============================================
+       SECTION 04: CLOSING STAMP
+       The closing CTA. Large display headline,
+       single-line body, postmark-style stamp button.
+       ============================================ */}
+  <section class="broadsheet pt-ed-6 pb-ed-8">
+    <hr class="masthead-rule" />
+
+    <div class="mt-ed-6 reveal" style="--i:0">
+      <p class="byline">Closing notice</p>
+    </div>
+
+    <h2 class="display-h1 reveal mt-ed-3" style="--i:1; font-size: clamp(2.25rem, 6.5vw, 5.5rem);" data-personalize="first-visit">
+      Sound familiar<span data-personalize="name-comma" style="display:none"></span>?
+    </h2>
+    <h2 class="display-h1 reveal mt-ed-3" style="--i:1; font-size: clamp(2.25rem, 6.5vw, 5.5rem); display:none;" data-personalize="returning">
+      Still thinking about it<span data-personalize="name-comma" style="display:none"></span>?
+    </h2>
+
+    <div class="editorial-grid mt-ed-5">
+      <aside class="reveal" style="--i:2">
+        <p class="byline">Postage</p>
+        <p class="byline mt-ed-1" style="color: var(--color-neutral-300); letter-spacing: 0.14em">
+          Reply within<br />one business day
+        </p>
+      </aside>
+
+      <div>
+        <p class="lede reveal" style="--i:2" data-personalize="first-visit" data-frame="default">
+          If you read three of those and thought "that's us," we should probably talk. No pitch deck. No discovery call theater. Just tell me what's going on.
+        </p>
+        <p class="lede reveal" style="--i:2;display:none" data-personalize="first-visit" data-frame="sun">
+          You've got the business. Let's get you the website it deserves. No pitch deck. No discovery call theater. Just a conversation about where you're headed.
+        </p>
+        <p class="lede reveal" style="--i:2;display:none" data-personalize="first-visit" data-frame="moon">
+          If you read three of those and thought "that's us," we should probably talk. No pitch deck. No discovery call theater. Just tell me what's broken and I'll tell you what I'd do about it.
+        </p>
+        <p class="lede reveal" style="--i:2;display:none" data-personalize="returning">
+          No pressure. But the website isn't fixing itself. Whenever you're ready, I'm here.
+        </p>
+
+        <div class="reveal mt-ed-5" style="--i:3">
+          <a href="/contact" class="cta-stamp">
+            Start a conversation
+            <span aria-hidden="true">→</span>
+          </a>
+        </div>
+      </div>
     </div>
   </section>
 </Base>

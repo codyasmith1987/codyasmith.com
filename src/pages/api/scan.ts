@@ -7,6 +7,7 @@ import { scrapeAll } from '../../lib/scraper';
 import { generateReport } from '../../lib/sentiment';
 import { getRecommendation } from '../../lib/recommend';
 import { createScan, updateScan, insertMention, checkRateLimit, incrementRateLimit, getMonthlySearchCount } from '../../lib/db';
+import { rateLimit } from '../../lib/rate-limit';
 
 export const POST: APIRoute = async ({ request, clientAddress }) => {
   const json = (s: any, status = 200) => new Response(JSON.stringify(s), {
@@ -30,10 +31,20 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       return json({ error: 'Please wait a moment before scanning' }, 429);
     }
 
-    // Rate limiting: 3 scans per day per IP
+    // Rate limiting: 3 scans per day per IP (long-window cap) plus a
+    // tighter hourly cap to slow rapid bursts. The portal_rate_limits
+    // bucket is keyed by IP and runs fail-closed for the hourly window
+    // since a Turso outage should not open the door to Serper/Gemini
+    // cost amplification. See SEC-028.
     const ip = clientAddress || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
     if (ip === 'unknown') {
       return json({ error: 'Could not verify your request' }, 400);
+    }
+    if (!await rateLimit(`scan:hour:${ip}`, 2, 60 * 60 * 1000, true)) {
+      return json({
+        error: 'Slow down. You can run two scans per hour.',
+        rate_limited: true,
+      }, 429);
     }
     const rateCheck = await checkRateLimit(ip);
     if (!rateCheck.allowed) {

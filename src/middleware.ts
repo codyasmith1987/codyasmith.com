@@ -4,6 +4,7 @@ import { setRequestId } from './lib/logger';
 import { runMigrations } from './lib/migrate';
 import { generateCsrfToken, validateCsrfToken } from './lib/csrf';
 import { logRequest, shouldLog } from './lib/request-log';
+import { maybeSweepRetention } from './lib/retention';
 
 let reqCounter = 0;
 
@@ -66,6 +67,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
       statusCode: response.status,
     });
   }
+
+  // Retention sweep on a throttled interval (at most once per hour
+  // across the whole process). Deletes request_log rows older than 90
+  // days and rate_limits rows older than 30 days. See SEC-020.
+  maybeSweepRetention();
 
   return response;
 });

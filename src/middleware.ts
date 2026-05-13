@@ -1,5 +1,5 @@
 import { defineMiddleware } from 'astro:middleware';
-import { validateSession, SESSION_COOKIE, isClientActive } from './lib/auth';
+import { validateSession, SESSION_COOKIE, isClientActive, userHasPassword } from './lib/auth';
 import { setRequestId } from './lib/logger';
 import { runMigrations } from './lib/migrate';
 import { generateCsrfToken, validateCsrfToken } from './lib/csrf';
@@ -139,6 +139,22 @@ async function handleRequest(context: Parameters<Parameters<typeof defineMiddlew
   // Block non-admin users from admin routes — redirect to dashboard instead of blank 403
   if (context.url.pathname.startsWith('/portal/admin') && result.user?.role !== 'admin') {
     return context.redirect('/portal/dashboard');
+  }
+
+  // Magic-link onboarding requires the user to set a password before
+  // they can use the rest of the portal. Otherwise a magic link is a
+  // 30-day session equivalent of a password and the password flow on
+  // /portal/login is moot. See security-audit-2026-05-12 round 3
+  // SEC3-008.
+  const isSetPasswordRoute = context.url.pathname === '/portal/set-password';
+  const isSelfSetPasswordApi = context.url.pathname === '/portal/api/auth/set-own-password';
+  if (
+    !isSetPasswordRoute &&
+    !isSelfSetPasswordApi &&
+    !context.url.pathname.startsWith('/portal/api/notifications') &&
+    !await userHasPassword(result.user!.id)
+  ) {
+    return context.redirect('/portal/set-password');
   }
 
   return next();

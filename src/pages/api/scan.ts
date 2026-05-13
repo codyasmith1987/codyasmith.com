@@ -149,7 +149,10 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
             teaser_lines: report.teaser_lines, recommendation,
           });
         } catch (err: any) {
-          emit('error', 'error', err.message || 'Scan failed');
+          // Log full detail server-side; show only a generic message to the
+          // client. err.message may carry Serper/Gemini internals or URLs.
+          logger.error('Scan stream error', err);
+          emit('error', 'error', 'Scan failed. Please try again in a few minutes.');
         }
         controller.close();
       }
@@ -166,6 +169,6 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
 
   } catch (err: any) {
     logger.error('Scan error', err);
-    return json({ error: err.message || 'Scan failed' }, 500);
+    return json({ error: 'Scan failed. Please try again in a few minutes.' }, 500);
   }
 };

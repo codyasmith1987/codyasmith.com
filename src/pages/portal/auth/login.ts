@@ -11,7 +11,9 @@ const json = (data: any, status = 200) =>
 
 export const POST: APIRoute = async ({ request, cookies, clientAddress }) => {
   const ip = clientAddress || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-  if (!await rateLimit(`login:${ip}`, 10, 15 * 60 * 1000)) {
+  // Per-IP throttle, fail-closed so a Turso outage cannot bypass brute-force
+  // protection. See security-audit-2026-05-12 SEC-016.
+  if (!await rateLimit(`login:ip:${ip}`, 10, 15 * 60 * 1000, true)) {
     return json({ error: 'Too many login attempts. Please wait a few minutes.' }, 429);
   }
 
@@ -20,6 +22,13 @@ export const POST: APIRoute = async ({ request, cookies, clientAddress }) => {
 
     if (!email || !password) {
       return json({ error: 'Email and password are required' }, 400);
+    }
+
+    // Per-account throttle: defends against credential stuffing from
+    // rotating-IP botnets. See SEC-011. Fail-closed.
+    const emailKey = typeof email === 'string' ? email.toLowerCase().trim() : 'unknown';
+    if (!await rateLimit(`login:email:${emailKey}`, 10, 15 * 60 * 1000, true)) {
+      return json({ error: 'Too many login attempts. Please wait a few minutes.' }, 429);
     }
 
     const userId = await verifyPassword(email, password);

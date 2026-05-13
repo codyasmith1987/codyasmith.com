@@ -71,8 +71,9 @@ export const POST: APIRoute = async ({ request }) => {
     });
 
   } catch (err: any) {
+    // Internal details stay in server logs; client gets a generic message.
     console.error('Unlock error:', err);
-    return json({ error: err.message || 'Failed to unlock report' }, 500);
+    return json({ error: 'Failed to unlock report. Please try again.' }, 500);
   }
 };
 

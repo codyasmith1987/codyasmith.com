@@ -7,7 +7,11 @@ export const prerender = false;
 const clients = await getAllClients();
 
 const clientFilter = Astro.url.searchParams.get('client') || '';
-const page = Math.max(1, parseInt(Astro.url.searchParams.get('page') || '1'));
+// Clamp page to [1, 10000] so a hostile `?page=999999999` cannot drive
+// the offset large enough to slow the DB scan or trigger overflow.
+// See security-audit-2026-05-12 round 5 SEC5-005 / round 6 SEC6-002.
+const rawPage = parseInt(Astro.url.searchParams.get('page') || '1', 10);
+const page = Number.isFinite(rawPage) ? Math.min(Math.max(rawPage, 1), 10000) : 1;
 const limit = 50;
 const offset = (page - 1) * limit;
 
@@ -110,7 +114,7 @@ function actionColor(action: string): string {
       <div class="flex items-center justify-center gap-4 mt-10">
         {page > 1 && (
           <a
-            href={`?page=${page - 1}${clientFilter ? `&client=${clientFilter}` : ''}`}
+            href={`?page=${page - 1}${clientFilter ? `&client=${encodeURIComponent(clientFilter)}` : ''}`}
             class="px-4 py-2 text-xs text-neutral-400 border border-white/5 rounded-lg hover:border-amber-500/20 hover:text-amber-400 transition-all duration-300"
           >
             Previous
@@ -121,7 +125,7 @@ function actionColor(action: string): string {
         </span>
         {page < totalPages && (
           <a
-            href={`?page=${page + 1}${clientFilter ? `&client=${clientFilter}` : ''}`}
+            href={`?page=${page + 1}${clientFilter ? `&client=${encodeURIComponent(clientFilter)}` : ''}`}
             class="px-4 py-2 text-xs text-neutral-400 border border-white/5 rounded-lg hover:border-amber-500/20 hover:text-amber-400 transition-all duration-300"
           >
             Next

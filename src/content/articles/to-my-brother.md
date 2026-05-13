@@ -3,7 +3,7 @@ title: "To My Brother"
 description: "Four years after Kevin's death, a letter from a younger brother who became older."
 publishDate: 2016-08-19T12:00:00Z
 draft: false
-tags: []
+tags: [essay, personal]
 cover:
   src: /images/blog/to-my-brother/kevin.jpg
   alt: Cody and his older brother Kevin in a car

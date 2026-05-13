@@ -29,6 +29,6 @@ export const POST: APIRoute = async ({ locals, request }) => {
     return json({ client_id, active });
   } catch (err: any) {
     logger.error('Toggle client error', err);
-    return json({ error: err.message || 'Failed to toggle client' }, 500);
+    return json({ error: 'Failed to toggle client' }, 500);
   }
 };

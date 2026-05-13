@@ -5,8 +5,9 @@ import { nanoid } from 'nanoid';
 import turso from './turso';
 
 const SESSION_COOKIE = 'portal_session';
-const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days rolling
 const SESSION_REFRESH_MS = 15 * 24 * 60 * 60 * 1000;  // refresh if within 15 days of expiry
+const SESSION_ABSOLUTE_MAX_MS = 90 * 24 * 60 * 60 * 1000; // hard cap from created_at
 const MAGIC_LINK_DURATION_MS = 15 * 60 * 1000;         // 15 minutes
 
 export { SESSION_COOKIE };
@@ -54,11 +55,49 @@ function legacySha256Hash(password: string): string {
   return encodeHexLowerCase(sha256(encoded));
 }
 
+// Password length policy: minimum 12 chars (2026 NIST SP 800-63B-4 floor for
+// memorable passphrases with no rotation), maximum 72 bytes (bcrypt's
+// silent-truncation boundary). Callers should also reject the breached-
+// password set; we lean on a 12-char floor instead of complexity rules per
+// current NIST guidance. See security-audit-2026-05-12 SEC-010.
+export const PASSWORD_MIN_LENGTH = 12;
+export const PASSWORD_MAX_LENGTH = 72;
+
+export class PasswordPolicyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PasswordPolicyError';
+  }
+}
+
+function assertPasswordPolicy(password: string): void {
+  if (typeof password !== 'string') {
+    throw new PasswordPolicyError('Password must be a string');
+  }
+  if (password.length < PASSWORD_MIN_LENGTH) {
+    throw new PasswordPolicyError(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`);
+  }
+  // bcrypt silently truncates at 72 bytes; reject longer inputs so the user
+  // gets a clear error instead of a quietly-different password being stored.
+  const byteLength = new TextEncoder().encode(password).length;
+  if (byteLength > PASSWORD_MAX_LENGTH) {
+    throw new PasswordPolicyError(`Password must be at most ${PASSWORD_MAX_LENGTH} bytes`);
+  }
+}
+
 export async function setPassword(userId: string, password: string): Promise<void> {
+  assertPasswordPolicy(password);
   const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
   await turso.execute({
     sql: 'UPDATE users SET password_hash = ? WHERE id = ?',
     args: [hash, userId],
+  });
+  // Revoke all existing sessions for this user. Forces a fresh login with
+  // the new password and blocks an attacker who already stole a session
+  // from continuing to use it. See SEC-014.
+  await turso.execute({
+    sql: 'DELETE FROM sessions WHERE user_id = ?',
+    args: [userId],
   });
 }
 
@@ -73,9 +112,18 @@ export async function verifyPassword(email: string, password: string): Promise<s
   if (!storedHash) return null;
 
   if (isLegacySha256(storedHash)) {
-    // Verify against legacy SHA256, then silently upgrade to bcrypt
+    // Verify against legacy SHA256 in constant time, then silently
+    // upgrade to bcrypt. Plain `===` on hash strings leaks per-character
+    // timing on the legacy bucket, which is enough to enumerate users
+    // who still have unmigrated hashes. See security-audit-2026-05-12
+    // round 3 SEC3-004.
     const inputHash = legacySha256Hash(password);
-    if (storedHash !== inputHash) return null;
+    if (inputHash.length !== storedHash.length) return null;
+    let mismatch = 0;
+    for (let i = 0; i < inputHash.length; i++) {
+      mismatch |= inputHash.charCodeAt(i) ^ storedHash.charCodeAt(i);
+    }
+    if (mismatch !== 0) return null;
 
     // Rehash with bcrypt for future logins
     const newHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
@@ -94,10 +142,13 @@ export async function verifyPassword(email: string, password: string): Promise<s
 
 // --- Sessions ---
 
-export async function createSession(userId: string): Promise<string> {
+export async function createSession(userId: string, durationMs: number = SESSION_DURATION_MS): Promise<string> {
+  // durationMs lets callers issue short sessions for pre-password
+  // magic-link arrivals; default is the rolling 30-day TTL used by the
+  // password flow. See security-audit-2026-05-12 round 6 SEC6-001.
   const token = nanoid(40);
   const sessionId = hashToken(token);
-  const expiresAt = new Date(Date.now() + SESSION_DURATION_MS).toISOString();
+  const expiresAt = new Date(Date.now() + durationMs).toISOString();
 
   await turso.execute({
     sql: 'INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)',
@@ -120,7 +171,7 @@ export async function validateSession(token: string): Promise<{
   const sessionId = hashToken(token);
 
   const result = await turso.execute({
-    sql: `SELECT s.id as session_id, s.expires_at, s.user_id,
+    sql: `SELECT s.id as session_id, s.expires_at, s.user_id, s.created_at,
                  u.email, u.name, u.role, u.client_id, u.permissions
           FROM sessions s
           JOIN users u ON u.id = s.user_id
@@ -132,14 +183,32 @@ export async function validateSession(token: string): Promise<{
 
   const row = result.rows[0];
   const expiresAt = new Date(row[1] as string);
+  const createdAt = new Date((row[3] as string) + (typeof row[3] === 'string' && (row[3] as string).endsWith('Z') ? '' : 'Z'));
 
   if (expiresAt <= new Date()) {
     await turso.execute({ sql: 'DELETE FROM sessions WHERE id = ?', args: [sessionId] });
     return null;
   }
 
-  // Extend session if within refresh window
-  if (expiresAt.getTime() - Date.now() < SESSION_REFRESH_MS) {
+  // Absolute lifetime cap: even with rolling refresh, a session cannot
+  // outlive SESSION_ABSOLUTE_MAX_MS from its created_at. Bounds the blast
+  // radius of a stolen token regardless of how active the attacker is.
+  // See security-audit-2026-05-12 SEC-015.
+  if (!isNaN(createdAt.getTime()) && Date.now() - createdAt.getTime() > SESSION_ABSOLUTE_MAX_MS) {
+    await turso.execute({ sql: 'DELETE FROM sessions WHERE id = ?', args: [sessionId] });
+    return null;
+  }
+
+  // Extend session if within refresh window. Pre-password (magic-link)
+  // sessions have a 1-hour total lifespan and are bounced to
+  // /portal/set-password by middleware; they must NOT auto-refresh to
+  // 30 days on first request. Detect them by their original duration:
+  // any session whose initial expires_at - created_at is less than the
+  // full SESSION_DURATION_MS was created with a short TTL on purpose.
+  // See security-audit-2026-05-12 round 7 SEC7-001.
+  const originalDurationMs = expiresAt.getTime() - createdAt.getTime();
+  const isFullDurationSession = originalDurationMs >= SESSION_DURATION_MS - 1000;
+  if (isFullDurationSession && expiresAt.getTime() - Date.now() < SESSION_REFRESH_MS) {
     const newExpiry = new Date(Date.now() + SESSION_DURATION_MS).toISOString();
     await turso.execute({
       sql: 'UPDATE sessions SET expires_at = ? WHERE id = ?',
@@ -149,12 +218,12 @@ export async function validateSession(token: string): Promise<{
 
   return {
     user: {
-      id: row[2] as string,
-      email: row[3] as string,
-      name: row[4] as string,
-      role: row[5] as 'admin' | 'client',
-      client_id: row[6] as string | null,
-      permissions: (row[7] as string | null) || null,
+      id: row[4] as string,
+      email: row[5] as string,
+      name: row[6] as string,
+      role: row[7] as 'admin' | 'client',
+      client_id: row[8] as string | null,
+      permissions: (row[9] as string | null) || null,
     },
     session: {
       id: sessionId,
@@ -232,6 +301,19 @@ export async function getUserByEmail(email: string) {
     role: row[3] as string,
     client_id: row[4] as string | null,
   };
+}
+
+// Used by send-link.ts to avoid mailing an alternate auth path
+// (magic link) to a user who already has a password set. Magic links
+// stay available for the initial-onboarding case (users with no
+// password yet) but are not a steady-state login mechanism.
+export async function userHasPassword(userId: string): Promise<boolean> {
+  const result = await turso.execute({
+    sql: 'SELECT password_hash FROM users WHERE id = ?',
+    args: [userId],
+  });
+  if (result.rows.length === 0) return false;
+  return result.rows[0][0] != null;
 }
 
 export async function createClient(name: string, slug: string): Promise<string> {

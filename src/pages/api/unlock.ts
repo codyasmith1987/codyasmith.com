@@ -3,6 +3,8 @@ export const prerender = false;
 import type { APIRoute } from 'astro';
 import { getScan, getMentions, insertLead } from '../../lib/db';
 import { getRecommendation } from '../../lib/recommend';
+import { generateReportToken } from '../../lib/report-token';
+import { escapeHtml, stripCRLF } from '../../lib/email-safety';
 
 export const POST: APIRoute = async ({ request }) => {
   const json = (s: any, status = 200) => new Response(JSON.stringify(s), {
@@ -69,13 +71,23 @@ export const POST: APIRoute = async ({ request }) => {
     });
 
   } catch (err: any) {
+    // Internal details stay in server logs; client gets a generic message.
     console.error('Unlock error:', err);
-    return json({ error: err.message || 'Failed to unlock report' }, 500);
+    return json({ error: 'Failed to unlock report. Please try again.' }, 500);
   }
 };
 
 async function sendReportEmail(apiKey: string, email: string, name: string, scan: any) {
   const scoreColor = scan.overall_score >= 65 ? '#10b981' : scan.overall_score >= 40 ? '#f59e0b' : '#ef4444';
+
+  const safeName = escapeHtml(name);
+  const safeBrand = escapeHtml(scan.brand);
+  const safeLabel = escapeHtml(scan.overall_label);
+  const safeSummary = escapeHtml(scan.summary);
+  const safeScore = Number(scan.overall_score) || 0;
+  const safeMentionCount = Number(scan.mention_count) || 0;
+  const token = generateReportToken(scan.id);
+  const reportUrl = `https://codyasmith.com/listener?report=${encodeURIComponent(scan.id)}&token=${encodeURIComponent(token)}`;
 
   const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
@@ -86,22 +98,22 @@ async function sendReportEmail(apiKey: string, email: string, name: string, scan
     },
     body: JSON.stringify({
       sender: { name: 'Cody Smith', email: 'cody@codyasmith.com' },
-      to: [{ email, name }],
-      subject: `Your Sentiment Report: ${scan.brand}`,
+      to: [{ email, name: stripCRLF(name) }],
+      subject: stripCRLF(`Your Sentiment Report: ${scan.brand}`),
       htmlContent: `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
-          <p>Hey ${name},</p>
-          <p>Here's your sentiment report for <strong>${scan.brand}</strong>.</p>
+          <p>Hey ${safeName},</p>
+          <p>Here's your sentiment report for <strong>${safeBrand}</strong>.</p>
 
           <div style="background: #f8f9fa; border-radius: 12px; padding: 24px; margin: 24px 0; text-align: center;">
-            <p style="font-size: 48px; font-weight: bold; color: ${scoreColor}; margin: 0;">${scan.overall_score}</p>
-            <p style="font-size: 14px; color: #666; margin: 4px 0 0 0;">${scan.overall_label} &middot; ${scan.mention_count} mentions analyzed</p>
+            <p style="font-size: 48px; font-weight: bold; color: ${scoreColor}; margin: 0;">${safeScore}</p>
+            <p style="font-size: 14px; color: #666; margin: 4px 0 0 0;">${safeLabel} &middot; ${safeMentionCount} mentions analyzed</p>
           </div>
 
-          <p>${scan.summary}</p>
+          <p>${safeSummary}</p>
 
           <p style="margin-top: 24px;">
-            <a href="https://codyasmith.com/listener?report=${scan.id}" style="background: #f59e0b; color: #1a1a1a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">View Full Report</a>
+            <a href="${reportUrl}" style="background: #f59e0b; color: #1a1a1a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">View Full Report</a>
           </p>
 
           <hr style="border: none; border-top: 1px solid #eee; margin: 32px 0;" />

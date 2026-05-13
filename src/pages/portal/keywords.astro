@@ -91,6 +91,16 @@ const clients = isAdmin ? await getAllClients() : [];
   </div>
 
   <script define:vars={{ clientId: user.client_id, isAdmin, firstClientId: clients[0]?.id || '' }}>
+    function escapeHtml(s) {
+      if (s == null) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
     let activeClientId = isAdmin ? firstClientId : clientId;
     let allKeywords = [];
     let searchTimeout;
@@ -214,6 +224,7 @@ const clients = isAdmin ? await getAllClients() : [];
         else if (pos && pos <= 20) { posColor = 'text-neutral-400'; posBg = 'bg-neutral-800'; }
         const delay = Math.min(i * 0.03, 1.5);
 
+        const urlDisplay = k.url ? String(k.url).replace('https://', '') : '';
         return `
           <div class="kw-animate flex items-center justify-between py-3 px-4 rounded-lg hover:bg-white/[0.02] transition-all duration-300" style="animation-delay:${delay}s">
             <div class="flex items-center gap-4 min-w-0">
@@ -221,14 +232,14 @@ const clients = isAdmin ? await getAllClients() : [];
                 ${pos ? '#' + pos : '—'}
               </span>
               <div class="min-w-0">
-                <span class="text-sm text-neutral-200 block truncate">${k.keyword}</span>
-                ${k.url ? `<span class="text-[10px] text-neutral-700 block truncate mt-0.5">${k.url.replace('https://', '')}</span>` : ''}
+                <span class="text-sm text-neutral-200 block truncate">${escapeHtml(k.keyword)}</span>
+                ${k.url ? `<span class="text-[10px] text-neutral-700 block truncate mt-0.5">${escapeHtml(urlDisplay)}</span>` : ''}
               </div>
             </div>
             <div class="flex items-center gap-5 shrink-0 ml-4">
-              ${k.search_volume ? `<span class="text-xs font-mono text-neutral-600">${k.search_volume.toLocaleString()}/mo</span>` : ''}
-              ${k.seo_difficulty != null ? `<span class="text-xs font-mono ${k.seo_difficulty <= 30 ? 'text-emerald-600' : k.seo_difficulty <= 60 ? 'text-amber-600' : 'text-red-600'}">${k.seo_difficulty} SD</span>` : ''}
-              ${k.change ? `<span class="text-xs font-mono ${k.change < 0 ? 'text-emerald-400' : 'text-red-400'}">${k.change < 0 ? '↑' : '↓'}${Math.abs(k.change)}</span>` : ''}
+              ${k.search_volume ? `<span class="text-xs font-mono text-neutral-600">${Number(k.search_volume).toLocaleString()}/mo</span>` : ''}
+              ${k.seo_difficulty != null ? `<span class="text-xs font-mono ${k.seo_difficulty <= 30 ? 'text-emerald-600' : k.seo_difficulty <= 60 ? 'text-amber-600' : 'text-red-600'}">${Number(k.seo_difficulty)} SD</span>` : ''}
+              ${k.change ? `<span class="text-xs font-mono ${k.change < 0 ? 'text-emerald-400' : 'text-red-400'}">${k.change < 0 ? '↑' : '↓'}${Math.abs(Number(k.change))}</span>` : ''}
             </div>
           </div>
         `;

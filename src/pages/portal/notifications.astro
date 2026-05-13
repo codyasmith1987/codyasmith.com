@@ -28,6 +28,16 @@ const user = Astro.locals.user!;
   </div>
 
   <script>
+    function escapeHtml(s: any): string {
+      if (s == null) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const list = document.getElementById('notif-list')!;
     const loading = document.getElementById('notif-loading')!;
@@ -49,14 +59,14 @@ const user = Astro.locals.user!;
         if (hasUnread) markAllBtn.classList.remove('hidden');
 
         list.innerHTML = notifications.map((n: any) => `
-          <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 flex items-start gap-4 ${n.read ? 'opacity-50' : ''}" data-notif-id="${n.id}">
+          <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 flex items-start gap-4 ${n.read ? 'opacity-50' : ''}" data-notif-id="${escapeHtml(n.id)}">
             <div class="flex-1 min-w-0">
               <div class="flex items-start justify-between gap-3">
-                <p class="text-sm font-medium text-neutral-200">${n.title}</p>
-                ${!n.read ? `<button data-mark-read="${n.id}" class="text-[10px] text-neutral-600 hover:text-amber-400 transition-colors shrink-0">Mark read</button>` : ''}
+                <p class="text-sm font-medium text-neutral-200">${escapeHtml(n.title)}</p>
+                ${!n.read ? `<button data-mark-read="${escapeHtml(n.id)}" class="text-[10px] text-neutral-600 hover:text-amber-400 transition-colors shrink-0">Mark read</button>` : ''}
               </div>
-              ${n.body ? `<p class="text-xs text-neutral-500 mt-1">${n.body}</p>` : ''}
-              <p class="text-[10px] text-neutral-700 mt-2">${new Date(n.created_at).toLocaleString()}</p>
+              ${n.body ? `<p class="text-xs text-neutral-500 mt-1">${escapeHtml(n.body)}</p>` : ''}
+              <p class="text-[10px] text-neutral-700 mt-2">${escapeHtml(new Date(n.created_at).toLocaleString())}</p>
             </div>
           </div>
         `).join('');

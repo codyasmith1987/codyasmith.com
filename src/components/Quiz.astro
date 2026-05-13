@@ -195,7 +195,7 @@
       const content = quiz.querySelector('.relative.z-10') as HTMLElement;
 
       if (hasAnswers) {
-        // Resolution — backdrop-filter releases via CSS transition in __fieldResolve
+        // Resolution: backdrop-filter releases via CSS transition in __fieldResolve
         if ((window as any).__fieldResolve) (window as any).__fieldResolve();
 
         if (content) {
@@ -209,6 +209,15 @@
         }, 1600);
 
         setTimeout(() => {
+          // iOS Safari leaves a grey paint behind when a backdrop-filter
+          // layer goes display:none while still compositing. Even though
+          // __fieldResolve transitioned the filter to its transparent
+          // values (blur 0, brightness/contrast/saturate 1), the GPU
+          // layer can persist. Explicitly nuke backdrop-filter before
+          // hiding so iOS releases the compositing context. See memory
+          // entry project_ios_quiz_grey_screen and the May 2026 bisect
+          // (commits 3fc55c5, 1051026, ec1ad6c, 4fb5362, bb51815).
+          if ((window as any).__fieldStop) (window as any).__fieldStop();
           quiz.style.display = 'none';
           document.documentElement.classList.remove('quiz-active');
           document.documentElement.classList.add('cs-no-quiz');

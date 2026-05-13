@@ -1,17 +1,109 @@
 ---
 import Base from './Base.astro';
 
+interface CoverData {
+  src: string;
+  alt: string;
+  width?: number;
+  height?: number;
+}
+
 interface Props {
   title: string;
   description: string;
   ogImage?: string;
+  ogImageAlt?: string;
+  publishDate: Date;
+  updated?: Date;
+  author?: string;
+  section?: 'Articles' | 'Case studies';
+  tags?: string[];
+  slug: string;
+  cover?: CoverData;
 }
 
-const { title, description, ogImage } = Astro.props;
+const {
+  title,
+  description,
+  ogImage,
+  ogImageAlt,
+  publishDate,
+  updated,
+  author = 'Cody Smith',
+  section = 'Articles',
+  tags = [],
+  slug,
+  cover,
+} = Astro.props;
+
 const pageTitle = `${title} | Cody Smith`;
+const sectionPath = section === 'Case studies' ? '/blog/case-studies' : '/blog/articles';
+const canonicalUrl = `https://codyasmith.com${sectionPath}/${slug}`;
+const resolvedOgImage = ogImage ?? `${sectionPath}/og/${slug}.png`;
+const resolvedImageUrl = new URL(resolvedOgImage, 'https://codyasmith.com').href;
+
+const breadcrumbs = [
+  { name: 'Home', url: 'https://codyasmith.com/' },
+  { name: 'Blog', url: 'https://codyasmith.com/blog' },
+  { name: section, url: `https://codyasmith.com${sectionPath}` },
+  { name: title, url: canonicalUrl },
+];
+
+// Article JSON-LD. headline, datePublished, image, author, publisher are
+// required for Google's Article rich result; mainEntityOfPage closes the
+// loop so the schema points back at the canonical URL. dateModified only
+// emits when an updated timestamp is present.
+const coverImage = cover ? {
+  '@type': 'ImageObject',
+  url: new URL(cover.src, 'https://codyasmith.com').href,
+  ...(cover.width && cover.height ? { width: cover.width, height: cover.height } : {}),
+} : resolvedImageUrl;
+
+const articleJsonLd = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'Article',
+  headline: title,
+  description,
+  image: coverImage,
+  datePublished: publishDate.toISOString(),
+  ...(updated ? { dateModified: updated.toISOString() } : {}),
+  author: {
+    '@type': 'Person',
+    name: author,
+    url: 'https://codyasmith.com/about',
+  },
+  publisher: {
+    '@type': 'Organization',
+    name: 'Cody Smith',
+    logo: {
+      '@type': 'ImageObject',
+      url: 'https://codyasmith.com/icon-512.png',
+      width: 512,
+      height: 512,
+    },
+  },
+  mainEntityOfPage: canonicalUrl,
+  ...(tags.length > 0 ? { keywords: tags.join(', ') } : {}),
+  articleSection: section,
+});
 ---
 
-<Base title={pageTitle} description={description} ogImage={ogImage} ogType="article">
+<Base
+  title={pageTitle}
+  description={description}
+  ogImage={resolvedOgImage}
+  ogImageAlt={ogImageAlt ?? title}
+  ogType="article"
+  article={{
+    publishedTime: publishDate.toISOString(),
+    modifiedTime: updated?.toISOString(),
+    author,
+    section,
+    tags,
+  }}
+  breadcrumbs={breadcrumbs}
+>
+  <script type="application/ld+json" set:html={articleJsonLd} />
   <slot />
 </Base>
 

@@ -88,10 +88,12 @@ export async function getUnreadCount(userId: string): Promise<number> {
   return row?.cnt ?? 0;
 }
 
-export async function markAsRead(id: string): Promise<void> {
+export async function markAsRead(id: string, userId: string): Promise<void> {
+  // Scope the update to the calling user so notifications belonging to
+  // another account cannot be silently dismissed (IDOR mitigation).
   await turso.execute({
-    sql: "UPDATE notifications SET read = 1, read_at = datetime('now') WHERE id = ?",
-    args: [id],
+    sql: "UPDATE notifications SET read = 1, read_at = datetime('now') WHERE id = ? AND user_id = ?",
+    args: [id, userId],
   });
 }
 
@@ -102,6 +104,10 @@ export async function markAllAsRead(userId: string): Promise<void> {
   });
 }
 
-export async function deleteNotification(id: string): Promise<void> {
-  await turso.execute({ sql: 'DELETE FROM notifications WHERE id = ?', args: [id] });
+export async function deleteNotification(id: string, userId: string): Promise<void> {
+  // Scope to owner; protects against IDOR if a delete endpoint is ever exposed.
+  await turso.execute({
+    sql: 'DELETE FROM notifications WHERE id = ? AND user_id = ?',
+    args: [id, userId],
+  });
 }

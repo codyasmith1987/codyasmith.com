@@ -31,7 +31,19 @@ const clientName = d.clientAnonymized ? 'Confidential client' : d.client;
 const ogImage = `/blog/og/case-studies/${entry.id}.png`;
 ---
 
-<BlogPost title={d.seoTitle ?? d.title} description={d.description} ogImage={ogImage}>
+<BlogPost
+  title={d.seoTitle ?? d.title}
+  description={d.description}
+  ogImage={ogImage}
+  ogImageAlt={d.title}
+  publishDate={d.publishDate}
+  updated={d.updated}
+  author={d.author}
+  section="Case studies"
+  tags={d.tags}
+  slug={entry.id}
+  cover={d.cover}
+>
   <article data-elm-host data-elm="stars" class="blog-case pt-32 pb-24">
     <!-- Eyebrow -->
     <div class="px-6 mb-8">
@@ -124,7 +136,10 @@ const ogImage = `/blog/og/case-studies/${entry.id}.png`;
               src={d.cover.src}
               alt={d.cover.alt}
               class="w-full rounded-lg"
-              loading="eager"
+              loading="lazy"
+              decoding="async"
+              width={d.cover.width}
+              height={d.cover.height}
             />
             {d.cover.credit && (
               <figcaption class="text-right mt-2 font-mono text-[10px] tracking-[0.15em] uppercase text-neutral-600">

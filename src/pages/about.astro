@@ -2,8 +2,52 @@
 import Base from '../layouts/Base.astro';
 ---
 
-<Base title="About Cody Smith | Writer, Strategist, Consultant in Cedar City" description="The longer version. Writer, strategist, consultant. Cedar City, Utah.">
-  <script type="application/ld+json" set:html={JSON.stringify({"@context":"https://schema.org","@type":"Person","name":"Cody Smith","jobTitle":"Web Management & Marketing Consultant","url":"https://codyasmith.com","address":{"@type":"PostalAddress","addressLocality":"Cedar City","addressRegion":"UT","addressCountry":"US"},"email":"cody@codyasmith.com","telephone":"+1-435-868-7133","sameAs":["https://codyasmith.com"]})} />
+<Base title="About Cody Smith | Writer, Strategist, Consultant in Cedar City" description="The longer version. Writer, strategist, consultant. Cedar City, Utah." ogImage="/og/about.png" ogImageAlt="About Cody Smith: writer, marketer, strategist, consultant.">
+  <script type="application/ld+json" set:html={JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "Person",
+    "@id": "https://codyasmith.com/about#person",
+    "name": "Cody Smith",
+    "jobTitle": "Web Management & Marketing Consultant",
+    "url": "https://codyasmith.com/about",
+    "image": "https://codyasmith.com/icon-512.png",
+    "address": {
+      "@type": "PostalAddress",
+      "addressLocality": "Cedar City",
+      "addressRegion": "UT",
+      "addressCountry": "US"
+    },
+    "email": "cody@codyasmith.com",
+    "telephone": "+1-435-868-7133",
+    "worksFor": {
+      "@type": "Organization",
+      "name": "SC Broadband",
+      "url": "https://scbroadband.com"
+    },
+    "alumniOf": [
+      {
+        "@type": "CollegeOrUniversity",
+        "name": "Southern Utah University",
+        "sameAs": "https://www.suu.edu"
+      }
+    ],
+    "award": [
+      "Bronze Horizon Interactive Award, Non-profit (SPTS / AllenComm)",
+      "Silver Horizon Interactive Award, Training and eLearning (SPTS / AllenComm)",
+      "Bronze Horizon Interactive Award, Non-profit and Advocacy (SPTS / AllenComm)",
+      "Silver Davey Award, General-Education (SPTS / AllenComm)",
+      "Utah Press Association Awards (Iron County Today)"
+    ],
+    "knowsAbout": [
+      "Web Management",
+      "Search Engine Optimization",
+      "Marketing Strategy",
+      "Brand Architecture",
+      "Content Strategy",
+      "Photojournalism"
+    ],
+    "sameAs": ["https://codyasmith.com"]
+  })} />
 
   <section class="pt-40 pb-16 px-6">
     <div class="max-w-4xl mx-auto">

@@ -12,12 +12,36 @@ for (const a of articles) {
 const tags = Array.from(tagSet.entries())
   .map(([tag, count]) => ({ tag, count }))
   .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+
+const breadcrumbs = [
+  { name: 'Home', url: 'https://codyasmith.com/' },
+  { name: 'Blog', url: 'https://codyasmith.com/blog' },
+  { name: 'Articles', url: 'https://codyasmith.com/blog/articles' },
+];
+
+const itemListJsonLd = articles.length > 0 ? JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  itemListElement: articles.map((a, i) => ({
+    '@type': 'ListItem',
+    position: i + 1,
+    url: `https://codyasmith.com/blog/articles/${a.id}`,
+    name: a.data.title,
+  })),
+}) : null;
 ---
 
 <Base
   title="Articles | Cody Smith"
   description="Thinking out loud about marketing, persuasion, and the craft of getting small businesses found."
+  ogImage="/og/blog/articles.png"
+  ogImageAlt="Articles by Cody Smith: I argue for a living"
+  breadcrumbs={breadcrumbs}
 >
+  {itemListJsonLd && (
+    <script type="application/ld+json" set:html={itemListJsonLd} />
+  )}
+
   <section class="pt-40 pb-12 px-6">
     <div class="max-w-4xl mx-auto">
       <p class="font-mono text-[11px] tracking-[0.25em] uppercase text-amber-400 mb-8">
@@ -39,17 +63,22 @@ const tags = Array.from(tagSet.entries())
     <section class="px-6 pb-8">
       <div class="max-w-4xl mx-auto">
         <div id="tag-filter-bar" class="flex flex-wrap gap-2 items-center">
+          {/* "All" is a button (no destination page). Tags are anchors so
+              crawlers see and follow the tag URLs; JS filter behavior
+              layered on top via preventDefault. See seo-audit-2026-05-12
+              SEO-021 (anchor semantics) and SEO-033 (min-h-[44px] tap
+              target). */}
           <button
             type="button"
             data-tag=""
-            class="tag-chip is-active text-xs font-mono tracking-wide px-3 py-1.5 rounded border border-amber-500/30 bg-amber-500/5 text-amber-400"
+            class="tag-chip is-active inline-flex items-center min-h-[44px] text-xs font-mono tracking-wide px-3 py-2.5 rounded border border-amber-500/30 bg-amber-500/5 text-amber-400"
           >All</button>
           {tags.map(({ tag, count }) => (
-            <button
-              type="button"
+            <a
+              href={`/blog/tags/${tagSlug(tag)}`}
               data-tag={tag}
-              class="tag-chip text-xs font-mono tracking-wide px-3 py-1.5 rounded border border-white/5 text-neutral-400 hover:border-amber-500/30 hover:text-amber-400 transition-colors"
-            >{tag} <span class="text-[10px] text-neutral-600 ml-1">{count}</span></button>
+              class="tag-chip inline-flex items-center min-h-[44px] text-xs font-mono tracking-wide px-3 py-2.5 rounded border border-white/5 text-neutral-400 hover:border-amber-500/30 hover:text-amber-400 transition-colors"
+            >{tag} <span class="text-[10px] text-neutral-600 ml-1">{count}</span></a>
           ))}
         </div>
       </div>
@@ -107,7 +136,7 @@ const tags = Array.from(tagSet.entries())
         const show = !selectedTag || tags.includes(selectedTag);
         row.style.display = show ? '' : 'none';
       });
-      bar.querySelectorAll<HTMLButtonElement>('.tag-chip').forEach((b) => {
+      bar.querySelectorAll<HTMLElement>('.tag-chip').forEach((b) => {
         const isActive = (b.dataset.tag || '') === selectedTag;
         b.classList.toggle('is-active', isActive);
         b.classList.toggle('border-amber-500/30', isActive);
@@ -119,13 +148,14 @@ const tags = Array.from(tagSet.entries())
     };
 
     bar.addEventListener('click', (e) => {
-      const btn = (e.target as HTMLElement).closest('button.tag-chip') as HTMLButtonElement | null;
-      if (!btn) return;
-      applyFilter(btn.dataset.tag || '');
+      const chip = (e.target as HTMLElement).closest('.tag-chip') as HTMLElement | null;
+      if (!chip) return;
+      // Anchor chips: prevent navigation so the in-place filter runs.
+      // Crawlers without JS follow the href to the tag page directly.
+      e.preventDefault();
+      applyFilter(chip.dataset.tag || '');
     });
   }
   initTagFilter();
   document.addEventListener('astro:after-swap', initTagFilter);
 </script>
-</content>
-</invoke>

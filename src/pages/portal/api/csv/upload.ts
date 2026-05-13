@@ -30,7 +30,15 @@ export const POST: APIRoute = async ({ locals, request }) => {
       return json({ error: 'CSV file must be under 10MB' }, 400);
     }
 
+    // Row count cap: 50k rows is generous for realistic SEO/keyword exports
+    // and still bounds DoS risk. See security-audit-2026-05-12 SEC-019.
+    const MAX_ROWS = 50000;
     const raw = await file.text();
+    const lineCount = (raw.match(/\n/g) || []).length + 1;
+    if (lineCount > MAX_ROWS) {
+      return json({ error: `CSV exceeds ${MAX_ROWS} row maximum (${lineCount} rows submitted)` }, 400);
+    }
+
     const result = await ingestCSV(raw, clientId, month, file.name, locals.user.id);
 
     await logActivity({
@@ -59,6 +67,6 @@ export const POST: APIRoute = async ({ locals, request }) => {
     });
   } catch (err: any) {
     logger.error('CSV upload error', err);
-    return json({ error: err.message || 'Upload failed' }, 500);
+    return json({ error: 'Upload failed' }, 500);
   }
 };

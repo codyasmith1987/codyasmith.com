@@ -1,9 +1,118 @@
 ---
 import Base from '../../layouts/Base.astro';
+
+const faqSchema = JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What's the difference between a single session and the guided program?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A single session is a one-time training on a specific topic. Useful for onboarding a new hire or covering a narrow skill. The guided program is three sessions over three to four weeks with real assignments in between. The guided format is what actually makes the skills stick. A single session is faster and cheaper, but most of it gets forgotten within a week."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Do you train remotely or on-site?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Remote by default. Screen-shared, recorded, with everyone working on their own systems from wherever they sit. On-site is possible in southern Utah but the format works just as well remotely. Most of my clients are spread across multiple locations anyway."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What team size works best?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Three to eight people is the sweet spot. Small enough that everyone gets attention and can ask questions. Big enough that you're not paying for a one-on-one. Larger teams I'll split into cohorts. Smaller teams work fine too, just talk to me about pricing."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What if my team needs different things at different skill levels?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Tell me up front. I'll design the program around the real range, not a fake average. Sometimes that means splitting into two cohorts. Sometimes it means the more advanced people get harder assignments between sessions. The goal is everyone leaves more capable, not everyone gets the same slides."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Do we keep the materials?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. Reference guides, SOPs, and checklists are included with any session and they're yours to keep. Use them for onboarding the next hire. Update them as your tools change. They're written for your team, not as a generic handout."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How do you measure if the training worked?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "The real measure is whether your team stops asking you to do things they should be doing themselves. The third session includes a self-sufficiency check where they walk through real scenarios without coaching. If they can do it, training worked. If they can't, we cover the gap before the program closes."
+      }
+    }
+  ]
+});
+
+const serviceSchema = JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "Service",
+  "name": "Training",
+  "url": "https://codyasmith.com/services/training",
+  "description": "WordPress, SEO, and AI workflow training built on learning science. Not a webinar. A guided program.",
+  "provider": { "@id": "https://codyasmith.com/#organization" },
+  "serviceType": "Training",
+  "areaServed": { "@type": "Country", "name": "United States" },
+  "termsOfService": "Three-session guided programs delivered remotely. Assignments between sessions. Reference materials delivered at the end. Single sessions and ongoing advisory retainers available.",
+  "offers": [
+    {
+      "@type": "Offer",
+      "name": "New Hire Orientation",
+      "priceSpecification": {
+        "@type": "PriceSpecification",
+        "price": 250,
+        "priceCurrency": "USD"
+      }
+    },
+    {
+      "@type": "Offer",
+      "name": "SEO Fundamentals",
+      "priceSpecification": {
+        "@type": "PriceSpecification",
+        "price": 200,
+        "priceCurrency": "USD"
+      }
+    },
+    {
+      "@type": "Offer",
+      "name": "WordPress Best Practices",
+      "priceSpecification": {
+        "@type": "PriceSpecification",
+        "price": 200,
+        "priceCurrency": "USD"
+      }
+    },
+    {
+      "@type": "Offer",
+      "name": "Custom Training",
+      "priceSpecification": {
+        "@type": "UnitPriceSpecification",
+        "price": 100,
+        "priceCurrency": "USD",
+        "unitText": "hour",
+        "referenceQuantity": { "@type": "QuantitativeValue", "value": 1, "unitText": "hour" }
+      }
+    }
+  ]
+});
 ---
 
-<Base title="Training | WordPress, SEO & AI Workflow Guided Programs" description="WordPress, SEO, and AI workflow training built on learning science. Not a webinar. A guided program.">
-  <script type="application/ld+json" set:html={JSON.stringify({"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Services","item":"https://codyasmith.com/services"},{"@type":"ListItem","position":2,"name":"Training","item":"https://codyasmith.com/services/training"}]})} />
+<Base title="Training | WordPress, SEO & AI Workflow Guided Programs" description="WordPress, SEO, and AI workflow training built on learning science. Not a webinar. A guided program." ogImage="/og/services/training.png" ogImageAlt="Training: built on learning science, not slide decks.">
+  <script type="application/ld+json" set:html={faqSchema} />
+  <script type="application/ld+json" set:html={serviceSchema} />
+  <script type="application/ld+json" set:html={JSON.stringify({"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://codyasmith.com/"},{"@type":"ListItem","position":2,"name":"Services","item":"https://codyasmith.com/services"},{"@type":"ListItem","position":3,"name":"Training","item":"https://codyasmith.com/services/training"}]})} />
 
   <section class="pt-40 pb-24 px-6">
     <div class="max-w-4xl mx-auto">
@@ -285,6 +394,77 @@ import Base from '../../layouts/Base.astro';
             </a>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="py-28 px-6">
+    <div class="max-w-3xl mx-auto">
+      <div class="mb-16">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Questions</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Things people ask.</h2>
+      </div>
+
+      <div class="space-y-4">
+        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            What's the difference between a single session and the guided program?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            A single session is a one-time training on a specific topic. Useful for onboarding a new hire or covering a narrow skill. The guided program is three sessions over three to four weeks with real assignments in between. The guided format is what actually makes the skills stick. A single session is faster and cheaper, but most of it gets forgotten within a week.
+          </div>
+        </details>
+
+        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            Do you train remotely or on-site?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            Remote by default. Screen-shared, recorded, with everyone working on their own systems from wherever they sit. On-site is possible in southern Utah but the format works just as well remotely. Most of my clients are spread across multiple locations anyway.
+          </div>
+        </details>
+
+        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            What team size works best?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            Three to eight people is the sweet spot. Small enough that everyone gets attention and can ask questions. Big enough that you're not paying for a one-on-one. Larger teams I'll split into cohorts. Smaller teams work fine too, just talk to me about pricing.
+          </div>
+        </details>
+
+        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            What if my team needs different things at different skill levels?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            Tell me up front. I'll design the program around the real range, not a fake average. Sometimes that means splitting into two cohorts. Sometimes it means the more advanced people get harder assignments between sessions. The goal is everyone leaves more capable, not everyone gets the same slides.
+          </div>
+        </details>
+
+        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            Do we keep the materials?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            Yes. Reference guides, SOPs, and checklists are included with any session and they're yours to keep. Use them for onboarding the next hire. Update them as your tools change. They're written for your team, not as a generic handout.
+          </div>
+        </details>
+
+        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            How do you measure if the training worked?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            The real measure is whether your team stops asking you to do things they should be doing themselves. The third session includes a self-sufficiency check where they walk through real scenarios without coaching. If they can do it, training worked. If they can't, we cover the gap before the program closes.
+          </div>
+        </details>
       </div>
     </div>
   </section>

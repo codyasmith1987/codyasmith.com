@@ -14,12 +14,44 @@ const latestCase = caseStudies[0];
 const recentArticles = articles.slice(0, 5);
 const otherCases = caseStudies.slice(1, 4);
 const hasAny = articles.length + caseStudies.length > 0;
+
+const breadcrumbs = [
+  { name: 'Home', url: 'https://codyasmith.com/' },
+  { name: 'Blog', url: 'https://codyasmith.com/blog' },
+];
+
+const blogItems = [
+  ...recentArticles.map((a, i) => ({
+    '@type': 'ListItem',
+    position: i + 1,
+    url: `https://codyasmith.com/blog/articles/${a.id}`,
+    name: a.data.title,
+  })),
+  ...caseStudies.slice(0, 4).map((c, i) => ({
+    '@type': 'ListItem',
+    position: recentArticles.length + i + 1,
+    url: `https://codyasmith.com/blog/case-studies/${c.id}`,
+    name: c.data.title,
+  })),
+];
+const itemListJsonLd = blogItems.length > 0 ? JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  itemListElement: blogItems,
+}) : null;
 ---
 
 <Base
   title="Blog | Cody Smith"
   description="Articles and case studies from a working consultancy. Thinking, evidence, and receipts from the projects that shaped how I work."
+  ogImage="/og/blog/index.png"
+  ogImageAlt="Cody Smith's blog: articles and case studies"
+  breadcrumbs={breadcrumbs}
 >
+  {itemListJsonLd && (
+    <script type="application/ld+json" set:html={itemListJsonLd} />
+  )}
+
   <section class="pt-40 pb-16 px-6">
     <div class="max-w-5xl mx-auto">
       <p class="font-mono text-[11px] tracking-[0.25em] uppercase text-amber-400 mb-8">Blog</p>
@@ -158,5 +190,3 @@ const hasAny = articles.length + caseStudies.length > 0;
 
 
 </Base>
-</content>
-</invoke>

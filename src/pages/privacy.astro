@@ -2,7 +2,7 @@
 import Base from '../layouts/Base.astro';
 ---
 
-<Base title="Privacy Policy | Cody Smith" description="How codyasmith.com handles your data.">
+<Base title="Privacy Policy | Cody Smith" description="How codyasmith.com handles your data." ogImage="/og/privacy.png" ogImageAlt="Privacy Policy: what I collect, why, and how to delete it.">
   <section class="pt-40 pb-16 px-6">
     <div class="max-w-3xl mx-auto">
       <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Legal</p>
@@ -33,7 +33,7 @@ import Base from '../layouts/Base.astro';
           <p>When you use the free scanner tool, I store the brand name you searched and the results. If you unlock the full report by providing your email, that email is stored and used to send you the report via Brevo. Your IP address is used for rate limiting (3 scans per day) and is not stored permanently.</p>
 
           <h3 class="text-neutral-200 font-medium text-base mt-6 mb-2">Client portal</h3>
-          <p>If you're a client with portal access, I store your name, email, and the files and data associated with your account. Authentication uses magic links. No passwords are stored. Session tokens are hashed. Files are stored on DigitalOcean Spaces (S3-compatible storage) and access is restricted to your account.</p>
+          <p>If you're a client with portal access, I store your name, email, and the files and data associated with your account. Authentication uses a password you set during onboarding; passwords are hashed with bcrypt before storage. Initial invitations are sent as one-time magic links that expire in 15 minutes. Session tokens are stored as SHA-256 hashes. Files are stored on DigitalOcean Spaces (S3-compatible storage) with private access; download links are signed and time-bound. Access is restricted to your account.</p>
 
           <h3 class="text-neutral-200 font-medium text-base mt-6 mb-2">Anonymous request logs</h3>
           <p>Every request to a public page on this site (not portal pages, not static assets) is logged server-side. Captured: the URL path, HTTP method, referring URL if any, your user-agent string, your country (provided by Cloudflare), and the response status code. No IP address is stored. No cookies are set for this. No data leaves my server. I use it for traffic patterns and debugging. My target retention is 90 days; I delete older logs periodically.</p>
@@ -58,7 +58,7 @@ import Base from '../layouts/Base.astro';
           <h2 class="text-neutral-100 font-serif text-2xl mb-4">Cookies</h2>
           <p>Two cookies are set when you visit this site:</p>
           <ul class="list-disc list-inside space-y-2 mt-3">
-            <li><code class="text-amber-400/60 text-xs bg-neutral-900 px-1.5 py-0.5 rounded">portal_session</code>: set only after a portal client signs in. Keeps you logged in. httpOnly, secure, SameSite=lax, 30-day expiry. First-party.</li>
+            <li><code class="text-amber-400/60 text-xs bg-neutral-900 px-1.5 py-0.5 rounded">portal_session</code>: set only after a portal client signs in. Keeps you logged in. httpOnly, secure, SameSite=strict, 30-day rolling expiry, 90-day absolute maximum. First-party.</li>
             <li><code class="text-amber-400/60 text-xs bg-neutral-900 px-1.5 py-0.5 rounded">__cf_bm</code>: set by Cloudflare for bot management on every request. Helps separate human visitors from automated traffic. 30-minute expiry. First-party on this domain, controlled by Cloudflare.</li>
           </ul>
           <p class="mt-4">No analytics cookies. No advertising cookies. No Google or Microsoft or Facebook tracking pixels.</p>

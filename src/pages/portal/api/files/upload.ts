@@ -61,6 +61,6 @@ export const POST: APIRoute = async ({ locals, request }) => {
     return json({ id: result.id, filename: file.name, size: buffer.length });
   } catch (err: any) {
     logger.error('File upload error', err);
-    return json({ error: err.message || 'Upload failed' }, 500);
+    return json({ error: 'Upload failed' }, 500);
   }
 };

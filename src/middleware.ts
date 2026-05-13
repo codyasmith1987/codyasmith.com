@@ -1,9 +1,11 @@
 import { defineMiddleware } from 'astro:middleware';
-import { validateSession, SESSION_COOKIE, isClientActive } from './lib/auth';
-import { setRequestId } from './lib/logger';
+import { validateSession, SESSION_COOKIE, isClientActive, userHasPassword } from './lib/auth';
+import { runWithRequestId } from './lib/logger';
 import { runMigrations } from './lib/migrate';
 import { generateCsrfToken, validateCsrfToken } from './lib/csrf';
 import { logRequest, shouldLog } from './lib/request-log';
+import { maybeSweepRetention } from './lib/retention';
+import { SECURITY_HEADERS } from './lib/security-headers';
 
 let reqCounter = 0;
 
@@ -11,28 +13,24 @@ export const onRequest = defineMiddleware(async (context, next) => {
   // Run migrations once at cold start (race-safe, idempotent)
   await runMigrations();
 
-  // Generate request ID for correlation logging
+  // Generate request ID for correlation logging and wrap the entire
+  // handler chain in an AsyncLocalStorage scope so concurrent requests
+  // never cross-correlate. See security-audit-2026-05-12 round 4
+  // SEC4-004 (logger fallbackId was shared across requests).
   const requestId = `r${Date.now().toString(36)}-${(++reqCounter).toString(36)}`;
-  setRequestId(requestId);
-
-  // Add security headers to all responses
+  return runWithRequestId(requestId, async () => {
   const response = await handleRequest(context, next);
   response.headers.set('X-Request-Id', requestId);
-  response.headers.set('X-Content-Type-Options', 'nosniff');
-  response.headers.set('X-Frame-Options', 'DENY');
-  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+    response.headers.set(key, value);
+  }
 
-  // CSP: allow self, inline scripts (Astro needs them), Google Fonts, jsDelivr for Chart.js
-  response.headers.set('Content-Security-Policy', [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data: blob:",
-    "connect-src 'self'",
-    "frame-ancestors 'none'",
-  ].join('; '));
+  // Portal pages should never be indexed. Belt-and-suspenders the
+  // <meta name="robots"> tag on /portal/login with an HTTP-level signal
+  // that also covers redirect responses with no HTML body.
+  if (context.url.pathname.startsWith('/portal')) {
+    response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+  }
 
   // First-party request log for the public surface. Fire and forget so the
   // response isn't blocked. Portal pages and assets are excluded.
@@ -47,10 +45,32 @@ export const onRequest = defineMiddleware(async (context, next) => {
     });
   }
 
-  return response;
+  // Retention sweep on a throttled interval (at most once per hour
+  // across the whole process). Deletes request_log rows older than 90
+  // days and rate_limits rows older than 30 days. See SEC-020.
+  maybeSweepRetention();
+
+    return response;
+  });
 });
 
 async function handleRequest(context: Parameters<Parameters<typeof defineMiddleware>[0]>[0], next: Parameters<Parameters<typeof defineMiddleware>[0]>[1]): Promise<Response> {
+  // Body-size cap on public API endpoints. Portal API also enforces this
+  // below, but the public /api/* routes (quiz, contact, scan, unlock,
+  // naming/preview) had no cap and could memory-pressure the process
+  // with a single multi-megabyte JSON body. See security-audit-2026-05-12
+  // round 4 SEC4-006.
+  if (context.url.pathname.startsWith('/api/')) {
+    const PUBLIC_API_MAX_BODY = 256 * 1024; // 256KB; public payloads are small
+    const len = parseInt(context.request.headers.get('content-length') || '0', 10);
+    if (len > PUBLIC_API_MAX_BODY) {
+      return new Response(JSON.stringify({ error: 'Request body too large' }), {
+        status: 413,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+  }
+
   // Only protect /portal/* routes
   if (!context.url.pathname.startsWith('/portal')) {
     return next();
@@ -113,6 +133,22 @@ async function handleRequest(context: Parameters<Parameters<typeof defineMiddlew
   // Block non-admin users from admin routes — redirect to dashboard instead of blank 403
   if (context.url.pathname.startsWith('/portal/admin') && result.user?.role !== 'admin') {
     return context.redirect('/portal/dashboard');
+  }
+
+  // Magic-link onboarding requires the user to set a password before
+  // they can use the rest of the portal. Otherwise a magic link is a
+  // 30-day session equivalent of a password and the password flow on
+  // /portal/login is moot. See security-audit-2026-05-12 round 3
+  // SEC3-008.
+  const isSetPasswordRoute = context.url.pathname === '/portal/set-password';
+  const isSelfSetPasswordApi = context.url.pathname === '/portal/api/auth/set-own-password';
+  if (
+    !isSetPasswordRoute &&
+    !isSelfSetPasswordApi &&
+    !context.url.pathname.startsWith('/portal/api/notifications') &&
+    !await userHasPassword(result.user!.id)
+  ) {
+    return context.redirect('/portal/set-password');
   }
 
   return next();

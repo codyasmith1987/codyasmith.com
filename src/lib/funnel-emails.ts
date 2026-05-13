@@ -15,13 +15,10 @@ export type ContactInterest =
   | 'training'
   | 'not-sure';
 
-export function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+// Re-export the canonical escapeHtml from src/lib/email-safety.ts so this
+// module shares the single-quote escape and null-safe input handling with
+// every other email path. See security-audit-2026-05-12 round 3 SEC3-010.
+export { escapeHtml } from './email-safety';
 
 function frameFromTheme(theme: string): ContactFrame {
   const first = theme.split('-')[0];

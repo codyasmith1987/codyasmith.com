@@ -4,6 +4,11 @@ interface Image {
   alt: string;
   caption?: string;
   credit?: string;
+  // Optional explicit dimensions per image. When passed, the browser
+  // reserves layout space before the image loads, eliminating CLS.
+  // See seo-audit-2026-05-12 round 2 SEO2-004.
+  width?: number;
+  height?: number;
 }
 
 interface Props {
@@ -23,6 +28,8 @@ const colClass = columns === 4 ? 'md:grid-cols-4' : columns === 3 ? 'md:grid-col
         alt={img.alt}
         loading="lazy"
         decoding="async"
+        width={img.width}
+        height={img.height}
         class="w-full rounded-lg block"
       />
       {(img.caption || img.credit) && (

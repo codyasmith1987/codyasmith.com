@@ -3,22 +3,7 @@ import { getUserByEmail, createMagicLink, userHasPassword } from '../../../lib/a
 import { rateLimit } from '../../../lib/rate-limit';
 import { logger } from '../../../lib/logger';
 import { logActivity } from '../../../lib/activity';
-
-// Escape HTML for safe interpolation into Brevo email htmlContent.
-function escapeHtml(s: string | null | undefined): string {
-  if (s == null) return '';
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function stripCRLF(s: string | null | undefined): string {
-  if (s == null) return '';
-  return String(s).replace(/[\r\n]+/g, ' ').trim();
-}
+import { escapeHtml, stripCRLF } from '../../../lib/email-safety';
 
 export const prerender = false;
 

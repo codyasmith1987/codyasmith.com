@@ -1,6 +1,12 @@
-// Shared email sending via Brevo — extracted from create-user.ts / send-link.ts pattern
+// Shared email sending via Brevo. Extracted from create-user.ts and
+// send-link.ts to keep the API call shape consistent. Centralizes CRLF
+// stripping on subject and recipient names so callers cannot accidentally
+// open header-injection holes. Body escaping (HTML) is the caller's
+// responsibility because each builder composes its own template; see
+// src/lib/email-safety.ts for the helper.
 
 import { logger } from './logger';
+import { stripCRLF } from './email-safety';
 
 export async function sendEmail(
   to: { email: string; name: string }[],
@@ -13,6 +19,12 @@ export async function sendEmail(
     return false;
   }
 
+  // Defense in depth: subject and recipient names must never contain CRLF
+  // (RFC 5322 header injection). Brevo's JSON API is unlikely to honor
+  // these in practice, but we strip at the application boundary.
+  const safeSubject = stripCRLF(subject);
+  const safeTo = to.map(t => ({ email: t.email, name: stripCRLF(t.name) }));
+
   try {
     await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',
@@ -22,8 +34,8 @@ export async function sendEmail(
       },
       body: JSON.stringify({
         sender: { name: 'Cody Smith', email: 'cody@codyasmith.com' },
-        to,
-        subject,
+        to: safeTo,
+        subject: safeSubject,
         htmlContent,
       }),
     });

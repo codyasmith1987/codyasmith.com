@@ -4,10 +4,7 @@ import type { APIRoute } from 'astro';
 import { rateLimit } from '../../lib/rate-limit';
 import { logger } from '../../lib/logger';
 import { buildQuizConfirmationEmail } from '../../lib/funnel-emails';
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+import { escapeHtml, stripCRLF } from '../../lib/email-safety';
 
 export const POST: APIRoute = async ({ request, clientAddress }) => {
   const ip = clientAddress || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
@@ -57,8 +54,8 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
       body: JSON.stringify({
         sender: { name: 'codyasmith.com', email: 'cody@codyasmith.com' },
         to: [{ email: 'cody@codyasmith.com', name: 'Cody Smith' }],
-        replyTo: { email, name },
-        subject: `New visitor: ${name} (${q1} / ${q2} / ${q3} / ${q4})`,
+        replyTo: { email, name: stripCRLF(name) },
+        subject: stripCRLF(`New visitor: ${name} (${q1} / ${q2} / ${q3} / ${q4})`),
         htmlContent: `
           <h2>Someone personalized the site</h2>
           <p><strong>Name:</strong> ${escapeHtml(name)}</p>
@@ -83,8 +80,8 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         },
         body: JSON.stringify({
           sender: { name: 'Cody Smith', email: 'cody@codyasmith.com' },
-          to: [{ email, name }],
-          subject: followUp.subject,
+          to: [{ email, name: stripCRLF(name) }],
+          subject: stripCRLF(followUp.subject),
           htmlContent: followUp.html,
         }),
       });

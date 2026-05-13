@@ -4,25 +4,7 @@ import type { APIRoute } from 'astro';
 import { getScan, getMentions, insertLead } from '../../lib/db';
 import { getRecommendation } from '../../lib/recommend';
 import { generateReportToken } from '../../lib/report-token';
-
-// Escape HTML for safe interpolation into email htmlContent.
-// Prevents stored XSS from scraped brand names, summaries, etc.
-function escapeHtml(s: string | null | undefined): string {
-  if (s == null) return '';
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-// Strip CRLF from values that go into email headers (subject, sender names).
-// Prevents header injection.
-function stripCRLF(s: string | null | undefined): string {
-  if (s == null) return '';
-  return String(s).replace(/[\r\n]+/g, ' ').trim();
-}
+import { escapeHtml, stripCRLF } from '../../lib/email-safety';
 
 export const POST: APIRoute = async ({ request }) => {
   const json = (s: any, status = 200) => new Response(JSON.stringify(s), {

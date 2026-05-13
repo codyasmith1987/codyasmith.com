@@ -63,44 +63,46 @@ const faqSchema = JSON.stringify({
     "description": "SEO roadmap built on real keyword data, competitive analysis, content briefs, monthly strategy calls, and quarterly reporting. Strategy only: I steer, you execute.",
     "termsOfService": "Month-to-month after the initial audit. No annual contracts."
   })} />
-
-  <section class="pt-40 pb-24 px-6">
-    <div class="max-w-4xl mx-auto">
-      <a href="/services" class="inline-flex items-center gap-2 text-neutral-500 text-sm hover:text-neutral-300 transition-colors duration-200 mb-8 group">
-        <svg class="w-4 h-4 group-hover:-translate-x-1 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+  <!-- Hero -->
+  <section class="relative pt-40 pb-24 px-6 overflow-hidden">
+    <div class="absolute top-0 right-1/4 w-[600px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative max-w-4xl mx-auto">
+      <a href="/services" class="reveal inline-flex items-center gap-2 text-neutral-500 text-sm hover:text-neutral-300 transition-colors duration-300 mb-8 group">
+        <svg class="w-4 h-4 group-hover:-translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" />
         </svg>
         All services
       </a>
       <div class="flex items-center gap-4 mb-6">
-        <span class="text-amber-400 font-mono text-xs tracking-[0.2em]">02</span>
-        <div class="h-px bg-neutral-800 flex-1"></div>
+        <span class="reveal text-amber-400 font-mono text-xs tracking-[0.2em]">02</span>
+        <div class="reveal gradient-divider flex-1"></div>
       </div>
-      <h1 class="font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-6">
+      <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-6">
         Marketing Strategy
       </h1>
-      <p class="text-neutral-500 italic text-sm tracking-wide mb-10">I direct it. You execute it.</p>
-      <p class="text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" data-frame="default">
+      <p class="reveal text-neutral-500 italic text-sm tracking-wide mb-10">I direct it. You execute it.</p>
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" data-frame="default">
         Somebody told you to "do SEO." Somebody else said content marketing. Your brother-in-law thinks you need TikTok. You've been paying for Google Ads but you can't tell if they're working because the analytics were set up wrong in 2019 and nobody's touched them since. Meanwhile your competitor just showed up on page one for the keyword you thought was yours.
       </p>
-      <p class="text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="sun">
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="sun">
         Your business has momentum. The question isn't whether to invest in marketing. It's where. SEO, content, ads, social: there's opportunity in all of it, but you can't do everything at once. I look at where you are, where the market is moving, and build the roadmap to get there first.
       </p>
-      <p class="text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="moon">
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="moon">
         Somebody told you to "do SEO." Somebody else said content marketing. Your brother-in-law thinks you need TikTok. The analytics were set up wrong in 2019, your competitor just showed up on page one, and you can't tell if your ad spend is working. I sort through all of it and tell you what to do first.
       </p>
     </div>
   </section>
 
+  <!-- What this is / isn't -->
   <section class="py-28 px-6 surface-1">
     <div class="max-w-5xl mx-auto">
-      <div class="mb-16">
+      <div class="reveal mb-16">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Clarity</p>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">What this is and what it isn't.</h2>
       </div>
 
       <div class="grid md:grid-cols-2 gap-8">
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-8 hover:border-amber-500/40 transition-colors duration-200">
+        <div class="reveal glow-card p-8">
           <p class="text-amber-400 text-xs tracking-[0.15em] uppercase mb-6">What you get</p>
           <ul class="space-y-4 text-neutral-300 text-sm leading-relaxed">
             <li class="flex items-start gap-3">
@@ -129,7 +131,7 @@ const faqSchema = JSON.stringify({
             </li>
           </ul>
         </div>
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-8 hover:border-amber-500/40 transition-colors duration-200">
+        <div class="reveal glow-card p-8">
           <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-6">What I don't do</p>
           <ul class="space-y-4 text-neutral-400 text-sm leading-relaxed">
             <li class="flex items-start gap-3">
@@ -162,9 +164,10 @@ const faqSchema = JSON.stringify({
     </div>
   </section>
 
-  <section class="py-28 px-6 surface-2">
+  <!-- How it works -->
+  <section class="py-28 px-6 dot-grid">
     <div class="max-w-5xl mx-auto">
-      <div class="mb-16">
+      <div class="reveal mb-16">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Process</p>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Here's how it works.</h2>
         <p class="text-neutral-400 mt-4 max-w-2xl" data-vibe="default">
@@ -182,7 +185,7 @@ const faqSchema = JSON.stringify({
         <div class="absolute left-6 md:left-8 top-0 bottom-0 w-px bg-gradient-to-b from-amber-500/40 via-amber-500/20 to-transparent"></div>
 
         <div class="space-y-16">
-          <div class="relative pl-16 md:pl-20">
+          <div class="reveal relative pl-16 md:pl-20">
             <div class="absolute left-3 md:left-5 top-1 w-6 h-6 rounded-full border-2 border-amber-500 bg-neutral-950 flex items-center justify-center">
               <span class="text-amber-400 text-[10px] font-mono font-bold">1</span>
             </div>
@@ -198,7 +201,7 @@ const faqSchema = JSON.stringify({
             </p>
           </div>
 
-          <div class="relative pl-16 md:pl-20">
+          <div class="reveal relative pl-16 md:pl-20">
             <div class="absolute left-3 md:left-5 top-1 w-6 h-6 rounded-full border-2 border-amber-500/60 bg-neutral-950 flex items-center justify-center">
               <span class="text-amber-400/60 text-[10px] font-mono font-bold">2</span>
             </div>
@@ -214,7 +217,7 @@ const faqSchema = JSON.stringify({
             </p>
           </div>
 
-          <div class="relative pl-16 md:pl-20">
+          <div class="reveal relative pl-16 md:pl-20">
             <div class="absolute left-3 md:left-5 top-1 w-6 h-6 rounded-full border-2 border-amber-500/40 bg-neutral-950 flex items-center justify-center">
               <span class="text-amber-400/40 text-[10px] font-mono font-bold">3</span>
             </div>
@@ -230,7 +233,7 @@ const faqSchema = JSON.stringify({
             </p>
           </div>
 
-          <div class="relative pl-16 md:pl-20">
+          <div class="reveal relative pl-16 md:pl-20">
             <div class="absolute left-3 md:left-5 top-1 w-6 h-6 rounded-full border-2 border-amber-500/20 bg-neutral-950 flex items-center justify-center">
               <span class="text-amber-400/20 text-[10px] font-mono font-bold">4</span>
             </div>
@@ -250,45 +253,46 @@ const faqSchema = JSON.stringify({
     </div>
   </section>
 
+  <!-- Deliverables -->
   <section class="py-28 px-6 surface-1">
     <div class="max-w-5xl mx-auto">
-      <div class="mb-16">
+      <div class="reveal mb-16">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Deliverables</p>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">What you walk away with.</h2>
       </div>
 
-      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 reveal-stagger">
+        <div class="reveal glow-card p-6" style="--i:0">
           <h3 class="text-neutral-100 font-medium mb-2">Keyword research</h3>
           <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">Real search volume, real difficulty scores, grouped by intent. Not a spreadsheet dump. A prioritized list of opportunities.</p>
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">The keywords that define where your business shows up, and where it should. Prioritized by the opportunities that move the needle most.</p>
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">Search volume, keyword difficulty, intent mapping, and SERP feature analysis. Grouped by topic cluster with monthly search estimates and ranking probability.</p>
         </div>
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+        <div class="reveal glow-card p-6" style="--i:1">
           <h3 class="text-neutral-100 font-medium mb-2">Competitive analysis</h3>
           <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">Who's ranking for what you want, what they're doing differently, and where the gaps are you can exploit.</p>
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">A clear picture of who owns the search results you want and what it takes to overtake them.</p>
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">Domain authority comparisons, backlink gap analysis, content overlap mapping, and ranked list of exploitable keyword gaps with difficulty scores.</p>
         </div>
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+        <div class="reveal glow-card p-6" style="--i:2">
           <h3 class="text-neutral-100 font-medium mb-2">Content briefs</h3>
           <p class="text-neutral-500 text-sm leading-relaxed" data-processing="default">Page-level briefs with target keywords, structure recommendations, and competitive context. Hand these to your writer.</p>
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="stars">Briefs your writer can use. Keyword cluster sized, intent layered, content outline built around the SERP that's actually showing up. The questions that delay a draft, pre-answered.</p>
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="clouds">Briefs your writer can hand off and execute. They get a doc; you get a piece of content.</p>
         </div>
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+        <div class="reveal glow-card p-6" style="--i:3">
           <h3 class="text-neutral-100 font-medium mb-2">SEO roadmap</h3>
           <p class="text-neutral-500 text-sm leading-relaxed" data-processing="default">Technical fixes, content priorities, and link opportunities, sequenced by impact and effort. Updated quarterly.</p>
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="stars">Roadmap sequenced by impact-vs-effort scoring: each item ranked, each ranking traceable to the data behind it. Refreshed quarterly when the data shifts.</p>
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="clouds">Priorities ranked by impact and effort. Updated every quarter.</p>
         </div>
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+        <div class="reveal glow-card p-6" style="--i:4">
           <h3 class="text-neutral-100 font-medium mb-2">Strategy memos</h3>
           <p class="text-neutral-500 text-sm leading-relaxed" data-processing="default">When something needs your attention, a competitor move or an algorithm update, you get a clear memo with what to do about it.</p>
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="stars">Memos function as strategic pulses between calls. Algorithm updates flagged with the strategic implication. Competitor moves flagged with the recommended response. Ranking shifts past significance flagged with what to investigate.</p>
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="clouds">Strategic pulses between calls. When something matters, you hear about it before you'd notice it yourself.</p>
         </div>
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+        <div class="reveal glow-card p-6" style="--i:5">
           <h3 class="text-neutral-100 font-medium mb-2">Quarterly reports</h3>
           <p class="text-neutral-500 text-sm leading-relaxed">Rankings, traffic, conversions, and what it means. Written for decision-makers, not analysts. Executive brief up front, data behind it.</p>
         </div>
@@ -299,11 +303,11 @@ const faqSchema = JSON.stringify({
   <!-- Portal block: where the strategic engagement lives -->
   <section class="py-28 px-6">
     <div class="max-w-4xl mx-auto">
-      <div class="mb-12 text-center">
+      <div class="reveal mb-12 text-center">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">The portal</p>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">The receipt for the engagement.</h2>
       </div>
-      <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-8 md:p-10 hover:border-amber-500/40 transition-colors duration-200">
+      <div class="reveal glow-card p-8 md:p-10">
         <p class="text-neutral-300 leading-relaxed text-lg" data-frame="default">
           Every engagement runs through one portal: contracts, change orders, invoices, files, milestones, approvals, notifications. One log-in, one source of truth, one place to find anything I've ever done for you.
         </p>
@@ -320,83 +324,69 @@ const faqSchema = JSON.stringify({
     </div>
   </section>
 
+  <!-- Mid-page CTA -->
   <section class="py-16 px-6">
-    <div class="max-w-4xl mx-auto text-center">
+    <div class="max-w-4xl mx-auto text-center reveal">
       <p class="text-neutral-500 text-sm mb-4">Ready to get found?</p>
-      <a href="/contact?interest=marketing-strategy" class="inline-flex items-center justify-center px-8 py-4 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/25 hover:text-amber-400 transition-colors duration-200">
+      <a href="/contact?interest=marketing-strategy" class="inline-flex items-center justify-center px-8 py-4 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/25 hover:text-amber-400 transition-all duration-300">
         Let's talk strategy
       </a>
     </div>
   </section>
 
-  <!-- Pricing (calibrated, no public tier ladder until ecosystem routing exists) -->
-  <section class="py-28 px-6">
-    <div class="max-w-3xl mx-auto text-center">
-      <div>
-        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Pricing</p>
-        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100 mb-8">Calibrated, not off the rack.</h2>
-        <p class="text-neutral-400 text-lg leading-relaxed mb-10">
-          What you pay depends on how much strategic depth your business actually uses. Some clients want one focused audit and a clear roadmap; others want ongoing partnership at the marketing-director level. The engagement gets calibrated to that. Tell me where you're at and we'll figure out where you land.
-        </p>
-        <a href="/contact?interest=marketing-strategy" class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-colors duration-200">
-          Tell me where you're at
-        </a>
-      </div>
-    </div>
-  </section>
-
+  <!-- FAQ -->
   <section class="py-28 px-6">
     <div class="max-w-3xl mx-auto">
-      <div class="mb-16">
+      <div class="reveal mb-16">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Questions</p>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Things people ask.</h2>
       </div>
 
-      <div class="space-y-4">
-        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+      <div class="space-y-4 reveal-stagger">
+        <details class="reveal group glow-card" style="--i:0">
           <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
             Do you actually do the marketing, or just consult?
-            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
           </summary>
           <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
             I direct it. You execute it. I build the roadmap, write the briefs, and tell you what to do next. Your writer writes. Your ad person runs the ads. Your social person posts. I'm the one keeping all of it pointed in the same direction. If you don't have those people yet, I'll tell you what to hire for.
           </div>
         </details>
 
-        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+        <details class="reveal group glow-card" style="--i:1">
           <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
             What do I have to commit to?
-            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
           </summary>
           <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
             The initial audit and roadmap is a fixed scope. After that it's month-to-month. No annual contracts. If a quarter goes by and you're not getting value, you can stop. I'd rather keep clients who want to be there than lock people into something they've outgrown.
           </div>
         </details>
 
-        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+        <details class="reveal group glow-card" style="--i:2">
           <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
             How do you measure success?
-            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
           </summary>
           <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
             Rankings, organic traffic, conversions. Numbers that tie back to revenue, not vanity metrics. Quarterly, the data goes on the table. If something isn't working, I say so. You won't get a report that makes bad news sound like progress.
           </div>
         </details>
 
-        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+        <details class="reveal group glow-card" style="--i:3">
           <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
             Can you work with my existing SEO or content vendor?
-            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
           </summary>
           <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
             Yes. I do this often. Most agencies are fine at execution but light on direction. I bring the strategy, hand them briefs they can actually use, and stay in the loop on what's shipping. If your current vendor is the problem, I'll tell you that too.
           </div>
         </details>
 
-        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+        <details class="reveal group glow-card" style="--i:4">
           <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
             How is this different from hiring a marketing agency?
-            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
           </summary>
           <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
             Agencies sell hours and deliverables. I sell direction. You're not paying for a team of account managers and junior strategists. You're paying for one person who's been doing this for fifteen years to tell you what to focus on and what to stop doing. Smaller scope, sharper output.
@@ -406,13 +396,31 @@ const faqSchema = JSON.stringify({
     </div>
   </section>
 
-  <section class="py-32 px-6 surface-1">
+  <!-- Pricing (calibrated, no public tier ladder until ecosystem routing exists) -->
+  <section class="py-28 px-6">
     <div class="max-w-3xl mx-auto text-center">
-      <h2 class="font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Know what you need to do next?</h2>
-      <p class="text-neutral-400 text-lg mb-10" data-processing="default">If the answer is "not really," that's exactly what this solves.</p>
-      <p class="text-neutral-400 text-lg mb-10" style="display:none" data-processing="stars">Here's what the data says about your visibility: most businesses leave winnable organic positions uncontested. I'll show you yours, named and prioritized.</p>
-      <p class="text-neutral-400 text-lg mb-10" style="display:none" data-processing="clouds">Let's figure out where people should find you, and make sure they actually do. No jargon, no dashboards you'll never check. Just clear direction.</p>
-      <a href="/contact?interest=marketing-strategy" class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-colors duration-200">
+      <div class="reveal">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Pricing</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100 mb-8">Calibrated, not off the rack.</h2>
+        <p class="text-neutral-400 text-lg leading-relaxed mb-10">
+          What you pay depends on how much strategic depth your business actually uses. Some clients want one focused audit and a clear roadmap; others want ongoing partnership at the marketing-director level. The engagement gets calibrated to that. Tell me where you're at and we'll figure out where you land.
+        </p>
+        <a href="/contact?interest=marketing-strategy" class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
+          Tell me where you're at
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="relative py-32 px-6 surface-1 overflow-hidden">
+    <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative max-w-3xl mx-auto text-center">
+      <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Know what you need to do next?</h2>
+      <p class="reveal text-neutral-400 text-lg mb-10" data-processing="default">If the answer is "not really," that's exactly what this solves.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-processing="stars">Here's what the data says about your visibility: most businesses leave winnable organic positions uncontested. I'll show you yours, named and prioritized.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-processing="clouds">Let's figure out where people should find you, and make sure they actually do. No jargon, no dashboards you'll never check. Just clear direction.</p>
+      <a href="/contact?interest=marketing-strategy" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
         Build your roadmap
       </a>
     </div>

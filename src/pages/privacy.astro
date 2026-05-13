@@ -3,11 +3,11 @@ import Base from '../layouts/Base.astro';
 ---
 
 <Base title="Privacy Policy | Cody Smith" description="How codyasmith.com handles your data." ogImage="/og/privacy.png" ogImageAlt="Privacy Policy: what I collect, why, and how to delete it.">
-  <section class="pt-40 pb-16 px-6">
-    <div class="max-w-3xl mx-auto">
-      <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Legal</p>
-      <h1 class="font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10">Privacy Policy</h1>
-      <p class="text-neutral-500 text-sm">Last updated: April 28, 2026</p>
+  <section class="relative pt-40 pb-16 px-6">
+    <div class="relative max-w-3xl mx-auto">
+      <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Legal</p>
+      <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10">Privacy Policy</h1>
+      <p class="reveal text-neutral-500 text-sm">Last updated: April 28, 2026</p>
     </div>
   </section>
 
@@ -15,12 +15,12 @@ import Base from '../layouts/Base.astro';
     <div class="max-w-3xl mx-auto prose-custom">
       <div class="space-y-12 text-neutral-400 text-sm leading-relaxed">
 
-        <div>
+        <div class="reveal">
           <h2 class="text-neutral-100 font-serif text-2xl mb-4">The short version</h2>
           <p>I collect only what I need to do the thing you asked me to do. I don't sell your data. I don't share it with anyone except the services required to deliver what you requested (email delivery, file storage). If you want your data deleted, email me and I'll do it.</p>
         </div>
 
-        <div>
+        <div class="reveal">
           <h2 class="text-neutral-100 font-serif text-2xl mb-4">What I collect and why</h2>
 
           <h3 class="text-neutral-200 font-medium text-base mt-6 mb-2">Contact form</h3>
@@ -39,7 +39,7 @@ import Base from '../layouts/Base.astro';
           <p>Every request to a public page on this site (not portal pages, not static assets) is logged server-side. Captured: the URL path, HTTP method, referring URL if any, your user-agent string, your country (provided by Cloudflare), and the response status code. No IP address is stored. No cookies are set for this. No data leaves my server. I use it for traffic patterns and debugging. My target retention is 90 days; I delete older logs periodically.</p>
         </div>
 
-        <div>
+        <div class="reveal">
           <h2 class="text-neutral-100 font-serif text-2xl mb-4">Third-party services</h2>
           <ul class="list-disc list-inside space-y-2">
             <li><strong class="text-neutral-200">Brevo</strong>: transactional email delivery (contact form, magic links, scanner reports)</li>
@@ -54,7 +54,7 @@ import Base from '../layouts/Base.astro';
           <p class="mt-4">I don't load Google Analytics, Microsoft Clarity, Facebook Pixel, or any other third-party tracking or advertising scripts on this site.</p>
         </div>
 
-        <div>
+        <div class="reveal">
           <h2 class="text-neutral-100 font-serif text-2xl mb-4">Cookies</h2>
           <p>Two cookies are set when you visit this site:</p>
           <ul class="list-disc list-inside space-y-2 mt-3">
@@ -64,17 +64,17 @@ import Base from '../layouts/Base.astro';
           <p class="mt-4">No analytics cookies. No advertising cookies. No Google or Microsoft or Facebook tracking pixels.</p>
         </div>
 
-        <div>
+        <div class="reveal">
           <h2 class="text-neutral-100 font-serif text-2xl mb-4">Your rights</h2>
           <p>You can ask me to delete any data I have about you. Email <a href="mailto:cody@codyasmith.com" class="text-amber-400/60 hover:text-amber-400 transition-colors">cody@codyasmith.com</a> and I'll handle it within 5 business days. If you're a portal client, I'll export your data before deletion if you want it.</p>
         </div>
 
-        <div>
+        <div class="reveal">
           <h2 class="text-neutral-100 font-serif text-2xl mb-4">Changes</h2>
           <p>If I change this policy in a meaningful way, I'll update the date at the top. I won't email you about it unless you're a portal client and the change affects how your data is stored.</p>
         </div>
 
-        <div>
+        <div class="reveal">
           <h2 class="text-neutral-100 font-serif text-2xl mb-4">Questions</h2>
           <p>Email me: <a href="mailto:cody@codyasmith.com" class="text-amber-400/60 hover:text-amber-400 transition-colors">cody@codyasmith.com</a></p>
         </div>

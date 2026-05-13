@@ -3,60 +3,62 @@ import Base from '../layouts/Base.astro';
 ---
 
 <Base title="Services | Web Management, Marketing Strategy & Training" description="Web management, marketing strategy, training, and implementation. Monthly retainers, not hourly surprises." ogImage="/og/services.png" ogImageAlt="Services: web management, marketing strategy, implementation, training.">
-  <section class="pt-40 pb-24 px-6">
-    <div class="max-w-4xl mx-auto">
-      <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Services</p>
+  <section class="relative pt-40 pb-24 px-6 overflow-hidden">
+    <div class="absolute top-0 right-0 w-[400px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative max-w-4xl mx-auto">
+      <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Services</p>
       <!-- Stacked H1 variants are intentional. Each is server-rendered for SEO weight on
            segment-targeted copy (data-vibe axis: default / beach / mountain). swapAxis in
            Base.astro toggles display and aria-hidden so one variant is visible and announced
            per session. See swapAxis comment for the full rationale. -->
-      <h1 class="font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10" data-vibe="default">
+      <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10" data-vibe="default">
         Four things I do.<br />
-        Here's how each one works.
+        <span class="gradient-text">Here's how each one works.</span>
       </h1>
-      <div class="font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10" style="display:none" aria-hidden="true" role="heading" aria-level="1" data-vibe="beach">
+      <div class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10" style="display:none" aria-hidden="true" role="heading" aria-level="1" data-vibe="beach">
         Four ways I make your<br />
-        business visible.
+        <span class="gradient-text">business visible.</span>
       </div>
-      <div class="font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10" style="display:none" aria-hidden="true" role="heading" aria-level="1" data-vibe="mountain">
+      <div class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10" style="display:none" aria-hidden="true" role="heading" aria-level="1" data-vibe="mountain">
         Four ways I strengthen<br />
-        what's under the hood.
+        <span class="gradient-text">what's under the hood.</span>
       </div>
-      <p class="text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" data-frame="default">
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" data-frame="default">
         Monthly retainers, not hourly surprises. Pricing is a conversation, not a checkbox grid. Everything is month-to-month after onboarding because if I'm not earning the next month, I shouldn't get it.
       </p>
-      <p class="text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="sun">
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="sun">
         Monthly retainers that grow with you. Pricing is a conversation, not a checkbox grid you have to fit yourself into. Everything is month-to-month because if I'm not earning the next month, I shouldn't get it.
       </p>
-      <p class="text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="moon">
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="moon">
         Monthly retainers, not hourly surprises. Pricing is a conversation, not a checkbox grid. No long-term contracts. No scope creep. If I'm not earning the next month, I shouldn't get it.
       </p>
     </div>
   </section>
 
+  <!-- Web Management -->
   <section class="py-28 px-6 surface-1">
     <div class="max-w-5xl mx-auto">
-      <div class="flex items-center gap-4 mb-6">
+      <div class="reveal flex items-center gap-4 mb-6">
         <span class="text-amber-400 font-mono text-xs tracking-[0.2em]">01</span>
-        <div class="h-px bg-neutral-800 flex-1"></div>
+        <div class="gradient-divider flex-1"></div>
       </div>
       <div class="grid lg:grid-cols-5 gap-12 items-start">
         <div class="lg:col-span-3">
           <a href="/services/web-management" class="group">
-            <h2 class="font-serif text-4xl md:text-5xl text-neutral-100 mb-3 group-hover:text-amber-400 transition-colors duration-200 inline-flex items-center gap-4">Web Management <svg class="w-8 h-8 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-2 transition-all duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg></h2>
+            <h2 class="reveal font-serif text-4xl md:text-5xl text-neutral-100 mb-3 group-hover:text-amber-400 transition-colors duration-300 inline-flex items-center gap-4">Web Management <svg class="w-8 h-8 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-2 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg></h2>
           </a>
-          <p class="text-neutral-500 italic text-sm tracking-wide mb-8">Your site lives on my infrastructure.</p>
+          <p class="reveal text-neutral-500 italic text-sm tracking-wide mb-8">Your site lives on my infrastructure.</p>
           <div class="space-y-5 text-neutral-400 leading-relaxed">
-            <p>
+            <p class="reveal">
               Your site is probably on shared hosting you don't control, running plugins that haven't been updated in months, with nobody watching if it goes down at 2am on a Saturday. You find out something broke when a customer tells you.
             </p>
-            <p>
+            <p class="reveal">
               I take over the whole thing. Your site moves to dedicated cloud hosting under my management. I handle updates, security, backups, and monitoring. Every month you get a plain-language report showing exactly what happened and what's next. You stop thinking about it.
             </p>
           </div>
         </div>
-        <div class="lg:col-span-2">
-          <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+        <div class="lg:col-span-2 reveal">
+          <div class="glow-card p-6">
             <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Includes</p>
             <ul class="text-neutral-300 text-sm space-y-3">
               <li class="flex items-start gap-3">
@@ -94,29 +96,30 @@ import Base from '../layouts/Base.astro';
     </div>
   </section>
 
-  <section class="py-28 px-6 surface-2">
+  <!-- Marketing Strategy -->
+  <section class="py-28 px-6 dot-grid">
     <div class="max-w-5xl mx-auto">
-      <div class="flex items-center gap-4 mb-6">
+      <div class="reveal flex items-center gap-4 mb-6">
         <span class="text-amber-400 font-mono text-xs tracking-[0.2em]">02</span>
-        <div class="h-px bg-neutral-800 flex-1"></div>
+        <div class="gradient-divider flex-1"></div>
       </div>
       <div class="grid lg:grid-cols-5 gap-12 items-start">
         <div class="lg:col-span-3">
           <a href="/services/marketing-strategy" class="group">
-            <h2 class="font-serif text-4xl md:text-5xl text-neutral-100 mb-3 group-hover:text-amber-400 transition-colors duration-200 inline-flex items-center gap-4">Marketing Strategy <svg class="w-8 h-8 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-2 transition-all duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg></h2>
+            <h2 class="reveal font-serif text-4xl md:text-5xl text-neutral-100 mb-3 group-hover:text-amber-400 transition-colors duration-300 inline-flex items-center gap-4">Marketing Strategy <svg class="w-8 h-8 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-2 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg></h2>
           </a>
-          <p class="text-neutral-500 italic text-sm tracking-wide mb-8">I direct it. You execute it.</p>
+          <p class="reveal text-neutral-500 italic text-sm tracking-wide mb-8">I direct it. You execute it.</p>
           <div class="space-y-5 text-neutral-400 leading-relaxed">
-            <p>
+            <p class="reveal">
               You know your marketing could be better but you don't know where to start. There's SEO, content, ads, social, email, and twelve opinions about which one matters most. Meanwhile the site has no meta descriptions, your competitor is outranking you, and you can't tell if your traffic is going up or down because nobody set up the tracking right.
             </p>
-            <p>
+            <p class="reveal">
               I sort through all of it and tell you what to do first. An SEO roadmap built on real keyword data. Competitive analysis that names names. Content briefs your writer can actually use. Monthly calls to keep it on track.
             </p>
           </div>
         </div>
-        <div class="lg:col-span-2">
-          <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+        <div class="lg:col-span-2 reveal">
+          <div class="glow-card p-6">
             <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">Starts with</p>
             <p class="text-neutral-300 text-sm leading-relaxed mb-6">
               A strategic audit. A full read of your site, your market, and your competitors. The findings become your roadmap.
@@ -150,31 +153,32 @@ import Base from '../layouts/Base.astro';
     </div>
   </section>
 
+  <!-- Implementation -->
   <section class="py-28 px-6 surface-1">
     <div class="max-w-5xl mx-auto">
-      <div class="flex items-center gap-4 mb-6">
+      <div class="reveal flex items-center gap-4 mb-6">
         <span class="text-amber-400 font-mono text-xs tracking-[0.2em]">03</span>
-        <div class="h-px bg-neutral-800 flex-1"></div>
+        <div class="gradient-divider flex-1"></div>
       </div>
       <a href="/services/implementation" class="group">
-        <h2 class="font-serif text-4xl md:text-5xl text-neutral-100 mb-3 group-hover:text-amber-400 transition-colors duration-200 inline-flex items-center gap-4">Implementation <svg class="w-8 h-8 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-2 transition-all duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg></h2>
+        <h2 class="reveal font-serif text-4xl md:text-5xl text-neutral-100 mb-3 group-hover:text-amber-400 transition-colors duration-300 inline-flex items-center gap-4">Implementation <svg class="w-8 h-8 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-2 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg></h2>
       </a>
-      <p class="text-neutral-500 italic text-sm tracking-wide mb-8">Scoped projects. Start, build, hand over.</p>
-      <div class="text-neutral-400 leading-relaxed max-w-3xl mb-12">
+      <p class="reveal text-neutral-500 italic text-sm tracking-wide mb-8">Scoped projects. Start, build, hand over.</p>
+      <div class="reveal text-neutral-400 leading-relaxed max-w-3xl mb-12">
         <p>
           Your contact form submissions aren't reaching your CRM. Your analytics aren't tracking conversions. You need landing pages for a market you're entering but they don't exist yet. These are projects with a start, a scope, and a finish line. I scope it, quote it, build it, and hand it over working.
         </p>
       </div>
-      <div class="grid md:grid-cols-3 gap-6">
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+      <div class="grid md:grid-cols-3 gap-6 reveal-stagger">
+        <div class="reveal glow-card p-6" style="--i:0">
           <h3 class="text-neutral-100 font-medium mb-3">Integrations</h3>
           <p class="text-neutral-500 text-sm leading-relaxed">Form-to-CRM, analytics, email marketing, payment systems. The connections between your website and the tools your business actually runs on.</p>
         </div>
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+        <div class="reveal glow-card p-6" style="--i:1">
           <h3 class="text-neutral-100 font-medium mb-3">Page builds</h3>
           <p class="text-neutral-500 text-sm leading-relaxed">Landing pages, service pages, content rewrites. The pages that need to exist for your marketing to work.</p>
         </div>
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+        <div class="reveal glow-card p-6" style="--i:2">
           <h3 class="text-neutral-100 font-medium mb-3">Analytics setup</h3>
           <p class="text-neutral-500 text-sm leading-relaxed">GA4, Search Console, conversion tracking. Configured so the data you see actually means something.</p>
         </div>
@@ -182,33 +186,34 @@ import Base from '../layouts/Base.astro';
     </div>
   </section>
 
+  <!-- Training -->
   <section class="py-28 px-6">
     <div class="max-w-5xl mx-auto">
-      <div class="flex items-center gap-4 mb-6">
+      <div class="reveal flex items-center gap-4 mb-6">
         <span class="text-amber-400 font-mono text-xs tracking-[0.2em]">04</span>
-        <div class="h-px bg-neutral-800 flex-1"></div>
+        <div class="gradient-divider flex-1"></div>
       </div>
       <div class="grid lg:grid-cols-5 gap-12 items-start">
         <div class="lg:col-span-3">
           <a href="/services/training" class="group">
-            <h2 class="font-serif text-4xl md:text-5xl text-neutral-100 mb-3 group-hover:text-amber-400 transition-colors duration-200 inline-flex items-center gap-4">Training <svg class="w-8 h-8 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-2 transition-all duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg></h2>
+            <h2 class="reveal font-serif text-4xl md:text-5xl text-neutral-100 mb-3 group-hover:text-amber-400 transition-colors duration-300 inline-flex items-center gap-4">Training <svg class="w-8 h-8 text-neutral-700 group-hover:text-amber-400 group-hover:translate-x-2 transition-all duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg></h2>
           </a>
-          <p class="text-neutral-500 italic text-sm tracking-wide mb-8">Built on learning science, not slide decks.</p>
+          <p class="reveal text-neutral-500 italic text-sm tracking-wide mb-8">Built on learning science, not slide decks.</p>
           <div class="space-y-5 text-neutral-400 leading-relaxed">
-            <p>
+            <p class="reveal">
               Your team sat through a training webinar last year. They forgot 80% of it within a week. Now they still ask you to "update the website" because nobody actually learned how. The problem isn't your team. The problem is that one-shot training doesn't work.
             </p>
-            <p>
+            <p class="reveal">
               I build guided programs. Three sessions over three to four weeks, with real assignments between them. Your team practices on their own systems, makes mistakes in a safe context, and comes back with questions that matter.
             </p>
           </div>
         </div>
-        <div class="lg:col-span-2 space-y-6">
-          <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+        <div class="lg:col-span-2 space-y-6 reveal-stagger">
+          <div class="reveal glow-card p-6" style="--i:0">
             <h3 class="text-neutral-100 font-medium mb-2">WordPress and SEO</h3>
             <p class="text-neutral-500 text-sm leading-relaxed">Content management, basic SEO, site maintenance. Your team stops being dependent on you for every small change.</p>
           </div>
-          <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+          <div class="reveal glow-card p-6" style="--i:1">
             <h3 class="text-neutral-100 font-medium mb-2">AI Workflows</h3>
             <p class="text-neutral-500 text-sm leading-relaxed">When to use AI, when not to, and how to tell the difference. Judgment first, tools second.</p>
           </div>
@@ -217,13 +222,15 @@ import Base from '../layouts/Base.astro';
     </div>
   </section>
 
-  <section class="py-32 px-6 surface-1">
-    <div class="max-w-3xl mx-auto text-center">
-      <h2 class="font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Not sure where to start<span data-personalize="name-comma" style="display:none"></span>?</h2>
-      <p class="text-neutral-400 text-lg mb-10" data-frame="default">Tell me what's going on and I'll tell you which of these makes sense. Sometimes the answer is "none of them, here's what you actually need."</p>
-      <p class="text-neutral-400 text-lg mb-10" style="display:none" data-frame="sun">Tell me where you're headed and I'll tell you which of these gets you there fastest. Sometimes the answer is "none of them, here's what you actually need."</p>
-      <p class="text-neutral-400 text-lg mb-10" style="display:none" data-frame="moon">Tell me what's not working and I'll tell you which of these fixes it. Sometimes the answer is "none of them, here's what you actually need."</p>
-      <a href="/contact" class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-colors duration-200">
+  <!-- CTA -->
+  <section class="relative py-32 px-6 surface-1 overflow-hidden">
+    <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative max-w-3xl mx-auto text-center">
+      <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Not sure where to start<span data-personalize="name-comma" style="display:none"></span>?</h2>
+      <p class="reveal text-neutral-400 text-lg mb-10" data-frame="default">Tell me what's going on and I'll tell you which of these makes sense. Sometimes the answer is "none of them, here's what you actually need."</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-frame="sun">Tell me where you're headed and I'll tell you which of these gets you there fastest. Sometimes the answer is "none of them, here's what you actually need."</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-frame="moon">Tell me what's not working and I'll tell you which of these fixes it. Sometimes the answer is "none of them, here's what you actually need."</p>
+      <a href="/contact" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
         Start a conversation
       </a>
     </div>

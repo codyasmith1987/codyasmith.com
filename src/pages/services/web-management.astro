@@ -63,41 +63,43 @@ const faqSchema = JSON.stringify({
     "description": "Dedicated cloud hosting, security monitoring, daily backups, core and plugin updates, and a monthly Site Health Report. Month-to-month after onboarding.",
     "termsOfService": "Month-to-month after onboarding. No lock-in. Full backup and 30 days to migrate elsewhere on exit."
   })} />
-
-  <section class="pt-40 pb-24 px-6">
-    <div class="max-w-4xl mx-auto">
-      <a href="/services" class="inline-flex items-center gap-2 text-neutral-500 text-sm hover:text-neutral-300 transition-colors duration-200 mb-8 group">
-        <svg class="w-4 h-4 group-hover:-translate-x-1 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+  <!-- Hero -->
+  <section class="relative pt-40 pb-24 px-6 overflow-hidden">
+    <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative max-w-4xl mx-auto">
+      <a href="/services" class="reveal inline-flex items-center gap-2 text-neutral-500 text-sm hover:text-neutral-300 transition-colors duration-300 mb-8 group">
+        <svg class="w-4 h-4 group-hover:-translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" />
         </svg>
         All services
       </a>
       <div class="flex items-center gap-4 mb-6">
-        <span class="text-amber-400 font-mono text-xs tracking-[0.2em]">01</span>
-        <div class="h-px bg-neutral-800 flex-1"></div>
+        <span class="reveal text-amber-400 font-mono text-xs tracking-[0.2em]">01</span>
+        <div class="reveal gradient-divider flex-1"></div>
       </div>
-      <h1 class="font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-6">
+      <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-6">
         Web Management
       </h1>
-      <p class="text-neutral-500 italic text-sm tracking-wide mb-10">Your site lives on my infrastructure.</p>
-      <p class="text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" data-frame="default">
+      <p class="reveal text-neutral-500 italic text-sm tracking-wide mb-10">Your site lives on my infrastructure.</p>
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" data-frame="default">
         I ask clients who hosts their website. Most of them don't know. They think it's GoDaddy but they're not sure. Nobody's logged in since the last developer left. The SSL certificate expired two months ago and nobody noticed until a customer mentioned the warning screen. That's the moment I usually get the call.
       </p>
-      <p class="text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="sun">
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="sun">
         Your website should be the one thing that just works. Dedicated cloud hosting, managed security, daily backups, proactive monitoring, all under one roof. You focus on the business. I make sure the site keeps up with it.
       </p>
-      <p class="text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="moon">
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="moon">
         I ask clients who hosts their website. Most of them don't know. The SSL expired two months ago and a customer mentioned the warning screen before anyone on staff noticed. The last developer left and took the credentials. That's the moment I usually get the call.
       </p>
-      <p class="text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl mt-6">
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl mt-6">
         What I run for clients is WordPress. WordPress where it earns its keep. Something simpler where it doesn't.
       </p>
     </div>
   </section>
 
+  <!-- How it works -->
   <section class="py-28 px-6 surface-1">
     <div class="max-w-5xl mx-auto">
-      <div class="mb-16">
+      <div class="reveal mb-16">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Process</p>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Here's what happens.</h2>
         <p class="text-neutral-400 mt-4 max-w-2xl" data-vibe="default">
@@ -116,7 +118,7 @@ const faqSchema = JSON.stringify({
         <div class="absolute left-6 md:left-8 top-0 bottom-0 w-px bg-gradient-to-b from-amber-500/40 via-amber-500/20 to-transparent"></div>
 
         <div class="space-y-16">
-          <div class="relative pl-16 md:pl-20">
+          <div class="reveal relative pl-16 md:pl-20">
             <div class="absolute left-3 md:left-5 top-1 w-6 h-6 rounded-full border-2 border-amber-500 bg-neutral-950 flex items-center justify-center">
               <span class="text-amber-400 text-[10px] font-mono font-bold">1</span>
             </div>
@@ -132,7 +134,7 @@ const faqSchema = JSON.stringify({
             </p>
           </div>
 
-          <div class="relative pl-16 md:pl-20">
+          <div class="reveal relative pl-16 md:pl-20">
             <div class="absolute left-3 md:left-5 top-1 w-6 h-6 rounded-full border-2 border-amber-500/60 bg-neutral-950 flex items-center justify-center">
               <span class="text-amber-400/60 text-[10px] font-mono font-bold">2</span>
             </div>
@@ -148,7 +150,7 @@ const faqSchema = JSON.stringify({
             </p>
           </div>
 
-          <div class="relative pl-16 md:pl-20">
+          <div class="reveal relative pl-16 md:pl-20">
             <div class="absolute left-3 md:left-5 top-1 w-6 h-6 rounded-full border-2 border-amber-500/40 bg-neutral-950 flex items-center justify-center">
               <span class="text-amber-400/40 text-[10px] font-mono font-bold">3</span>
             </div>
@@ -164,7 +166,7 @@ const faqSchema = JSON.stringify({
             </p>
           </div>
 
-          <div class="relative pl-16 md:pl-20">
+          <div class="reveal relative pl-16 md:pl-20">
             <div class="absolute left-3 md:left-5 top-1 w-6 h-6 rounded-full border-2 border-amber-500/20 bg-neutral-950 flex items-center justify-center">
               <span class="text-amber-400/20 text-[10px] font-mono font-bold">4</span>
             </div>
@@ -184,15 +186,16 @@ const faqSchema = JSON.stringify({
     </div>
   </section>
 
-  <section class="py-28 px-6 surface-2">
+  <!-- What's included -->
+  <section class="py-28 px-6 dot-grid">
     <div class="max-w-5xl mx-auto">
-      <div class="mb-16">
+      <div class="reveal mb-16">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Coverage</p>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">What's covered.</h2>
       </div>
 
-      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 reveal-stagger">
+        <div class="reveal glow-card p-6" style="--i:0">
           <div class="text-amber-400 mb-4">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" /></svg>
           </div>
@@ -201,7 +204,7 @@ const faqSchema = JSON.stringify({
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">Your site gets its own server: fast, stable, and built to grow with your business.</p>
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">Dedicated VPS with isolated resources, SSD storage, server-level caching, and manual configuration. No shared hosting neighbors.</p>
         </div>
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+        <div class="reveal glow-card p-6" style="--i:1">
           <div class="text-amber-400 mb-4">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
           </div>
@@ -210,7 +213,7 @@ const faqSchema = JSON.stringify({
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">Layered security that keeps threats out so you never have to think about them.</p>
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">SSL provisioning, WAF rules, brute-force protection, file integrity monitoring, and weekly malware scans with automated alerting.</p>
         </div>
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+        <div class="reveal glow-card p-6" style="--i:2">
           <div class="text-amber-400 mb-4">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
           </div>
@@ -219,7 +222,7 @@ const faqSchema = JSON.stringify({
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">Updates handled the way they should be: tested before they touch your live site. You never see the broken version.</p>
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">WordPress core, theme, and plugin updates are staged, regression-tested, screenshotted, and deployed with a rollback plan in place. No "update all and pray."</p>
         </div>
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+        <div class="reveal glow-card p-6" style="--i:3">
           <div class="text-amber-400 mb-4">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" /></svg>
           </div>
@@ -228,7 +231,7 @@ const faqSchema = JSON.stringify({
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">The site can always go back to the way it was yesterday. That's the floor.</p>
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">Automated daily snapshot of files and database. 30-day retention, off-site storage, point-in-time restore tested every quarter. Disaster recovery is not theoretical.</p>
         </div>
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+        <div class="reveal glow-card p-6" style="--i:4">
           <div class="text-amber-400 mb-4">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
           </div>
@@ -237,7 +240,7 @@ const faqSchema = JSON.stringify({
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">If the site goes down, I know about it before your customers do. They almost never see a downtime moment that wasn't planned.</p>
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">UptimeRobot probes the site every 60 seconds from multiple regions. Alerts route to me by SMS and email within seconds of any failed check. Public status data available on request.</p>
         </div>
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+        <div class="reveal glow-card p-6" style="--i:5">
           <div class="text-amber-400 mb-4">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
           </div>
@@ -253,11 +256,11 @@ const faqSchema = JSON.stringify({
   <!-- Portal block: where the engagement lives -->
   <section class="py-28 px-6">
     <div class="max-w-4xl mx-auto">
-      <div class="mb-12 text-center">
+      <div class="reveal mb-12 text-center">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">The portal</p>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">The receipt for the engagement.</h2>
       </div>
-      <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-8 md:p-10 hover:border-amber-500/40 transition-colors duration-200">
+      <div class="reveal glow-card p-8 md:p-10">
         <p class="text-neutral-300 leading-relaxed text-lg" data-frame="default">
           Every engagement runs through one portal: contracts, change orders, invoices, files, milestones, approvals, notifications. One log-in, one source of truth, one place to find anything I've ever done for you.
         </p>
@@ -274,10 +277,11 @@ const faqSchema = JSON.stringify({
     </div>
   </section>
 
+  <!-- Mid-page CTA -->
   <section class="py-16 px-6">
-    <div class="max-w-4xl mx-auto text-center">
+    <div class="max-w-4xl mx-auto text-center reveal">
       <p class="text-neutral-500 text-sm mb-4">Sound like what you need?</p>
-      <a href="/contact?interest=web-management" class="inline-flex items-center justify-center px-8 py-4 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/25 hover:text-amber-400 transition-colors duration-200">
+      <a href="/contact?interest=web-management" class="inline-flex items-center justify-center px-8 py-4 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/25 hover:text-amber-400 transition-all duration-300">
         Let's talk about your site
       </a>
     </div>
@@ -286,71 +290,72 @@ const faqSchema = JSON.stringify({
   <!-- Pricing (calibrated, no public tier ladder until ecosystem routing exists) -->
   <section class="py-28 px-6 surface-1">
     <div class="max-w-3xl mx-auto text-center">
-      <div>
+      <div class="reveal">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Pricing</p>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100 mb-8">Calibrated, not off the rack.</h2>
         <p class="text-neutral-400 text-lg leading-relaxed mb-10">
           Pricing is calibrated to your site. A 20-page brochure site doesn't carry the same maintenance load as a 120-page lead-generation engine. Tell me what you're running and I'll show you what fits.
         </p>
-        <a href="/contact?interest=web-management" class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-colors duration-200">
+        <a href="/contact?interest=web-management" class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
           Tell me about your site
         </a>
       </div>
     </div>
   </section>
 
+  <!-- FAQ -->
   <section class="py-28 px-6">
     <div class="max-w-3xl mx-auto">
-      <div class="mb-16">
+      <div class="reveal mb-16">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Questions</p>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Things people ask.</h2>
       </div>
 
-      <div class="space-y-4">
-        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+      <div class="space-y-4 reveal-stagger">
+        <details class="reveal group glow-card" style="--i:0">
           <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
             What happens to my current hosting?
-            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
           </summary>
           <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
             It moves to mine. I handle DNS, files, database, email routing. Once everything's running and you've confirmed it, you cancel the old account. Zero downtime. Most clients don't even realize the switch happened until they see the speed difference.
           </div>
         </details>
 
-        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+        <details class="reveal group glow-card" style="--i:1">
           <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
             Do I still have access to my site?
-            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
           </summary>
           <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
             Yes. Full WordPress admin. Log in, edit content, publish posts. It's your site. I handle the engine room. You keep the keys to the front door.
           </div>
         </details>
 
-        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+        <details class="reveal group glow-card" style="--i:2">
           <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
             What if I want to leave?
-            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
           </summary>
           <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
             Month-to-month after onboarding. No contracts, no lock-in. If you leave, I hand you a full backup and give you 30 days to land somewhere else. I don't hold sites hostage. That's the other guy's move.
           </div>
         </details>
 
-        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+        <details class="reveal group glow-card" style="--i:3">
           <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
             What about my domain and email?
-            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
           </summary>
           <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
             Your domain is yours. I never touch ownership. Email keeps working through the migration. If you're currently running email through your shared host (and a lot of people are without realizing it), I'll set up something that won't go dark when the old hosting gets canceled.
           </div>
         </details>
 
-        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+        <details class="reveal group glow-card" style="--i:4">
           <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
             Do maintenance hours roll over?
-            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
           </summary>
           <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
             No. Use them or lose them. Keeps it simple and keeps pricing honest for both of us. If you're consistently using more than your tier allows, we bump you up. Consistently using fewer, we bump you down. Nobody pays for time they're not using.
@@ -360,13 +365,15 @@ const faqSchema = JSON.stringify({
     </div>
   </section>
 
-  <section class="py-32 px-6 surface-1">
-    <div class="max-w-3xl mx-auto text-center">
-      <h2 class="font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Ready to hand it off?</h2>
-      <p class="text-neutral-400 text-lg mb-10" data-processing="default">Tell me what you're running and I'll tell you what the migration looks like.</p>
-      <p class="text-neutral-400 text-lg mb-10" style="display:none" data-processing="stars">Managed uptime tracks above the industry 99.9% threshold, monitored every 60 seconds. Public data available on request. Tell me what you're running and I'll show you the numbers.</p>
-      <p class="text-neutral-400 text-lg mb-10" style="display:none" data-processing="clouds">You shouldn't have to worry about whether your site is up. Tell me what you're running and let's make it something you never think about again.</p>
-      <a href="/contact?interest=web-management" class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-colors duration-200">
+  <!-- CTA -->
+  <section class="relative py-32 px-6 surface-1 overflow-hidden">
+    <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative max-w-3xl mx-auto text-center">
+      <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Ready to hand it off?</h2>
+      <p class="reveal text-neutral-400 text-lg mb-10" data-processing="default">Tell me what you're running and I'll tell you what the migration looks like.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-processing="stars">Managed uptime tracks above the industry 99.9% threshold, monitored every 60 seconds. Public data available on request. Tell me what you're running and I'll show you the numbers.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-processing="clouds">You shouldn't have to worry about whether your site is up. Tell me what you're running and let's make it something you never think about again.</p>
+      <a href="/contact?interest=web-management" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
         Tell me about your site
       </a>
     </div>

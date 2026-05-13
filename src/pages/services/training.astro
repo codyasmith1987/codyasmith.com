@@ -113,38 +113,40 @@ const serviceSchema = JSON.stringify({
   <script type="application/ld+json" set:html={faqSchema} />
   <script type="application/ld+json" set:html={serviceSchema} />
   <script type="application/ld+json" set:html={JSON.stringify({"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://codyasmith.com/"},{"@type":"ListItem","position":2,"name":"Services","item":"https://codyasmith.com/services"},{"@type":"ListItem","position":3,"name":"Training","item":"https://codyasmith.com/services/training"}]})} />
-
-  <section class="pt-40 pb-24 px-6">
-    <div class="max-w-4xl mx-auto">
-      <a href="/services" class="inline-flex items-center gap-2 text-neutral-500 text-sm hover:text-neutral-300 transition-colors duration-200 mb-8 group">
-        <svg class="w-4 h-4 group-hover:-translate-x-1 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+  <!-- Hero -->
+  <section class="relative pt-40 pb-24 px-6 overflow-hidden">
+    <div class="absolute top-0 right-1/3 w-[600px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative max-w-4xl mx-auto">
+      <a href="/services" class="reveal inline-flex items-center gap-2 text-neutral-500 text-sm hover:text-neutral-300 transition-colors duration-300 mb-8 group">
+        <svg class="w-4 h-4 group-hover:-translate-x-1 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" />
         </svg>
         All services
       </a>
       <div class="flex items-center gap-4 mb-6">
-        <span class="text-amber-400 font-mono text-xs tracking-[0.2em]">04</span>
-        <div class="h-px bg-neutral-800 flex-1"></div>
+        <span class="reveal text-amber-400 font-mono text-xs tracking-[0.2em]">04</span>
+        <div class="reveal gradient-divider flex-1"></div>
       </div>
-      <h1 class="font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-6">
+      <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-6">
         Training
       </h1>
-      <p class="text-neutral-500 italic text-sm tracking-wide mb-10">Built on learning science, not slide decks.</p>
-      <p class="text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" data-frame="default">
+      <p class="reveal text-neutral-500 italic text-sm tracking-wide mb-10">Built on learning science, not slide decks.</p>
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" data-frame="default">
         Last year your team sat through a two-hour webinar on WordPress. The instructor shared their screen, clicked through some menus, said "any questions?" three times, and left. A week later your office manager still emailed you asking how to add a photo to a blog post. That's not a training problem. That's a training design problem.
       </p>
-      <p class="text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="sun">
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="sun">
         Imagine your team updating the website themselves. Adding blog posts, fixing content, running basic SEO with confidence, without calling you or emailing a developer. That's what a real training program builds. Not a webinar. A guided program where people learn by doing real work on their own systems.
       </p>
-      <p class="text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="moon">
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="moon">
         Last year your team sat through a two-hour webinar. A week later nobody remembered how to add a blog post. The office manager still emails you every time something needs to change on the site. The money you spent on that webinar bought you exactly nothing. That's not a training problem. That's a training design problem.
       </p>
     </div>
   </section>
 
+  <!-- The difference -->
   <section class="py-28 px-6 surface-1">
     <div class="max-w-4xl mx-auto">
-      <div class="mb-16">
+      <div class="reveal mb-16">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">The difference</p>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Why most training doesn't work.</h2>
         <p class="text-neutral-400 mt-4 max-w-2xl" data-vibe="default">
@@ -159,7 +161,7 @@ const serviceSchema = JSON.stringify({
       </div>
 
       <div class="grid md:grid-cols-2 gap-12 items-start">
-        <div class="space-y-6 text-neutral-400 leading-relaxed">
+        <div class="reveal space-y-6 text-neutral-400 leading-relaxed">
           <p data-phase="default">
             Most training is a single session where someone talks at your team for two hours, shows some slides, answers a few questions, and leaves. Without reinforcement, your team forgets 80% of it within a week. That number is from Hermann Ebbinghaus's forgetting curve research, replicated by Murre and Dros in PLOS ONE (2015). You've seen this. You've probably sat through it yourself.
           </p>
@@ -176,8 +178,8 @@ const serviceSchema = JSON.stringify({
             This isn't because I like overcomplicating things. It's because the research is clear: spaced practice, error-based learning, and deliberate application are what make training stick. Everything else is just an expensive meeting.
           </p>
         </div>
-        <div class="space-y-4">
-          <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-5 hover:border-amber-500/40 transition-colors duration-200">
+        <div class="reveal space-y-4">
+          <div class="glow-card p-5">
             <div class="flex items-center gap-3 mb-2">
               <div class="w-2 h-2 rounded-full bg-amber-400"></div>
               <p class="text-neutral-100 text-sm font-medium">Session 1: Foundation</p>
@@ -186,28 +188,28 @@ const serviceSchema = JSON.stringify({
             <p class="text-neutral-500 text-sm pl-5" style="display:none" data-phase="spring">Your team starts seeing their tools differently. The shift from "someone else handles this" to "I can do this" begins here.</p>
             <p class="text-neutral-500 text-sm pl-5" style="display:none" data-phase="fall">90-minute live session covering core interface, key workflows, and common pitfalls. Assignment issued: 3-5 real tasks on their own systems due before Session 2.</p>
           </div>
-          <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-5 hover:border-amber-500/40 transition-colors duration-200">
+          <div class="glow-card p-5">
             <div class="flex items-center gap-3 mb-2">
               <div class="w-2 h-2 rounded-full bg-amber-400/60"></div>
               <p class="text-neutral-300 text-sm font-medium">Week 1 to 2: They practice</p>
             </div>
             <p class="text-neutral-500 text-sm pl-5">Real work on their own systems. Real mistakes. This is where the learning happens.</p>
           </div>
-          <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-5 hover:border-amber-500/40 transition-colors duration-200">
+          <div class="glow-card p-5">
             <div class="flex items-center gap-3 mb-2">
               <div class="w-2 h-2 rounded-full bg-amber-400"></div>
               <p class="text-neutral-100 text-sm font-medium">Session 2: Application</p>
             </div>
             <p class="text-neutral-500 text-sm pl-5">Review what they did, troubleshoot what went wrong, deepen understanding.</p>
           </div>
-          <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-5 hover:border-amber-500/40 transition-colors duration-200">
+          <div class="glow-card p-5">
             <div class="flex items-center gap-3 mb-2">
               <div class="w-2 h-2 rounded-full bg-amber-400/60"></div>
               <p class="text-neutral-300 text-sm font-medium">Week 2 to 3: Harder tasks</p>
             </div>
             <p class="text-neutral-500 text-sm pl-5">More complex assignments. Building confidence through independent practice.</p>
           </div>
-          <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-5 hover:border-amber-500/40 transition-colors duration-200">
+          <div class="glow-card p-5">
             <div class="flex items-center gap-3 mb-2">
               <div class="w-2 h-2 rounded-full bg-amber-400"></div>
               <p class="text-neutral-100 text-sm font-medium">Session 3: Independence</p>
@@ -221,15 +223,16 @@ const serviceSchema = JSON.stringify({
     </div>
   </section>
 
-  <section class="py-28 px-6 surface-2">
+  <!-- Programs -->
+  <section class="py-28 px-6 dot-grid">
     <div class="max-w-5xl mx-auto">
-      <div class="mb-16">
+      <div class="reveal mb-16">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Programs</p>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Two programs.</h2>
       </div>
 
-      <div class="grid md:grid-cols-2 gap-8">
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-8 hover:border-amber-500/40 transition-colors duration-200">
+      <div class="grid md:grid-cols-2 gap-8 reveal-stagger">
+        <div class="reveal glow-card p-8" style="--i:0">
           <h3 class="text-neutral-100 text-xl font-medium mb-4">WordPress & SEO</h3>
           <p class="text-neutral-400 text-sm leading-relaxed mb-6" data-processing="default">
             Every time the website needs a change, your team asks you to do it because they don't know how. This program fixes that. Content management, page editing, basic SEO, image optimization, and site maintenance.
@@ -261,7 +264,7 @@ const serviceSchema = JSON.stringify({
           </ul>
         </div>
 
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-8 hover:border-amber-500/40 transition-colors duration-200">
+        <div class="reveal glow-card p-8" style="--i:1">
           <h3 class="text-neutral-100 text-xl font-medium mb-4">AI Workflows</h3>
           <p class="text-neutral-400 text-sm leading-relaxed mb-6" data-frame="default">
             Your team is either afraid of AI or using it recklessly with no judgment. Both are a problem. This is judgment-first training. When to use AI, when not to, how to evaluate output, and how to build workflows that actually save time without creating new risks.
@@ -296,13 +299,14 @@ const serviceSchema = JSON.stringify({
     </div>
   </section>
 
+  <!-- AI Readiness -->
   <section class="py-28 px-6 surface-1">
     <div class="max-w-4xl mx-auto">
-      <div class="mb-12">
+      <div class="reveal mb-12">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">For AI-anxious teams</p>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Not sure if your team is ready?</h2>
       </div>
-      <div class="text-neutral-400 leading-relaxed max-w-3xl mb-10">
+      <div class="reveal text-neutral-400 leading-relaxed max-w-3xl mb-10">
         <p data-processing="default">
           Some teams aren't anxious about AI because they don't understand it. They're anxious because they half-understand it, and that's worse. For those teams, I start with an AI Readiness Assessment. It maps where your team actually is, identifies the real barriers (usually trust and workflow disruption, not technical skill), and determines whether a full training program is the right next step or if something simpler would serve you better.
         </p>
@@ -313,7 +317,7 @@ const serviceSchema = JSON.stringify({
           I figure out where your team actually is with AI before recommending anything. Sometimes the answer is full training. Sometimes it's something simpler. The assessment tells us which.
         </p>
       </div>
-      <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-8 hover:border-amber-500/40 transition-colors duration-200">
+      <div class="reveal glow-card p-8">
         <div class="grid md:grid-cols-3 gap-8">
           <div>
             <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-3">Assessment</p>
@@ -332,10 +336,11 @@ const serviceSchema = JSON.stringify({
     </div>
   </section>
 
+  <!-- Mid-page CTA -->
   <section class="py-16 px-6">
-    <div class="max-w-4xl mx-auto text-center">
+    <div class="max-w-4xl mx-auto text-center reveal">
       <p class="text-neutral-500 text-sm mb-4">Want to train your team?</p>
-      <a href="/contact?interest=training" class="inline-flex items-center justify-center px-8 py-4 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/25 hover:text-amber-400 transition-colors duration-200">
+      <a href="/contact?interest=training" class="inline-flex items-center justify-center px-8 py-4 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/25 hover:text-amber-400 transition-all duration-300">
         Let's design a session
       </a>
     </div>
@@ -344,14 +349,15 @@ const serviceSchema = JSON.stringify({
   <!-- Pricing: BPv2 a la carte menu plus the included-at-Best note -->
   <section class="py-28 px-6">
     <div class="max-w-5xl mx-auto">
-      <div class="mb-16">
+      <div class="reveal mb-16">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Pricing</p>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Training, two ways.</h2>
         <p class="text-neutral-400 mt-4 max-w-2xl">Bundled into your engagement at the top tier, or booked from the menu.</p>
       </div>
 
-      <div class="grid md:grid-cols-2 gap-8">
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-8 flex flex-col hover:border-amber-500/40 transition-colors duration-200">
+      <div class="grid md:grid-cols-2 gap-8 reveal-stagger">
+        <!-- Left: a la carte menu -->
+        <div class="reveal glow-card p-8 flex flex-col" style="--i:0">
           <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-6">A la carte</p>
           <ul class="space-y-5 text-neutral-300 text-sm leading-relaxed flex-1">
             <li class="flex items-baseline justify-between gap-4">
@@ -375,21 +381,22 @@ const serviceSchema = JSON.stringify({
               <span class="text-neutral-500 text-xs italic whitespace-nowrap">included with any session</span>
             </li>
           </ul>
-          <a href="/contact?interest=training" class="mt-8 inline-flex items-center justify-center px-6 py-3 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-white/25 hover:text-neutral-100 transition-colors duration-200">
+          <a href="/contact?interest=training" class="mt-8 inline-flex items-center justify-center px-6 py-3 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-white/25 hover:text-neutral-100 transition-all duration-300">
             Book a session
           </a>
         </div>
 
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-8 ring-1 ring-amber-500/30 flex flex-col hover:border-amber-500/40 transition-colors duration-200">
+        <!-- Right: bundled-engagement callout (no tier-system reference) -->
+        <div class="reveal glow-card p-8 ring-1 ring-amber-500/30 flex flex-col" style="--i:1">
           <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-6">Often bundled</p>
           <p class="text-neutral-300 leading-relaxed mb-8 flex-1">
             Training is often included as part of broader Web Management or Marketing Consulting engagements. Otherwise, this menu is how it gets booked.
           </p>
           <div class="flex flex-col sm:flex-row gap-3">
-            <a href="/services/web-management" class="inline-flex items-center justify-center px-6 py-3 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/25 hover:text-amber-400 transition-colors duration-200">
+            <a href="/services/web-management" class="inline-flex items-center justify-center px-6 py-3 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/25 hover:text-amber-400 transition-all duration-300">
               See Web Management
             </a>
-            <a href="/services/marketing-strategy" class="inline-flex items-center justify-center px-6 py-3 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/25 hover:text-amber-400 transition-colors duration-200">
+            <a href="/services/marketing-strategy" class="inline-flex items-center justify-center px-6 py-3 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/25 hover:text-amber-400 transition-all duration-300">
               See Marketing Strategy
             </a>
           </div>
@@ -398,68 +405,69 @@ const serviceSchema = JSON.stringify({
     </div>
   </section>
 
+  <!-- FAQ -->
   <section class="py-28 px-6">
     <div class="max-w-3xl mx-auto">
-      <div class="mb-16">
+      <div class="reveal mb-16">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Questions</p>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Things people ask.</h2>
       </div>
 
-      <div class="space-y-4">
-        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+      <div class="space-y-4 reveal-stagger">
+        <details class="reveal group glow-card" style="--i:0">
           <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
             What's the difference between a single session and the guided program?
-            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
           </summary>
           <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
             A single session is a one-time training on a specific topic. Useful for onboarding a new hire or covering a narrow skill. The guided program is three sessions over three to four weeks with real assignments in between. The guided format is what actually makes the skills stick. A single session is faster and cheaper, but most of it gets forgotten within a week.
           </div>
         </details>
 
-        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+        <details class="reveal group glow-card" style="--i:1">
           <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
             Do you train remotely or on-site?
-            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
           </summary>
           <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
             Remote by default. Screen-shared, recorded, with everyone working on their own systems from wherever they sit. On-site is possible in southern Utah but the format works just as well remotely. Most of my clients are spread across multiple locations anyway.
           </div>
         </details>
 
-        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+        <details class="reveal group glow-card" style="--i:2">
           <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
             What team size works best?
-            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
           </summary>
           <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
             Three to eight people is the sweet spot. Small enough that everyone gets attention and can ask questions. Big enough that you're not paying for a one-on-one. Larger teams I'll split into cohorts. Smaller teams work fine too, just talk to me about pricing.
           </div>
         </details>
 
-        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+        <details class="reveal group glow-card" style="--i:3">
           <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
             What if my team needs different things at different skill levels?
-            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
           </summary>
           <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
             Tell me up front. I'll design the program around the real range, not a fake average. Sometimes that means splitting into two cohorts. Sometimes it means the more advanced people get harder assignments between sessions. The goal is everyone leaves more capable, not everyone gets the same slides.
           </div>
         </details>
 
-        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+        <details class="reveal group glow-card" style="--i:4">
           <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
             Do we keep the materials?
-            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
           </summary>
           <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
             Yes. Reference guides, SOPs, and checklists are included with any session and they're yours to keep. Use them for onboarding the next hire. Update them as your tools change. They're written for your team, not as a generic handout.
           </div>
         </details>
 
-        <details class="group rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/40 transition-colors duration-200">
+        <details class="reveal group glow-card" style="--i:5">
           <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
             How do you measure if the training worked?
-            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
           </summary>
           <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
             The real measure is whether your team stops asking you to do things they should be doing themselves. The third session includes a self-sufficiency check where they walk through real scenarios without coaching. If they can do it, training worked. If they can't, we cover the gap before the program closes.
@@ -469,13 +477,15 @@ const serviceSchema = JSON.stringify({
     </div>
   </section>
 
-  <section class="py-32 px-6 surface-1">
-    <div class="max-w-3xl mx-auto text-center">
-      <h2 class="font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Ready to upskill your team?</h2>
-      <p class="text-neutral-400 text-lg mb-10" data-processing="default">Tell me what your team needs to learn and I'll design the program around them.</p>
-      <p class="text-neutral-400 text-lg mb-10" style="display:none" data-processing="stars">The guided program is built around what actually makes learning stick: distributed practice and active recall. Not slides about spacing. Actual spacing. Tell me your team size and skill level and I'll scope the program.</p>
-      <p class="text-neutral-400 text-lg mb-10" style="display:none" data-processing="clouds">Three weeks from now, your team handles the website themselves. No more being the bottleneck. Tell me what they need to learn and I'll build the program around them.</p>
-      <a href="/contact?interest=training" class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-colors duration-200">
+  <!-- CTA -->
+  <section class="relative py-32 px-6 surface-1 overflow-hidden">
+    <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative max-w-3xl mx-auto text-center">
+      <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Ready to upskill your team?</h2>
+      <p class="reveal text-neutral-400 text-lg mb-10" data-processing="default">Tell me what your team needs to learn and I'll design the program around them.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-processing="stars">The guided program is built around what actually makes learning stick: distributed practice and active recall. Not slides about spacing. Actual spacing. Tell me your team size and skill level and I'll scope the program.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-processing="clouds">Three weeks from now, your team handles the website themselves. No more being the bottleneck. Tell me what they need to learn and I'll build the program around them.</p>
+      <a href="/contact?interest=training" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
         Design a session
       </a>
     </div>

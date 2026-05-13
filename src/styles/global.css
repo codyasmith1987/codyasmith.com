@@ -343,6 +343,20 @@
     line-height: 1.7;
   }
 
+  /* Noise texture overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 60;
+    opacity: 0.18;
+  }
+
+  /* Sun themes: softer noise */
+  [data-theme^="sun-"] body::after { opacity: 0.10; }
+
   ::selection {
     background-color: var(--color-amber-600);
     color: var(--color-neutral-950);
@@ -413,14 +427,14 @@
    ============================================ */
 
 @layer components {
-  /* Focus indicators — accessible keyboard navigation */
+  /* Focus indicators: accessible keyboard navigation */
   :focus-visible {
     outline: 2px solid var(--color-amber-400);
     outline-offset: 2px;
     border-radius: 4px;
   }
 
-  /* Quiz — theme-aware via CSS custom properties
+  /* Quiz: theme-aware via CSS custom properties
      The quiz sits over a dark frosted backdrop, so text stays light.
      Accents adapt to the active theme as the user answers questions. */
   #quiz {
@@ -468,14 +482,143 @@
     background: color-mix(in srgb, var(--quiz-accent) 5%, transparent);
   }
 
-  /* .quiz-input and .quiz-skip live outside @layer components — see below */
+  /* .quiz-input and .quiz-skip live outside @layer components, see below */
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(1.5rem);
+    will-change: transform, opacity;
+    transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .reveal.in-view {
+    opacity: 1;
+    transform: none;
+    will-change: auto;
+  }
+
+  /* Suppress competing page textures while quiz overlay is active */
+  html.quiz-active body::after { opacity: 0 !important; }
+  html.quiz-active .dot-grid { background-image: none !important; }
+  html.quiz-active .blur-3xl { opacity: 0 !important; }
 
   @media (prefers-reduced-motion: reduce) {
+    .reveal {
+      transition: none;
+      opacity: 1;
+      transform: none;
+      will-change: auto;
+    }
     .story-section, .trophy-row, .sim-result, .checkup-card,
     .kw-animate, .health-animate, .csv-result {
       opacity: 1 !important;
       animation: none !important;
     }
+  }
+
+  .reveal-stagger > .reveal {
+    transition-delay: calc(var(--i, 0) * 100ms);
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    background: linear-gradient(to right, var(--color-neutral-100), var(--color-neutral-400));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Gradient divider */
+  .gradient-divider {
+    height: 1px;
+    background: linear-gradient(to right, transparent, rgba(255,255,255,0.08), transparent);
+  }
+
+  [data-theme^="sun-"] .gradient-divider {
+    background: linear-gradient(to right, transparent, rgba(20, 20, 16, 0.1), transparent);
+  }
+
+  [data-theme^="moon-"] .gradient-divider {
+    background: linear-gradient(to right, transparent, rgba(240, 232, 224, 0.06), transparent);
+  }
+
+  /* Card */
+  .glow-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1rem;
+    background-color: var(--color-neutral-900);
+    border: 1px solid rgba(255,255,255,0.05);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  .glow-card::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: 1rem;
+    background: linear-gradient(135deg, rgba(251,191,36,0), rgba(251,191,36,0));
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    z-index: 0;
+  }
+
+  .glow-card:hover::before {
+    background: linear-gradient(135deg, rgba(251,191,36,0.1), rgba(217,119,6,0.05), rgba(251,191,36,0));
+    opacity: 1;
+  }
+
+  .glow-card:hover {
+    border-color: rgba(251,191,36,0.15);
+  }
+
+  /* Disable scale effects on touch devices */
+  @media (hover: none) {
+    .tier-card { transform: none !important; }
+  }
+
+  /* Sun: shadow cards instead of glow */
+  [data-theme^="sun-"] .glow-card {
+    border-color: rgba(20, 20, 16, 0.06);
+    box-shadow: 0 1px 3px rgba(20, 20, 16, 0.04);
+  }
+
+  [data-theme^="sun-"] .glow-card::before { display: none; }
+
+  [data-theme^="sun-"] .glow-card:hover {
+    border-color: rgba(20, 20, 16, 0.12);
+    box-shadow: 0 4px 16px rgba(20, 20, 16, 0.06);
+  }
+
+  /* Moon: warm accent glow */
+  [data-theme^="moon-"] .glow-card {
+    border-color: rgba(240, 232, 224, 0.04);
+  }
+
+  [data-theme^="moon-"] .glow-card:hover::before {
+    background: linear-gradient(135deg,
+      color-mix(in srgb, var(--color-amber-500) 8%, transparent),
+      color-mix(in srgb, var(--color-amber-600) 4%, transparent),
+      transparent);
+  }
+
+  [data-theme^="moon-"] .glow-card:hover {
+    border-color: color-mix(in srgb, var(--color-amber-500) 12%, transparent);
+  }
+
+  .glow-card > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .tier-card {
+    overflow: visible;
+  }
+
+  .tier-card::before {
+    border-radius: 1rem;
+    overflow: hidden;
   }
 
   /* Surface levels */
@@ -487,6 +630,20 @@
   }
 
   /* Growth field uses backdrop-filter, see src/lib/growth-field.ts */
+
+  /* Dot grid */
+  .dot-grid {
+    background-image: radial-gradient(circle, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  [data-theme^="sun-"] .dot-grid {
+    background-image: radial-gradient(circle, rgba(20, 20, 16, 0.035) 1px, transparent 1px);
+  }
+
+  [data-theme^="moon-"] .dot-grid {
+    background-image: radial-gradient(circle, rgba(240, 232, 224, 0.025) 1px, transparent 1px);
+  }
 
   /* ============================================
      Theme Switcher (dev tool, can remove later)
@@ -530,7 +687,7 @@
 }
 
 /* ============================================
-   QUIZ FORM — UNLAYERED so Tailwind utilities
+   QUIZ FORM: UNLAYERED so Tailwind utilities
    can't beat these via the cascade. Fully self-
    contained: do not add utility classes to the
    input or skip elements in Quiz.astro.
@@ -584,7 +741,7 @@
 }
 
 /* ============================================
-   QUIZ LEAD CAPTURE CARD — persona end state
+   QUIZ LEAD CAPTURE CARD: persona end state
    High-contrast warm gradient panel so the
    inputs read unambiguously against any theme.
    ============================================ */
@@ -638,7 +795,7 @@
   gap: 0.85rem;
 }
 
-/* Inverted inputs: cream fill, near-black text — unmistakable contrast */
+/* Inverted inputs: cream fill, near-black text, unmistakable contrast */
 #quiz .quiz-lead-form .quiz-input {
   display: block;
   width: 100%;

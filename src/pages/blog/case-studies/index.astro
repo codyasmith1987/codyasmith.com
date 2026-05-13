@@ -42,18 +42,19 @@ const itemListJsonLd = caseStudies.length > 0 ? JSON.stringify({
     <script type="application/ld+json" set:html={itemListJsonLd} />
   )}
 
-  <section class="pt-40 pb-12 px-6">
-    <div class="max-w-5xl mx-auto">
-      <p class="font-mono text-[11px] tracking-[0.25em] uppercase text-amber-400 mb-8">
+  <section class="relative pt-40 pb-12 px-6 overflow-hidden">
+    <div class="absolute top-0 left-1/4 w-[500px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative max-w-5xl mx-auto">
+      <p class="reveal font-mono text-[11px] tracking-[0.25em] uppercase text-amber-400 mb-8">
         <a href="/blog" class="hover:text-amber-300">Blog</a>
         <span class="text-neutral-700 mx-2">/</span>
         <span class="text-neutral-400">Case studies</span>
       </p>
-      <h1 class="font-serif text-5xl md:text-6xl leading-[1.05] text-neutral-100 tracking-tight">
+      <h1 class="reveal font-serif text-5xl md:text-6xl leading-[1.05] text-neutral-100 tracking-tight">
         Jobs my lawyer cleared.<br />
         <span class="font-quote italic">The rest is for the bar.</span>
       </h1>
-      <p class="mt-6 text-lg text-neutral-400 max-w-2xl leading-relaxed">
+      <p class="reveal mt-6 text-lg text-neutral-400 max-w-2xl leading-relaxed">
         What broke. What we tried. What moved. What didn't. In that order, without the PowerPoint.
       </p>
     </div>
@@ -94,7 +95,7 @@ const itemListJsonLd = caseStudies.length > 0 ? JSON.stringify({
         <ul id="case-grid" class="grid md:grid-cols-2 gap-6">
           {caseStudies.map((c) => (
             <li data-sector={c.data.sector} class="case-card">
-              <a href={`/blog/case-studies/${c.id}`} class="rounded-xl bg-neutral-900 border border-neutral-800 block p-8 group h-full hover:border-amber-500/40 transition-colors duration-200">
+              <a href={`/blog/case-studies/${c.id}`} class="glow-card block p-8 group h-full">
                 <p class="font-mono text-[10px] tracking-[0.2em] uppercase text-neutral-500 mb-3">
                   <span>{c.data.clientAnonymized ? 'Confidential' : c.data.client}</span>
                   <span class="text-neutral-700 mx-2">&middot;</span>

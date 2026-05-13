@@ -3,39 +3,42 @@ import Base from '../layouts/Base.astro';
 ---
 
 <Base title="Contact Cody Smith | Web Management & Marketing Consulting" description="Start a conversation about web management, marketing strategy, or training." ogImage="/og/contact.png" ogImageAlt="Contact Cody Smith. Let's talk.">
-
-  <section class="pt-40 pb-16 px-6">
-    <div class="max-w-4xl mx-auto">
-      <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Contact</p>
+  <!-- Hero -->
+  <section class="relative pt-40 pb-16 px-6 overflow-hidden">
+    <div class="absolute top-0 left-1/3 w-[400px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="relative max-w-4xl mx-auto">
+      <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Contact</p>
       <!-- Stacked H1 variants are intentional. Each is server-rendered for SEO weight on
            segment-targeted copy (data-frame axis: default / sun / moon). swapAxis in
            Base.astro toggles display and aria-hidden so one variant is visible and announced
            per session. See swapAxis comment for the full rationale. -->
-      <h1 class="font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10" data-frame="default">
+      <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10" data-frame="default">
         Let's talk<span data-personalize="name-comma" style="display:none"></span>.
       </h1>
-      <div class="font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10" style="display:none" aria-hidden="true" role="heading" aria-level="1" data-frame="sun">
+      <div class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10" style="display:none" aria-hidden="true" role="heading" aria-level="1" data-frame="sun">
         Let's build something<span data-personalize="name-comma" style="display:none"></span>.
       </div>
-      <div class="font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10" style="display:none" aria-hidden="true" role="heading" aria-level="1" data-frame="moon">
+      <div class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10" style="display:none" aria-hidden="true" role="heading" aria-level="1" data-frame="moon">
         Let's fix this<span data-personalize="name-comma" style="display:none"></span>.
       </div>
-      <p class="text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" data-processing="default">
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" data-processing="default">
         Tell me what's going on. The version you'd tell a friend, not the one you'd put in a board presentation. I'll tell you if I can help, what it would cost, and how long it takes. If I can't help, I'll say that in the first email.
       </p>
-      <p class="text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-processing="stars">
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-processing="stars">
         Tell me what's going on. What's working, what's not, what you've tried. I'll reply within one business day with an honest assessment: can I help, what would it cost, and how long it takes. If I can't help, I'll say that in the first email.
       </p>
-      <p class="text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-processing="clouds">
+      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-processing="clouds">
         Tell me the version you'd tell a friend, not the one you'd put in a board presentation. I'm good at reading between the lines. I'll tell you if I can help, and if I can't, I'll say that in the first email instead of dragging you through a call to find out.
       </p>
     </div>
   </section>
 
+  <!-- Form + Info -->
   <section class="pb-28 px-6">
     <div class="max-w-5xl mx-auto">
       <div class="grid lg:grid-cols-5 gap-16">
-        <div class="lg:col-span-3">
+        <!-- Form -->
+        <div class="lg:col-span-3 reveal">
           <form id="contact-form" class="space-y-8">
             <input type="hidden" name="quiz-theme" id="quiz-theme-field" value="" />
             <div>
@@ -48,7 +51,7 @@ import Base from '../layouts/Base.astro';
                 aria-required="true"
                 maxlength="100"
                 data-personalize="prefill-name"
-                class="w-full bg-transparent border-b border-white/10 pb-3 text-neutral-100 text-lg focus:border-amber-400 focus:outline-none transition-colors duration-200 placeholder:text-neutral-700"
+                class="w-full bg-transparent border-b border-white/10 pb-3 text-neutral-100 text-lg focus:border-amber-400 focus:outline-none transition-colors duration-300 placeholder:text-neutral-700"
                 placeholder="Your name"
               />
             </div>
@@ -62,7 +65,7 @@ import Base from '../layouts/Base.astro';
                 aria-required="true"
                 maxlength="254"
                 data-personalize="prefill-email"
-                class="w-full bg-transparent border-b border-white/10 pb-3 text-neutral-100 text-lg focus:border-amber-400 focus:outline-none transition-colors duration-200 placeholder:text-neutral-700"
+                class="w-full bg-transparent border-b border-white/10 pb-3 text-neutral-100 text-lg focus:border-amber-400 focus:outline-none transition-colors duration-300 placeholder:text-neutral-700"
                 placeholder="you@company.com"
               />
             </div>
@@ -136,7 +139,7 @@ import Base from '../layouts/Base.astro';
                 required
                 aria-required="true"
                 maxlength="2000"
-                class="w-full bg-transparent border-b border-white/10 pb-3 text-neutral-100 text-lg focus:border-amber-400 focus:outline-none transition-colors duration-200 placeholder:text-neutral-700 resize-none"
+                class="w-full bg-transparent border-b border-white/10 pb-3 text-neutral-100 text-lg focus:border-amber-400 focus:outline-none transition-colors duration-300 placeholder:text-neutral-700 resize-none"
                 placeholder="Tell me about the problem you're trying to solve..."
               ></textarea>
             </div>
@@ -144,26 +147,27 @@ import Base from '../layouts/Base.astro';
               <button
                 type="submit"
                 id="submit-btn"
-                class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-colors duration-200"
+                class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]"
               >
                 Send it
               </button>
-              <p id="form-status" role="status" aria-live="polite" class="text-sm transition-opacity duration-200 opacity-0"></p>
+              <p id="form-status" role="status" aria-live="polite" class="text-sm transition-opacity duration-300 opacity-0"></p>
             </div>
           </form>
         </div>
 
-        <div class="lg:col-span-2">
+        <!-- Info -->
+        <div class="lg:col-span-2 reveal">
           <div class="space-y-10">
             <div>
               <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-3">Email directly</p>
-              <a data-email class="text-neutral-100 text-lg hover:text-amber-400 transition-colors duration-200 cursor-pointer">
+              <a data-email class="text-neutral-100 text-lg hover:text-amber-400 transition-colors duration-300 cursor-pointer">
                 <span class="email-placeholder">cody at codyasmith.com</span>
               </a>
             </div>
             <div>
               <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-3">Phone</p>
-              <a href="tel:+14358687133" class="text-neutral-100 text-lg hover:text-amber-400 transition-colors duration-200">
+              <a href="tel:+14358687133" class="text-neutral-100 text-lg hover:text-amber-400 transition-colors duration-300">
                 (435) 868-7133
               </a>
             </div>
@@ -171,7 +175,7 @@ import Base from '../layouts/Base.astro';
               <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-3">Based in</p>
               <p class="text-neutral-100 text-lg">Cedar City, Utah</p>
             </div>
-            <div class="h-px bg-neutral-800"></div>
+            <div class="gradient-divider"></div>
             <div>
               <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-4">What to expect</p>
               <div class="space-y-4 text-neutral-400 text-sm leading-relaxed">
@@ -186,7 +190,7 @@ import Base from '../layouts/Base.astro';
                 </p>
               </div>
             </div>
-            <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+            <div class="glow-card p-6">
               <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-3">Business hours</p>
               <p class="text-neutral-400 text-sm leading-relaxed">
                 Monday through Friday, 9am to 5pm Mountain Time. I don't check email on weekends unless something is on fire. Yours or mine.
@@ -198,9 +202,10 @@ import Base from '../layouts/Base.astro';
     </div>
   </section>
 
+  <!-- How it starts -->
   <section class="py-28 px-6 surface-1">
     <div class="max-w-5xl mx-auto">
-      <div class="mb-16">
+      <div class="reveal mb-16">
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">How it starts</p>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">What happens after you reach out.</h2>
         <p class="text-neutral-400 mt-4 max-w-2xl" data-phase="default">
@@ -213,22 +218,22 @@ import Base from '../layouts/Base.astro';
           Three discrete steps in defined order. Each step has a named action and a named output. The sequence runs the same way every time.
         </p>
       </div>
-      <div class="grid md:grid-cols-3 gap-8">
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+      <div class="grid md:grid-cols-3 gap-8 reveal-stagger">
+        <div class="reveal glow-card p-6" style="--i:0">
           <div class="w-8 h-8 rounded-full border-2 border-amber-500 flex items-center justify-center mb-4">
             <span class="text-amber-400 text-xs font-mono font-bold">1</span>
           </div>
           <h3 class="text-neutral-100 font-medium mb-2">You tell me what's going on</h3>
           <p class="text-neutral-500 text-sm leading-relaxed">Use the form, send an email, call me. I don't need a brief. I need the version you'd tell a friend, not the one you'd put in a board presentation.</p>
         </div>
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+        <div class="reveal glow-card p-6" style="--i:1">
           <div class="w-8 h-8 rounded-full border-2 border-amber-500/60 flex items-center justify-center mb-4">
             <span class="text-amber-400/60 text-xs font-mono font-bold">2</span>
           </div>
           <h3 class="text-neutral-100 font-medium mb-2">We have a conversation</h3>
           <p class="text-neutral-500 text-sm leading-relaxed">I reply within one business day. Usually faster. We'll talk through what you're dealing with and whether any of my services actually fit. If they don't, I'll say so.</p>
         </div>
-        <div class="rounded-xl bg-neutral-900 border border-neutral-800 p-6 hover:border-amber-500/40 transition-colors duration-200">
+        <div class="reveal glow-card p-6" style="--i:2">
           <div class="w-8 h-8 rounded-full border-2 border-amber-500/30 flex items-center justify-center mb-4">
             <span class="text-amber-400/30 text-xs font-mono font-bold">3</span>
           </div>

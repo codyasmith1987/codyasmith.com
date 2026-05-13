@@ -93,7 +93,17 @@ function isHostnameSpecialUse(host: string): boolean {
   return false;
 }
 
-function syncUrlIsRejected(rawUrl: string): { rejected: true } | { rejected: false; parsed: URL } {
+// Normalize a URL hostname for SSRF checks. Node 22's URL.hostname returns
+// IPv6 literals with their square brackets intact (e.g. `[::1]`); older Node
+// versions strip them. We strip unconditionally so the IPv6 string checks
+// below see the raw address regardless of platform.
+function normalizedHost(parsed: URL): string {
+  let h = parsed.hostname.toLowerCase();
+  if (h.startsWith('[') && h.endsWith(']')) h = h.slice(1, -1);
+  return h;
+}
+
+function syncUrlIsRejected(rawUrl: string): { rejected: true } | { rejected: false; parsed: URL; host: string } {
   let parsed: URL;
   try {
     parsed = new URL(rawUrl);
@@ -103,7 +113,7 @@ function syncUrlIsRejected(rawUrl: string): { rejected: true } | { rejected: fal
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return { rejected: true };
   if (parsed.username || parsed.password) return { rejected: true };
 
-  const host = parsed.hostname.toLowerCase();
+  const host = normalizedHost(parsed);
   if (!host) return { rejected: true };
   if (isHostnameSpecialUse(host)) return { rejected: true };
 
@@ -115,13 +125,13 @@ function syncUrlIsRejected(rawUrl: string): { rejected: true } | { rejected: fal
   }
   if (host.includes(':') && ipv6StringIsBlocked(host)) return { rejected: true };
 
-  return { rejected: false, parsed };
+  return { rejected: false, parsed, host };
 }
 
 async function isAllowedFetchUrl(rawUrl: string): Promise<boolean> {
   const sync = syncUrlIsRejected(rawUrl);
   if (sync.rejected) return false;
-  const host = sync.parsed.hostname.toLowerCase();
+  const host = sync.host;
 
   // If host is a literal IP we already validated it. Skip DNS.
   if (/^\d+\.\d+\.\d+\.\d+$/.test(host) || host.includes(':')) return true;
@@ -149,9 +159,17 @@ async function isAllowedFetchUrl(rawUrl: string): Promise<boolean> {
 async function scrapeSinglePage(url: string): Promise<{ text: string; snippet: string } | null> {
   // SSRF guard runs before any network call. Redirects are followed manually
   // and revalidated to keep an attacker from bouncing through a public host
-  // to a metadata IP. The guard now also DNS-resolves the hostname so a
-  // public name pointing at a private IP is rejected. See SEC2-002 and
-  // SEC3-001.
+  // to a metadata IP. The guard also DNS-resolves the hostname so a public
+  // name pointing at a private IP is rejected. See SEC2-002, SEC3-001, and
+  // SEC4-001 (IPv6 bracket normalization).
+  //
+  // Known residual gap: DNS rebinding. The fetch() below re-resolves the
+  // hostname independently of our validation lookup, so an attacker who
+  // controls an authoritative resolver could serve a public IP to the
+  // validation step and a private IP to the connect. Pinning the connect
+  // to the validated IP (and rewriting the Host header) is the proper fix
+  // and is deferred to a follow-up since it requires switching from native
+  // fetch to undici dispatcher wiring. See SEC4-002.
   if (!(await isAllowedFetchUrl(url))) return null;
   try {
     let current = url;

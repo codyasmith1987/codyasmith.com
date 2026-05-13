@@ -154,6 +154,17 @@ const breadcrumbJsonLd = breadcrumbs && breadcrumbs.length > 0 ? JSON.stringify(
     </script>
     <style is:inline>
       html.cs-no-quiz #quiz { display: none !important; }
+      /* iOS Safari belt-and-suspenders. After quiz completion or skip,
+         the quiz overlay is display:none but the backdrop-filter GPU
+         layer can persist and render as grey on iOS. This rule guarantees
+         the backdrop-filter is gone whenever the quiz is gone, regardless
+         of whether the JS __fieldStop path ran. See memory entry
+         project_ios_quiz_grey_screen. */
+      html.cs-no-quiz #quiz-backdrop {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        background: transparent !important;
+      }
       /* While the quiz is showing, keep page content rendered (the blur needs
          to see it for reactive theming) but block scroll on the body. */
       html.quiz-active, html.quiz-active body { overflow: hidden; }

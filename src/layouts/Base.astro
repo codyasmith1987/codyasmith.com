@@ -5,16 +5,55 @@ import Footer from '../components/Footer.astro';
 import Quiz from '../components/Quiz.astro';
 import { ClientRouter } from 'astro:transitions';
 
+interface ArticleMeta {
+  publishedTime: string;        // ISO 8601
+  modifiedTime?: string;        // ISO 8601
+  author?: string;
+  section?: string;             // e.g. "Articles" or "Case studies"
+  tags?: string[];
+}
+
+interface Breadcrumb {
+  name: string;
+  url: string;                  // absolute URL on this site
+}
+
 interface Props {
   title: string;
   description?: string;
   ogImage?: string;
+  ogImageAlt?: string;
   ogType?: 'website' | 'article';
+  article?: ArticleMeta;
+  breadcrumbs?: Breadcrumb[];   // when set, emits BreadcrumbList JSON-LD
 }
 
-const { title, description = "Cody Smith: web management, marketing strategy, and consulting for small businesses in Cedar City, Utah and beyond.", ogImage, ogType = 'website' } = Astro.props;
+const DEFAULT_DESCRIPTION = "Cody Smith: web management, marketing strategy, and consulting for small businesses in Cedar City, Utah and beyond.";
+const {
+  title,
+  description = DEFAULT_DESCRIPTION,
+  ogImage,
+  ogImageAlt,
+  ogType = 'website',
+  article,
+  breadcrumbs,
+} = Astro.props;
+
 const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
 const resolvedOgImage = new URL(ogImage ?? '/og-default.png', 'https://codyasmith.com').href;
+const resolvedOgImageAlt = ogImageAlt
+  ?? (ogType === 'article' ? title : 'Cody Smith: web management, marketing strategy, and consulting in Cedar City, Utah');
+
+const breadcrumbJsonLd = breadcrumbs && breadcrumbs.length > 0 ? JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: breadcrumbs.map((b, i) => ({
+    '@type': 'ListItem',
+    position: i + 1,
+    name: b.name,
+    item: b.url,
+  })),
+}) : null;
 ---
 
 <!DOCTYPE html>
@@ -39,12 +78,30 @@ const resolvedOgImage = new URL(ogImage ?? '/og-default.png', 'https://codyasmit
     <meta property="og:image" content={resolvedOgImage} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={resolvedOgImageAlt} />
+
+    {ogType === 'article' && article && (
+      <>
+        <meta property="article:published_time" content={article.publishedTime} />
+        {article.modifiedTime && <meta property="article:modified_time" content={article.modifiedTime} />}
+        {article.author && <meta property="article:author" content={article.author} />}
+        {article.section && <meta property="article:section" content={article.section} />}
+        {article.tags && article.tags.map(tag => (
+          <meta property="article:tag" content={tag} />
+        ))}
+      </>
+    )}
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={resolvedOgImage} />
+    <meta name="twitter:image:alt" content={resolvedOgImageAlt} />
+
+    {breadcrumbJsonLd && (
+      <script type="application/ld+json" set:html={breadcrumbJsonLd} />
+    )}
 
     <title>{title}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />

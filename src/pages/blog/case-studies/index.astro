@@ -12,12 +12,34 @@ for (const c of caseStudies) {
 const sectors = Array.from(sectorSet.entries())
   .map(([sector, count]) => ({ sector, count }))
   .sort((a, b) => b.count - a.count || a.sector.localeCompare(b.sector));
+
+const breadcrumbs = [
+  { name: 'Home', url: 'https://codyasmith.com/' },
+  { name: 'Blog', url: 'https://codyasmith.com/blog' },
+  { name: 'Case studies', url: 'https://codyasmith.com/blog/case-studies' },
+];
+
+const itemListJsonLd = caseStudies.length > 0 ? JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  itemListElement: caseStudies.map((c, i) => ({
+    '@type': 'ListItem',
+    position: i + 1,
+    url: `https://codyasmith.com/blog/case-studies/${c.id}`,
+    name: c.data.title,
+  })),
+}) : null;
 ---
 
 <Base
   title="Case studies | Cody Smith"
   description="Receipts. What the problem was, what we tried, what moved, and what didn't."
+  breadcrumbs={breadcrumbs}
 >
+  {itemListJsonLd && (
+    <script type="application/ld+json" set:html={itemListJsonLd} />
+  )}
+
   <section class="pt-40 pb-12 px-6">
     <div class="max-w-5xl mx-auto">
       <p class="font-mono text-[11px] tracking-[0.25em] uppercase text-amber-400 mb-8">

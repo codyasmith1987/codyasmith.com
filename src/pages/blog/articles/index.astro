@@ -12,12 +12,34 @@ for (const a of articles) {
 const tags = Array.from(tagSet.entries())
   .map(([tag, count]) => ({ tag, count }))
   .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+
+const breadcrumbs = [
+  { name: 'Home', url: 'https://codyasmith.com/' },
+  { name: 'Blog', url: 'https://codyasmith.com/blog' },
+  { name: 'Articles', url: 'https://codyasmith.com/blog/articles' },
+];
+
+const itemListJsonLd = articles.length > 0 ? JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  itemListElement: articles.map((a, i) => ({
+    '@type': 'ListItem',
+    position: i + 1,
+    url: `https://codyasmith.com/blog/articles/${a.id}`,
+    name: a.data.title,
+  })),
+}) : null;
 ---
 
 <Base
   title="Articles | Cody Smith"
   description="Thinking out loud about marketing, persuasion, and the craft of getting small businesses found."
+  breadcrumbs={breadcrumbs}
 >
+  {itemListJsonLd && (
+    <script type="application/ld+json" set:html={itemListJsonLd} />
+  )}
+
   <section class="pt-40 pb-12 px-6">
     <div class="max-w-4xl mx-auto">
       <p class="font-mono text-[11px] tracking-[0.25em] uppercase text-amber-400 mb-8">

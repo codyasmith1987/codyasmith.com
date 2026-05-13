@@ -5,6 +5,7 @@ import { runMigrations } from './lib/migrate';
 import { generateCsrfToken, validateCsrfToken } from './lib/csrf';
 import { logRequest, shouldLog } from './lib/request-log';
 import { maybeSweepRetention } from './lib/retention';
+import { SECURITY_HEADERS } from './lib/security-headers';
 
 let reqCounter = 0;
 
@@ -16,22 +17,14 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const requestId = `r${Date.now().toString(36)}-${(++reqCounter).toString(36)}`;
   setRequestId(requestId);
 
-  // Add security headers to all responses
+  // Add security headers to all responses. Single source of truth is
+  // src/lib/security-headers.ts; the postbuild wrapper reads the same
+  // module via tsx import. See SEC4-003.
   const response = await handleRequest(context, next);
   response.headers.set('X-Request-Id', requestId);
-  response.headers.set('X-Content-Type-Options', 'nosniff');
-  response.headers.set('X-Frame-Options', 'DENY');
-  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  response.headers.set('Permissions-Policy', [
-    'accelerometer=()', 'ambient-light-sensor=()', 'autoplay=()', 'battery=()',
-    'camera=()', 'cross-origin-isolated=()', 'display-capture=()', 'document-domain=()',
-    'encrypted-media=()', 'execution-while-not-rendered=()', 'execution-while-out-of-viewport=()',
-    'fullscreen=(self)', 'geolocation=()', 'gyroscope=()', 'keyboard-map=()',
-    'magnetometer=()', 'microphone=()', 'midi=()', 'navigation-override=()',
-    'payment=()', 'picture-in-picture=()', 'publickey-credentials-get=()',
-    'screen-wake-lock=()', 'sync-xhr=()', 'usb=()', 'web-share=()',
-    'xr-spatial-tracking=()', 'clipboard-read=()', 'clipboard-write=(self)',
-  ].join(', '));
+  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+    response.headers.set(key, value);
+  }
 
   // Portal pages should never be indexed. Belt-and-suspenders the
   // <meta name="robots"> tag on /portal/login with an HTTP-level signal
@@ -39,21 +32,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
   if (context.url.pathname.startsWith('/portal')) {
     response.headers.set('X-Robots-Tag', 'noindex, nofollow');
   }
-
-  // CSP: allow self, inline scripts (Astro needs them), Google Fonts, jsDelivr for Chart.js.
-  // base-uri, form-action, object-src tightened per OWASP guidance.
-  response.headers.set('Content-Security-Policy', [
-    "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data: blob:",
-    "connect-src 'self'",
-    "frame-ancestors 'none'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "object-src 'none'",
-  ].join('; '));
 
   // First-party request log for the public surface. Fire and forget so the
   // response isn't blocked. Portal pages and assets are excluded.

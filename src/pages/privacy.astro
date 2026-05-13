@@ -58,7 +58,7 @@ import Base from '../layouts/Base.astro';
           <h2 class="text-neutral-100 font-serif text-2xl mb-4">Cookies</h2>
           <p>Two cookies are set when you visit this site:</p>
           <ul class="list-disc list-inside space-y-2 mt-3">
-            <li><code class="text-amber-400/60 text-xs bg-neutral-900 px-1.5 py-0.5 rounded">portal_session</code>: set only after a portal client signs in. Keeps you logged in. httpOnly, secure, SameSite=lax, 30-day expiry. First-party.</li>
+            <li><code class="text-amber-400/60 text-xs bg-neutral-900 px-1.5 py-0.5 rounded">portal_session</code>: set only after a portal client signs in. Keeps you logged in. httpOnly, secure, SameSite=strict, 30-day rolling expiry, 90-day absolute maximum. First-party.</li>
             <li><code class="text-amber-400/60 text-xs bg-neutral-900 px-1.5 py-0.5 rounded">__cf_bm</code>: set by Cloudflare for bot management on every request. Helps separate human visitors from automated traffic. 30-minute expiry. First-party on this domain, controlled by Cloudflare.</li>
           </ul>
           <p class="mt-4">No analytics cookies. No advertising cookies. No Google or Microsoft or Facebook tracking pixels.</p>

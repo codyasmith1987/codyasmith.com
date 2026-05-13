@@ -103,12 +103,20 @@ if (token) {
       const errorEl = document.getElementById('error-message')!;
 
       // Show error from redirect (e.g. expired session, inactive account)
-      const urlError = new URLSearchParams(window.location.search).get('error');
+      const params = new URLSearchParams(window.location.search);
+      const urlError = params.get('error');
       if (urlError === 'expired') {
         errorEl.textContent = 'Your session has expired. Please log in again.';
         errorEl.classList.remove('hidden');
       } else if (urlError === 'inactive') {
         errorEl.textContent = 'Your account is currently inactive. Contact Cody if you think this is a mistake.';
+        errorEl.classList.remove('hidden');
+      } else if (params.get('passwordSet') === '1') {
+        // Repurpose the error slot as a success confirmation; reuse the
+        // same container so no extra DOM is needed.
+        errorEl.textContent = 'Password set. Sign in with your new password.';
+        errorEl.classList.remove('bg-red-500/5', 'border-red-500/15', 'text-red-400');
+        errorEl.classList.add('bg-emerald-500/5', 'border', 'border-emerald-500/20', 'text-emerald-400');
         errorEl.classList.remove('hidden');
       }
 

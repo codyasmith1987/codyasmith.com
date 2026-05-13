@@ -3,6 +3,7 @@ export const prerender = false;
 import type { APIRoute } from 'astro';
 import { rateLimit } from '../../lib/rate-limit';
 import { logger } from '../../lib/logger';
+import { buildQuizConfirmationEmail } from '../../lib/funnel-emails';
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -67,6 +68,33 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
         `,
       }),
     });
+
+    // Follow-up email to the visitor. Non-blocking: an admin notification
+    // already landed, so we shouldn't fail the request if the visitor copy
+    // bounces.
+    try {
+      const followUp = buildQuizConfirmationEmail({ name, theme: theme || '' });
+      const followUpRes = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'content-type': 'application/json',
+          'api-key': apiKey,
+        },
+        body: JSON.stringify({
+          sender: { name: 'Cody Smith', email: 'cody@codyasmith.com' },
+          to: [{ email, name }],
+          subject: followUp.subject,
+          htmlContent: followUp.html,
+        }),
+      });
+      if (!followUpRes.ok) {
+        const followUpErr = await followUpRes.text();
+        logger.error('Quiz follow-up email API error', new Error(`${followUpRes.status}: ${followUpErr}`));
+      }
+    } catch (err) {
+      logger.error('Quiz follow-up email failed', err);
+    }
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,

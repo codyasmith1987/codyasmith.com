@@ -201,17 +201,6 @@ const resolvedOgImage = new URL(ogImage ?? '/og-default.png', 'https://codyasmit
       // Expose for quiz to call after completion
       (window as any).__initPersonalization = initPersonalization;
 
-      function initReveals() {
-        const observer = new IntersectionObserver((entries) => {
-          entries.forEach(e => {
-            if (e.isIntersecting) {
-              e.target.classList.add('in-view');
-            }
-          });
-        }, { threshold: 0.1 });
-        document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
-      }
-
       function initThemeSwitcher() {
         const switcher = document.getElementById('theme-switcher');
         if (!switcher) return;
@@ -241,14 +230,12 @@ const resolvedOgImage = new URL(ogImage ?? '/og-default.png', 'https://codyasmit
         setActive();
       }
 
-      initReveals();
       initPersonalization();
       initThemeSwitcher();
       document.addEventListener('astro:after-swap', () => {
         // Re-apply theme from localStorage after view transition swap
         var saved = localStorage.getItem('cs-theme');
         if (saved) document.documentElement.setAttribute('data-theme', saved);
-        initReveals();
         initPersonalization();
         initThemeSwitcher();
       });

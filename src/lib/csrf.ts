@@ -12,20 +12,29 @@ import { createHmac } from 'node:crypto';
 
 const TOKEN_VALIDITY_MS = 60 * 60 * 1000; // 1 hour
 
-const CSRF_SECRET: string = (() => {
+// Lazy-evaluated so the boot-time guard does not fire during the Astro
+// prerender step, which loads this module before any request env is bound.
+// At runtime, the first call (generate or validate) resolves the secret;
+// in production with no CSRF_SECRET set, that call throws. GET-only static
+// pages that never reach this module's exports still build.
+let _cachedSecret: string | null = null;
+function getCsrfSecret(): string {
+  if (_cachedSecret !== null) return _cachedSecret;
   const secret = import.meta.env.CSRF_SECRET;
   if (!secret) {
     if (import.meta.env.PROD) {
       throw new Error('CSRF_SECRET environment variable is required in production. See .env.example.');
     }
     console.warn('[csrf] CSRF_SECRET not set; using dev fallback. Set CSRF_SECRET before deploying.');
-    return 'csrf-dev-only-do-not-deploy';
+    _cachedSecret = 'csrf-dev-only-do-not-deploy';
+    return _cachedSecret;
   }
-  return secret;
-})();
+  _cachedSecret = secret;
+  return _cachedSecret;
+}
 
 function hmac(data: string): string {
-  return createHmac('sha256', CSRF_SECRET).update(data).digest('hex');
+  return createHmac('sha256', getCsrfSecret()).update(data).digest('hex');
 }
 
 /**

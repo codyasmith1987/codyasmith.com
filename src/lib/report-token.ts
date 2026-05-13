@@ -16,20 +16,28 @@ import { createHmac } from 'node:crypto';
 
 const TOKEN_VALIDITY_MS = 30 * 24 * 60 * 60 * 1000; // 30 days, matches scan retention
 
-const REPORT_SECRET: string = (() => {
+// Lazy-evaluated for the same reason as src/lib/csrf.ts: Astro's prerender
+// step loads this module before request env is bound. Module-load throws
+// would break the build for every static page that touches the middleware
+// chain that imports this file.
+let _cachedSecret: string | null = null;
+function getReportSecret(): string {
+  if (_cachedSecret !== null) return _cachedSecret;
   const secret = import.meta.env.REPORT_SECRET;
   if (!secret) {
     if (import.meta.env.PROD) {
       throw new Error('REPORT_SECRET environment variable is required in production. See .env.example.');
     }
     console.warn('[report-token] REPORT_SECRET not set; using dev fallback. Set REPORT_SECRET before deploying.');
-    return 'report-dev-only-do-not-deploy';
+    _cachedSecret = 'report-dev-only-do-not-deploy';
+    return _cachedSecret;
   }
-  return secret;
-})();
+  _cachedSecret = secret;
+  return _cachedSecret;
+}
 
 function hmac(data: string): string {
-  return createHmac('sha256', REPORT_SECRET).update(data).digest('hex');
+  return createHmac('sha256', getReportSecret()).update(data).digest('hex');
 }
 
 export function generateReportToken(scanId: number): string {

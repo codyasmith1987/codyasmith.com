@@ -17,8 +17,18 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
   try {
     const { name, email, theme, answers } = await request.json();
 
-    if (!name || !email) {
-      return new Response(JSON.stringify({ error: 'Missing fields' }), {
+    // Validate shape and length before any processing. Without these caps
+    // an attacker can post multi-megabyte name/email/theme strings that
+    // tie up the Brevo call and burn the daily send budget. See
+    // security-audit-2026-05-12 round 3 SEC3-006.
+    if (
+      typeof name !== 'string' || typeof email !== 'string' ||
+      !name.trim() || !email.trim() ||
+      name.length > 100 || email.length > 254 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+      (theme && (typeof theme !== 'string' || theme.length > 80))
+    ) {
+      return new Response(JSON.stringify({ error: 'Missing or invalid fields' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });

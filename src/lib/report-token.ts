@@ -8,8 +8,11 @@
 //
 // See security-audit-2026-05-12 SEC2-003.
 
-import { sha256 } from '@oslojs/crypto/sha2';
-import { encodeHexLowerCase } from '@oslojs/encoding';
+// Uses proper HMAC-SHA256 (node:crypto) instead of sha256(secret + ':' + data)
+// so the primitive matches RFC 2104. See security-audit-2026-05-12 round 3
+// SEC3-005.
+
+import { createHmac } from 'node:crypto';
 
 const TOKEN_VALIDITY_MS = 30 * 24 * 60 * 60 * 1000; // 30 days, matches scan retention
 
@@ -26,8 +29,7 @@ const REPORT_SECRET: string = (() => {
 })();
 
 function hmac(data: string): string {
-  const encoded = new TextEncoder().encode(REPORT_SECRET + ':' + data);
-  return encodeHexLowerCase(sha256(encoded));
+  return createHmac('sha256', REPORT_SECRET).update(data).digest('hex');
 }
 
 export function generateReportToken(scanId: number): string {

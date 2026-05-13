@@ -52,6 +52,17 @@ const faqSchema = JSON.stringify({
 <Base title="Marketing Strategy | SEO, Competitive Analysis & Content Direction" description="SEO, competitive analysis, content direction, and keyword strategy. I direct the marketing. You execute it.">
   <script type="application/ld+json" set:html={faqSchema} />
   <script type="application/ld+json" set:html={JSON.stringify({"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Services","item":"https://codyasmith.com/services"},{"@type":"ListItem","position":2,"name":"Marketing Strategy","item":"https://codyasmith.com/services/marketing-strategy"}]})} />
+  <script type="application/ld+json" set:html={JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "Service",
+    "name": "Marketing Strategy",
+    "url": "https://codyasmith.com/services/marketing-strategy",
+    "provider": { "@id": "https://codyasmith.com/#organization" },
+    "serviceType": "SEO and Marketing Strategy Consulting",
+    "areaServed": { "@type": "Country", "name": "United States" },
+    "description": "SEO roadmap built on real keyword data, competitive analysis, content briefs, monthly strategy calls, and quarterly reporting. Strategy only: I steer, you execute.",
+    "termsOfService": "Month-to-month after the initial audit. No annual contracts."
+  })} />
 
   <section class="pt-40 pb-24 px-6">
     <div class="max-w-4xl mx-auto">

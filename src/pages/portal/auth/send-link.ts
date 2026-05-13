@@ -12,7 +12,11 @@ const json = (data: any, status = 200) =>
 
 export const POST: APIRoute = async ({ request, url, clientAddress }) => {
   const ip = clientAddress || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-  if (!await rateLimit(`login:${ip}`, 10, 15 * 60 * 1000)) {
+  // Fail-closed and use the same login:ip:<ip> key as /portal/auth/login.
+  // Sharing the bucket means an attacker cannot bypass the per-IP login
+  // throttle by alternating between the password and magic-link paths.
+  // See security-audit-2026-05-12 round 3 SEC3-003.
+  if (!await rateLimit(`login:ip:${ip}`, 10, 15 * 60 * 1000, true)) {
     return json({ error: 'Too many login attempts. Please wait a few minutes.' }, 429);
   }
   try {

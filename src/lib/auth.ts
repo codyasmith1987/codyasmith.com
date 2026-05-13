@@ -112,9 +112,18 @@ export async function verifyPassword(email: string, password: string): Promise<s
   if (!storedHash) return null;
 
   if (isLegacySha256(storedHash)) {
-    // Verify against legacy SHA256, then silently upgrade to bcrypt
+    // Verify against legacy SHA256 in constant time, then silently
+    // upgrade to bcrypt. Plain `===` on hash strings leaks per-character
+    // timing on the legacy bucket, which is enough to enumerate users
+    // who still have unmigrated hashes. See security-audit-2026-05-12
+    // round 3 SEC3-004.
     const inputHash = legacySha256Hash(password);
-    if (storedHash !== inputHash) return null;
+    if (inputHash.length !== storedHash.length) return null;
+    let mismatch = 0;
+    for (let i = 0; i < inputHash.length; i++) {
+      mismatch |= inputHash.charCodeAt(i) ^ storedHash.charCodeAt(i);
+    }
+    if (mismatch !== 0) return null;
 
     // Rehash with bcrypt for future logins
     const newHash = await bcrypt.hash(password, BCRYPT_ROUNDS);

@@ -4,28 +4,50 @@ Disallow: /portal/
 Disallow: /api/
 Disallow: /naming-preview
 
-# AI training and grounding crawlers. The site welcomes assistants
-# that respect robots.txt; opt-outs go below as we identify ones we
-# do not want, per current 2026 conventions.
+# AI training and grounding crawlers. Each User-agent record is its own
+# group with its own rules per the REP draft; restrictions on `*` do not
+# inherit, so we restate the portal/api/naming-preview disallows under
+# every named bot we want to keep out of those paths.
 User-agent: GPTBot
 Allow: /
+Disallow: /portal/
+Disallow: /api/
+Disallow: /naming-preview
 
 User-agent: ChatGPT-User
 Allow: /
+Disallow: /portal/
+Disallow: /api/
+Disallow: /naming-preview
 
 User-agent: ClaudeBot
 Allow: /
+Disallow: /portal/
+Disallow: /api/
+Disallow: /naming-preview
 
 User-agent: Claude-User
 Allow: /
+Disallow: /portal/
+Disallow: /api/
+Disallow: /naming-preview
 
 User-agent: PerplexityBot
 Allow: /
+Disallow: /portal/
+Disallow: /api/
+Disallow: /naming-preview
 
 User-agent: Google-Extended
 Allow: /
+Disallow: /portal/
+Disallow: /api/
+Disallow: /naming-preview
 
 User-agent: CCBot
 Allow: /
+Disallow: /portal/
+Disallow: /api/
+Disallow: /naming-preview
 
 Sitemap: https://codyasmith.com/sitemap-index.xml

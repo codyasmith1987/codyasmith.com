@@ -1,8 +1,14 @@
-// CSRF protection: HMAC-based token generation/validation.
-// No database state needed. Token = timestamp.HMAC(secret, "csrf:" + sessionId + ":" + timestamp).
+// CSRF protection: proper HMAC-SHA256 token generation/validation.
+// No database state needed. Token = timestamp.HMAC-SHA256(secret, "csrf:" + sessionId + ":" + timestamp).
+//
+// Uses node:crypto.createHmac (RFC 2104) instead of the previous
+// sha256(secret + ':' + data) construction, which was technically
+// vulnerable to length-extension attacks. Not exploitable as written
+// because we never let an attacker append to a known prefix, but the
+// fix is trivial and HMAC is the correct primitive. See
+// security-audit-2026-05-12 round 3 SEC3-005.
 
-import { sha256 } from '@oslojs/crypto/sha2';
-import { encodeHexLowerCase } from '@oslojs/encoding';
+import { createHmac } from 'node:crypto';
 
 const TOKEN_VALIDITY_MS = 60 * 60 * 1000; // 1 hour
 
@@ -19,8 +25,7 @@ const CSRF_SECRET: string = (() => {
 })();
 
 function hmac(data: string): string {
-  const encoded = new TextEncoder().encode(CSRF_SECRET + ':' + data);
-  return encodeHexLowerCase(sha256(encoded));
+  return createHmac('sha256', CSRF_SECRET).update(data).digest('hex');
 }
 
 /**

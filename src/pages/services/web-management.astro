@@ -52,6 +52,17 @@ const faqSchema = JSON.stringify({
 <Base title="Web Management | Managed WordPress Hosting & Security" description="Managed WordPress hosting, security, updates, and monthly reporting. Your site lives on my infrastructure.">
   <script type="application/ld+json" set:html={faqSchema} />
   <script type="application/ld+json" set:html={JSON.stringify({"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Services","item":"https://codyasmith.com/services"},{"@type":"ListItem","position":2,"name":"Web Management","item":"https://codyasmith.com/services/web-management"}]})} />
+  <script type="application/ld+json" set:html={JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "Service",
+    "name": "Web Management",
+    "url": "https://codyasmith.com/services/web-management",
+    "provider": { "@id": "https://codyasmith.com/#organization" },
+    "serviceType": "Managed WordPress Hosting and Maintenance",
+    "areaServed": { "@type": "Country", "name": "United States" },
+    "description": "Dedicated cloud hosting, security monitoring, daily backups, core and plugin updates, and a monthly Site Health Report. Month-to-month after onboarding.",
+    "termsOfService": "Month-to-month after onboarding. No lock-in. Full backup and 30 days to migrate elsewhere on exit."
+  })} />
 
   <section class="pt-40 pb-24 px-6">
     <div class="max-w-4xl mx-auto">

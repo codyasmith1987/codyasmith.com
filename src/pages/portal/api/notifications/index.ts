@@ -19,7 +19,10 @@ export const GET: APIRoute = async ({ locals, url }) => {
       return json({ unread: count });
     }
 
-    const limit = parseInt(url.searchParams.get('limit') || '50', 10);
+    // Clamp limit to [1, 200] so a hostile or buggy caller cannot pull
+    // unbounded rows. See security-audit-2026-05-12 round 3 SEC3-002.
+    const rawLimit = parseInt(url.searchParams.get('limit') || '50', 10);
+    const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : 50;
     const notifications = await getNotifications(locals.user.id, limit);
     return json(notifications);
   } catch (err) {

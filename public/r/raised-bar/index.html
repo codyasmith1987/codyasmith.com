@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+<title>Engagement Proposal for Jason Roth and Kevin Adams</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    background: #faf7f2;
+    color: #1a1814;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  .container {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 72px 40px 96px;
+  }
+  h1, h2, h3, .price-monthly {
+    font-family: Georgia, "Times New Roman", Cambria, serif;
+    font-weight: normal;
+    color: #1a1814;
+    letter-spacing: -0.005em;
+  }
+  h1 { font-size: 46px; line-height: 1.15; margin-bottom: 24px; }
+  h2 {
+    font-size: 28px;
+    line-height: 1.3;
+    margin: 64px 0 24px;
+    padding-top: 48px;
+    border-top: 1px solid #d4cdc0;
+  }
+  h2:first-of-type { padding-top: 0; border-top: none; margin-top: 48px; }
+  h3 { font-size: 22px; line-height: 1.3; margin: 28px 0 12px; }
+  p { margin-bottom: 18px; max-width: 68ch; }
+  strong { font-weight: 600; }
+  .meta {
+    font-size: 13px;
+    color: #6b6359;
+    margin-bottom: 36px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .meta span { margin: 0 8px; color: #b8aea0; }
+  .intro {
+    font-size: 19px;
+    line-height: 1.6;
+    color: #1a1814;
+    margin-bottom: 24px;
+  }
+  .tiers {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    margin: 40px 0 8px;
+  }
+  .tier {
+    background: #ffffff;
+    border: 1px solid #d4cdc0;
+    padding: 36px 28px 32px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .tier.recommended {
+    border: 2px solid #1d2c3a;
+    padding: 35px 27px 31px;
+    box-shadow: 0 6px 24px rgba(26, 24, 20, 0.07);
+  }
+  .pill {
+    position: absolute;
+    top: -13px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1d2c3a;
+    color: #faf7f2;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 5px 14px;
+    font-weight: 600;
+  }
+  .tier h3 {
+    font-size: 30px;
+    margin: 0 0 6px;
+    color: #1d2c3a;
+  }
+  .tagline {
+    font-size: 14px;
+    color: #6b6359;
+    font-style: italic;
+    margin-bottom: 24px;
+    min-height: 36px;
+  }
+  .price-monthly {
+    font-size: 30px;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .price-monthly .suffix {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 14px;
+    color: #6b6359;
+    font-style: italic;
+  }
+  .price-onetime {
+    font-size: 14px;
+    color: #6b6359;
+    margin-bottom: 24px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid #e6ddd0;
+  }
+  .tier ul {
+    list-style: none;
+    padding: 0;
+    font-size: 15px;
+    line-height: 1.55;
+    flex: 1;
+  }
+  .tier ul li {
+    padding: 0 0 14px 16px;
+    position: relative;
+  }
+  .tier ul li:last-child { padding-bottom: 0; }
+  .tier ul li:before {
+    content: "";
+    width: 5px;
+    height: 5px;
+    background: #1d2c3a;
+    border-radius: 50%;
+    position: absolute;
+    left: 0;
+    top: 8px;
+  }
+  .addon {
+    background: #ffffff;
+    border: 1px solid #d4cdc0;
+    padding: 36px 32px;
+    margin: 32px 0 8px;
+  }
+  .addon h3 {
+    margin: 0 0 8px;
+    font-size: 24px;
+    color: #1d2c3a;
+  }
+  .addon-price {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 20px;
+    color: #1a1814;
+    margin: 4px 0 24px;
+  }
+  .addon p { margin-bottom: 14px; }
+  .addon p:last-child { margin-bottom: 0; }
+  .phase {
+    margin: 20px 0;
+    padding: 24px 28px;
+    background: #ffffff;
+    border-left: 3px solid #1d2c3a;
+  }
+  .phase .phase-num {
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #6b6359;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  .phase h3 {
+    margin: 0 0 12px;
+    font-size: 22px;
+    color: #1a1814;
+  }
+  .phase p { margin-bottom: 0; }
+  .close {
+    margin-top: 72px;
+    padding-top: 48px;
+    border-top: 2px solid #1a1814;
+  }
+  .close h2 {
+    padding-top: 0;
+    border-top: none;
+    margin-top: 0;
+  }
+  .signature-block {
+    margin-top: 32px;
+    padding: 36px 36px 28px;
+    background: #ffffff;
+    border: 1px solid #d4cdc0;
+  }
+  .sig-row {
+    display: flex;
+    align-items: baseline;
+    gap: 20px;
+    margin-bottom: 24px;
+  }
+  .sig-row:last-child { margin-bottom: 0; }
+  .sig-row label {
+    width: 160px;
+    font-size: 14px;
+    color: #6b6359;
+    flex-shrink: 0;
+  }
+  .sig-row .field {
+    flex: 1;
+    border-bottom: 1px solid #1a1814;
+    height: 28px;
+    min-width: 0;
+  }
+  .sig-instructions {
+    margin-top: 24px;
+    font-size: 14px;
+    color: #6b6359;
+    font-style: italic;
+  }
+  footer {
+    margin-top: 72px;
+    padding-top: 32px;
+    border-top: 1px solid #d4cdc0;
+    font-size: 14px;
+    color: #6b6359;
+  }
+  footer a { color: #1d2c3a; text-decoration: none; border-bottom: 1px solid #d4cdc0; }
+  @media print {
+    body { background: #ffffff; font-size: 12pt; }
+    .container { padding: 0; max-width: none; }
+    h1 { font-size: 30pt; }
+    h2 { font-size: 18pt; margin-top: 32px; padding-top: 24px; }
+    h3 { font-size: 14pt; }
+    .tier, .phase, .addon, .signature-block { page-break-inside: avoid; box-shadow: none; }
+    h1, h2, h3 { page-break-after: avoid; }
+  }
+  @media (max-width: 720px) {
+    .container { padding: 40px 22px 56px; }
+    h1 { font-size: 34px; }
+    h2 { font-size: 24px; margin: 48px 0 18px; padding-top: 36px; }
+    .tiers { grid-template-columns: 1fr; gap: 32px; }
+    .tier.recommended { padding: 35px 27px 31px; }
+    .sig-row { flex-direction: column; align-items: stretch; gap: 6px; }
+    .sig-row label { width: auto; }
+    .sig-row .field { height: 32px; }
+    p { max-width: none; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="meta">Engagement Proposal<span>&middot;</span>Cody A Smith LLC<span>&middot;</span>May 22, 2026</div>
+
+<h1>Jason and Kevin,</h1>
+<p class="intro">After our call, I sat with your family of companies, your sites, and the market you sell into. Here is the engagement I recommend, the real numbers behind it, the order it rolls out in, and a clean way to start today.</p>
+
+<h2>What I see in your business</h2>
+
+<p>You run three companies. <strong>F3 Properties</strong> is the real estate brokerage your family built up over twenty-plus years. It is online but visibly broken right now: the styling fails to load on most pages, and the magazine feature and the Brigadier General's endorsement that should be doing PR work for you are buried in the file directory where almost nobody finds them. <strong>Raised Bar Builders</strong> is the general contracting practice carrying three generations of your family's name, your grandfather's work in South Dakota in the 1920s, your father Wayne's decades in the Wood River Valley, your three companies now. It has no web presence at all. <strong>Raised Bar Development Group</strong> is the investment and acquisition arm; you said it stays behind the scenes, and that is how I treat it.</p>
+
+<p>And you have <strong>Tailwater</strong>, three customized ZipKit Homes plans on an infill parcel in downtown Hailey, two blocks from Main Street, on a city park that already pulls foot traffic. You and Kevin want to pre-sell those three homes, and the location plus the ZipKit Homes finish give you something most luxury pre-sells do not have: a real story.</p>
+
+<p>Your urgency is Tailwater. Your growth is Raised Bar Builders, especially with the ZipKit Homes authorized builder-dealer alliance Sven and Hayden have been building with you. Your maintenance priority is F3, the brokerage you said you want tightened up but is no longer where your energy is. That is the order I treat them in.</p>
+
+<h2>What I recommend</h2>
+
+<p>Two products, sold together. <strong>Web Management</strong> keeps your sites running, secure, and improving every month, billed per site, with hours pooled across the sites I manage for you. <strong>Marketing Consulting</strong> is research and strategy applied to the whole business: I look at your market, your competitors, what people are searching for, where the holes are, and come back with specific recommendations on what to do about it. I never execute on the marketing side. You give me direction, I come back with strategy. Sold once for the family of companies, never multiplied per site.</p>
+
+<p>For the build side, I recommend <strong>one substantial Raised Bar Builders site</strong>, with Tailwater built in as a focused section, the ZipKit Homes authorized builder-dealer funnel inside the same site, and the F3 Properties takeover as the second managed site. The Tailwater section is built and launches first, so your pre-sell goes live while the rest of the builder content is still in production. F3 is a takeover, not a rebuild: I fix the broken styling, surface the magazine feature and the General's endorsement properly, and tighten the site inside your monthly pooled hours instead of charging you for a new build on a site that is no longer the priority.</p>
+
+<p>One site instead of two is cheaper to build, simpler to run, and there is nothing that has to wind down later. When the three homes sell, your Tailwater section becomes a permanent portfolio piece on the builder site, not an orphan campaign site you keep paying to maintain. If you want a standalone Tailwater micro-site for the pre-sell, with its own URL for the signage at the park and a focused funnel, that is available as a single add-on at the bottom of this page. It is a real option, not a hidden one. You pick it if you want it.</p>
+
+<h2>Your three options</h2>
+
+<p>Pick a level. Good, Better, or Best. The level sets the recurring partnership: how much research and strategy I do for the business every month, how much hands-on work goes into the sites, and how fast I respond. Better is the level that fits where you actually are right now.</p>
+
+<div class="tiers">
+
+  <div class="tier">
+    <h3>Good</h3>
+    <div class="tagline">A start, intentionally light.</div>
+    <div class="price-monthly">$1,031.60<span class="suffix"> / month</span></div>
+    <div class="price-onetime">$7,925 to start</div>
+    <ul>
+      <li>Marketing Consulting at the lightest level: a baseline competitor and keyword read at the start, then monthly access to my strategic thinking if you have a question. No ongoing roadmap, no monthly strategy call.</li>
+      <li>Web Management for the unified Raised Bar Builders site and the F3 Properties takeover. Your sites stay online, secure, and updated monthly.</li>
+      <li>6 pooled hours per month for hands-on site work.</li>
+    </ul>
+  </div>
+
+  <div class="tier recommended">
+    <div class="pill">Recommended</div>
+    <h3>Better</h3>
+    <div class="tagline">The flagship. The right fit for what you are doing right now.</div>
+    <div class="price-monthly">$1,891.60<span class="suffix"> / month</span></div>
+    <div class="price-onetime">$8,925 to start</div>
+    <ul>
+      <li>A research-grade audit at the start, then a quarterly cycle of competitive analysis, search engine optimization (SEO) and content roadmap, brand positioning, and a 30-minute monthly strategy call. Quarterly performance reporting.</li>
+      <li>Web Management with bi-weekly software updates, performance optimization, and a monthly health report so you know what is happening.</li>
+      <li>10 pooled hours per month for active page work, copy, images, content updates, whatever the sites need.</li>
+    </ul>
+  </div>
+
+  <div class="tier">
+    <h3>Best</h3>
+    <div class="tagline">Marketing on a monthly cycle. Same-day priority response.</div>
+    <div class="price-monthly">$2,661.60<span class="suffix"> / month</span></div>
+    <div class="price-onetime">$10,625 to start</div>
+    <ul>
+      <li>The deepest audit at the start, then a monthly cycle of competitive analysis, SEO and content roadmap, ongoing brand work, a 60-minute strategy call, monthly performance reporting, and hiring guidance when you bring marketing or web roles in-house.</li>
+      <li>Web Management with weekly updates and same-day priority response when something breaks.</li>
+      <li>16 pooled hours per month. One staff training session per quarter for your team.</li>
+    </ul>
+  </div>
+
+</div>
+
+<h2>Optional: a dedicated Tailwater pre-sell micro-site</h2>
+
+<div class="addon">
+  <h3>Add a standalone Tailwater micro-site</h3>
+  <div class="addon-price">+$4,500 to start. +$237.60 to +$517.60 per month, by tier, only while the micro-site is live.</div>
+  <p>If you want Tailwater on its own URL for the parcel signage, ads, and a focused pre-sell funnel that has no builder content competing for attention, this splits Tailwater out of the unified site into its own micro-site. It is built first and launches first, on its own timeline. The Builders site catches up behind it. After the three homes sell, the micro-site winds down and your monthly returns to the tier number you picked above. Long-term, the recurring is the same whether you add this or not. The add-on is for the pre-sell experience, not the long-term economics.</p>
+  <p><strong>Pick it if</strong> a memorable URL on the signage at the downtown Hailey park matters to the pre-sell. <strong>Skip it if</strong> you are fine letting the Tailwater section inside the builder site do the pre-sell work, with the builder URL pointing visitors to it.</p>
+</div>
+
+<h2>How it rolls out</h2>
+
+<p>The default rollout, without the add-on:</p>
+
+<div class="phase">
+  <div class="phase-num">Phase 1</div>
+  <h3>The unified site, Tailwater section first</h3>
+  <p>I start Marketing Consulting research the day this engagement signs. At the same time I build the unified Raised Bar Builders site, with the Tailwater section completed first so the pre-sell launches while the rest of the builder content is still being finished. The builder content, the ZipKit Homes authorized builder-dealer funnel, and your About page (the heritage, the magazine feature, the General's endorsement) all land in the same launch. The site moves onto Web Management at launch.</p>
+</div>
+
+<div class="phase">
+  <div class="phase-num">Phase 2</div>
+  <h3>F3 Properties takeover</h3>
+  <p>I take over F3, fix the broken styling that is degrading the site right now, surface the magazine feature and the General's endorsement properly, and tighten the site inside your monthly pooled hours. F3 joins the management pool as the second site.</p>
+</div>
+
+<p>If you take the Tailwater add-on, the order shifts: Phase 1 is the standalone Tailwater micro-site (built and launched first, on its own URL, for the pre-sell), Phase 2 is the Raised Bar Builders site (without the Tailwater section, since it now lives on its own micro-site), Phase 3 is the F3 takeover.</p>
+
+<h2>What each thing actually is</h2>
+
+<h3>The build</h3>
+<p>A new website, built as a fixed-fee project, separate from the monthly management. The build covers an agreed set of pages, the design, the forms, the search-engine foundation, and launch. Fifty percent at signing, fifty percent at launch. The build replaces the onboarding fee for that site. The default Raised Bar Builders site, with Tailwater built in, is one Small build at $5,625.</p>
+
+<h3>Web Management</h3>
+<p>The monthly that keeps a site running, secure, monitored, updated, and backed up. Every tier includes hosting, daily backups, security monitoring, and uptime monitoring. The tier sets how often software gets updated, how fast I respond when something breaks, and how many hands-on hours are in your monthly pool. Hours are pooled across all the sites I manage for you, so you draw from the same bucket whether the work is on the Builders site or the F3 takeover.</p>
+
+<h3>Marketing Consulting</h3>
+<p>Research and strategy applied to your business. I look at your market and your competitors, figure out what people are searching for and where the holes are, and come back with specific recommendations on what to do about it. I never execute on the marketing side, that is the discipline of the product. You give me direction, I come back with strategy. Sold once for the family of companies, not per site or per entity.</p>
+
+<h3>Takeover and onboarding</h3>
+<p>F3 is a takeover, not a build. The first month is the takeover audit: who controls the domain, the email, the analytics, the licenses. That month is heavier than every month after it. The $800 onboarding fee on F3 pays for that takeover work. Onboarding ends on a date, the close of month one, not when a task list is empty.</p>
+
+<div class="close">
+
+<h2>Sign and start</h2>
+
+<p>This acceptance starts the work. I send your first invoice and begin Marketing Consulting research the same day this comes back to me signed. The full new-client contract follows within the first week and carries the full legal terms; this signature is enough to get us moving.</p>
+
+<div class="signature-block">
+  <div class="sig-row"><label>Tier (Good, Better, Best):</label><div class="field"></div></div>
+  <div class="sig-row"><label>Tailwater add-on (Y or N):</label><div class="field"></div></div>
+  <div class="sig-row"><label>Jason Roth:</label><div class="field"></div></div>
+  <div class="sig-row"><label>Kevin Adams:</label><div class="field"></div></div>
+  <div class="sig-row"><label>Date:</label><div class="field"></div></div>
+  <div class="sig-instructions">Email this page back to cody@codyasmith.com, signed, with your tier and add-on choice. That is the kickoff.</div>
+</div>
+
+</div>
+
+<footer>
+Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmith.com</a>. <a href="https://codyasmith.com">codyasmith.com</a>. Prepared May 22, 2026 for Jason Roth and Kevin Adams.
+</footer>
+
+</div>
+</body>
+</html>

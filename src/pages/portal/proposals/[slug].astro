@@ -208,21 +208,40 @@ const clientConfig = {
     position: relative;
     cursor: pointer;
     transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    /* min-width:0 lets grid items shrink to the column width even when
+       they contain unbreakable long tokens (domain names). Without it,
+       the card pushes the grid wider than the container and the third
+       card lands "outside" the page. */
+    min-width: 0;
   }
   .tier:hover {
     transform: translateY(-3px);
     border-color: #6b6359;
   }
+  /* Recommended uses a sepia accent border so the visual state reads as
+     "the practice's suggestion" rather than "your selection." Pairs
+     with the existing dark-navy Recommended pill at the top. */
   .tier.recommended {
+    border: 2px solid #c47d5a;
+    padding: 35px 27px 31px;
+    box-shadow: 0 6px 24px rgba(196, 125, 90, 0.10);
+  }
+  /* Selected uses the dark-navy border so it is clearly distinct from
+     the recommended hint. The card the user actually picks should not
+     look the same as the card the practice suggested. */
+  .tier.selected {
     border: 2px solid #1d2c3a;
     padding: 35px 27px 31px;
-    box-shadow: 0 6px 24px rgba(26, 24, 20, 0.07);
+    box-shadow: 0 12px 36px rgba(26, 24, 20, 0.16);
+    transform: translateY(-3px);
   }
-  .tier.selected,
+  /* Recommended AND selected: dark navy wins (selected is the
+     authoritative state). The Recommended pill at the top stays visible
+     so the user sees that they happened to pick the recommended option. */
   .tier.recommended.selected {
     border: 2px solid #1d2c3a;
     padding: 35px 27px 31px;
-    box-shadow: 0 12px 36px rgba(26, 24, 20, 0.13);
+    box-shadow: 0 12px 36px rgba(26, 24, 20, 0.16);
     transform: translateY(-3px);
   }
   .tier.selected::after {
@@ -243,6 +262,14 @@ const clientConfig = {
     font-style: italic;
     margin-top: 8px;
   }
+  .rollout-placeholder {
+    color: #6b6359;
+    font-style: italic;
+    margin: 24px 0;
+  }
+  .rollout-scenario {
+    margin-top: 16px;
+  }
   .step-hidden {
     display: none !important;
   }
@@ -258,6 +285,14 @@ const clientConfig = {
     max-height: 3000px;
     opacity: 1;
     margin: 40px 0 8px;
+    /* After the reveal animation finishes (0.4s), drop overflow:hidden
+       so the absolutely-positioned "Recommended" pill at top:-12px is
+       not clipped. CSS animation with a delay is the cleanest way to
+       snap a non-animatable property after a transition. */
+    animation: showOverflow 0s 0.45s forwards;
+  }
+  @keyframes showOverflow {
+    to { overflow: visible; }
   }
   .addon-choice {
     display: grid;
@@ -272,6 +307,13 @@ const clientConfig = {
   .addon-choice.revealed {
     max-height: 2000px;
     opacity: 1;
+    /* Same overflow-after-reveal trick as .tiers-hidden.revealed so
+       the card content (selected badge at bottom-right, or any future
+       overflowing decoration) is not clipped. */
+    animation: showOverflow 0s 0.45s forwards;
+  }
+  .addon-option {
+    min-width: 0;
   }
   .addon-option {
     background: #ffffff;
@@ -855,15 +897,41 @@ const clientConfig = {
 {rollout && (
   <>
     {rollout.h2 && <h2>{rollout.h2}</h2>}
-    {rollout.intro_html && <p set:html={rollout.intro_html} />}
-    {Array.isArray(rollout.phases) && rollout.phases.map((ph: any) => (
-      <div class="phase">
-        {ph.phase_num && <div class="phase-num">{ph.phase_num}</div>}
-        {ph.h3 && <h3>{ph.h3}</h3>}
-        {ph.html && <p set:html={ph.html} />}
-      </div>
-    ))}
-    {rollout.outro_html && <p set:html={rollout.outro_html} />}
+    {/* Selection-aware rollout. If rollout.scenarios + scenario_step is
+        configured, render every scenario block and let JS toggle which
+        one is visible based on the prospect's current selection for
+        that step. Fall back to the legacy single-block rendering when
+        scenarios is not configured. */}
+    {rollout.scenarios && rollout.scenario_step ? (
+      <>
+        <p class="rollout-placeholder" id="rollout-placeholder">Pick your site setup above and the rollout for that path appears here.</p>
+        {Object.entries(rollout.scenarios).map(([scenKey, scen]: any) => (
+          <div class="rollout-scenario step-hidden" data-scenario-step={rollout.scenario_step} data-scenario-value={scenKey}>
+            {scen.intro_html && <p set:html={scen.intro_html} />}
+            {Array.isArray(scen.phases) && scen.phases.map((ph: any) => (
+              <div class="phase">
+                {ph.phase_num && <div class="phase-num">{ph.phase_num}</div>}
+                {ph.h3 && <h3>{ph.h3}</h3>}
+                {ph.html && <p set:html={ph.html} />}
+              </div>
+            ))}
+            {scen.outro_html && <p set:html={scen.outro_html} />}
+          </div>
+        ))}
+      </>
+    ) : (
+      <>
+        {rollout.intro_html && <p set:html={rollout.intro_html} />}
+        {Array.isArray(rollout.phases) && rollout.phases.map((ph: any) => (
+          <div class="phase">
+            {ph.phase_num && <div class="phase-num">{ph.phase_num}</div>}
+            {ph.h3 && <h3>{ph.h3}</h3>}
+            {ph.html && <p set:html={ph.html} />}
+          </div>
+        ))}
+        {rollout.outro_html && <p set:html={rollout.outro_html} />}
+      </>
+    )}
   </>
 )}
 
@@ -1208,6 +1276,30 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
           promptEl.style.display = state.selections[dep] ? 'none' : '';
         }
       }
+    }
+
+    // Selection-aware rollout: show only the scenario block whose
+    // data-scenario-value matches the current selection for the
+    // configured scenario step. Hide the placeholder line once a
+    // scenario is showing.
+    var rolloutBlocks = document.querySelectorAll('[data-scenario-step]');
+    var anyRolloutShown = false;
+    for (var rb = 0; rb < rolloutBlocks.length; rb++) {
+      var rEl = rolloutBlocks[rb];
+      var stepKey = rEl.getAttribute('data-scenario-step');
+      var scenVal = rEl.getAttribute('data-scenario-value');
+      var match = stepKey && scenVal && state.selections[stepKey] === scenVal;
+      if (match) {
+        rEl.classList.remove('step-hidden');
+        anyRolloutShown = true;
+      } else {
+        rEl.classList.add('step-hidden');
+      }
+    }
+    var rolloutPlaceholder = document.getElementById('rollout-placeholder');
+    if (rolloutPlaceholder) {
+      if (anyRolloutShown) rolloutPlaceholder.classList.add('step-hidden');
+      else rolloutPlaceholder.classList.remove('step-hidden');
     }
 
     // Dynamic price strings on tier-keyed options (raised_bar_v1 only

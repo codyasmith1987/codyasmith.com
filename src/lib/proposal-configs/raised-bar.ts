@@ -31,20 +31,51 @@ export const RAISED_BAR_PROPOSAL_CONFIG = {
     ],
     rollout: {
       h2: 'How it rolls out',
-      intro_html: `If you pick <strong>Option 1</strong> in Step 2:`,
-      phases: [
-        {
-          phase_num: 'Phase 1',
-          h3: 'The unified Builders site, Tailwater section first',
-          html: `Marketing Consulting research starts the day this engagement signs (if you picked it). I build the unified Raised Bar Builders site with the Tailwater section completed first so the pre-sell launches while the rest of the builder content is still being finished. The ZipKit Homes authorized builder-dealer funnel and your About page (heritage, magazine feature, General's endorsement) land in the same launch. The site moves onto Web Management at launch.`,
+      // scenarios + scenario_step makes the rollout content swap based
+      // on the prospect's site_setup pick. The renderer shows the
+      // matching scenario and hides the rest; if no scenario_step is
+      // configured, falls back to the legacy intro_html/phases/outro_html
+      // single-scenario rendering.
+      scenario_step: 'site_setup',
+      scenarios: {
+        o1: {
+          intro_html: `With <strong>Option 1</strong> picked, the unified Builders site carries everything and Tailwater lives inside it:`,
+          phases: [
+            {
+              phase_num: 'Phase 1',
+              h3: 'The unified Builders site, Tailwater section first',
+              html: `Marketing Consulting research starts the day this engagement signs (if you picked it). I build the unified Raised Bar Builders site with the Tailwater section completed first so the pre-sell launches while the rest of the builder content is still being finished. The ZipKit Homes authorized builder-dealer funnel and your About page (heritage, magazine feature, General's endorsement) land in the same launch. The site moves onto Web Management at launch.`,
+            },
+            {
+              phase_num: 'Phase 2',
+              h3: 'F3 Properties takeover',
+              html: `I take over F3, fix the broken styling, surface the magazine feature and General's endorsement properly, and tighten the site inside your monthly pooled hours. F3 joins the management pool as the second site.`,
+            },
+          ],
+          outro_html: `After the three Tailwater homes sell, the Tailwater section on the Builders site becomes a permanent portfolio piece. Two sites under management long-term.`,
         },
-        {
-          phase_num: 'Phase 2',
-          h3: 'F3 Properties takeover',
-          html: `I take over F3, fix the broken styling, surface the magazine feature and General's endorsement properly, and tighten the site inside your monthly pooled hours. F3 joins the management pool as the second site.`,
+        o2: {
+          intro_html: `With <strong>Option 2</strong> picked, Tailwater gets its own standalone URL for the pre-sell, and the work order shifts to launch it first:`,
+          phases: [
+            {
+              phase_num: 'Phase 1',
+              h3: 'The standalone Tailwater micro-site',
+              html: `Tailwater launches first on its own URL, focused entirely on the three-home pre-sell. Parcel signage, paid ads, and direct outreach all point at this site. Lean, focused, fast to launch.`,
+            },
+            {
+              phase_num: 'Phase 2',
+              h3: 'The Raised Bar Builders site',
+              html: `I build the Builders site without the Tailwater section. This becomes the primary brand site for the contracting practice: heritage, magazine feature, General's endorsement, the ZipKit Homes builder-dealer alliance, and the rest of the builder content. The site moves onto Web Management at launch.`,
+            },
+            {
+              phase_num: 'Phase 3',
+              h3: 'F3 Properties takeover',
+              html: `Same takeover as Option 1: fix the broken styling, surface the magazine feature and General's endorsement properly, tighten the site inside your monthly pooled hours. F3 joins the management pool.`,
+            },
+          ],
+          outro_html: `After the three Tailwater homes sell, the micro-site winds down and your monthly recurring drops back to the Option 1 number (two sites managed, not three).`,
         },
-      ],
-      outro_html: `If you pick <strong>Option 2</strong>, the order shifts: Phase 1 is the standalone Tailwater micro-site (built and launched first, on its own URL, for the pre-sell), Phase 2 is the Raised Bar Builders site without the Tailwater section, Phase 3 is the F3 takeover. The micro-site winds down after the three homes sell.`,
+      },
     },
   },
 

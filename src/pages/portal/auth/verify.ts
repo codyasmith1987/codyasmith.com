@@ -4,8 +4,22 @@ import { logActivity } from '../../../lib/activity';
 
 export const prerender = false;
 
+// Allowlist for ?next= post-verify redirect targets. Must be a same-origin
+// path under /portal/, no protocol, no scheme, no path traversal, no //
+// (which some browsers parse as a protocol-relative URL).
+function safeNextPath(raw: string | null): string | null {
+  if (!raw) return null;
+  if (!raw.startsWith('/portal/')) return null;
+  if (raw.startsWith('//')) return null;
+  if (raw.includes('\\')) return null;
+  if (raw.includes('..')) return null;
+  if (!/^\/portal\/[A-Za-z0-9/_.\-?=&%]*$/.test(raw)) return null;
+  return raw;
+}
+
 export const GET: APIRoute = async ({ url, cookies, redirect }) => {
   const token = url.searchParams.get('token');
+  const next = safeNextPath(url.searchParams.get('next'));
 
   if (!token) {
     return redirect('/portal/login');
@@ -54,5 +68,9 @@ export const GET: APIRoute = async ({ url, cookies, redirect }) => {
     maxAge: 60 * 60, // 1 hour
   });
 
-  return redirect('/portal/set-password');
+  // If a ?next=/portal/... was passed and passes the allowlist, send the
+  // user there instead of the default set-password page. Used for sales
+  // proposal magic-links so the recipient lands directly on the proposal
+  // viewer (which is carved out from the password-set requirement).
+  return redirect(next || '/portal/set-password');
 };

@@ -140,6 +140,10 @@ async function handleRequest(context: Parameters<Parameters<typeof defineMiddlew
   // 30-day session equivalent of a password and the password flow on
   // /portal/login is moot. See security-audit-2026-05-12 round 3
   // SEC3-008.
+  //
+  // Proposal viewers are NOT carved out: setting a password is a small
+  // commitment that primes the client for the engagement. They hit
+  // set-password on first arrival, then can reach /portal/proposals/*.
   const isSetPasswordRoute = context.url.pathname === '/portal/set-password';
   const isSelfSetPasswordApi = context.url.pathname === '/portal/api/auth/set-own-password';
   if (

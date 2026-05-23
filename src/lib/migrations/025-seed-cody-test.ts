@@ -1,75 +1,27 @@
-// Seed the cody-test fixture (client + user + proposal). Lets Cody
-// drive the full proposal -> LOI -> contract -> sign -> PDF flow end
-// to end under his personal email without touching the real Raised Bar
-// client data.
+// Seed the cody-test fixture (client + user + client_metadata only).
+// Lets Cody log into the portal as codyasmith@live.com on the Cody
+// Test client without touching real Raised Bar client data.
+//
+// The proposal itself is NOT auto-seeded. Cody creates it via the
+// admin builder at /portal/admin/proposals/new. That tests the
+// builder (does it produce a real, working proposal from admin
+// input?) instead of hiding it behind a cloned template.
 //
 // Idempotent: every insert is gated on a SELECT, so re-running this
 // migration is a no-op. The reset endpoint at
 // /portal/api/admin/test-fixtures/cody-test/reset clears drafts,
 // agreements, signatures, and intake between test runs without
-// removing the seeded client / user / proposal rows themselves.
+// removing the seeded client / user / metadata rows themselves.
 
 import turso from '../turso';
 import { nanoid } from 'nanoid';
 import type { Migration } from '../migrate';
-import { RAISED_BAR_PROPOSAL_CONFIG } from '../proposal-configs/raised-bar';
 import { upsertClientMetadata } from '../agreements';
 
 const CLIENT_SLUG = 'cody-test';
 const CLIENT_NAME = 'Cody Test';
 const SIGNER_EMAIL = 'codyasmith@live.com';
 const SIGNER_NAME = 'Cody Smith';
-const PROPOSAL_SLUG = 'cody-test';
-const PROPOSAL_TITLE = 'Test Engagement Proposal for Cody';
-
-// Single-signer variant of the Raised Bar config. Reuses the steps
-// (mgmt_tier, site_setup, builders_domain, tailwater_domain, consulting,
-// consulting_tier) so the proposal-form mechanics render identically
-// to what real clients see. Replaces the narrative with test-marker
-// copy so the page does not read as Jason and Kevin's actual proposal
-// content with someone else's name pasted on top.
-function buildTestConfig() {
-  return {
-    ...RAISED_BAR_PROPOSAL_CONFIG,
-    prepared_for: 'Cody Smith (test signer)',
-    prepared_on: new Date().toISOString().slice(0, 10),
-    title: PROPOSAL_TITLE,
-    signers: [
-      { id: 'cody', email: SIGNER_EMAIL, name: SIGNER_NAME },
-    ],
-    narrative: {
-      intro: `This is a test fixture, not a real engagement proposal. The steps, pricing, and contract preview below are wired to the same raised_bar_v1 formula real clients see, so you can walk the full flow end to end. The narrative paragraphs below are placeholders.`,
-      sections: [
-        {
-          h2: 'What I see in your business',
-          paragraphs: [
-            `Placeholder. In a real proposal, this section reads back to the client what their business is, where it stands today, and what is in their way. It is written from the discovery call notes, not from a template.`,
-            `Use the admin wizard at <a href="/portal/admin/proposals/new">/portal/admin/proposals/new</a> to create real proposals. Each one gets its own intro, "what I see," "what I recommend," and rollout sections.`,
-          ],
-        },
-        {
-          h2: 'What I recommend',
-          paragraphs: [
-            `Placeholder. In a real proposal, this section names the products, explains why they fit, and sets up the picker cards below.`,
-            `The three products are <strong>Web Management</strong>, <strong>Marketing Consulting</strong>, and build work scoped per engagement. Buy one, the other, both, or add a build SOW.`,
-          ],
-        },
-      ],
-      rollout: {
-        h2: 'How it rolls out',
-        intro_html: `Placeholder rollout copy. In a real proposal, this section walks the client through the phasing of the work in plain language.`,
-        phases: [
-          {
-            phase_num: 'Phase 1',
-            h3: 'Test phase',
-            html: `Placeholder. Test the form interaction below.`,
-          },
-        ],
-        outro_html: `End of test narrative.`,
-      },
-    },
-  };
-}
 
 const migration: Migration = {
   id: '025-seed-cody-test',
@@ -122,28 +74,10 @@ const migration: Migration = {
       primary_contact_phone: '435-868-7133',
     });
 
-    // 4) Proposal.
-    const existingProposal = await turso.execute({
-      sql: 'SELECT id FROM proposals WHERE slug = ? LIMIT 1',
-      args: [PROPOSAL_SLUG],
-    });
-    if (existingProposal.rows.length === 0) {
-      const proposalId = nanoid();
-      const config = buildTestConfig();
-      await turso.execute({
-        sql: `INSERT INTO proposals (id, slug, client_id, title, config, status, created_by)
-              VALUES (?, ?, ?, ?, ?, 'published', NULL)`,
-        args: [proposalId, PROPOSAL_SLUG, clientId, PROPOSAL_TITLE, JSON.stringify(config)],
-      });
-    } else {
-      // If the proposal already exists, update its config to keep it in
-      // sync with the latest raised-bar source. Same pattern as
-      // migration 024 for the live raised-bar row.
-      await turso.execute({
-        sql: 'UPDATE proposals SET config = ? WHERE slug = ?',
-        args: [JSON.stringify(buildTestConfig()), PROPOSAL_SLUG],
-      });
-    }
+    // No proposal is seeded. The cody-test proposal is created via
+    // the admin builder at /portal/admin/proposals/new, picking the
+    // Cody Test client. That tests the builder end to end instead of
+    // hiding it behind a cloned template.
   },
 };
 

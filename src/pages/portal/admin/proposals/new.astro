@@ -102,7 +102,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           >
             <option value="">Select a client</option>
             {clients.map(c => (
-              <option value={c.id} data-slug={c.slug} data-name={c.name}>{c.name}</option>
+              <option value={c.id} data-slug={c.slug} data-name={c.name} data-domain={c.domain || ''}>{c.name}</option>
             ))}
           </select>
           <button type="button" id="add-client-btn" class="px-4 py-3 bg-neutral-800 border border-white/10 text-neutral-300 text-sm rounded-lg hover:border-amber-500/40 hover:text-amber-400 transition-colors">
@@ -118,6 +118,8 @@ const todayISO = new Date().toISOString().slice(0, 10);
             <input type="text" id="new_client_slug" placeholder="business-slug" pattern="[a-z0-9\-]+"
               class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
           </div>
+          <input type="text" id="new_client_domain" placeholder="example.com (optional, no protocol)"
+            class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
           <div class="flex items-center gap-3">
             <button type="button" id="create-client-btn" class="px-4 py-2 bg-amber-500 text-neutral-950 font-medium text-xs rounded-md hover:bg-amber-400 transition-colors">
               Create client
@@ -128,6 +130,39 @@ const todayISO = new Date().toISOString().slice(0, 10);
         </div>
 
         <p id="client-prefill-note" class="hidden mt-3 text-[11px] text-amber-400/80"></p>
+
+        <!-- Research panel: appears after a client is picked. Domain
+             is required for research; if missing, an inline input lets
+             admin set it. -->
+        <div id="research-panel" class="hidden mt-5 pt-5 border-t border-white/5">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase">AI client research</p>
+              <p class="text-[11px] text-neutral-500 mt-1">Pulls public info to seed revenue band, industry, urgency, focus, domains, and page count. You apply each suggestion.</p>
+            </div>
+            <button type="button" id="research-btn"
+              class="px-4 py-2 bg-amber-500/10 border border-amber-500/40 text-amber-300 text-xs rounded-md hover:bg-amber-500/20 transition-colors">
+              Research this client
+            </button>
+          </div>
+
+          <div id="research-domain-slot" class="hidden mt-3 p-3 bg-neutral-900/40 border border-amber-500/20 rounded-md">
+            <p class="text-[10px] font-mono text-amber-400 tracking-wide uppercase mb-2">Set primary domain first</p>
+            <div class="flex items-center gap-2">
+              <input type="text" id="research-domain-input" placeholder="example.com (no protocol)"
+                class="flex-1 px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
+              <button type="button" id="research-domain-save"
+                class="px-3 py-2 bg-amber-500 text-neutral-950 text-xs font-medium rounded-md hover:bg-amber-400 transition-colors">
+                Save
+              </button>
+            </div>
+            <p id="research-domain-msg" class="hidden text-[11px] mt-2"></p>
+          </div>
+
+          <p id="research-status" class="hidden mt-3 text-[11px] text-neutral-400"></p>
+
+          <div id="research-results" class="hidden mt-4 space-y-3"></div>
+        </div>
       </section>
 
       <!-- 2. PRODUCTS IN SCOPE -->
@@ -268,11 +303,13 @@ const todayISO = new Date().toISOString().slice(0, 10);
       client_id: '',
       client_name: '',
       client_slug: '',
+      client_domain: '',
       products: [],                    // array of product ids picked
       product_vars: {},                // { productId: { var_id: value, ... } }
       narrative_variables: {},         // { industry, urgency, focus[] }
       signers: [],                     // [{ name, email }]
       overrides: {},                   // { title?, slug?, prepared_for?, prepared_on? }
+      research_result: null,           // last AI research blob, when populated
     };
 
     // =========================================================================
@@ -303,6 +340,8 @@ const todayISO = new Date().toISOString().slice(0, 10);
       state.client_id = opt.value;
       state.client_name = opt.dataset.name || '';
       state.client_slug = opt.dataset.slug || '';
+      state.client_domain = opt.dataset.domain || '';
+      refreshResearchPanel();
       if (state.client_id) {
         const users = usersByClient[state.client_id] || [];
         // Reset signers from client users.
@@ -351,9 +390,12 @@ const todayISO = new Date().toISOString().slice(0, 10);
     });
     newClientSlug.addEventListener('input', () => { newClientSlug.dataset.manual = '1'; });
 
+    const newClientDomain = document.getElementById('new_client_domain');
+
     createClientBtn.addEventListener('click', async () => {
       const name = newClientName.value.trim();
       const slug = newClientSlug.value.trim();
+      const domain = (newClientDomain?.value || '').trim();
       if (!name || !slug) {
         newClientMsg.textContent = 'Name and slug are required';
         newClientMsg.className = 'text-xs text-red-400';
@@ -364,10 +406,10 @@ const todayISO = new Date().toISOString().slice(0, 10);
       newClientMsg.className = 'text-xs text-neutral-400';
       newClientMsg.classList.remove('hidden');
       try {
-        const res = await fetch('/portal/api/admin/clients/create', {
+        const res = await fetch('/portal/api/admin/create-client', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify({ name, slug }),
+          body: JSON.stringify({ name, slug, domain: domain || undefined }),
         });
         const data = await res.json();
         if (res.ok) {
@@ -375,6 +417,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           opt.value = data.id;
           opt.dataset.slug = slug;
           opt.dataset.name = name;
+          opt.dataset.domain = domain || '';
           opt.textContent = name;
           opt.selected = true;
           clientSelect.appendChild(opt);
@@ -382,6 +425,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           addClientSlot.classList.add('hidden');
           newClientName.value = '';
           newClientSlug.value = '';
+          if (newClientDomain) newClientDomain.value = '';
           newClientMsg.classList.add('hidden');
         } else {
           newClientMsg.textContent = data.error || 'Failed to create client';
@@ -709,5 +753,241 @@ const todayISO = new Date().toISOString().slice(0, 10);
 
     document.getElementById('save-draft-btn').addEventListener('click', () => submitProposal('draft'));
     document.getElementById('publish-btn').addEventListener('click', () => submitProposal('published'));
+
+    // =========================================================================
+    // AI client research panel
+    // =========================================================================
+    const researchPanel = document.getElementById('research-panel');
+    const researchBtn = document.getElementById('research-btn');
+    const researchDomainSlot = document.getElementById('research-domain-slot');
+    const researchDomainInput = document.getElementById('research-domain-input');
+    const researchDomainSave = document.getElementById('research-domain-save');
+    const researchDomainMsg = document.getElementById('research-domain-msg');
+    const researchStatus = document.getElementById('research-status');
+    const researchResults = document.getElementById('research-results');
+
+    function refreshResearchPanel() {
+      if (!state.client_id) {
+        researchPanel.classList.add('hidden');
+        return;
+      }
+      researchPanel.classList.remove('hidden');
+      researchResults.classList.add('hidden');
+      researchResults.innerHTML = '';
+      researchStatus.classList.add('hidden');
+      if (state.client_domain) {
+        researchDomainSlot.classList.add('hidden');
+        researchBtn.disabled = false;
+        researchBtn.textContent = `Research ${state.client_name} (${state.client_domain})`;
+      } else {
+        researchDomainSlot.classList.remove('hidden');
+        researchBtn.disabled = true;
+        researchBtn.textContent = `Set domain first`;
+        researchDomainInput.value = '';
+      }
+    }
+
+    function showResearchDomainMsg(text, type) {
+      researchDomainMsg.textContent = text;
+      researchDomainMsg.className = 'text-[11px] mt-2 ' + (type === 'ok' ? 'text-emerald-400' : 'text-red-400');
+      researchDomainMsg.classList.remove('hidden');
+    }
+
+    researchDomainSave.addEventListener('click', async () => {
+      const raw = researchDomainInput.value.trim();
+      if (!raw) { showResearchDomainMsg('Enter a domain', 'error'); return; }
+      researchDomainSave.disabled = true;
+      try {
+        const res = await fetch('/portal/api/admin/clients/set-domain', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ client_id: state.client_id, domain: raw }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          state.client_domain = data.domain || raw.toLowerCase();
+          const opt = clientSelect.selectedOptions[0];
+          if (opt) opt.dataset.domain = state.client_domain;
+          showResearchDomainMsg('Saved', 'ok');
+          setTimeout(refreshResearchPanel, 400);
+        } else {
+          showResearchDomainMsg(data.error || 'Failed to save', 'error');
+        }
+      } catch {
+        showResearchDomainMsg('Connection error', 'error');
+      } finally {
+        researchDomainSave.disabled = false;
+      }
+    });
+
+    researchBtn.addEventListener('click', async () => {
+      if (!state.client_id || !state.client_domain) return;
+      researchBtn.disabled = true;
+      researchStatus.textContent = 'Looking up. This usually takes 5 to 15 seconds.';
+      researchStatus.classList.remove('hidden');
+      researchResults.classList.add('hidden');
+      researchResults.innerHTML = '';
+      try {
+        const res = await fetch('/portal/api/admin/proposals/ai/research', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ client_id: state.client_id }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          state.research_result = data.result;
+          researchStatus.classList.add('hidden');
+          renderResearchResults(data.result);
+        } else {
+          researchStatus.textContent = data.error || 'Lookup failed. Fill manually.';
+        }
+      } catch {
+        researchStatus.textContent = 'Connection error. Fill manually.';
+      } finally {
+        researchBtn.disabled = false;
+      }
+    });
+
+    function renderResearchResults(r) {
+      researchResults.innerHTML = '';
+      researchResults.classList.remove('hidden');
+      const blocks = [
+        {
+          label: 'Revenue band',
+          value: r.estimated_revenue_band,
+          evidence: r.revenue_evidence,
+          confidence: r.revenue_confidence,
+          apply: () => {
+            // Inject into MC product_vars if MC is in scope.
+            if (!state.products.includes('marketing-consulting')) {
+              if (!state.products.includes('marketing-consulting')) {
+                showResearchApplyMsg('Marketing Consulting is not in scope; pick it first.', 'error');
+                return;
+              }
+            }
+            state.product_vars['marketing-consulting'] = {
+              ...(state.product_vars['marketing-consulting'] || {}),
+              revenue_band: r.estimated_revenue_band === 'unknown' ? null : r.estimated_revenue_band,
+            };
+            renderVars();
+          },
+          disabled: r.estimated_revenue_band === 'unknown',
+        },
+        {
+          label: 'Industry',
+          value: r.inferred_industry,
+          evidence: r.industry_evidence,
+          confidence: 'high',
+          apply: () => {
+            const sel = document.getElementById('narr_industry');
+            if (sel && r.inferred_industry !== 'unknown') {
+              sel.value = r.inferred_industry;
+              state.narrative_variables.industry = r.inferred_industry;
+            }
+          },
+          disabled: r.inferred_industry === 'unknown',
+        },
+        {
+          label: 'Urgency',
+          value: r.inferred_urgency,
+          evidence: r.urgency_evidence,
+          confidence: 'high',
+          apply: () => {
+            const sel = document.getElementById('narr_urgency');
+            if (sel && r.inferred_urgency !== 'unknown') {
+              sel.value = r.inferred_urgency;
+              state.narrative_variables.urgency = r.inferred_urgency;
+            }
+          },
+          disabled: r.inferred_urgency === 'unknown',
+        },
+        {
+          label: 'Focus',
+          value: (r.inferred_focus || []).join(', ') || '(none)',
+          evidence: '',
+          confidence: 'medium',
+          apply: () => {
+            const sel = document.getElementById('narr_focus');
+            if (sel && Array.isArray(r.inferred_focus)) {
+              Array.from(sel.options).forEach(o => { o.selected = r.inferred_focus.includes(o.value); });
+              state.narrative_variables.focus = r.inferred_focus.length ? r.inferred_focus : undefined;
+            }
+          },
+          disabled: !r.inferred_focus || r.inferred_focus.length === 0,
+        },
+        {
+          label: 'Page count',
+          value: r.estimated_page_count == null ? '(unknown)' : String(r.estimated_page_count),
+          evidence: r.page_count_source,
+          confidence: 'medium',
+          apply: () => {
+            if (!state.products.includes('web-management')) {
+              showResearchApplyMsg('Web Management is not in scope; pick it first.', 'error');
+              return;
+            }
+            state.product_vars['web-management'] = {
+              ...(state.product_vars['web-management'] || {}),
+              page_count: r.estimated_page_count,
+            };
+            renderVars();
+          },
+          disabled: r.estimated_page_count == null,
+        },
+        {
+          label: 'Domains found',
+          value: (r.domains_found || []).map(d => `${d.domain} (${d.role_guess})`).join(', ') || '(none)',
+          evidence: '',
+          confidence: 'medium',
+          apply: () => {
+            // No direct field today; surface the count instead and
+            // let admin set the primary if it differs. v2 hook for
+            // multi-site Schedule A.
+            const primary = (r.domains_found || []).find(d => d.role_guess === 'primary');
+            if (primary && primary.domain && primary.domain !== state.client_domain) {
+              if (confirm(`Set client domain to ${primary.domain}?`)) {
+                researchDomainInput.value = primary.domain;
+                researchDomainSave.click();
+              }
+            }
+          },
+          disabled: !r.domains_found || r.domains_found.length === 0,
+        },
+      ];
+      for (const b of blocks) {
+        const row = document.createElement('div');
+        row.className = 'p-3 bg-neutral-900/40 border border-white/5 rounded-md flex items-start justify-between gap-3';
+        const meta = document.createElement('div');
+        meta.className = 'flex-1';
+        meta.innerHTML = `
+          <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase">${escapeHtml(b.label)} <span class="text-amber-400/60">${escapeHtml(b.confidence || '')}</span></p>
+          <p class="text-sm text-neutral-200 mt-1">${escapeHtml(String(b.value))}</p>
+          ${b.evidence ? `<p class="text-[11px] text-neutral-500 mt-1">${escapeHtml(b.evidence)}</p>` : ''}
+        `;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'px-3 py-2 text-xs rounded-md transition-colors ' + (b.disabled
+          ? 'bg-neutral-900 border border-white/5 text-neutral-600 cursor-not-allowed'
+          : 'bg-amber-500/10 border border-amber-500/40 text-amber-300 hover:bg-amber-500/20');
+        btn.textContent = 'Apply';
+        btn.disabled = !!b.disabled;
+        btn.addEventListener('click', b.apply);
+        row.appendChild(meta);
+        row.appendChild(btn);
+        researchResults.appendChild(row);
+      }
+      if (r.notes) {
+        const notes = document.createElement('p');
+        notes.className = 'text-[11px] text-amber-400/80 mt-2';
+        notes.textContent = 'Notes: ' + r.notes;
+        researchResults.appendChild(notes);
+      }
+    }
+
+    function showResearchApplyMsg(text, type) {
+      researchStatus.textContent = text;
+      researchStatus.className = 'mt-3 text-[11px] ' + (type === 'ok' ? 'text-emerald-400' : 'text-red-400');
+      researchStatus.classList.remove('hidden');
+      setTimeout(() => researchStatus.classList.add('hidden'), 4000);
+    }
   </script>
 </Portal>

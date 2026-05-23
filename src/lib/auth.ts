@@ -343,13 +343,20 @@ export async function getClientBySlug(slug: string) {
   };
 }
 
-export async function createClient(name: string, slug: string): Promise<string> {
+export async function createClient(name: string, slug: string, domain: string | null = null): Promise<string> {
   const id = nanoid();
   await turso.execute({
-    sql: 'INSERT INTO clients (id, name, slug) VALUES (?, ?, ?)',
-    args: [id, name, slug],
+    sql: 'INSERT INTO clients (id, name, slug, domain) VALUES (?, ?, ?, ?)',
+    args: [id, name, slug, domain],
   });
   return id;
+}
+
+export async function updateClientDomain(clientId: string, domain: string | null): Promise<void> {
+  await turso.execute({
+    sql: 'UPDATE clients SET domain = ? WHERE id = ?',
+    args: [domain, clientId],
+  });
 }
 
 export async function createUser(email: string, name: string, role: 'admin' | 'client', clientId: string | null): Promise<string> {
@@ -362,12 +369,13 @@ export async function createUser(email: string, name: string, role: 'admin' | 'c
 }
 
 export async function getAllClients() {
-  const result = await turso.execute('SELECT id, name, slug, active, created_at FROM clients ORDER BY name');
+  const result = await turso.execute('SELECT id, name, slug, active, created_at, domain FROM clients ORDER BY name');
   return result.rows.map(row => ({
     id: row[0] as string,
     name: row[1] as string,
     slug: row[2] as string,
     active: row[3] as number,
+    domain: (row[5] ?? null) as string | null,
     created_at: row[4] as string,
   }));
 }

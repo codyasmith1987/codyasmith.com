@@ -1058,6 +1058,35 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
     });
   }
 
+  // Wire the "Revert my acceptance" button inside the success-message
+  // block. The button is rendered into the same container that holds
+  // the form, so it only exists after the success message is injected.
+  // Calling this function after each render keeps the binding fresh.
+  function wireRevertButton() {
+    var btn = document.getElementById('revert-acceptance');
+    if (!btn) return;
+    btn.addEventListener('click', function() {
+      if (!confirm('Revert your acceptance? You can change your selections and re-accept. Cody will get an email letting him know.')) return;
+      btn.disabled = true;
+      btn.textContent = 'Reverting...';
+      saveDraft({ revoke: true }).then(function(result) {
+        if (!result.ok) {
+          alert((result.data && result.data.error) || 'Revert failed.');
+          btn.disabled = false;
+          btn.textContent = 'Revert my acceptance and edit selections';
+          return;
+        }
+        // Full reload so the page re-renders the form in its
+        // unfinalized state with the previous selections intact.
+        window.location.reload();
+      }).catch(function() {
+        alert('Connection error. Try again or email cody@codyasmith.com.');
+        btn.disabled = false;
+        btn.textContent = 'Revert my acceptance and edit selections';
+      });
+    });
+  }
+
   function loadDraft() {
     return fetch(DRAFT_URL, {
       method: 'GET',
@@ -1498,7 +1527,9 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
               '<p>This is a Letter of Intent, not a contract yet. Cody reaches out within twenty-four hours to schedule the call. After that call, your engagement agreement is issued in the portal for signature. It is already drafted from your selections; the link is at the bottom of this page if you want to start reading now.</p>' +
               '<p>Reach Cody at <a href="mailto:cody@codyasmith.com">cody@codyasmith.com</a> any time with questions.</p>' +
               '<p class="success-note">Confirmation sent to ' + emails + '.</p>' +
+              '<button type="button" id="revert-acceptance" class="revoke-link">Revert my acceptance and edit selections</button>' +
             '</div>';
+          wireRevertButton();
           window.scrollTo({ top: container.offsetTop - 32, behavior: 'smooth' });
         } else {
           update();
@@ -1553,7 +1584,9 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
           '<div class="success-message">' +
             '<h3>' + headline2 + '</h3>' +
             '<p>This is a Letter of Intent, not a contract yet. Cody is in touch to schedule the call; your engagement agreement goes into the portal for signature after that.</p>' +
+            '<button type="button" id="revert-acceptance" class="revoke-link">Revert my acceptance and edit selections</button>' +
           '</div>';
+        wireRevertButton();
       }
     }
   }).catch(function() {

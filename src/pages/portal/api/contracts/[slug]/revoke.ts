@@ -37,6 +37,15 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
   if (user.role === 'admin') return json({ error: 'Admin preview mode' }, 403);
   if (user.client_id !== agreement.client_id) return json({ error: 'Forbidden' }, 403);
   if (agreement.status === 'voided') return json({ error: 'Agreement is voided' }, 409);
+  // Once a contract is fully executed (every signer signed and finalized
+  // landed), it is binding. No more revoke from the signers' side. If a
+  // party needs out, that is a termination conversation under section 17
+  // of the contract, not a unilateral revoke. Per Cody's directive: the
+  // LOI on the proposal is revocable until contract issue; the contract
+  // itself locks at execution.
+  if (agreement.status === 'executed') {
+    return json({ error: 'This contract is fully executed and cannot be revoked. Contact Cody to discuss termination under section 17 of the agreement.' }, 409);
+  }
 
   let body: any = {};
   try { body = await request.json(); } catch { /* body optional */ }

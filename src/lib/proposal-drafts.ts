@@ -315,6 +315,17 @@ export async function markFinalized(clientId: string, slug: string): Promise<voi
   });
 }
 
+// Reset finalized_at to NULL. Used when a signer revokes their
+// acceptance on a previously-finalized proposal so the draft can
+// resume the partial / open state.
+export async function unmarkFinalized(clientId: string, slug: string): Promise<void> {
+  const now = new Date().toISOString();
+  await turso.execute({
+    sql: `UPDATE proposal_drafts SET finalized_at = NULL, updated_at = ? WHERE client_id = ? AND slug = ?`,
+    args: [now, clientId, slug],
+  });
+}
+
 // Convenience: which signer is this user, by email match? Returns null
 // for any user that is not Jason or Kevin (e.g., admin previewing).
 //

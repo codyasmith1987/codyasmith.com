@@ -1,6 +1,7 @@
-// Raised Bar proposal config used by the migration seed and (in
-// Phase 2) the generic renderer. Encodes the four-step interactive
-// flow currently hardcoded in src/pages/portal/proposals/raised-bar.astro.
+// Raised Bar proposal config used by the migration seed and the
+// generic renderer at src/pages/portal/proposals/[slug].astro. Encodes
+// the four-step interactive flow: Web Management tier, site setup,
+// Marketing Consulting yes/no, and Consulting tier.
 
 export const RAISED_BAR_PROPOSAL_CONFIG = {
   version: 1,

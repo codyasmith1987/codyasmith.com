@@ -1,0 +1,140 @@
+---
+// Client-facing documents aggregator. Lists agreements, finalized
+// proposals, and data references in one place. Peer to /portal/files
+// (which holds ad-hoc Cody uploads); this page lists system-generated
+// records the client should be able to find.
+
+import Portal from '../../layouts/Portal.astro';
+import { listAgreementsForClient } from '../../lib/agreements';
+import turso from '../../lib/turso';
+
+export const prerender = false;
+
+const user = Astro.locals.user;
+if (!user) return Astro.redirect('/portal/login');
+
+// Admin: show their own client_id if they have one, otherwise empty
+// (admin can see the per-agreement view directly via the admin index).
+const clientId = user.client_id;
+let agreements: Array<{ slug: string; title: string; status: string; finalized_at: string | null; issued_at: string | null; created_at: string; pdf_file_id: string | null; }> = [];
+let proposals: Array<{ slug: string; title: string; finalized_at: string | null; status: string }> = [];
+
+if (clientId) {
+  const list = await listAgreementsForClient(clientId);
+  agreements = list.map(a => ({
+    slug: a.slug,
+    title: a.title,
+    status: a.status,
+    finalized_at: a.finalized_at,
+    issued_at: a.issued_at,
+    created_at: a.created_at,
+    pdf_file_id: a.pdf_file_id,
+  }));
+  const proposalsResult = await turso.execute({
+    sql: `SELECT slug, title, finalized_at, status FROM proposals WHERE client_id = ? AND finalized_at IS NOT NULL ORDER BY finalized_at DESC`,
+    args: [clientId],
+  });
+  proposals = (proposalsResult.rows as any[]).map(r => ({
+    slug: r[0] as string,
+    title: r[1] as string,
+    finalized_at: r[2] as string | null,
+    status: r[3] as string,
+  }));
+}
+
+function fmtDate(s: string | null): string {
+  if (!s) return '';
+  const d = new Date(s.includes('T') ? s : s.replace(' ', 'T') + 'Z');
+  if (isNaN(d.getTime())) return s;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+const statusBadge: Record<string, string> = {
+  draft: 'bg-neutral-700/30 text-neutral-400',
+  issued: 'bg-blue-500/10 text-blue-400',
+  partially_signed: 'bg-amber-500/10 text-amber-400',
+  executed: 'bg-emerald-500/10 text-emerald-400',
+  revoked: 'bg-amber-500/10 text-amber-400',
+  voided: 'bg-red-500/10 text-red-400',
+  finalized: 'bg-emerald-500/10 text-emerald-400',
+};
+
+const empty = agreements.length === 0 && proposals.length === 0;
+---
+<Portal title="Documents">
+  <div class="max-w-4xl mx-auto">
+    <div class="mb-10">
+      <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Deliverables</p>
+      <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Documents</h1>
+      <p class="text-sm text-neutral-500 mt-2">Your agreements, proposals, and reports.</p>
+    </div>
+
+    {!clientId && (
+      <div class="p-6 bg-neutral-900/30 border border-white/5 rounded-xl text-sm text-neutral-400">
+        Admin view: select a client from /portal/admin/clients to see their documents, or open the agreement directly from <a href="/portal/admin/agreements" class="text-amber-400 hover:text-amber-300">/portal/admin/agreements</a>.
+      </div>
+    )}
+
+    {clientId && empty && (
+      <div class="text-center py-16">
+        <p class="text-sm text-neutral-500">No documents yet.</p>
+        <p class="text-xs text-neutral-600 mt-2">Your agreements, proposals, and reports will appear here as they're issued.</p>
+      </div>
+    )}
+
+    {clientId && agreements.length > 0 && (
+      <div class="mb-10">
+        <h2 class="text-xs font-mono uppercase tracking-[0.18em] text-amber-400 mb-4">Agreements</h2>
+        <div class="space-y-3">
+          {agreements.map(a => (
+            <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 group hover:border-white/10 transition-all duration-300">
+              <div class="flex items-start justify-between gap-4">
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-baseline gap-3 flex-wrap">
+                    <p class="text-sm font-medium text-neutral-200">{a.title}</p>
+                    <span class={`px-2 py-0.5 text-[10px] font-mono uppercase rounded ${statusBadge[a.status] || statusBadge.draft}`}>{a.status === 'executed' ? 'Fully executed' : a.status}</span>
+                  </div>
+                  <div class="flex items-center gap-4 mt-2 text-[10px] font-mono text-neutral-700">
+                    {a.finalized_at && <span>Executed {fmtDate(a.finalized_at)}</span>}
+                    {!a.finalized_at && a.issued_at && <span>Issued {fmtDate(a.issued_at)}</span>}
+                    {!a.finalized_at && !a.issued_at && <span>Created {fmtDate(a.created_at)}</span>}
+                  </div>
+                </div>
+                <div class="flex flex-col items-end gap-2 shrink-0">
+                  <a href={`/portal/contracts/${a.slug}`} class="px-3 py-1.5 bg-neutral-800/50 border border-white/10 rounded-md text-xs text-neutral-300 hover:bg-neutral-700/50 hover:text-neutral-100 transition-colors">View</a>
+                  {a.pdf_file_id && (
+                    <a href={`/portal/api/files/download/${a.pdf_file_id}`} class="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-md text-xs text-emerald-400 hover:bg-emerald-500/20 transition-colors">Download PDF</a>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {clientId && proposals.length > 0 && (
+      <div class="mb-10">
+        <h2 class="text-xs font-mono uppercase tracking-[0.18em] text-amber-400 mb-4">Proposals</h2>
+        <div class="space-y-3">
+          {proposals.map(p => (
+            <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 group hover:border-white/10 transition-all duration-300">
+              <div class="flex items-start justify-between gap-4">
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-baseline gap-3 flex-wrap">
+                    <p class="text-sm font-medium text-neutral-200">{p.title}</p>
+                    <span class={`px-2 py-0.5 text-[10px] font-mono uppercase rounded ${statusBadge[p.status] || statusBadge.draft}`}>{p.status}</span>
+                  </div>
+                  <div class="flex items-center gap-4 mt-2 text-[10px] font-mono text-neutral-700">
+                    {p.finalized_at && <span>Accepted {fmtDate(p.finalized_at)}</span>}
+                  </div>
+                </div>
+                <a href={`/portal/proposals/${p.slug}`} class="px-3 py-1.5 bg-neutral-800/50 border border-white/10 rounded-md text-xs text-neutral-300 hover:bg-neutral-700/50 hover:text-neutral-100 transition-colors">View</a>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+  </div>
+</Portal>

@@ -1,0 +1,1057 @@
+---
+// Admin wizard: build a new proposal row from a single-page form.
+//
+// Output is a row in the `proposals` table with a config JSON blob
+// matching the shape in src/lib/proposal-configs/raised-bar.ts. The
+// generic renderer (Phase 2) is the consumer; this wizard just
+// captures the inputs and POSTs them.
+//
+// V1 simplifications:
+//   - Single-page form, no multi-step UI. The form is long but linear.
+//   - Three step templates (tier_picker for management, binary_picker
+//     for site setup, binary_picker for consulting yes/no, tier_picker
+//     for consulting). Each is a sub-form the admin picks from a
+//     dropdown and fills in.
+//   - 'depends_on' is implicit by step order; no explicit picker.
+//   - Drag-to-reorder is out of scope. Add and remove only; insertion
+//     order = final order.
+//   - 'Add new client' inline opens a slot above the select that
+//     creates a client server-side first via the existing
+//     create-client endpoint, then resolves to the new id.
+
+import Portal from '../../../../layouts/Portal.astro';
+import { getAllClients } from '../../../../lib/auth';
+
+export const prerender = false;
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'admin') {
+  return Astro.redirect('/portal/dashboard');
+}
+
+const clients = await getAllClients();
+
+// Default 'prepared on' is today in en-US long form, matching the
+// Raised Bar config example (e.g. 'May 22, 2026').
+const todayLong = new Date().toLocaleDateString('en-US', {
+  year: 'numeric', month: 'long', day: 'numeric',
+});
+const todayISO = new Date().toISOString().slice(0, 10);
+---
+
+<Portal title="New Proposal">
+  <div class="max-w-4xl mx-auto">
+    <div class="mb-10">
+      <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin / Proposals</p>
+      <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">New proposal</h1>
+      <p class="text-neutral-500 text-sm mt-3">
+        Build the config for a client proposal. Save as draft to revisit, or publish to make it visible to assigned client users.
+      </p>
+    </div>
+
+    <form id="proposal-form" class="space-y-10">
+      <!-- ============== BASICS ============== -->
+      <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
+        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">Basics</p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div class="sm:col-span-2">
+            <label for="client_id" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Client</label>
+            <div class="flex items-center gap-3">
+              <select
+                id="client_id"
+                name="client_id"
+                required
+                class="flex-1 px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
+              >
+                <option value="">Select a client</option>
+                {clients.map(c => (
+                  <option value={c.id} data-slug={c.slug} data-name={c.name}>{c.name}</option>
+                ))}
+              </select>
+              <button type="button" id="add-client-btn" class="px-4 py-3 bg-neutral-800 border border-white/10 text-neutral-300 text-sm rounded-lg hover:border-amber-500/40 hover:text-amber-400 transition-colors">
+                Add new
+              </button>
+            </div>
+
+            <!-- Inline 'add new client' slot, hidden by default -->
+            <div id="add-client-slot" class="hidden mt-3 p-4 bg-neutral-900/40 border border-amber-500/20 rounded-lg space-y-3">
+              <p class="text-[10px] font-mono text-amber-400 tracking-wide uppercase">Create new client</p>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input
+                  type="text"
+                  id="new_client_name"
+                  placeholder="Business name"
+                  class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30"
+                />
+                <input
+                  type="text"
+                  id="new_client_slug"
+                  placeholder="business-slug"
+                  pattern="[a-z0-9\-]+"
+                  class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30"
+                />
+              </div>
+              <div class="flex items-center gap-3">
+                <button type="button" id="create-client-btn" class="px-4 py-2 bg-amber-500 text-neutral-950 font-medium text-xs rounded-md hover:bg-amber-400 transition-colors">
+                  Create client
+                </button>
+                <button type="button" id="cancel-add-client-btn" class="text-xs text-neutral-500 hover:text-neutral-300 transition-colors">Cancel</button>
+                <p id="new-client-msg" class="text-xs hidden"></p>
+              </div>
+            </div>
+          </div>
+
+          <div class="sm:col-span-2">
+            <label for="title" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Proposal title</label>
+            <input
+              type="text"
+              id="title"
+              name="title"
+              required
+              placeholder="Engagement Proposal for Jane Doe"
+              class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
+            />
+            <p class="text-[11px] text-neutral-600 mt-1">Appears at the top of the proposal page.</p>
+          </div>
+
+          <div>
+            <label for="slug" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Slug</label>
+            <input
+              type="text"
+              id="slug"
+              name="slug"
+              required
+              pattern="[a-z0-9\-]+"
+              placeholder="auto-from-title"
+              class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
+            />
+            <p class="text-[11px] text-neutral-600 mt-1">URL path. Lowercase, hyphens only. Auto-derived from title.</p>
+          </div>
+
+          <div>
+            <label for="prepared_on" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Prepared on</label>
+            <input
+              type="date"
+              id="prepared_on"
+              name="prepared_on"
+              value={todayISO}
+              class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
+            />
+          </div>
+
+          <div class="sm:col-span-2">
+            <label for="prepared_for" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Prepared for</label>
+            <input
+              type="text"
+              id="prepared_for"
+              name="prepared_for"
+              placeholder="Jane Doe and John Smith"
+              class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
+            />
+            <p class="text-[11px] text-neutral-600 mt-1">Free text. The names that appear in the header.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============== NARRATIVE ============== -->
+      <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
+        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">Narrative</p>
+
+        <div class="space-y-5">
+          <div>
+            <label for="intro" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Intro paragraph</label>
+            <textarea
+              id="intro"
+              name="intro"
+              rows="4"
+              placeholder="After our call, I sat with your business and the market you sell into..."
+              class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
+            ></textarea>
+            <p class="text-[11px] text-neutral-600 mt-1">Plain text or simple HTML. Single paragraph.</p>
+          </div>
+
+          <div>
+            <label for="what_i_see" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">What I see in your business</label>
+            <textarea
+              id="what_i_see"
+              name="what_i_see"
+              rows="8"
+              placeholder="One paragraph per line break (blank line between paragraphs)..."
+              class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
+            ></textarea>
+            <p class="text-[11px] text-neutral-600 mt-1">Separate paragraphs with a blank line. Simple HTML allowed for emphasis.</p>
+          </div>
+
+          <div>
+            <label for="what_i_recommend" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">What I recommend</label>
+            <textarea
+              id="what_i_recommend"
+              name="what_i_recommend"
+              rows="8"
+              placeholder="One paragraph per line break (blank line between paragraphs)..."
+              class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
+            ></textarea>
+          </div>
+
+          <div class="pt-4 border-t border-white/5">
+            <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-3">Rollout section</p>
+
+            <div class="space-y-4">
+              <div>
+                <label for="rollout_intro" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Rollout intro (HTML allowed)</label>
+                <textarea
+                  id="rollout_intro"
+                  name="rollout_intro"
+                  rows="2"
+                  placeholder="If you pick <strong>Option 1</strong> in Step 2:"
+                  class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
+                ></textarea>
+              </div>
+
+              <div id="phases-container" class="space-y-3"></div>
+
+              <button type="button" id="add-phase-btn" class="text-xs text-amber-400 hover:text-amber-300 transition-colors">
+                + Add phase
+              </button>
+
+              <div>
+                <label for="rollout_outro" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Rollout outro (HTML allowed)</label>
+                <textarea
+                  id="rollout_outro"
+                  name="rollout_outro"
+                  rows="3"
+                  placeholder="If you pick Option 2, the order shifts..."
+                  class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
+                ></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============== STEPS ============== -->
+      <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
+        <div class="flex items-center justify-between mb-5">
+          <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase">Interactive steps</p>
+          <span class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase" id="step-count">0 steps</span>
+        </div>
+
+        <div id="steps-container" class="space-y-4"></div>
+
+        <div class="mt-6 pt-5 border-t border-white/5 flex flex-wrap items-center gap-3">
+          <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase mr-2">Add step:</p>
+          <button type="button" data-add-step="mgmt_tier" class="px-3 py-2 bg-neutral-800 border border-white/10 text-neutral-300 text-xs rounded-md hover:border-amber-500/40 hover:text-amber-400 transition-colors">
+            Web Management tier
+          </button>
+          <button type="button" data-add-step="site_setup" class="px-3 py-2 bg-neutral-800 border border-white/10 text-neutral-300 text-xs rounded-md hover:border-amber-500/40 hover:text-amber-400 transition-colors">
+            Site setup (binary)
+          </button>
+          <button type="button" data-add-step="consulting_yn" class="px-3 py-2 bg-neutral-800 border border-white/10 text-neutral-300 text-xs rounded-md hover:border-amber-500/40 hover:text-amber-400 transition-colors">
+            Consulting yes/no
+          </button>
+          <button type="button" data-add-step="consulting_tier" class="px-3 py-2 bg-neutral-800 border border-white/10 text-neutral-300 text-xs rounded-md hover:border-amber-500/40 hover:text-amber-400 transition-colors">
+            Consulting tier
+          </button>
+        </div>
+      </section>
+
+      <!-- ============== SIGNERS ============== -->
+      <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
+        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">Signers</p>
+        <p class="text-[11px] text-neutral-600 mb-4">Add one row per person who needs to sign. Emails should match existing portal users; if they don't, create the user separately at Admin / Users.</p>
+
+        <div id="signers-container" class="space-y-3"></div>
+
+        <button type="button" id="add-signer-btn" class="mt-4 text-xs text-amber-400 hover:text-amber-300 transition-colors">
+          + Add signer
+        </button>
+      </section>
+
+      <!-- ============== PRICING FORMULA ============== -->
+      <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
+        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">Pricing formula</p>
+        <select
+          id="pricing_formula"
+          name="pricing_formula"
+          class="w-full sm:w-72 px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
+        >
+          <option value="raised_bar_v1">raised_bar_v1</option>
+        </select>
+        <p class="text-[11px] text-neutral-600 mt-2">Only one formula is wired up right now. New formulas land via code, not config.</p>
+      </section>
+
+      <!-- ============== ACTIONS ============== -->
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
+        <button
+          type="button"
+          id="save-draft-btn"
+          class="flex-1 px-6 py-3 bg-neutral-800 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/40 hover:text-amber-400 transition-colors"
+        >
+          Save as draft
+        </button>
+        <button
+          type="button"
+          id="publish-btn"
+          class="flex-1 px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300"
+        >
+          Publish
+        </button>
+      </div>
+
+      <p id="submit-msg" class="text-sm hidden"></p>
+    </form>
+  </div>
+
+  <script is:inline define:vars={{ todayLong }}>
+    // ========== Ecosystem pricing reference ==========
+    // Pulled from business-design-v2. The wizard uses these to auto-fill
+    // a tier_picker step the moment the admin picks an ecosystem.
+    const WEB_MGMT_PRICING = {
+      A: {
+        label: 'Eco A (Small, <30 pages)',
+        good:   { monthly: 297,  onb: 800,  hrs: 3 },
+        better: { monthly: 497,  onb: 800,  hrs: 5 },
+        best:   { monthly: 647,  onb: 1000, hrs: 8 },
+      },
+      B: {
+        label: 'Eco B (Mid, 30-150 pages)',
+        good:   { monthly: 497, onb: 1200, hrs: 5 },
+        better: { monthly: 797, onb: 1200, hrs: 8 },
+        best:   { monthly: 997, onb: 1500, hrs: 12 },
+      },
+      C: {
+        label: 'Eco C (Large, 150+ pages)',
+        good:   { monthly: 997,  onb: 2000, hrs: 8 },
+        better: { monthly: 1497, onb: 2000, hrs: 12 },
+        best:   { monthly: 1997, onb: 2500, hrs: 18 },
+      },
+    };
+
+    const CONSULTING_PRICING = {
+      A: {
+        label: 'Eco A (<$1M revenue)',
+        good:   { monthly: 297,  audit: 750 },
+        better: { monthly: 497,  audit: 1500 },
+        best:   { monthly: 797,  audit: 2500 },
+      },
+      B: {
+        label: 'Eco B ($1M-$10M revenue)',
+        good:   { monthly: 497,  audit: 1500 },
+        better: { monthly: 997,  audit: 2500 },
+        best:   { monthly: 1497, audit: 4000 },
+      },
+      C: {
+        label: 'Eco C ($10M+ revenue)',
+        good:   { monthly: 1497, audit: 4000 },
+        better: { monthly: 2497, audit: 6000 },
+        best:   { monthly: 3997, audit: 10000 },
+      },
+    };
+
+    // Multi-site formula: monthly = base + (sites-1) * base * 0.80
+    //                    onboarding = base + (sites-1) * base * 0.25
+    function fmtMoney(n) {
+      return '$' + Math.round(n).toLocaleString('en-US');
+    }
+    function multiSiteMonthly(base, sites) {
+      return base + (Math.max(1, sites) - 1) * base * 0.80;
+    }
+    function multiSiteOnb(base, sites) {
+      return base + (Math.max(1, sites) - 1) * base * 0.25;
+    }
+
+    // ========== Slug + title auto-link ==========
+    const slugInput = document.getElementById('slug');
+    const titleInput = document.getElementById('title');
+    function slugify(s) {
+      return s.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+    }
+    titleInput.addEventListener('input', () => {
+      if (!slugInput.dataset.manual) {
+        slugInput.value = slugify(titleInput.value);
+      }
+    });
+    slugInput.addEventListener('input', () => { slugInput.dataset.manual = '1'; });
+
+    // ========== Add new client inline ==========
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const addClientBtn = document.getElementById('add-client-btn');
+    const addClientSlot = document.getElementById('add-client-slot');
+    const cancelAddClientBtn = document.getElementById('cancel-add-client-btn');
+    const createClientBtn = document.getElementById('create-client-btn');
+    const newClientName = document.getElementById('new_client_name');
+    const newClientSlug = document.getElementById('new_client_slug');
+    const newClientMsg = document.getElementById('new-client-msg');
+    const clientSelect = document.getElementById('client_id');
+
+    addClientBtn.addEventListener('click', () => {
+      addClientSlot.classList.remove('hidden');
+      newClientName.focus();
+    });
+    cancelAddClientBtn.addEventListener('click', () => {
+      addClientSlot.classList.add('hidden');
+      newClientName.value = '';
+      newClientSlug.value = '';
+      newClientMsg.classList.add('hidden');
+    });
+    newClientName.addEventListener('input', () => {
+      if (!newClientSlug.dataset.manual) {
+        newClientSlug.value = slugify(newClientName.value);
+      }
+    });
+    newClientSlug.addEventListener('input', () => { newClientSlug.dataset.manual = '1'; });
+
+    createClientBtn.addEventListener('click', async () => {
+      const name = newClientName.value.trim();
+      const slug = newClientSlug.value.trim();
+      if (!name || !slug) {
+        newClientMsg.textContent = 'Name and slug are required';
+        newClientMsg.className = 'text-xs text-red-400';
+        newClientMsg.classList.remove('hidden');
+        return;
+      }
+      createClientBtn.disabled = true;
+      createClientBtn.textContent = 'Creating...';
+      try {
+        const res = await fetch('/portal/api/admin/create-client', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ name, slug }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          // Add new <option> and select it
+          const opt = document.createElement('option');
+          opt.value = data.id;
+          opt.textContent = data.name;
+          opt.dataset.slug = data.slug;
+          opt.dataset.name = data.name;
+          clientSelect.appendChild(opt);
+          clientSelect.value = data.id;
+          addClientSlot.classList.add('hidden');
+          newClientName.value = '';
+          newClientSlug.value = '';
+          newClientSlug.dataset.manual = '';
+          newClientMsg.classList.add('hidden');
+        } else {
+          newClientMsg.textContent = data.error || 'Failed to create client';
+          newClientMsg.className = 'text-xs text-red-400';
+          newClientMsg.classList.remove('hidden');
+        }
+      } catch (err) {
+        newClientMsg.textContent = 'Connection error';
+        newClientMsg.className = 'text-xs text-red-400';
+        newClientMsg.classList.remove('hidden');
+      }
+      createClientBtn.disabled = false;
+      createClientBtn.textContent = 'Create client';
+    });
+
+    // ========== Phases (rollout) ==========
+    const phasesContainer = document.getElementById('phases-container');
+    let phaseCounter = 0;
+    function addPhaseRow(initial = {}) {
+      phaseCounter++;
+      const idx = phaseCounter;
+      const div = document.createElement('div');
+      div.className = 'p-4 bg-neutral-900/40 border border-white/10 rounded-lg space-y-2';
+      div.dataset.phaseRow = String(idx);
+      div.innerHTML = `
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-[10px] font-mono text-amber-400 tracking-wide uppercase">Phase ${idx}</p>
+          <button type="button" data-remove-phase="${idx}" class="text-xs text-neutral-500 hover:text-red-400 transition-colors">Remove</button>
+        </div>
+        <input type="text" data-phase-num placeholder="Phase 1" value="${escapeAttr(initial.phase_num || ('Phase ' + idx))}" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-xs font-mono focus:outline-none focus:border-amber-500/30" />
+        <input type="text" data-phase-h3 placeholder="Heading for this phase" value="${escapeAttr(initial.h3 || '')}" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+        <textarea data-phase-html rows="3" placeholder="What happens in this phase (HTML allowed)" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/30">${escapeText(initial.html || '')}</textarea>
+      `;
+      phasesContainer.appendChild(div);
+      div.querySelector('[data-remove-phase]').addEventListener('click', () => div.remove());
+    }
+    document.getElementById('add-phase-btn').addEventListener('click', () => addPhaseRow());
+
+    // ========== Signers ==========
+    const signersContainer = document.getElementById('signers-container');
+    let signerCounter = 0;
+    function addSignerRow(initial = {}) {
+      signerCounter++;
+      const idx = signerCounter;
+      const div = document.createElement('div');
+      div.className = 'p-4 bg-neutral-900/40 border border-white/10 rounded-lg';
+      div.dataset.signerRow = String(idx);
+      div.innerHTML = `
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase">Signer ${idx}</p>
+          <button type="button" data-remove-signer="${idx}" class="text-xs text-neutral-500 hover:text-red-400 transition-colors">Remove</button>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <input type="text" data-signer-name placeholder="Full name" value="${escapeAttr(initial.name || '')}" class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          <input type="email" data-signer-email placeholder="email@example.com" value="${escapeAttr(initial.email || '')}" class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          <input type="text" data-signer-label placeholder="signing as" value="${escapeAttr(initial.label || '')}" class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+        </div>
+      `;
+      signersContainer.appendChild(div);
+      div.querySelector('[data-remove-signer]').addEventListener('click', () => div.remove());
+    }
+    document.getElementById('add-signer-btn').addEventListener('click', () => addSignerRow());
+    // Start with one signer row
+    addSignerRow();
+
+    // ========== Steps ==========
+    const stepsContainer = document.getElementById('steps-container');
+    const stepCount = document.getElementById('step-count');
+    let stepCounter = 0;
+
+    function updateStepCount() {
+      const n = stepsContainer.querySelectorAll('[data-step-row]').length;
+      stepCount.textContent = n + (n === 1 ? ' step' : ' steps');
+    }
+
+    function escapeAttr(s) {
+      return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function escapeText(s) {
+      return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function defaultMgmtFeatures(eco, level) {
+      const p = WEB_MGMT_PRICING[eco][level];
+      if (level === 'good') {
+        return [
+          'Sites stay online, secure, monitored, and updated monthly.',
+          `About ${p.hrs} pooled hours per month for hands-on site work.`,
+          'Hosting, daily backups, security and uptime monitoring on every site I manage for you.',
+        ];
+      }
+      if (level === 'better') {
+        return [
+          'Everything in Good, plus bi-weekly software updates, performance optimization, and a monthly health report.',
+          `About ${p.hrs} pooled hours per month for active page work, copy, images, content updates.`,
+          'The level most clients land on. The price jump from Good buys real visibility into your sites.',
+        ];
+      }
+      return [
+        'Everything in Better, plus weekly updates and same-day priority response when something breaks.',
+        `About ${p.hrs} pooled hours per month.`,
+        'One staff training session per quarter for your team.',
+      ];
+    }
+
+    function defaultConsultingFeatures(eco, level) {
+      const p = CONSULTING_PRICING[eco][level];
+      if (level === 'good') {
+        return [
+          'A baseline competitive and keyword read at the start of the engagement.',
+          'Monthly access to my strategic thinking if you have a question.',
+          'Designed to get you in the door. Most clients move up after a few months.',
+        ];
+      }
+      if (level === 'better') {
+        return [
+          'A research-grade audit at the start, then a quarterly cycle of competitive analysis, SEO and content roadmap, and brand positioning.',
+          'A 30-minute monthly strategy call. Quarterly performance reporting.',
+          'This is the cycle for a business that is actually trying to grow.',
+        ];
+      }
+      return [
+        'The deepest audit at the start, then a monthly cycle of competitive analysis, SEO and content roadmap, and ongoing brand work.',
+        'A 60-minute strategy call every month. Monthly performance reporting.',
+        'Hiring guidance when you bring marketing or web roles in-house.',
+      ];
+    }
+
+    function buildStep(template) {
+      stepCounter++;
+      const idx = stepCounter;
+      const wrap = document.createElement('div');
+      wrap.className = 'p-5 bg-neutral-900/40 border border-white/10 rounded-xl';
+      wrap.dataset.stepRow = String(idx);
+      wrap.dataset.stepTemplate = template;
+
+      const header = `
+        <div class="flex items-center justify-between mb-4">
+          <p class="text-[10px] font-mono text-amber-400 tracking-wide uppercase">Step ${idx} / ${labelForTemplate(template)}</p>
+          <button type="button" data-remove-step="${idx}" class="text-xs text-neutral-500 hover:text-red-400 transition-colors">Remove</button>
+        </div>
+      `;
+
+      const stepIdField = `
+        <div class="mb-4">
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-1">Step id (used in config)</label>
+          <input type="text" data-step-id value="${escapeAttr(suggestStepId(template))}" placeholder="step_id_snake_case" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-xs font-mono focus:outline-none focus:border-amber-500/30" />
+        </div>
+      `;
+
+      const h2Field = `
+        <div class="mb-3">
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-1">Heading</label>
+          <input type="text" data-step-h2 placeholder="Step 1: Pick a Web Management level" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+        </div>
+      `;
+
+      const promptField = `
+        <div class="mb-4">
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-1">Prompt copy (above the cards)</label>
+          <textarea data-step-prompt rows="2" placeholder="What this step asks the client to pick..." class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/30"></textarea>
+        </div>
+      `;
+
+      wrap.innerHTML = header + stepIdField + h2Field + promptField + bodyFor(template);
+      stepsContainer.appendChild(wrap);
+
+      wrap.querySelector('[data-remove-step]').addEventListener('click', () => {
+        wrap.remove();
+        updateStepCount();
+      });
+
+      // Wire up template-specific listeners
+      if (template === 'mgmt_tier' || template === 'consulting_tier') {
+        const ecoSelect = wrap.querySelector('[data-eco]');
+        const sitesInput = wrap.querySelector('[data-sites]');
+        const refresh = () => fillTierPickerDefaults(wrap, template);
+        ecoSelect.addEventListener('change', refresh);
+        if (sitesInput) sitesInput.addEventListener('input', refresh);
+        // Trigger fill on first paint
+        refresh();
+      }
+      if (template === 'consulting_yn') {
+        const ecoSelect = wrap.querySelector('[data-yes-eco]');
+        const refresh = () => fillConsultingYnDefaults(wrap);
+        ecoSelect.addEventListener('change', refresh);
+        refresh();
+      }
+      if (template === 'site_setup') {
+        // Default labels already in markup; nothing dynamic to wire.
+      }
+
+      updateStepCount();
+    }
+
+    function labelForTemplate(t) {
+      if (t === 'mgmt_tier') return 'Web Management tier picker';
+      if (t === 'site_setup') return 'Site setup (binary)';
+      if (t === 'consulting_yn') return 'Consulting yes/no';
+      if (t === 'consulting_tier') return 'Consulting tier picker';
+      return t;
+    }
+
+    function suggestStepId(t) {
+      if (t === 'mgmt_tier') return 'mgmt_tier';
+      if (t === 'site_setup') return 'site_setup';
+      if (t === 'consulting_yn') return 'consulting';
+      if (t === 'consulting_tier') return 'consulting_tier';
+      return 'step';
+    }
+
+    function bodyFor(template) {
+      if (template === 'mgmt_tier') {
+        return `
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+            <div>
+              <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-1">Ecosystem</label>
+              <select data-eco class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+                <option value="A">${WEB_MGMT_PRICING.A.label}</option>
+                <option value="B">${WEB_MGMT_PRICING.B.label}</option>
+                <option value="C">${WEB_MGMT_PRICING.C.label}</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-1">Sites managed</label>
+              <select data-sites class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+              </select>
+            </div>
+          </div>
+          ${tierBlock('good', 'Good')}
+          ${tierBlock('better', 'Better', true)}
+          ${tierBlock('best', 'Best')}
+        `;
+      }
+      if (template === 'site_setup') {
+        return `
+          ${binaryOptionBlock('o1', 'Option 1')}
+          ${binaryOptionBlock('o2', 'Option 2')}
+        `;
+      }
+      if (template === 'consulting_yn') {
+        return `
+          <div class="p-3 bg-neutral-900/30 border border-white/10 rounded-md mb-3">
+            <p class="text-[10px] font-mono text-amber-400 tracking-wide uppercase mb-2">Option: Web Management only (no)</p>
+            <input type="text" data-no-name value="Web Management only" class="w-full px-3 py-2 mb-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+            <textarea data-no-desc rows="3" placeholder="Description for the 'no' option" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/30">Skip Marketing Consulting for now. You can add it later at any time.</textarea>
+          </div>
+          <div class="p-3 bg-neutral-900/30 border border-white/10 rounded-md mb-3">
+            <p class="text-[10px] font-mono text-amber-400 tracking-wide uppercase mb-2">Option: Add Marketing Consulting (yes)</p>
+            <input type="text" data-yes-name value="Add Marketing Consulting" class="w-full px-3 py-2 mb-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+            <textarea data-yes-desc rows="3" placeholder="Description for the 'yes' option" class="w-full px-3 py-2 mb-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/30">Research and strategy applied to the whole business. Competitive analysis, search and content direction, brand positioning.</textarea>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-1 mt-2">Ecosystem (for the consulting price preview)</label>
+            <select data-yes-eco class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+              <option value="A">${CONSULTING_PRICING.A.label}</option>
+              <option value="B">${CONSULTING_PRICING.B.label}</option>
+              <option value="C">${CONSULTING_PRICING.C.label}</option>
+            </select>
+            <p data-yes-price class="text-[11px] text-neutral-500 mt-2"></p>
+          </div>
+        `;
+      }
+      if (template === 'consulting_tier') {
+        return `
+          <div class="mb-4">
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-1">Ecosystem</label>
+            <select data-eco class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+              <option value="A">${CONSULTING_PRICING.A.label}</option>
+              <option value="B">${CONSULTING_PRICING.B.label}</option>
+              <option value="C">${CONSULTING_PRICING.C.label}</option>
+            </select>
+          </div>
+          ${tierBlock('good', 'Good')}
+          ${tierBlock('better', 'Better', true)}
+          ${tierBlock('best', 'Best')}
+        `;
+      }
+      return '';
+    }
+
+    function tierBlock(id, label, recommended = false) {
+      return `
+        <div class="p-3 bg-neutral-900/30 border border-white/10 rounded-md mb-3" data-tier="${id}">
+          <div class="flex items-center justify-between mb-2">
+            <p class="text-[10px] font-mono text-amber-400 tracking-wide uppercase">${label}${recommended ? ' (recommended)' : ''}</p>
+            <label class="text-[10px] font-mono text-neutral-500 flex items-center gap-1">
+              <input type="checkbox" data-tier-recommended ${recommended ? 'checked' : ''} class="accent-amber-500" />
+              Recommended
+            </label>
+          </div>
+          <input type="text" data-tier-name value="${escapeAttr(label)}" class="w-full px-3 py-2 mb-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="Tier name" />
+          <input type="text" data-tier-tagline placeholder="Tagline" class="w-full px-3 py-2 mb-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
+            <input type="text" data-tier-price-label placeholder="$XXX" class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
+            <input type="text" data-tier-price-suffix value="/ month" placeholder="/ month" class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+            <input type="text" data-tier-price-subline placeholder="subline" class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          </div>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-1">Features (one per line)</label>
+          <textarea data-tier-features rows="4" placeholder="One feature per line" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/30"></textarea>
+        </div>
+      `;
+    }
+
+    function binaryOptionBlock(id, label) {
+      return `
+        <div class="p-3 bg-neutral-900/30 border border-white/10 rounded-md mb-3" data-binary="${id}">
+          <p class="text-[10px] font-mono text-amber-400 tracking-wide uppercase mb-2">${label}</p>
+          <input type="text" data-binary-name value="${escapeAttr(label + ': ')}" class="w-full px-3 py-2 mb-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="Option name" />
+          <textarea data-binary-html rows="3" placeholder="Description (HTML allowed)" class="w-full px-3 py-2 mb-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/30"></textarea>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <input type="text" data-binary-price-dynamic placeholder="mgmtMonthly:o1 (formula key)" class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
+            <input type="text" data-binary-price-detail placeholder="Price detail HTML" class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          </div>
+        </div>
+      `;
+    }
+
+    function fillTierPickerDefaults(wrap, template) {
+      const eco = wrap.querySelector('[data-eco]').value;
+      const sitesEl = wrap.querySelector('[data-sites]');
+      const sites = sitesEl ? parseInt(sitesEl.value, 10) || 1 : 1;
+      const pricing = template === 'mgmt_tier' ? WEB_MGMT_PRICING[eco] : CONSULTING_PRICING[eco];
+
+      ['good', 'better', 'best'].forEach(level => {
+        const tierEl = wrap.querySelector(`[data-tier="${level}"]`);
+        if (!tierEl) return;
+        const p = pricing[level];
+        const priceLabel = tierEl.querySelector('[data-tier-price-label]');
+        const priceSubline = tierEl.querySelector('[data-tier-price-subline]');
+        const features = tierEl.querySelector('[data-tier-features]');
+        const tagline = tierEl.querySelector('[data-tier-tagline]');
+
+        if (template === 'mgmt_tier') {
+          const monthly = multiSiteMonthly(p.monthly, sites);
+          const onb = multiSiteOnb(p.onb, sites);
+          priceLabel.value = `${fmtMoney(monthly)}`;
+          priceSubline.value = sites > 1 ? `${sites} sites; onb ${fmtMoney(onb)}` : `onb ${fmtMoney(onb)}`;
+          if (!features.dataset.manual) {
+            features.value = defaultMgmtFeatures(eco, level).join('\n');
+          }
+          if (!tagline.dataset.manual) {
+            tagline.value = level === 'good' ? 'A start, intentionally light.'
+              : level === 'better' ? 'The flagship.'
+              : 'Weekly updates. Same-day priority response.';
+          }
+        } else {
+          priceLabel.value = `${fmtMoney(p.monthly)}`;
+          priceSubline.value = `${fmtMoney(p.audit)} audit at signing`;
+          if (!features.dataset.manual) {
+            features.value = defaultConsultingFeatures(eco, level).join('\n');
+          }
+          if (!tagline.dataset.manual) {
+            tagline.value = level === 'good' ? 'The lightest consulting engagement.'
+              : level === 'better' ? 'The flagship consulting cycle.'
+              : 'Monthly strategy cycle. Hiring guidance included.';
+          }
+        }
+        features.addEventListener('input', () => { features.dataset.manual = '1'; }, { once: true });
+        tagline.addEventListener('input', () => { tagline.dataset.manual = '1'; }, { once: true });
+      });
+    }
+
+    function fillConsultingYnDefaults(wrap) {
+      const eco = wrap.querySelector('[data-yes-eco]').value;
+      const p = CONSULTING_PRICING[eco];
+      const preview = wrap.querySelector('[data-yes-price]');
+      preview.textContent = `Range: +${fmtMoney(p.good.monthly)} to +${fmtMoney(p.best.monthly)} / month. Audit at signing ${fmtMoney(p.good.audit)} to ${fmtMoney(p.best.audit)}.`;
+    }
+
+    // Hook up the Add-step buttons
+    document.querySelectorAll('[data-add-step]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        buildStep(btn.dataset.addStep);
+      });
+    });
+
+    // ========== Serialize and submit ==========
+    function serializeConfig() {
+      const errors = [];
+
+      const title = document.getElementById('title').value.trim();
+      const prepared_for = document.getElementById('prepared_for').value.trim();
+      const prepared_on_iso = document.getElementById('prepared_on').value;
+      const intro = document.getElementById('intro').value.trim();
+      const what_i_see = document.getElementById('what_i_see').value.trim();
+      const what_i_recommend = document.getElementById('what_i_recommend').value.trim();
+      const rollout_intro = document.getElementById('rollout_intro').value.trim();
+      const rollout_outro = document.getElementById('rollout_outro').value.trim();
+      const pricing_formula = document.getElementById('pricing_formula').value;
+
+      // Convert prepared_on (YYYY-MM-DD) to long form ('May 22, 2026').
+      let prepared_on = todayLong;
+      if (prepared_on_iso) {
+        const d = new Date(prepared_on_iso + 'T12:00:00');
+        if (!isNaN(d.getTime())) {
+          prepared_on = d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        }
+      }
+
+      function paragraphsFrom(text) {
+        if (!text) return [];
+        return text.split(/\n\s*\n+/).map(p => p.replace(/\n/g, ' ').trim()).filter(Boolean);
+      }
+
+      const narrativeSections = [];
+      if (what_i_see) {
+        narrativeSections.push({ h2: 'What I see in your business', paragraphs: paragraphsFrom(what_i_see) });
+      }
+      if (what_i_recommend) {
+        narrativeSections.push({ h2: 'What I recommend', paragraphs: paragraphsFrom(what_i_recommend) });
+      }
+
+      // Phases
+      const phases = [];
+      phasesContainer.querySelectorAll('[data-phase-row]').forEach(row => {
+        const phase_num = row.querySelector('[data-phase-num]').value.trim();
+        const h3 = row.querySelector('[data-phase-h3]').value.trim();
+        const html = row.querySelector('[data-phase-html]').value.trim();
+        if (phase_num || h3 || html) {
+          phases.push({ phase_num, h3, html });
+        }
+      });
+
+      const rollout = (phases.length || rollout_intro || rollout_outro) ? {
+        h2: 'How it rolls out',
+        intro_html: rollout_intro,
+        phases,
+        outro_html: rollout_outro,
+      } : undefined;
+
+      // Steps
+      const steps = [];
+      stepsContainer.querySelectorAll('[data-step-row]').forEach(row => {
+        const template = row.dataset.stepTemplate;
+        const id = (row.querySelector('[data-step-id]')?.value || '').trim();
+        const h2 = (row.querySelector('[data-step-h2]')?.value || '').trim();
+        const prompt = (row.querySelector('[data-step-prompt]')?.value || '').trim();
+        if (!id) { errors.push(`Step is missing an id`); return; }
+
+        if (template === 'mgmt_tier' || template === 'consulting_tier') {
+          const eco = row.querySelector('[data-eco]')?.value || 'A';
+          const options = [];
+          ['good', 'better', 'best'].forEach(level => {
+            const tierEl = row.querySelector(`[data-tier="${level}"]`);
+            if (!tierEl) return;
+            const name = tierEl.querySelector('[data-tier-name]').value.trim();
+            const tagline = tierEl.querySelector('[data-tier-tagline]').value.trim();
+            const price_label = tierEl.querySelector('[data-tier-price-label]').value.trim();
+            const price_suffix = tierEl.querySelector('[data-tier-price-suffix]').value.trim();
+            const price_subline = tierEl.querySelector('[data-tier-price-subline]').value.trim();
+            const features = tierEl.querySelector('[data-tier-features]').value.split('\n').map(s => s.trim()).filter(Boolean);
+            const recommended = tierEl.querySelector('[data-tier-recommended]').checked;
+            const opt = { id: level, name, tagline, price_label, price_suffix, price_subline, features };
+            if (recommended) opt.recommended = true;
+            options.push(opt);
+          });
+          const step = { id, type: 'tier_picker', h2, prompt, ecosystem: eco, options };
+          if (template === 'mgmt_tier') {
+            const sites = parseInt(row.querySelector('[data-sites]').value, 10) || 1;
+            step.sites = sites;
+          }
+          if (steps.length > 0) step.depends_on = steps[steps.length - 1].id;
+          steps.push(step);
+        } else if (template === 'site_setup') {
+          const options = [];
+          ['o1', 'o2'].forEach(optId => {
+            const binEl = row.querySelector(`[data-binary="${optId}"]`);
+            if (!binEl) return;
+            const name = binEl.querySelector('[data-binary-name]').value.trim();
+            const html = binEl.querySelector('[data-binary-html]').value.trim();
+            const price_dynamic = binEl.querySelector('[data-binary-price-dynamic]').value.trim();
+            const price_detail_html = binEl.querySelector('[data-binary-price-detail]').value.trim();
+            options.push({ id: optId, name, html, price_dynamic, price_detail_html });
+          });
+          const step = { id, type: 'binary_picker', h2, prompt, options };
+          if (steps.length > 0) step.depends_on = steps[steps.length - 1].id;
+          steps.push(step);
+        } else if (template === 'consulting_yn') {
+          const noName = row.querySelector('[data-no-name]').value.trim();
+          const noDesc = row.querySelector('[data-no-desc]').value.trim();
+          const yesName = row.querySelector('[data-yes-name]').value.trim();
+          const yesDesc = row.querySelector('[data-yes-desc]').value.trim();
+          const eco = row.querySelector('[data-yes-eco]').value;
+          const p = CONSULTING_PRICING[eco];
+          const step = {
+            id,
+            type: 'binary_picker',
+            h2,
+            prompt,
+            ecosystem: eco,
+            options: [
+              { id: 'no',  name: noName,  html: noDesc, price_label: 'No additional charge', price_detail_html: 'Mgmt-only monthly.' },
+              { id: 'yes', name: yesName, html: yesDesc,
+                price_label: `+${fmtMoney(p.good.monthly)} to +${fmtMoney(p.best.monthly)} / month`,
+                price_detail_html: `Pick a level next. Audit at signing ranges ${fmtMoney(p.good.audit)} to ${fmtMoney(p.best.audit)} by level.` },
+            ],
+          };
+          if (steps.length > 0) step.depends_on = steps[steps.length - 1].id;
+          steps.push(step);
+        }
+      });
+
+      // Auto-add show_when to consulting_tier steps if a prior consulting yn step exists.
+      for (let i = 0; i < steps.length; i++) {
+        const s = steps[i];
+        // Heuristic: a consulting_tier step that follows a binary with options yes/no
+        // should show only when the prior step's selection is 'yes'.
+        if (s.type === 'tier_picker' && /consulting/i.test(s.id) && i > 0) {
+          const prev = steps[i - 1];
+          const hasYes = prev.options && prev.options.some(o => o.id === 'yes');
+          if (hasYes) {
+            s.show_when = { [prev.id]: 'yes' };
+            s.depends_on = prev.id;
+          }
+        }
+      }
+
+      // Signers
+      const signers = [];
+      signersContainer.querySelectorAll('[data-signer-row]').forEach(row => {
+        const name = row.querySelector('[data-signer-name]').value.trim();
+        const email = row.querySelector('[data-signer-email]').value.trim().toLowerCase();
+        const label = row.querySelector('[data-signer-label]').value.trim();
+        if (!name && !email) return;
+        if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+          errors.push(`Signer "${name || '(unnamed)'}" needs a valid email`);
+          return;
+        }
+        const id = email.split('@')[0].replace(/[^a-z0-9]+/g, '_').slice(0, 24) || `s${signers.length + 1}`;
+        const entry = { id, name, email };
+        if (label) entry.label = label;
+        signers.push(entry);
+      });
+
+      if (signers.length === 0) errors.push('At least one signer is required');
+
+      const config = {
+        version: 1,
+        prepared_for,
+        prepared_on,
+        title,
+        narrative: {
+          intro,
+          sections: narrativeSections,
+          ...(rollout ? { rollout } : {}),
+        },
+        steps,
+        signers,
+        pricing_formula,
+      };
+
+      return { config, errors };
+    }
+
+    async function submitProposal(status) {
+      const msg = document.getElementById('submit-msg');
+      msg.classList.add('hidden');
+
+      const client_id = document.getElementById('client_id').value;
+      const slug = document.getElementById('slug').value.trim();
+      const title = document.getElementById('title').value.trim();
+
+      if (!client_id) {
+        showMsg(msg, 'Select a client', 'error');
+        return;
+      }
+      if (!title) {
+        showMsg(msg, 'Title is required', 'error');
+        return;
+      }
+      if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+        showMsg(msg, 'Slug must be lowercase letters, numbers, and hyphens', 'error');
+        return;
+      }
+
+      const { config, errors } = serializeConfig();
+      if (errors.length > 0) {
+        showMsg(msg, errors.join('. '), 'error');
+        return;
+      }
+
+      const draftBtn = document.getElementById('save-draft-btn');
+      const pubBtn = document.getElementById('publish-btn');
+      draftBtn.disabled = true;
+      pubBtn.disabled = true;
+
+      try {
+        const res = await fetch('/portal/api/admin/proposals/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ slug, client_id, title, config, status }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showMsg(msg, `Created "${title}". Redirecting...`, 'ok');
+          setTimeout(() => { window.location.href = '/portal/admin/proposals'; }, 800);
+        } else {
+          showMsg(msg, data.error || 'Failed to create proposal', 'error');
+          draftBtn.disabled = false;
+          pubBtn.disabled = false;
+        }
+      } catch (err) {
+        showMsg(msg, 'Connection error', 'error');
+        draftBtn.disabled = false;
+        pubBtn.disabled = false;
+      }
+    }
+
+    function showMsg(el, text, type) {
+      el.textContent = text;
+      el.className = 'text-sm ' + (type === 'ok' ? 'text-emerald-400' : 'text-red-400');
+      el.classList.remove('hidden');
+    }
+
+    document.getElementById('save-draft-btn').addEventListener('click', () => submitProposal('draft'));
+    document.getElementById('publish-btn').addEventListener('click', () => submitProposal('published'));
+  </script>
+</Portal>

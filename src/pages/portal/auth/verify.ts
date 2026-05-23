@@ -47,6 +47,17 @@ export const GET: APIRoute = async ({ url, cookies, redirect }) => {
     summary: 'User logged in via magic link',
   });
 
+  // Clear any pre-existing portal_session cookie before setting the new
+  // one. The login endpoint sets the cookie with sameSite=strict; this
+  // endpoint sets it with sameSite=lax (required for cross-site email
+  // arrivals). Some browsers do not cleanly overwrite a same-name cookie
+  // when sameSite differs, leaving the user with a confused mix of the
+  // old admin session and the new magic-link session. Delete-then-set
+  // guarantees a clean swap. Clicking a magic link is explicit user
+  // intent to authenticate as that user; replacing the previous session
+  // is the correct behavior.
+  cookies.delete(SESSION_COOKIE, { path: '/portal' });
+
   // SameSite=Lax (not Strict) for this specific cookie set: the user is
   // arriving from an email client, which is a cross-site initiator. Some
   // browsers (notably Safari) refuse to set Strict cookies in cross-site

@@ -1,19 +1,31 @@
 // Admin endpoint: create a proposal row from the wizard at
-// /portal/admin/proposals/new. Validates slug shape and uniqueness,
-// validates the config payload at a structural level (not deep
-// schema), inserts the row, and returns the new id + slug so the
-// caller can redirect to the index page.
+// /portal/admin/proposals/new.
 //
-// The config blob is stored verbatim as JSON text. The generic
-// renderer (Phase 2) is the consumer; this endpoint just enforces the
-// outer shape that the proposals table expects.
+// Two payload shapes are accepted:
+//
+// 1. Compose payload (new, preferred): {
+//      client_id, status,
+//      compose: { products, product_vars, narrative_variables, signers, overrides }
+//    }
+//    The endpoint calls composeProposal() from src/lib/products/index.ts to
+//    build the full proposal config from canonical product definitions, then
+//    persists it. Slug and title derive from the client and signer rows
+//    (overrideable via compose.overrides).
+//
+// 2. Raw config payload (legacy): {
+//      slug, client_id, title, config, status
+//    }
+//    The endpoint validates and stores the config verbatim. Used by older
+//    callers and any direct API tooling that wants full control.
+//
+// Both paths share the same INSERT path and activity-log emission.
 
 import type { APIRoute } from 'astro';
 import { nanoid } from 'nanoid';
 import turso from '../../../../../lib/turso';
 import { logActivity } from '../../../../../lib/activity';
 import { logger } from '../../../../../lib/logger';
-import { upsertClientMetadata } from '../../../../../lib/agreements';
+import { composeProposal } from '../../../../../lib/products';
 
 export const prerender = false;
 
@@ -32,33 +44,104 @@ export const POST: APIRoute = async ({ locals, request }) => {
     return json({ error: 'Invalid JSON' }, 400);
   }
 
-  const slug = (body?.slug || '').toString().trim();
   const client_id = (body?.client_id || '').toString().trim();
-  const title = (body?.title || '').toString().trim();
-  const config = body?.config;
   const status = (body?.status || 'draft').toString().trim();
 
-  if (!slug) return json({ error: 'Slug is required' }, 400);
-  if (!SLUG_RE.test(slug)) return json({ error: 'Slug must be lowercase letters, numbers, and hyphens (no leading or trailing hyphen)' }, 400);
   if (!client_id) return json({ error: 'Client is required' }, 400);
-  if (!title) return json({ error: 'Title is required' }, 400);
-  if (!config || typeof config !== 'object') return json({ error: 'Config is required' }, 400);
   if (status !== 'draft' && status !== 'published') return json({ error: 'Status must be draft or published' }, 400);
 
-  // Confirm the client exists.
+  // Confirm the client exists, and pull the row for compose pre-fill.
   const clientCheck = await turso.execute({
-    sql: 'SELECT id FROM clients WHERE id = ?',
+    sql: 'SELECT id, name, slug FROM clients WHERE id = ?',
     args: [client_id],
   });
   if (clientCheck.rows.length === 0) return json({ error: 'Client not found' }, 404);
+  const clientRow = clientCheck.rows[0] as any;
+  const clientName = clientRow[1] as string;
+  const clientSlug = clientRow[2] as string;
 
-  // Slug uniqueness.
-  const existing = await turso.execute({
-    sql: 'SELECT id FROM proposals WHERE slug = ?',
-    args: [slug],
-  });
-  if (existing.rows.length > 0) {
-    return json({ error: 'A proposal with that slug already exists' }, 409);
+  // Decide which payload shape to use.
+  let slug: string;
+  let title: string;
+  let config: any;
+
+  if (body?.compose && typeof body.compose === 'object') {
+    // Compose payload: build the config server-side.
+    const c = body.compose;
+    const products = Array.isArray(c.products) ? c.products : [];
+    if (products.length === 0) {
+      return json({ error: 'At least one product is required' }, 400);
+    }
+    const product_vars = (c.product_vars && typeof c.product_vars === 'object') ? c.product_vars : {};
+    const narrative_variables = (c.narrative_variables && typeof c.narrative_variables === 'object') ? c.narrative_variables : {};
+    const rawSigners = Array.isArray(c.signers) ? c.signers : [];
+    if (rawSigners.length === 0) {
+      return json({ error: 'At least one signer is required' }, 400);
+    }
+    const signers = rawSigners.map((s: any, i: number) => {
+      const name = (s?.name || '').toString().trim();
+      const email = (s?.email || '').toString().trim().toLowerCase();
+      const localPart = email.split('@')[0] || '';
+      const id = localPart.replace(/[^a-z0-9]+/g, '_').slice(0, 24) || `s${i + 1}`;
+      return { id, name, email };
+    });
+    for (const s of signers) {
+      if (!s.email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s.email)) {
+        return json({ error: `Signer "${s.name || '(unnamed)'}" needs a valid email` }, 400);
+      }
+    }
+    const overrides = (c.overrides && typeof c.overrides === 'object') ? c.overrides : {};
+
+    try {
+      config = composeProposal({
+        client: { id: client_id, name: clientName, slug: clientSlug },
+        signers,
+        products,
+        product_vars,
+        narrative_variables,
+        overrides,
+      });
+    } catch (err) {
+      logger.error('composeProposal failed', err);
+      return json({ error: 'Failed to compose proposal from product definitions' }, 500);
+    }
+    title = config.title;
+    slug = overrides.slug && SLUG_RE.test(overrides.slug) ? overrides.slug : clientSlug;
+
+    // Slug collision: if the client slug is already taken by another
+    // proposal, append today's date so the admin gets a clean unique slug
+    // without having to hand-edit.
+    const existing = await turso.execute({
+      sql: 'SELECT id FROM proposals WHERE slug = ?',
+      args: [slug],
+    });
+    if (existing.rows.length > 0) {
+      const datePart = new Date().toISOString().slice(0, 10);
+      slug = `${slug}-${datePart}`;
+      const reCheck = await turso.execute({
+        sql: 'SELECT id FROM proposals WHERE slug = ?',
+        args: [slug],
+      });
+      if (reCheck.rows.length > 0) {
+        return json({ error: 'Slug collision; supply an explicit slug override' }, 409);
+      }
+    }
+  } else {
+    // Legacy raw-config payload.
+    slug = (body?.slug || '').toString().trim();
+    title = (body?.title || '').toString().trim();
+    config = body?.config;
+    if (!slug) return json({ error: 'Slug is required' }, 400);
+    if (!SLUG_RE.test(slug)) return json({ error: 'Slug must be lowercase letters, numbers, and hyphens (no leading or trailing hyphen)' }, 400);
+    if (!title) return json({ error: 'Title is required' }, 400);
+    if (!config || typeof config !== 'object') return json({ error: 'Config is required' }, 400);
+    const existing = await turso.execute({
+      sql: 'SELECT id FROM proposals WHERE slug = ?',
+      args: [slug],
+    });
+    if (existing.rows.length > 0) {
+      return json({ error: 'A proposal with that slug already exists' }, 409);
+    }
   }
 
   const id = nanoid();
@@ -78,33 +161,11 @@ export const POST: APIRoute = async ({ locals, request }) => {
     return json({ error: 'Failed to create proposal' }, 500);
   }
 
-  // Optional client legal-entity metadata. If the wizard sent any of
-  // these fields, upsert into client_metadata so the contract preview
-  // reads real values instead of [to be confirmed] placeholders.
-  // Treated as best-effort: a failure here does not block proposal
-  // creation, since the proposal can still function with placeholders.
-  const metadata = body?.client_metadata;
-  if (metadata && typeof metadata === 'object') {
-    const hasAny = Object.values(metadata).some(v => typeof v === 'string' && v.trim().length > 0);
-    if (hasAny) {
-      try {
-        await upsertClientMetadata({
-          client_id,
-          legal_entity_name: typeof metadata.legal_entity_name === 'string' ? metadata.legal_entity_name.trim() || null : null,
-          entity_type: typeof metadata.entity_type === 'string' ? metadata.entity_type.trim() || null : null,
-          state_of_organization: typeof metadata.state_of_organization === 'string' ? metadata.state_of_organization.trim() || null : null,
-          principal_address: typeof metadata.principal_address === 'string' ? metadata.principal_address.trim() || null : null,
-          notice_address: typeof metadata.notice_address === 'string' ? metadata.notice_address.trim() || null : null,
-          primary_contact_name: typeof metadata.primary_contact_name === 'string' ? metadata.primary_contact_name.trim() || null : null,
-          primary_contact_title: typeof metadata.primary_contact_title === 'string' ? metadata.primary_contact_title.trim() || null : null,
-          primary_contact_email: typeof metadata.primary_contact_email === 'string' ? metadata.primary_contact_email.trim() || null : null,
-          primary_contact_phone: typeof metadata.primary_contact_phone === 'string' ? metadata.primary_contact_phone.trim() || null : null,
-        });
-      } catch (err) {
-        logger.error('Client metadata upsert failed during proposal create', err);
-      }
-    }
-  }
+  // Client legal-entity metadata (legal_entity_name, entity_type,
+  // principal_address, etc.) is NOT collected here. The proposal wizard
+  // captures product picks and routing variables only. Clients supply
+  // legal-entity details at contract intake after they accept the LOI.
+  // See src/pages/portal/api/contracts/[slug]/intake.ts.
 
   await logActivity({
     clientId: client_id,

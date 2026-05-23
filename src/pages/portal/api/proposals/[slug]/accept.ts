@@ -389,7 +389,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
 
   // Finalize cycle
   if (allSigned && ready && !draft.finalized_at) {
-    const pricing = computePricing(proposal.config?.pricing_formula || '', draft.selections);
+    const pricing = computePricing(proposal.config?.pricing_formula || '', draft.selections, proposal.config);
     const acceptedAt = new Date().toISOString();
 
     const oneTime = pricing?.oneTime ?? 0;
@@ -508,7 +508,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
     if (brevoKey) {
       const others = signersWithState.filter(s => s.id !== signer.id);
       const justSignedName = signer.name?.split(' ')[0] || signer.name || signer.id;
-      const pricing = computePricing(proposal.config?.pricing_formula || '', draft.selections);
+      const pricing = computePricing(proposal.config?.pricing_formula || '', draft.selections, proposal.config);
       const summaryRows = summaryRowsHtml(pricing, draft.selections);
       for (const other of others) {
         const otherFirst = other.name?.split(' ')[0] || other.name || other.id;
@@ -550,7 +550,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
   if (partnerToNotify && !isRevoke && status !== 'finalized' && (!body || body.signature === undefined) && brevoKey) {
     const changerFirst = signer.name?.split(' ')[0] || signer.name || signer.id;
     const partnerFirst = partnerToNotify.name?.split(' ')[0] || partnerToNotify.name || partnerToNotify.id;
-    const pricing = computePricing(proposal.config?.pricing_formula || '', draft.selections);
+    const pricing = computePricing(proposal.config?.pricing_formula || '', draft.selections, proposal.config);
     const summaryRows = summaryRowsHtml(pricing, draft.selections);
     try {
       await fetch('https://api.brevo.com/v3/smtp/email', {

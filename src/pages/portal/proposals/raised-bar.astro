@@ -1,3 +1,11 @@
+---
+// Server-rendered, never prerendered. Prerendered HTML can be served as
+// static files outside the middleware chain in some adapter modes, which
+// would let an unauthenticated visitor read the proposal directly. Every
+// other /portal/* page in this repo is also prerender=false for the same
+// reason — keep the consistency.
+export const prerender = false;
+---
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,7 +13,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
 <title>Engagement Proposal for Jason Roth and Kevin Adams</title>
-<style>
+<style is:inline>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { -webkit-text-size-adjust: 100%; }
   body {

@@ -45,10 +45,17 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const user = locals.user;
   if (!user) return json({ error: 'Not authenticated' }, 401);
 
-  // Same access gate as the proposal page itself.
+  // Acceptance is signed by the client. Admin users can view the
+  // proposal page (preview) but cannot trigger accept — otherwise an
+  // admin clicking Send would fire confirmation emails to Jason and
+  // Kevin without their actual acceptance.
+  if (user.role === 'admin') {
+    return json({ error: 'Admin preview mode. The proposal must be accepted by a Raised Bar Group client user (Jason or Kevin).' }, 403);
+  }
   const client = await getClientBySlug(CLIENT_SLUG);
-  const isAuthorized = user.role === 'admin' || (!!client && user.client_id === client.id);
-  if (!isAuthorized) return json({ error: 'Forbidden' }, 403);
+  if (!client || user.client_id !== client.id) {
+    return json({ error: 'Forbidden' }, 403);
+  }
 
   let body: any;
   try {

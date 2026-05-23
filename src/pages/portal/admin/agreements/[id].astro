@@ -1,0 +1,243 @@
+---
+// Admin per-agreement detail. Three panels: status + actions,
+// Schedule A editor (JSON for now; per-field UI is a future polish),
+// and signers + audit trail.
+
+import Portal from '../../../../layouts/Portal.astro';
+import {
+  getAgreement,
+  getSignersForAgreement,
+  getSignaturesForAgreement,
+} from '../../../../lib/agreements';
+import turso from '../../../../lib/turso';
+
+export const prerender = false;
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'admin') return Astro.redirect('/portal/dashboard');
+
+const id = Astro.params.id || '';
+const agreement = await getAgreement(id);
+if (!agreement) return new Response('Not found', { status: 404 });
+
+const signers = await getSignersForAgreement(agreement.id);
+const signatures = await getSignaturesForAgreement(agreement.id, true);
+
+const clientRow = await turso.execute({
+  sql: `SELECT name, slug FROM clients WHERE id = ? LIMIT 1`,
+  args: [agreement.client_id],
+});
+const clientName = (clientRow.rows[0]?.[0] as string) || 'Unknown';
+
+const activityResult = await turso.execute({
+  sql: `SELECT id, user_id, action, summary, metadata, created_at FROM activity_log WHERE entity_type = 'agreement' AND entity_id = ? ORDER BY created_at DESC LIMIT 200`,
+  args: [agreement.id],
+});
+const activity = (activityResult.rows as any[]).map(r => ({
+  id: r[0],
+  user_id: r[1],
+  action: r[2],
+  summary: r[3],
+  metadata: r[4],
+  created_at: r[5],
+}));
+
+const statusBadge: Record<string, string> = {
+  draft: 'bg-neutral-700/30 text-neutral-400',
+  issued: 'bg-blue-500/10 text-blue-400',
+  partially_signed: 'bg-amber-500/10 text-amber-400',
+  executed: 'bg-emerald-500/10 text-emerald-400',
+  revoked: 'bg-amber-500/10 text-amber-400',
+  voided: 'bg-red-500/10 text-red-400',
+};
+
+const csrfToken = Astro.locals.csrfToken || '';
+---
+<Portal title={`Agreement: ${agreement.title}`}>
+  <div class="max-w-4xl mx-auto">
+    <div class="mb-6">
+      <a href="/portal/admin/agreements" class="text-xs font-mono text-neutral-500 hover:text-amber-400 transition-colors">← Back to agreements</a>
+    </div>
+
+    <div class="flex items-start justify-between gap-6 mb-8">
+      <div>
+        <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-2">{clientName}</p>
+        <h1 class="font-serif text-3xl text-neutral-100">{agreement.title}</h1>
+        <p class="text-xs font-mono text-neutral-600 mt-2">
+          <a href={`/portal/contracts/${agreement.slug}`} target="_blank" rel="noopener" class="hover:text-amber-400">/portal/contracts/{agreement.slug}</a>
+          <span class:list={['ml-3 px-2 py-0.5 text-[10px] font-mono uppercase rounded', statusBadge[agreement.status] || statusBadge.draft]}>{agreement.status}</span>
+        </p>
+      </div>
+      <div class="flex gap-2 shrink-0">
+        {agreement.status === 'draft' && (
+          <button type="button" id="issue-btn" class="px-4 py-2 bg-amber-500 text-neutral-950 text-sm font-semibold rounded-lg hover:bg-amber-400 transition-colors">Send to signers</button>
+        )}
+        {(agreement.status === 'issued' || agreement.status === 'partially_signed') && (
+          <button type="button" id="reissue-btn" class="px-4 py-2 bg-blue-500/20 border border-blue-500/40 text-blue-300 text-sm rounded-lg hover:bg-blue-500/30 transition-colors">Resend invite</button>
+        )}
+        {agreement.status !== 'voided' && agreement.status !== 'executed' && (
+          <button type="button" id="cancel-btn" class="px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-300 text-sm rounded-lg hover:bg-red-500/20 transition-colors">Cancel agreement</button>
+        )}
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <section class="bg-neutral-900/30 border border-white/5 rounded-xl p-6">
+        <h2 class="font-serif text-xl text-neutral-100 mb-4">Schedule A</h2>
+        <p class="text-xs text-neutral-500 mb-3">Edit the JSON below. Saving notifies any signed signer that their signature is paused until they re-sign against the new state.</p>
+        <textarea id="schedule-a-editor" rows="22" class="w-full bg-neutral-950 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-neutral-300" spellcheck="false">{JSON.stringify(agreement.schedule_a, null, 2)}</textarea>
+        <div class="mt-3 flex items-center gap-3">
+          <button type="button" id="save-schedule" class="px-4 py-2 bg-amber-500 text-neutral-950 text-sm font-semibold rounded-lg hover:bg-amber-400 transition-colors">Save Schedule A</button>
+          <p id="schedule-status" class="text-xs text-neutral-500"></p>
+        </div>
+        <div class="mt-4 pt-4 border-t border-white/5">
+          <label class="block text-xs font-mono uppercase tracking-[0.18em] text-amber-400 mb-2">Personal note</label>
+          <textarea id="personal-note-editor" rows="4" class="w-full bg-neutral-950 border border-white/10 rounded-lg px-3 py-2 text-sm text-neutral-200" style="font-family: 'Source Serif 4', Georgia, serif;">{agreement.personal_note || ''}</textarea>
+          <button type="button" id="save-note" class="mt-2 text-xs font-mono text-amber-400 hover:text-amber-300">Save note</button>
+        </div>
+      </section>
+
+      <section class="bg-neutral-900/30 border border-white/5 rounded-xl p-6">
+        <h2 class="font-serif text-xl text-neutral-100 mb-4">Signers</h2>
+        <div class="space-y-3 mb-6">
+          {signers.map(s => {
+            const active = signatures.find(sig => sig.signer_id === s.id && !sig.revoked_at);
+            return (
+              <div class="flex items-start justify-between gap-3 pb-3 border-b border-white/5">
+                <div>
+                  <p class="text-sm text-neutral-200">{s.name_snapshot}</p>
+                  <p class="text-xs font-mono text-neutral-600">{s.email_snapshot} · {s.signer_role}</p>
+                  {active ? (
+                    <p class="text-xs text-emerald-400 mt-1">Signed as "{active.signature_value}" on {new Date(active.signed_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                  ) : (
+                    <p class="text-xs text-neutral-600 mt-1">Awaiting</p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <details class="border-t border-white/5 pt-4">
+          <summary class="cursor-pointer text-xs font-mono uppercase tracking-[0.18em] text-amber-400 mb-3">Audit trail · {signatures.length + activity.length} events</summary>
+          <div class="mt-3 space-y-2 font-mono text-[11px]">
+            {signatures.map(sig => (
+              <div class="p-2 bg-neutral-950/50 rounded">
+                <span class={sig.revoked_at ? 'text-amber-400' : 'text-emerald-400'}>[{sig.revoked_at ? 'revoked' : 'signed'}]</span>
+                <span class="text-neutral-400 ml-2">{new Date(sig.signed_at).toLocaleString()}</span>
+                <div class="text-neutral-500 mt-1">
+                  signer={sig.signer_id} · ip={sig.ip_address || '?'} · ua={(sig.user_agent || '').slice(0, 60)} · hash={sig.document_hash.slice(0, 12)}...
+                </div>
+              </div>
+            ))}
+            {activity.map(ev => (
+              <div class="p-2 bg-neutral-950/30 rounded">
+                <span class="text-blue-400">[{ev.action}]</span>
+                <span class="text-neutral-500 ml-2">{new Date(ev.created_at).toLocaleString()}</span>
+                <div class="text-neutral-400 mt-1">{ev.summary}</div>
+              </div>
+            ))}
+          </div>
+          <div class="mt-4 flex gap-2">
+            <a href={`/portal/api/admin/agreements/${agreement.slug}/audit.csv`} class="px-3 py-1.5 bg-neutral-800/50 border border-white/10 rounded text-xs text-neutral-300 hover:bg-neutral-700/50 transition-colors">Export CSV</a>
+            <button type="button" id="verify-hashes-btn" class="px-3 py-1.5 bg-neutral-800/50 border border-white/10 rounded text-xs text-neutral-300 hover:bg-neutral-700/50 transition-colors">Verify hashes</button>
+          </div>
+          <pre id="verify-output" class="mt-3 hidden text-[10px] text-neutral-400 whitespace-pre-wrap"></pre>
+        </details>
+      </section>
+    </div>
+  </div>
+</Portal>
+
+<script is:inline define:vars={{ slug: agreement.slug, agreementId: agreement.id, csrfToken }}>
+(function() {
+  function api(url, method, body) {
+    return fetch(url, {
+      method: method,
+      headers: { 'content-type': 'application/json', 'x-csrf-token': csrfToken },
+      body: body ? JSON.stringify(body) : undefined,
+    }).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); });
+  }
+
+  var issueBtn = document.getElementById('issue-btn');
+  if (issueBtn) issueBtn.addEventListener('click', function() {
+    if (!confirm('Send the contract-issued email to all signers and flip status to "issued"?')) return;
+    issueBtn.disabled = true;
+    api('/portal/api/admin/agreements/' + slug + '/issue', 'POST', {}).then(function(r) {
+      if (r.ok) window.location.reload();
+      else { alert((r.data && r.data.error) || 'Issue failed'); issueBtn.disabled = false; }
+    });
+  });
+
+  var reissueBtn = document.getElementById('reissue-btn');
+  if (reissueBtn) reissueBtn.addEventListener('click', function() {
+    if (!confirm('Resend invite emails to all signers?')) return;
+    reissueBtn.disabled = true;
+    api('/portal/api/admin/agreements/' + slug + '/issue', 'POST', {}).then(function(r) {
+      if (r.ok) alert('Resent.');
+      else alert((r.data && r.data.error) || 'Resend failed');
+      reissueBtn.disabled = false;
+    });
+  });
+
+  var cancelBtn = document.getElementById('cancel-btn');
+  if (cancelBtn) cancelBtn.addEventListener('click', function() {
+    var reason = prompt('Reason for cancelling (optional):');
+    if (reason === null) return;
+    if (!confirm('Cancel this agreement? This sets status to voided.')) return;
+    cancelBtn.disabled = true;
+    api('/portal/api/admin/agreements/' + slug + '/cancel', 'POST', { reason: reason }).then(function(r) {
+      if (r.ok) window.location.reload();
+      else { alert((r.data && r.data.error) || 'Cancel failed'); cancelBtn.disabled = false; }
+    });
+  });
+
+  var saveScheduleBtn = document.getElementById('save-schedule');
+  var scheduleEditor = document.getElementById('schedule-a-editor');
+  var scheduleStatus = document.getElementById('schedule-status');
+  saveScheduleBtn.addEventListener('click', function() {
+    var parsed;
+    try { parsed = JSON.parse(scheduleEditor.value); } catch (e) {
+      scheduleStatus.textContent = 'Invalid JSON';
+      scheduleStatus.className = 'text-xs text-red-400';
+      return;
+    }
+    saveScheduleBtn.disabled = true;
+    scheduleStatus.textContent = 'Saving...';
+    scheduleStatus.className = 'text-xs text-neutral-500';
+    api('/portal/api/admin/agreements/' + slug, 'PATCH', { schedule_a: parsed }).then(function(r) {
+      saveScheduleBtn.disabled = false;
+      if (r.ok) {
+        scheduleStatus.textContent = 'Saved. Active signers notified of change.';
+        scheduleStatus.className = 'text-xs text-emerald-400';
+      } else {
+        scheduleStatus.textContent = (r.data && r.data.error) || 'Save failed';
+        scheduleStatus.className = 'text-xs text-red-400';
+      }
+    });
+  });
+
+  var saveNoteBtn = document.getElementById('save-note');
+  var noteEditor = document.getElementById('personal-note-editor');
+  saveNoteBtn.addEventListener('click', function() {
+    saveNoteBtn.textContent = 'Saving...';
+    api('/portal/api/admin/agreements/' + slug, 'PATCH', { personal_note: noteEditor.value }).then(function(r) {
+      saveNoteBtn.textContent = r.ok ? 'Saved' : 'Save failed';
+      setTimeout(function() { saveNoteBtn.textContent = 'Save note'; }, 1400);
+    });
+  });
+
+  var verifyBtn = document.getElementById('verify-hashes-btn');
+  var verifyOutput = document.getElementById('verify-output');
+  verifyBtn.addEventListener('click', function() {
+    verifyBtn.disabled = true;
+    verifyBtn.textContent = 'Verifying...';
+    fetch('/portal/api/admin/agreements/' + slug + '/verify-hashes').then(function(r) { return r.json(); }).then(function(data) {
+      verifyOutput.classList.remove('hidden');
+      verifyOutput.textContent = JSON.stringify(data, null, 2);
+      verifyBtn.disabled = false;
+      verifyBtn.textContent = 'Verify hashes';
+    });
+  });
+})();
+</script>

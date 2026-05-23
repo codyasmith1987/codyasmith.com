@@ -1,0 +1,291 @@
+---
+// Admin-only proposals index. Lists every proposal in the system with
+// client, signing progress, and view/manage/delete actions. Phase 3 of
+// the proposal-builder refactor.
+//
+// Reads proposals JOIN clients in one query. For each proposal we also
+// look up the matching proposal_drafts row (by client_id + slug) so the
+// listing can show per-signer signing progress. Signers come from
+// proposals.config JSON; signature presence comes from proposal_drafts
+// (either the typed jason_signature/kevin_signature columns or the
+// generic signatures JSON column added in Phase 1).
+
+import Portal from '../../../layouts/Portal.astro';
+import turso from '../../../lib/turso';
+
+export const prerender = false;
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'admin') {
+  return Astro.redirect('/portal/dashboard');
+}
+
+type Signer = { id: string; name: string; email: string };
+type ProposalConfig = {
+  title?: string;
+  signers?: Signer[];
+  [key: string]: any;
+};
+type SignerProgress = {
+  id: string;
+  name: string;
+  signed: boolean;
+};
+type ProposalRow = {
+  id: string;
+  slug: string;
+  title: string;
+  status: string;
+  client_id: string;
+  client_name: string;
+  created_at: string | null;
+  published_at: string | null;
+  finalized_at: string | null;
+  signers: SignerProgress[];
+};
+
+// One query to pull every proposal with its client name.
+const proposalsResult = await turso.execute(`
+  SELECT p.id, p.slug, p.title, p.config, p.status, p.client_id,
+         p.created_at, p.published_at, p.finalized_at, c.name as client_name
+  FROM proposals p
+  JOIN clients c ON c.id = p.client_id
+  ORDER BY p.created_at DESC
+`);
+
+// Pull all drafts in one query and index them by client_id + slug so
+// each proposal row can resolve its signing state without N round-trips.
+const draftsResult = await turso.execute(`
+  SELECT client_id, slug, jason_signature, kevin_signature, signatures
+  FROM proposal_drafts
+`);
+const draftsByKey = new Map<string, {
+  jason_signature: string | null;
+  kevin_signature: string | null;
+  signatures: string | null;
+}>();
+for (const row of draftsResult.rows) {
+  const clientId = row[0] as string;
+  const slug = row[1] as string;
+  draftsByKey.set(`${clientId}::${slug}`, {
+    jason_signature: row[2] as string | null,
+    kevin_signature: row[3] as string | null,
+    signatures: row[4] as string | null,
+  });
+}
+
+function resolveSignerProgress(
+  signers: Signer[],
+  draft: { jason_signature: string | null; kevin_signature: string | null; signatures: string | null } | undefined,
+): SignerProgress[] {
+  if (!signers || signers.length === 0) return [];
+
+  // Generic signatures JSON column (added in Phase 1): { [signerId]: { signature, signed_at } }
+  let signaturesJson: Record<string, { signature?: string }> | null = null;
+  if (draft?.signatures) {
+    try { signaturesJson = JSON.parse(draft.signatures); } catch { signaturesJson = null; }
+  }
+
+  return signers.map(s => {
+    let signed = false;
+    // Prefer the generic JSON if present
+    if (signaturesJson && signaturesJson[s.id]?.signature) {
+      signed = true;
+    } else if (draft) {
+      // Fallback to the typed columns for Raised Bar's existing draft
+      if (s.id === 'jason' && draft.jason_signature) signed = true;
+      if (s.id === 'kevin' && draft.kevin_signature) signed = true;
+    }
+    return { id: s.id, name: s.name, signed };
+  });
+}
+
+const proposals: ProposalRow[] = proposalsResult.rows.map(row => {
+  const id = row[0] as string;
+  const slug = row[1] as string;
+  const title = row[2] as string;
+  const configRaw = row[3] as string;
+  const status = row[4] as string;
+  const clientId = row[5] as string;
+  const createdAt = row[6] as string | null;
+  const publishedAt = row[7] as string | null;
+  const finalizedAt = row[8] as string | null;
+  const clientName = row[9] as string;
+
+  let config: ProposalConfig = {};
+  try { config = JSON.parse(configRaw); } catch { config = {}; }
+  const signers = Array.isArray(config.signers) ? config.signers : [];
+  const draft = draftsByKey.get(`${clientId}::${slug}`);
+
+  return {
+    id,
+    slug,
+    title,
+    status,
+    client_id: clientId,
+    client_name: clientName,
+    created_at: createdAt,
+    published_at: publishedAt,
+    finalized_at: finalizedAt,
+    signers: resolveSignerProgress(signers, draft),
+  };
+});
+
+function fmtDate(s: string | null): string {
+  if (!s) return '';
+  const d = new Date(s.includes('T') ? s : s.replace(' ', 'T') + 'Z');
+  if (isNaN(d.getTime())) return s;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+const statusBadge: Record<string, string> = {
+  draft: 'bg-neutral-700/30 text-neutral-400',
+  published: 'bg-blue-500/10 text-blue-400',
+  finalized: 'bg-emerald-500/10 text-emerald-400',
+};
+---
+
+<Portal title="Proposals">
+  <div class="max-w-4xl mx-auto">
+    <div class="mb-10 flex items-start justify-between gap-6">
+      <div>
+        <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin</p>
+        <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Proposals</h1>
+      </div>
+      <a
+        href="/portal/admin/proposals/new"
+        class="shrink-0 px-5 py-2.5 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.2)]"
+      >
+        New proposal
+      </a>
+    </div>
+
+    {proposals.length > 0 ? (
+      <div class="space-y-3">
+        {proposals.map(p => (
+          <div
+            class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 group hover:border-white/10 transition-all duration-300"
+            data-proposal-row={p.slug}
+          >
+            <div class="flex items-start justify-between gap-4">
+              <div class="min-w-0 flex-1">
+                <div class="flex items-baseline gap-3 flex-wrap">
+                  <p class="text-sm font-medium text-neutral-200">{p.client_name}</p>
+                  <a
+                    href={`/portal/proposals/${p.slug}`}
+                    target="_blank"
+                    rel="noopener"
+                    class="text-[10px] font-mono text-neutral-600 hover:text-amber-400 transition-colors"
+                  >
+                    /{p.slug}
+                  </a>
+                </div>
+                <p class="text-xs text-neutral-500 mt-1">{p.title}</p>
+
+                {p.signers.length > 0 && (
+                  <div class="flex items-center gap-4 mt-3 text-xs">
+                    {p.signers.map(s => (
+                      <span class="flex items-center gap-1.5">
+                        {s.signed ? (
+                          <span class="text-emerald-400">✓</span>
+                        ) : (
+                          <span class="text-neutral-600">○</span>
+                        )}
+                        <span class:list={[s.signed ? 'text-neutral-300' : 'text-neutral-600']}>
+                          {s.name}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div class="flex items-center gap-4 mt-3 text-[10px] font-mono text-neutral-700">
+                  {p.created_at && <span>Created {fmtDate(p.created_at)}</span>}
+                  {p.published_at && <span>Published {fmtDate(p.published_at)}</span>}
+                  {p.finalized_at && <span>Finalized {fmtDate(p.finalized_at)}</span>}
+                </div>
+              </div>
+
+              <div class="flex flex-col items-end gap-3 shrink-0">
+                <span class:list={[
+                  'text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full',
+                  statusBadge[p.status] || statusBadge.draft,
+                ]}>
+                  {p.status}
+                </span>
+
+                <div class="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                  <a
+                    href={`/portal/proposals/${p.slug}`}
+                    target="_blank"
+                    rel="noopener"
+                    class="text-xs text-neutral-600 hover:text-amber-400 transition-colors duration-300"
+                  >
+                    View as client
+                  </a>
+                  <a
+                    href={`/portal/admin/proposals/${p.slug}`}
+                    class="text-xs text-neutral-600 hover:text-amber-400 transition-colors duration-300"
+                  >
+                    Manage
+                  </a>
+                  <button
+                    data-delete-proposal={p.slug}
+                    data-proposal-title={p.title}
+                    data-client-name={p.client_name}
+                    class="text-xs text-neutral-600 hover:text-red-400 transition-colors duration-300"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    ) : (
+      <div class="text-center py-16">
+        <p class="font-serif text-xl text-neutral-100 mb-2">No proposals yet</p>
+        <p class="text-sm text-neutral-500">Create your first one.</p>
+      </div>
+    )}
+  </div>
+
+  <script>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    document.querySelectorAll('[data-delete-proposal]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const slug = (btn as HTMLElement).dataset.deleteProposal!;
+        const title = (btn as HTMLElement).dataset.proposalTitle || slug;
+        const clientName = (btn as HTMLElement).dataset.clientName || '';
+
+        const confirmed = await (window as any).__confirm({
+          title: `Delete proposal`,
+          message: `Permanently delete "${title}"${clientName ? ` for ${clientName}` : ''}? This removes the proposal row and any draft/signature state. Cannot be undone.`,
+          confirmLabel: 'Delete proposal',
+          danger: true,
+        });
+        if (!confirmed) return;
+
+        const res = await fetch(`/portal/api/admin/proposals/${encodeURIComponent(slug)}`, {
+          method: 'DELETE',
+          headers: { 'X-CSRF-Token': csrfToken },
+        });
+
+        if (res.ok) {
+          const row = document.querySelector(`[data-proposal-row="${slug}"]`) as HTMLElement | null;
+          if (row) {
+            row.style.opacity = '0';
+            row.style.transform = 'translateY(-8px)';
+            row.style.transition = 'all 0.3s ease';
+            setTimeout(() => row.remove(), 300);
+          }
+        } else {
+          const data = await res.json().catch(() => ({ error: 'Failed to delete' }));
+          (window as any).__toast(data.error || 'Failed to delete proposal', 'error');
+        }
+      });
+    });
+  </script>
+</Portal>

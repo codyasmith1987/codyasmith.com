@@ -16,7 +16,7 @@ const user = Astro.locals.user;
 if (!user) {
   return Astro.redirect('/portal/login');
 }
-const rothFamily = await getClientBySlug('roth-family-companies').catch(() => null);
+const rothFamily = await getClientBySlug('raised-bar-group').catch(() => null);
 const isAuthorized = user.role === 'admin' || (!!rothFamily && user.client_id === rothFamily.id);
 if (!isAuthorized) {
   return Astro.redirect('/portal/dashboard');

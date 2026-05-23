@@ -21,7 +21,7 @@ const currentPath = Astro.url.pathname;
 // see it only if they belong to the proposal's client (Roth Family
 // Companies). Lookup is by slug so the convention can scale to N
 // proposals without code changes.
-const rothFamily = await getClientBySlug('roth-family-companies').catch(() => null);
+const rothFamily = await getClientBySlug('raised-bar-group').catch(() => null);
 const isRothFamilyClient = !!rothFamily && user?.client_id === rothFamily.id;
 const proposalItems = (user?.role === 'admin' || isRothFamilyClient) ? [
   { href: '/portal/proposals/raised-bar', label: 'Raised Bar' },

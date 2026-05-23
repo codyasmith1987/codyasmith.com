@@ -13,8 +13,8 @@ import turso from '../turso';
 import { nanoid } from 'nanoid';
 import type { Migration } from '../migrate';
 
-const CLIENT_SLUG = 'roth-family-companies';
-const CLIENT_NAME = 'Roth Family Companies';
+const CLIENT_SLUG = 'raised-bar-group';
+const CLIENT_NAME = 'Raised Bar Group';
 const SIGNERS = [
   { name: 'Jason Roth', email: 'jasonroth1122@gmail.com' },
   { name: 'Kevin Adams', email: 'kevo.adams@gmail.com' },
@@ -23,7 +23,7 @@ const SIGNERS = [
 const migration: Migration = {
   id: '014-seed-raised-bar',
   async up() {
-    // 1) Resolve or create the Roth Family Companies client.
+    // 1) Resolve or create the Raised Bar Group client.
     let clientId: string;
     const existing = await turso.execute({
       sql: 'SELECT id FROM clients WHERE slug = ?',

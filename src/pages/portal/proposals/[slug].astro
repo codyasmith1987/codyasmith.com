@@ -1,0 +1,1463 @@
+---
+// Generic proposal renderer. Reads the proposal row by slug from the
+// `proposals` table (config TEXT JSON blob), authorizes the calling
+// user (admin or the proposal's matching client), and renders the
+// narrative + interactive steps + signature flow from the config.
+//
+// Server-rendered, never prerendered. Prerendered HTML can be served as
+// static files outside the middleware chain in some adapter modes, which
+// would let an unauthenticated visitor read the proposal directly. Every
+// other /portal/* page in this repo is also prerender=false for the same
+// reason; keep the consistency.
+export const prerender = false;
+
+import turso from '../../../lib/turso';
+
+// Access gate. Authenticated portal users in general can hit /portal/*,
+// but only the proposal's intended client and the practice owner
+// should see the body of any given offer. Anyone else gets bounced to
+// their dashboard.
+const user = Astro.locals.user;
+if (!user) {
+  return Astro.redirect('/portal/login');
+}
+
+const slug = Astro.params.slug || '';
+
+// Load the proposal row. 404 (and a redirect to the dashboard) if the
+// slug doesn't resolve.
+const proposalRow = await (async () => {
+  const result = await turso.execute({
+    sql: `SELECT id, slug, client_id, title, config, status, finalized_at FROM proposals WHERE slug = ?`,
+    args: [slug],
+  });
+  if (result.rows.length === 0) return null;
+  const r = result.rows[0] as any[];
+  let parsed: any = {};
+  try { parsed = JSON.parse(r[4] as string); } catch { parsed = {}; }
+  return {
+    id: r[0] as string,
+    slug: r[1] as string,
+    client_id: r[2] as string,
+    title: r[3] as string,
+    config: parsed,
+    status: r[5] as string,
+    finalized_at: r[6] as string | null,
+  };
+})();
+
+if (!proposalRow) {
+  return new Response('Not found', { status: 404 });
+}
+
+// Auth: admin OR matching client. Anyone else goes back to the dashboard.
+const isAuthorized = user.role === 'admin' || user.client_id === proposalRow.client_id;
+if (!isAuthorized) {
+  return Astro.redirect('/portal/dashboard');
+}
+
+// CSRF token for the interactive accept POST.
+const csrfToken = Astro.locals.csrfToken || '';
+
+// Signer identification by email match against config.signers. Admin
+// can preview but cannot sign; 'other' should never happen given the
+// client-level auth gate above, but the branch keeps the JS resilient.
+const emailLc = (user.email || '').toLowerCase().trim();
+const isAdmin = user.role === 'admin';
+const signers: Array<{ id: string; email: string; name: string }> = Array.isArray(proposalRow.config?.signers) ? proposalRow.config.signers : [];
+const matchedSigner = signers.find(s => (s.email || '').toLowerCase().trim() === emailLc) || null;
+const signerRole = isAdmin
+  ? 'admin'
+  : (matchedSigner ? matchedSigner.id : 'other');
+
+// Config shortcuts.
+const config = proposalRow.config || {};
+const narrative = config.narrative || {};
+const narrativeSections: Array<{ h2: string; paragraphs: string[] }> = Array.isArray(narrative.sections) ? narrative.sections : [];
+const rollout = narrative.rollout || null;
+const steps: any[] = Array.isArray(config.steps) ? config.steps : [];
+
+// Title + meta + prepared-for header text.
+const pageTitle = proposalRow.title || 'Proposal';
+const preparedFor = config.prepared_for || '';
+const preparedOn = config.prepared_on || '';
+
+// JSON blob the inline JS reads to drive interactive state and the
+// API URL. Keeps the renderer config-driven instead of hardcoded
+// to Raised Bar.
+const clientConfig = {
+  slug: proposalRow.slug,
+  finalized_at: proposalRow.finalized_at,
+  signers: signers.map(s => ({ id: s.id, name: s.name })),
+  steps: steps.map(s => ({
+    id: s.id,
+    type: s.type,
+    options: Array.isArray(s.options) ? s.options.map((o: any) => ({ id: o.id })) : [],
+    show_when: s.show_when || null,
+  })),
+  pricing_formula: config.pricing_formula || '',
+};
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+<meta name="csrf-token" content={csrfToken}>
+<title>{pageTitle}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,400,30,0;9..144,500,30,0;9..144,700,50,1;9..144,900,100,1&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=JetBrains+Mono:wght@400;500&display=swap"
+/>
+<style is:inline>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    background: #faf7f2;
+    color: #1a1814;
+    font-family: "Newsreader", "Iowan Old Style", "Charter", Georgia, serif;
+    font-feature-settings: "ss01" on, "onum" on;
+    font-size: 18px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  .container {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 72px 40px 96px;
+  }
+  h1, h2, h3 {
+    font-family: "Fraunces", "Times New Roman", serif;
+    font-weight: 500;
+    color: #1a1814;
+    letter-spacing: -0.018em;
+  }
+  h1 {
+    font-size: 58px;
+    line-height: 1.06;
+    margin-bottom: 24px;
+    font-variation-settings: "opsz" 144, "SOFT" 30, "WONK" 0;
+    letter-spacing: -0.028em;
+  }
+  h2 {
+    font-size: 32px;
+    line-height: 1.22;
+    margin: 64px 0 24px;
+    padding-top: 48px;
+    border-top: 1px solid #d4cdc0;
+    font-variation-settings: "opsz" 96, "SOFT" 30, "WONK" 0;
+  }
+  h2:first-of-type { padding-top: 0; border-top: none; margin-top: 48px; }
+  h3 {
+    font-size: 22px;
+    line-height: 1.3;
+    margin: 28px 0 12px;
+    font-variation-settings: "opsz" 36, "SOFT" 30, "WONK" 0;
+  }
+  p { margin-bottom: 18px; max-width: 68ch; }
+  strong { font-weight: 600; }
+  .portal-back-bar {
+    margin: -32px -40px 32px;
+    padding: 14px 40px;
+    border-bottom: 1px solid #d4cdc0;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .portal-back-bar a {
+    color: #1d2c3a;
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.2s ease;
+  }
+  .portal-back-bar a:hover {
+    border-bottom-color: #1d2c3a;
+  }
+  .meta {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 11px;
+    color: #6b6359;
+    margin-bottom: 36px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .meta span { margin: 0 8px; color: #b8aea0; }
+  .intro {
+    font-size: 19px;
+    line-height: 1.6;
+    color: #1a1814;
+    margin-bottom: 24px;
+  }
+  .tiers {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    margin: 40px 0 8px;
+  }
+  .tier {
+    background: #ffffff;
+    border: 1px solid #d4cdc0;
+    padding: 36px 28px 32px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    cursor: pointer;
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  }
+  .tier:hover {
+    transform: translateY(-3px);
+    border-color: #6b6359;
+  }
+  .tier.recommended {
+    border: 2px solid #1d2c3a;
+    padding: 35px 27px 31px;
+    box-shadow: 0 6px 24px rgba(26, 24, 20, 0.07);
+  }
+  .tier.selected,
+  .tier.recommended.selected {
+    border: 2px solid #1d2c3a;
+    padding: 35px 27px 31px;
+    box-shadow: 0 12px 36px rgba(26, 24, 20, 0.13);
+    transform: translateY(-3px);
+  }
+  .tier.selected::after {
+    content: "Selected";
+    position: absolute;
+    bottom: 14px;
+    right: 14px;
+    background: #1d2c3a;
+    color: #faf7f2;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+  }
+  .addon-prompt {
+    color: #6b6359;
+    font-style: italic;
+    margin-top: 8px;
+  }
+  .step-hidden {
+    display: none !important;
+  }
+  .tiers-hidden {
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.4s ease, max-height 0.4s ease;
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+  .tiers-hidden.revealed {
+    max-height: 3000px;
+    opacity: 1;
+    margin: 40px 0 8px;
+  }
+  .addon-choice {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin: 32px 0 8px;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.4s ease, max-height 0.4s ease;
+  }
+  .addon-choice.revealed {
+    max-height: 2000px;
+    opacity: 1;
+  }
+  .addon-option {
+    background: #ffffff;
+    border: 1px solid #d4cdc0;
+    padding: 32px 28px;
+    cursor: pointer;
+    position: relative;
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    display: flex;
+    flex-direction: column;
+  }
+  .addon-option:hover {
+    transform: translateY(-3px);
+    border-color: #6b6359;
+  }
+  .addon-option.selected {
+    border: 2px solid #1d2c3a;
+    padding: 31px 27px;
+    box-shadow: 0 12px 36px rgba(26, 24, 20, 0.13);
+    transform: translateY(-3px);
+  }
+  .addon-option.selected::after {
+    content: "Selected";
+    position: absolute;
+    bottom: 14px;
+    right: 14px;
+    background: #1d2c3a;
+    color: #faf7f2;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+  }
+  .addon-option h3 {
+    color: #1d2c3a;
+    margin-top: 0;
+    margin-bottom: 12px;
+    font-size: 22px;
+  }
+  .addon-option p {
+    flex: 1;
+    font-size: 15px;
+    margin-bottom: 20px;
+  }
+  .addon-pricing {
+    padding-top: 18px;
+    border-top: 1px solid #e6ddd0;
+  }
+  .addon-price-line {
+    font-family: "Fraunces", "Times New Roman", serif;
+    font-weight: 500;
+    font-variation-settings: "opsz" 36, "SOFT" 30, "WONK" 0;
+    font-size: 22px;
+    color: #1a1814;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+  .addon-price-detail {
+    font-size: 14px;
+    color: #6b6359;
+    margin: 0;
+  }
+  .proposal-form {
+    margin-top: 32px;
+    padding: 36px;
+    background: #ffffff;
+    border: 1px solid #d4cdc0;
+  }
+  .form-summary {
+    padding-bottom: 28px;
+    margin-bottom: 28px;
+    border-bottom: 1px solid #d4cdc0;
+  }
+  .summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 10px 0;
+    gap: 16px;
+  }
+  .summary-row.totals {
+    border-top: 1px dashed #e6ddd0;
+    margin-top: 12px;
+    padding-top: 18px;
+  }
+  .summary-label {
+    font-size: 14px;
+    color: #6b6359;
+  }
+  .summary-value {
+    font-family: "Fraunces", "Times New Roman", serif;
+    font-variation-settings: "opsz" 36, "SOFT" 30, "WONK" 0;
+    font-size: 18px;
+    color: #6b6359;
+    font-style: italic;
+    text-align: right;
+  }
+  .summary-value.selected {
+    color: #1a1814;
+    font-style: normal;
+  }
+  .summary-row.totals .summary-value {
+    font-size: 22px;
+    color: #1a1814;
+    font-style: normal;
+  }
+  .form-fields {
+    display: grid;
+    gap: 18px;
+    margin-bottom: 28px;
+  }
+  .field-group {
+    display: block;
+  }
+  .field-group.field-readonly input {
+    background: #f3eee2;
+    color: #6b6359;
+    border-color: #e6ddd0;
+    cursor: not-allowed;
+  }
+  .field-group.field-signed input {
+    display: none;
+  }
+  .field-label {
+    display: block;
+    font-size: 13px;
+    color: #6b6359;
+    letter-spacing: 0.04em;
+    margin: 0 0 8px;
+  }
+  .field-group input {
+    display: block;
+    width: 100%;
+    padding: 12px 14px;
+    background: #faf7f2;
+    border: 1px solid #d4cdc0;
+    color: #1a1814;
+    font-family: "Newsreader", Georgia, serif;
+    font-size: 17px;
+    transition: border-color 0.18s ease;
+  }
+  .field-group input:focus {
+    outline: none;
+    border-color: #1d2c3a;
+  }
+  .field-status {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: #6b6359;
+    font-style: italic;
+  }
+  .field-status.signed {
+    color: #1d2c3a;
+    font-style: normal;
+    padding: 12px 14px;
+    background: #faf7f2;
+    border: 1px solid #d4cdc0;
+    font-family: "Newsreader", Georgia, serif;
+    font-size: 17px;
+  }
+  .field-status.signed::before {
+    content: "Signed ";
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #6b6359;
+    margin-right: 8px;
+  }
+  .partner-banner {
+    margin: 32px 0;
+    padding: 18px 22px;
+    background: #f1eadd;
+    border-left: 3px solid #c47d5a;
+    color: #1a1814;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .partner-banner p {
+    margin: 0;
+  }
+  .revoke-link {
+    display: inline-block;
+    margin-top: 14px;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #6b6359;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+  .revoke-link:hover {
+    color: #1d2c3a;
+  }
+  .send-button {
+    display: block;
+    width: 100%;
+    padding: 16px 24px;
+    background: #1d2c3a;
+    color: #faf7f2;
+    border: none;
+    font-family: "Newsreader", Georgia, serif;
+    font-size: 17px;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: background 0.18s ease;
+  }
+  .send-button:hover:not(:disabled) {
+    background: #2e445b;
+  }
+  .send-button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+  .form-note {
+    font-size: 14px;
+    color: #6b6359;
+    margin-top: 18px;
+    margin-bottom: 0;
+    font-style: italic;
+  }
+  .success-message {
+    padding: 12px 0;
+  }
+  .success-message h3 {
+    font-size: 26px;
+    margin-bottom: 16px;
+  }
+  .success-note {
+    margin-top: 24px;
+    font-size: 14px;
+    color: #6b6359;
+    font-style: italic;
+  }
+  .pill {
+    position: absolute;
+    top: -13px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1d2c3a;
+    color: #faf7f2;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 5px 14px;
+    font-weight: 500;
+  }
+  .tier h3 {
+    font-size: 30px;
+    margin: 0 0 6px;
+    color: #1d2c3a;
+  }
+  .tagline {
+    font-size: 14px;
+    color: #6b6359;
+    font-style: italic;
+    margin-bottom: 24px;
+    min-height: 36px;
+  }
+  .price-monthly {
+    font-family: "Fraunces", "Times New Roman", serif;
+    font-weight: 500;
+    font-variation-settings: "opsz" 48, "SOFT" 30, "WONK" 0;
+    font-size: 34px;
+    line-height: 1;
+    margin-bottom: 4px;
+    letter-spacing: -0.018em;
+  }
+  .price-monthly .suffix {
+    font-family: "Newsreader", "Iowan Old Style", Georgia, serif;
+    font-weight: 400;
+    font-size: 14px;
+    color: #6b6359;
+    font-style: italic;
+    letter-spacing: 0;
+  }
+  .price-onetime {
+    font-size: 14px;
+    color: #6b6359;
+    margin-bottom: 24px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid #e6ddd0;
+  }
+  .tier ul {
+    list-style: none;
+    padding: 0;
+    font-size: 15px;
+    line-height: 1.55;
+    flex: 1;
+  }
+  .tier ul li {
+    padding: 0 0 14px 16px;
+    position: relative;
+  }
+  .tier ul li:last-child { padding-bottom: 0; }
+  .tier ul li:before {
+    content: "";
+    width: 5px;
+    height: 5px;
+    background: #1d2c3a;
+    border-radius: 50%;
+    position: absolute;
+    left: 0;
+    top: 8px;
+  }
+  .addon {
+    background: #ffffff;
+    border: 1px solid #d4cdc0;
+    padding: 36px 32px;
+    margin: 32px 0 8px;
+  }
+  .addon h3 {
+    margin: 0 0 8px;
+    font-size: 24px;
+    color: #1d2c3a;
+  }
+  .addon-price {
+    font-family: "Newsreader", "Iowan Old Style", Georgia, serif;
+    font-size: 19px;
+    color: #1a1814;
+    margin: 4px 0 24px;
+    font-feature-settings: "onum" on;
+  }
+  .addon p { margin-bottom: 14px; }
+  .addon p:last-child { margin-bottom: 0; }
+  .phase {
+    margin: 20px 0;
+    padding: 24px 28px;
+    background: #ffffff;
+    border-left: 3px solid #1d2c3a;
+  }
+  .phase .phase-num {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #6b6359;
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+  .phase h3 {
+    margin: 0 0 12px;
+    font-size: 22px;
+    color: #1a1814;
+  }
+  .phase p { margin-bottom: 0; }
+  .close {
+    margin-top: 72px;
+    padding-top: 48px;
+    border-top: 2px solid #1a1814;
+  }
+  .close h2 {
+    padding-top: 0;
+    border-top: none;
+    margin-top: 0;
+  }
+  .signature-block {
+    margin-top: 32px;
+    padding: 36px 36px 28px;
+    background: #ffffff;
+    border: 1px solid #d4cdc0;
+  }
+  .sig-row {
+    display: flex;
+    align-items: baseline;
+    gap: 20px;
+    margin-bottom: 24px;
+  }
+  .sig-row:last-child { margin-bottom: 0; }
+  .sig-row label {
+    width: 160px;
+    font-size: 14px;
+    color: #6b6359;
+    flex-shrink: 0;
+  }
+  .sig-row .field {
+    flex: 1;
+    border-bottom: 1px solid #1a1814;
+    height: 28px;
+    min-width: 0;
+  }
+  .sig-instructions {
+    margin-top: 24px;
+    font-size: 14px;
+    color: #6b6359;
+    font-style: italic;
+  }
+  footer {
+    margin-top: 72px;
+    padding-top: 32px;
+    border-top: 1px solid #d4cdc0;
+    font-size: 14px;
+    color: #6b6359;
+  }
+  footer a { color: #1d2c3a; text-decoration: none; border-bottom: 1px solid #d4cdc0; }
+  @media print {
+    body { background: #ffffff; font-size: 12pt; }
+    .container { padding: 0; max-width: none; }
+    h1 { font-size: 36pt; }
+    h2 { font-size: 20pt; margin-top: 32px; padding-top: 24px; }
+    h3 { font-size: 14pt; }
+    .tier, .phase, .addon, .signature-block { page-break-inside: avoid; box-shadow: none; }
+    h1, h2, h3 { page-break-after: avoid; }
+  }
+  @media (max-width: 720px) {
+    .container { padding: 40px 22px 56px; }
+    h1 { font-size: 42px; }
+    h2 { font-size: 26px; margin: 48px 0 18px; padding-top: 36px; }
+    .tiers { grid-template-columns: 1fr; gap: 32px; }
+    .tier.recommended { padding: 35px 27px 31px; }
+    .addon-choice { grid-template-columns: 1fr; gap: 24px; }
+    .proposal-form { padding: 28px 22px; }
+    .summary-row { gap: 12px; }
+    p { max-width: none; }
+  }
+</style>
+</head>
+<body data-signer-role={signerRole}>
+<div class="container">
+
+<div class="portal-back-bar">
+  <a href="/portal/dashboard">&larr; Back to portal</a>
+</div>
+
+<div class="meta">Engagement Proposal<span>&middot;</span>Cody A Smith LLC{preparedOn ? <><span>&middot;</span>{preparedOn}</> : null}</div>
+
+{/* H1 is a friendly first-name greeting. Derived from signer names so
+    "Jason Roth" + "Kevin Adams" renders as "Jason and Kevin,". Falls
+    back to the prepared_for string (full names) when signers can't be
+    resolved, then to the title as a last resort. */}
+{(() => {
+  const firstNames = signers.map(s => (s.name || '').split(' ')[0]).filter(Boolean);
+  let heading: string;
+  if (firstNames.length === 2) heading = `${firstNames[0]} and ${firstNames[1]},`;
+  else if (firstNames.length === 1) heading = `${firstNames[0]},`;
+  else if (firstNames.length > 2) heading = firstNames.slice(0, -1).join(', ') + ', and ' + firstNames[firstNames.length - 1] + ',';
+  else heading = preparedFor ? preparedFor + ',' : pageTitle;
+  return <h1>{heading}</h1>;
+})()}
+
+{narrative.intro && <p class="intro" set:html={narrative.intro} />}
+
+{narrativeSections.map((section, sectionIdx) => (
+  <>
+    {section.h2 && <h2>{section.h2}</h2>}
+    {Array.isArray(section.paragraphs) && section.paragraphs.map(p => <p set:html={p} />)}
+    {sectionIdx === 1 && (
+      <div id="partner-banner" class="partner-banner step-hidden">
+        <p id="partner-banner-text"></p>
+      </div>
+    )}
+  </>
+))}
+
+{steps.map(step => (
+  <>
+    {step.h2 && (
+      step.type === 'tier_picker' && step.show_when
+        ? <h2 id={`step-h2-${step.id}`} class="step-hidden">{step.h2}</h2>
+        : <h2 id={`step-h2-${step.id}`}>{step.h2}</h2>
+    )}
+    {step.prompt && (() => {
+      // Steps that gate on a previous step (depends_on or show_when)
+      // render their prompt as a "Pick X above" placeholder using the
+      // italic .addon-prompt style. Top-level steps (no gate) render
+      // it as the regular body paragraph that introduces the cards.
+      const isGated = !!(step.depends_on || step.show_when);
+      const hiddenInitially = step.type === 'tier_picker' && step.show_when;
+      const cls = isGated
+        ? (hiddenInitially ? 'addon-prompt step-hidden' : 'addon-prompt')
+        : '';
+      return <p id={`step-prompt-${step.id}`} class={cls}>{step.prompt}</p>;
+    })()}
+    {step.type === 'tier_picker' && (
+      <div class={`tiers${step.show_when ? ' tiers-hidden' : ''}`} id={`step-tiers-${step.id}`} data-step-id={step.id}>
+        {Array.isArray(step.options) && step.options.map((opt: any) => (
+          <div class={`tier${opt.recommended ? ' recommended' : ''}`} data-step-id={step.id} data-option-id={opt.id}>
+            {opt.recommended && <div class="pill">Recommended</div>}
+            <h3>{opt.name}</h3>
+            {opt.tagline && <div class="tagline">{opt.tagline}</div>}
+            {opt.price_label && (
+              <div class="price-monthly" set:html={opt.price_label + (opt.price_suffix ? `<span class="suffix"> ${opt.price_suffix}</span>` : '')} />
+            )}
+            {opt.price_subline && <div class="price-onetime">{opt.price_subline}</div>}
+            {Array.isArray(opt.features) && (
+              <ul>
+                {opt.features.map((f: string) => <li>{f}</li>)}
+              </ul>
+            )}
+          </div>
+        ))}
+      </div>
+    )}
+    {step.type === 'binary_picker' && (
+      <div class="addon-choice" id={`step-choice-${step.id}`} data-step-id={step.id}>
+        {Array.isArray(step.options) && step.options.map((opt: any) => (
+          <div class="addon-option" data-step-id={step.id} data-option-id={opt.id}>
+            <h3>{opt.name}</h3>
+            {opt.html && <p set:html={opt.html} />}
+            <div class="addon-pricing">
+              {opt.price_dynamic
+                ? <p class="addon-price-line"><span class={`dyn-price dyn-price-${step.id}-${opt.id}`}>&mdash;</span> / month</p>
+                : opt.price_label
+                  ? <p class="addon-price-line">{opt.price_label}</p>
+                  : null
+              }
+              {opt.price_detail_html && <p class="addon-price-detail" set:html={opt.price_detail_html} />}
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+  </>
+))}
+
+{rollout && (
+  <>
+    {rollout.h2 && <h2>{rollout.h2}</h2>}
+    {rollout.intro_html && <p set:html={rollout.intro_html} />}
+    {Array.isArray(rollout.phases) && rollout.phases.map((ph: any) => (
+      <div class="phase">
+        {ph.phase_num && <div class="phase-num">{ph.phase_num}</div>}
+        {ph.h3 && <h3>{ph.h3}</h3>}
+        {ph.html && <p set:html={ph.html} />}
+      </div>
+    ))}
+    {rollout.outro_html && <p set:html={rollout.outro_html} />}
+  </>
+)}
+
+<div class="close">
+
+<h2>Sign and send</h2>
+
+<p>This acceptance starts the work. I send the first invoice and begin Marketing Consulting research the same day you send this in. Formal contracts follow within the week with the full legal terms. This send is enough to get us moving.</p>
+
+<div class="proposal-form" id="proposal-form-container">
+  <div class="form-summary">
+    {steps
+      // A step that is gated by a show_when on another step (e.g.,
+      // consulting_tier shown only when consulting='yes') is folded
+      // into its host step's summary row by the JS, so we skip
+      // rendering a separate row for it here. Keeps the visible
+      // summary stable at one row per top-level decision.
+      .filter(step => !step.show_when)
+      .map(step => (
+        <div class="summary-row" data-summary-step={step.id}>
+          <span class="summary-label">{step.id === 'mgmt_tier' ? 'Web Management level' : step.id === 'site_setup' ? 'Site setup' : step.id === 'consulting' ? 'Marketing Consulting' : (step.h2 || step.id)}</span>
+          <span class="summary-value" id={`summary-${step.id}`}>Pick above</span>
+        </div>
+      ))}
+    <div class="summary-row totals">
+      <span class="summary-label">One-time at signing</span>
+      <span class="summary-value" id="summary-onetime">&mdash;</span>
+    </div>
+    <div class="summary-row totals">
+      <span class="summary-label">Monthly recurring</span>
+      <span class="summary-value" id="summary-monthly">&mdash;</span>
+    </div>
+  </div>
+
+  <div class="form-fields">
+    {signers.map(s => (
+      <div class="field-group" data-signer-block={s.id}>
+        <p class="field-label">{s.name}, signing as</p>
+        <input type="text" id={`signer-name-${s.id}`} autocomplete="off" placeholder="Type your full name" />
+        <p class="field-status" id={`signer-status-${s.id}`}></p>
+      </div>
+    ))}
+  </div>
+
+  <button id="send-proposal" type="button" class="send-button" disabled>
+    Save my signature
+  </button>
+
+  <button id="revoke-signature" type="button" class="revoke-link step-hidden">
+    Revoke my signature
+  </button>
+
+  <p class="form-note" id="form-note">
+    Walk through the steps above, then type your name. The page saves automatically as you go, so your partner can log in later and find your selections already in place.
+  </p>
+</div>
+
+</div>
+
+<footer>
+Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmith.com</a>. <a href="https://codyasmith.com">codyasmith.com</a>. {preparedFor && preparedOn ? `Prepared ${preparedOn} for ${preparedFor}.` : preparedFor ? `Prepared for ${preparedFor}.` : ''}
+</footer>
+
+</div>
+
+<script id="proposal-client-config" type="application/json" set:html={JSON.stringify(clientConfig)}></script>
+<script is:inline>
+(function() {
+  // Config + steps + signers come from the JSON blob the server
+  // embedded in the script tag above. The client doesn't know about
+  // the pricing math directly; it sends selections to the server and
+  // reads totals back from the GET draft response. The page-side
+  // pricing preview math below is a SIMPLIFICATION that mirrors the
+  // server's raised_bar_v1 formula so the user sees totals update
+  // optimistically without a round trip on every click. For any other
+  // formula the totals fall back to em-dash placeholders until POST
+  // returns.
+  var configEl = document.getElementById('proposal-client-config');
+  var config = {};
+  try { config = configEl ? JSON.parse(configEl.textContent || '{}') : {}; } catch (e) { config = {}; }
+  var SLUG = config.slug || '';
+  var STEPS = Array.isArray(config.steps) ? config.steps : [];
+  var SIGNERS = Array.isArray(config.signers) ? config.signers : [];
+  var SIGNER_ROLE = document.body.getAttribute('data-signer-role') || 'other';
+  var PRICING_FORMULA = config.pricing_formula || '';
+  var DRAFT_URL = '/portal/api/proposals/' + encodeURIComponent(SLUG) + '/accept';
+
+  // Raised Bar pricing constants for the optimistic monthly/one-time
+  // preview. Server is the source of truth; this just keeps the totals
+  // line responsive between clicks and the POST response.
+  var RB_MGMT_TIERS = {
+    good:   { name: 'Good',   base: 297,  onb: 800 },
+    better: { name: 'Better', base: 497,  onb: 800 },
+    best:   { name: 'Best',   base: 647,  onb: 1000 }
+  };
+  var RB_CONSULTING_TIERS = {
+    good:   { name: 'Good',   monthly: 497,  audit: 1500 },
+    better: { name: 'Better', monthly: 997,  audit: 2500 },
+    best:   { name: 'Best',   monthly: 1497, audit: 4000 }
+  };
+  var RB_BUILD_BUILDERS = 5625;
+  var RB_BUILD_TAILWATER = 4500;
+  var RB_F3_ONBOARDING = 800;
+
+  // State: a flat selections map keyed by step id + a signatures map
+  // keyed by signer id, mirroring the server-side draft shape.
+  var state = {
+    selections: {},     // { mgmt_tier: 'better', site_setup: 'o1', ... }
+    signatures: {},     // { jason: { signature: '...', signed_at: '...' }, ... }
+    finalizedAt: null
+  };
+
+  function money(n) {
+    return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function moneyInt(n) {
+    return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  }
+
+  function rbMgmtMonthly(tier, option) {
+    if (!tier || !RB_MGMT_TIERS[tier]) return 0;
+    var base = RB_MGMT_TIERS[tier].base;
+    var sites = option === 'o2' ? 3 : 2;
+    return base + (sites - 1) * base * 0.80;
+  }
+  function rbMultiSiteExtraOnb(tier, option) {
+    if (option !== 'o2') return 0;
+    if (!RB_MGMT_TIERS[tier]) return 0;
+    return RB_MGMT_TIERS[tier].onb * 0.25;
+  }
+  function rbOneTimeTotal() {
+    var t = state.selections.mgmt_tier;
+    var opt = state.selections.site_setup;
+    if (!t || !RB_MGMT_TIERS[t] || !opt) return 0;
+    var total = RB_BUILD_BUILDERS + RB_MGMT_TIERS[t].onb + RB_F3_ONBOARDING;
+    if (opt === 'o2') total += RB_BUILD_TAILWATER + rbMultiSiteExtraOnb(t, opt);
+    if (state.selections.consulting === 'yes' && state.selections.consulting_tier && RB_CONSULTING_TIERS[state.selections.consulting_tier]) {
+      total += RB_CONSULTING_TIERS[state.selections.consulting_tier].audit;
+    }
+    return total;
+  }
+  function rbMonthlyTotal() {
+    var t = state.selections.mgmt_tier;
+    var opt = state.selections.site_setup;
+    var m = rbMgmtMonthly(t, opt);
+    if (state.selections.consulting === 'yes' && state.selections.consulting_tier && RB_CONSULTING_TIERS[state.selections.consulting_tier]) {
+      m += RB_CONSULTING_TIERS[state.selections.consulting_tier].monthly;
+    }
+    return m;
+  }
+
+  // Selection completion check: walks STEPS and verifies each
+  // unconditional step has a value AND each conditional step matched
+  // by show_when also has a value. Mirrors the server check.
+  function selectionsComplete() {
+    for (var i = 0; i < STEPS.length; i++) {
+      var step = STEPS[i];
+      if (step.show_when) {
+        var whenKey = Object.keys(step.show_when)[0];
+        var whenVal = step.show_when[whenKey];
+        if (state.selections[whenKey] !== whenVal) continue;
+      }
+      if (!state.selections[step.id]) return false;
+    }
+    return true;
+  }
+
+  function getCsrf() {
+    var el = document.querySelector('meta[name="csrf-token"]');
+    return el ? (el.getAttribute('content') || '') : '';
+  }
+
+  function saveDraft(payload) {
+    // Admin previews never POST.
+    var validSigner = false;
+    for (var i = 0; i < SIGNERS.length; i++) {
+      if (SIGNERS[i].id === SIGNER_ROLE) { validSigner = true; break; }
+    }
+    if (!validSigner) return Promise.resolve({ ok: true, data: { draft: null } });
+    return fetch(DRAFT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
+      body: JSON.stringify(payload || {}),
+    }).then(function(res) {
+      return res.json().then(function(data) { return { ok: res.ok, data: data }; });
+    });
+  }
+
+  function loadDraft() {
+    return fetch(DRAFT_URL, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+    }).then(function(res) {
+      return res.json().then(function(data) { return { ok: res.ok, data: data }; });
+    });
+  }
+
+  function applyDraftToState(draft) {
+    if (!draft) return;
+    state.selections = draft.selections || {};
+    state.signatures = draft.signatures || {};
+    state.finalizedAt = draft.finalized_at || null;
+    // Legacy-shape backfill: the server returns generic selections,
+    // but in case any nullable field is missing, fall back to the
+    // flat alias the server also emits.
+    if (state.selections.mgmt_tier == null && draft.mgmt_tier) state.selections.mgmt_tier = draft.mgmt_tier;
+    if (state.selections.site_setup == null && draft.option) state.selections.site_setup = draft.option;
+    if (state.selections.consulting == null && draft.consulting) state.selections.consulting = draft.consulting;
+    if (state.selections.consulting_tier == null && draft.consulting_tier) state.selections.consulting_tier = draft.consulting_tier;
+  }
+
+  function setSummary(id, text, isSelected) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    el.classList.toggle('selected', !!isSelected);
+  }
+
+  // Resolve a human-readable summary string for a step's current
+  // selection. Reads the option labels off the rendered cards so we
+  // don't duplicate the config in JS.
+  function summaryTextForStep(stepId) {
+    var val = state.selections[stepId];
+    if (!val) return 'Pick above';
+    var step = null;
+    for (var i = 0; i < STEPS.length; i++) { if (STEPS[i].id === stepId) { step = STEPS[i]; break; } }
+    if (!step) return val;
+    // The rendered card carries the option name in its h3.
+    var card = document.querySelector('[data-step-id="' + stepId + '"][data-option-id="' + val + '"]');
+    if (!card) return val;
+    var h3 = card.querySelector('h3');
+    return h3 ? h3.textContent : val;
+  }
+
+  function update() {
+    // Highlight selected cards across all steps.
+    for (var i = 0; i < STEPS.length; i++) {
+      var step = STEPS[i];
+      var cards = document.querySelectorAll('[data-step-id="' + step.id + '"][data-option-id]');
+      for (var j = 0; j < cards.length; j++) {
+        var card = cards[j];
+        var oid = card.getAttribute('data-option-id');
+        if (step.type === 'tier_picker') {
+          card.classList.toggle('selected', oid === state.selections[step.id]);
+        } else if (step.type === 'binary_picker') {
+          card.classList.toggle('selected', oid === state.selections[step.id]);
+        }
+      }
+    }
+
+    // Reveal-on-prereq: each step beyond the first reveals when its
+    // depends_on step has a value. Steps with show_when only show
+    // when the conditional check holds.
+    for (var k = 0; k < STEPS.length; k++) {
+      var st = STEPS[k];
+      var dep = st.depends_on || null;
+      var conditional = st.show_when || null;
+      var shouldShow = true;
+      if (dep && !state.selections[dep]) shouldShow = false;
+      if (conditional) {
+        var whenKey = Object.keys(conditional)[0];
+        var whenVal = conditional[whenKey];
+        if (state.selections[whenKey] !== whenVal) shouldShow = false;
+        // If the conditional turned off, also clear the step's value
+        // so the draft stays consistent. (e.g., switching consulting
+        // to 'no' clears consulting_tier.)
+        if (state.selections[whenKey] !== whenVal && state.selections[st.id]) {
+          state.selections[st.id] = null;
+        }
+      }
+      var h2El = document.getElementById('step-h2-' + st.id);
+      var promptEl = document.getElementById('step-prompt-' + st.id);
+      var tiersEl = document.getElementById('step-tiers-' + st.id);
+      var choiceEl = document.getElementById('step-choice-' + st.id);
+      if (st.type === 'tier_picker' && tiersEl) {
+        if (shouldShow) tiersEl.classList.add('revealed');
+        else tiersEl.classList.remove('revealed');
+      }
+      if (st.type === 'binary_picker' && choiceEl) {
+        if (shouldShow) choiceEl.classList.add('revealed');
+        else choiceEl.classList.remove('revealed');
+      }
+      // Show/hide h2 + prompt for conditional steps. Steps without
+      // show_when always render their h2; their prompt is only hidden
+      // when the step is revealed (it served as a 'pick X above'
+      // placeholder).
+      if (conditional && h2El) {
+        if (shouldShow) h2El.classList.remove('step-hidden');
+        else h2El.classList.add('step-hidden');
+      }
+      // Prompt visibility. Only the gated steps (depends_on or
+      // show_when) treat the prompt as a "Pick X above" placeholder
+      // that hides on demand; top-level steps render their prompt as
+      // body copy that always shows.
+      var isGated = !!(dep || conditional);
+      if (promptEl && isGated) {
+        if (conditional) {
+          // show_when step: prompt shows only when conditional is
+          // satisfied AND the step itself isn't picked yet.
+          if (shouldShow) promptEl.classList.remove('step-hidden');
+          else promptEl.classList.add('step-hidden');
+          promptEl.style.display = (shouldShow && !state.selections[st.id]) ? '' : 'none';
+        } else if (dep) {
+          // depends_on step: prompt shows only when the prereq isn't
+          // satisfied yet (it's the placeholder telling the user to
+          // pick the previous step first).
+          promptEl.style.display = state.selections[dep] ? 'none' : '';
+        }
+      }
+    }
+
+    // Dynamic price strings on tier-keyed options (raised_bar_v1 only
+    // for now). The site_setup options carry a price_dynamic key
+    // that resolves to mgmtMonthly:o1 or :o2; both are recomputed
+    // here so the displayed monthly stays in sync with the mgmt tier.
+    if (PRICING_FORMULA === 'raised_bar_v1') {
+      var t = state.selections.mgmt_tier;
+      var o1Card = document.querySelector('.dyn-price-site_setup-o1');
+      var o2Card = document.querySelector('.dyn-price-site_setup-o2');
+      if (o1Card) o1Card.textContent = t ? money(rbMgmtMonthly(t, 'o1')) : '—';
+      if (o2Card) o2Card.textContent = t ? money(rbMgmtMonthly(t, 'o2')) : '—';
+      // Spans embedded in price_detail_html (dyn-mgmt-onb, dyn-multi-onb)
+      var mgmtOnbSpans = document.querySelectorAll('.dyn-mgmt-onb');
+      var multiOnbSpans = document.querySelectorAll('.dyn-multi-onb');
+      for (var di = 0; di < mgmtOnbSpans.length; di++) {
+        mgmtOnbSpans[di].textContent = t ? moneyInt(RB_MGMT_TIERS[t].onb) : '$—';
+      }
+      for (var dj = 0; dj < multiOnbSpans.length; dj++) {
+        multiOnbSpans[dj].textContent = t ? moneyInt(rbMultiSiteExtraOnb(t, 'o2')) : '$—';
+      }
+    }
+
+    // Form summary rows. One row per top-level step (steps gated by
+    // show_when are folded into their host step's row, matching the
+    // legacy layout). For the Raised Bar config that means
+    // consulting_tier's value is appended to the consulting row's
+    // display text rather than getting its own row.
+    for (var si = 0; si < STEPS.length; si++) {
+      var s = STEPS[si];
+      if (s.show_when) continue; // folded into the host step row
+      var rowEl = document.querySelector('[data-summary-step="' + s.id + '"]');
+      if (!rowEl) continue;
+      var labelText = summaryTextForStep(s.id);
+      var sel = !!state.selections[s.id];
+      // Special-case the site_setup row to keep parity with the
+      // legacy label: o2 shows "Option 2: Split setup (with micro-site)"
+      // in the summary even though the card heading itself reads
+      // "Option 2: Split setup".
+      if (s.id === 'site_setup') {
+        if (state.selections.site_setup === 'o2') { labelText = 'Option 2: Split setup (with micro-site)'; sel = true; }
+      }
+      // Special-case: consulting (yes/no) row combines its own value
+      // with the consulting_tier value when consulting === 'yes'.
+      // 'Skipped' when no; 'Yes, <tier>' when yes + tier picked;
+      // 'Yes, pick a level above' when yes + no tier yet.
+      if (s.id === 'consulting') {
+        if (state.selections.consulting === 'no') { labelText = 'Skipped'; sel = true; }
+        else if (state.selections.consulting === 'yes' && state.selections.consulting_tier) {
+          labelText = 'Yes, ' + summaryTextForStep('consulting_tier');
+          sel = true;
+        }
+        else if (state.selections.consulting === 'yes') {
+          labelText = 'Yes, pick a level above';
+          sel = false;
+        }
+      }
+      setSummary('summary-' + s.id, labelText, sel);
+    }
+
+    // Totals (raised_bar_v1 only — others fall back to em dash until POST).
+    if (PRICING_FORMULA === 'raised_bar_v1' && selectionsComplete()) {
+      setSummary('summary-onetime', moneyInt(rbOneTimeTotal()), true);
+      setSummary('summary-monthly', money(rbMonthlyTotal()) + ' / month', true);
+    } else {
+      setSummary('summary-onetime', '—', false);
+      setSummary('summary-monthly', '—', false);
+    }
+
+    // Signer blocks: each gets its own read-only / editable / signed state.
+    for (var k1 = 0; k1 < SIGNERS.length; k1++) {
+      (function(signer) {
+        var block = document.querySelector('[data-signer-block="' + signer.id + '"]');
+        var input = document.getElementById('signer-name-' + signer.id);
+        var status = document.getElementById('signer-status-' + signer.id);
+        if (!block || !input || !status) return;
+        var sigRow = state.signatures[signer.id];
+        var sig = sigRow ? sigRow.signature : null;
+        if (sig) {
+          block.classList.add('field-signed');
+          block.classList.remove('field-readonly');
+          status.classList.add('signed');
+          status.textContent = sig;
+        } else {
+          status.classList.remove('signed');
+          if (SIGNER_ROLE === signer.id) {
+            block.classList.remove('field-readonly');
+            input.disabled = false;
+            status.textContent = '';
+          } else if (SIGNER_ROLE === 'admin') {
+            block.classList.add('field-readonly');
+            input.disabled = true;
+            status.textContent = 'Awaiting ' + (signer.name.split(' ')[0]) + '. (Admin preview)';
+          } else {
+            block.classList.add('field-readonly');
+            input.disabled = true;
+            input.placeholder = '(awaiting)';
+            status.textContent = 'Awaiting ' + signer.name + '.';
+          }
+        }
+      })(SIGNERS[k1]);
+    }
+
+    // Send + revoke button states.
+    var sendBtn = document.getElementById('send-proposal');
+    var revokeBtn = document.getElementById('revoke-signature');
+    var formNote = document.getElementById('form-note');
+    if (sendBtn) {
+      if (state.finalizedAt) {
+        sendBtn.disabled = true;
+        sendBtn.textContent = 'Engagement accepted';
+        if (revokeBtn) revokeBtn.classList.add('step-hidden');
+      } else if (SIGNER_ROLE === 'admin') {
+        sendBtn.disabled = true;
+        sendBtn.textContent = 'Admin preview — submit disabled';
+        if (formNote) formNote.textContent = 'Admin preview. The proposal must be signed by an authorized signer.';
+        if (revokeBtn) revokeBtn.classList.add('step-hidden');
+      } else {
+        // Check the current user is actually a configured signer.
+        var meSigner = null;
+        for (var aa = 0; aa < SIGNERS.length; aa++) { if (SIGNERS[aa].id === SIGNER_ROLE) { meSigner = SIGNERS[aa]; break; } }
+        if (!meSigner) {
+          sendBtn.disabled = true;
+          sendBtn.textContent = 'Signing not available for this user';
+          if (revokeBtn) revokeBtn.classList.add('step-hidden');
+        } else {
+          var myInput = document.getElementById('signer-name-' + meSigner.id);
+          var mySig = state.signatures[meSigner.id] ? state.signatures[meSigner.id].signature : null;
+          // Other signer's signature, if any.
+          var otherSig = null;
+          for (var bb = 0; bb < SIGNERS.length; bb++) {
+            if (SIGNERS[bb].id !== meSigner.id && state.signatures[SIGNERS[bb].id]) {
+              otherSig = state.signatures[SIGNERS[bb].id].signature;
+              break;
+            }
+          }
+          var myName = myInput ? myInput.value.trim() : '';
+          if (mySig) {
+            sendBtn.disabled = true;
+            sendBtn.textContent = 'You signed. Waiting on the other.';
+            if (formNote) formNote.textContent = 'Your signature is in. The other person will see your selections when they log in and can countersign. If you want to change anything, revoke your signature first.';
+            if (revokeBtn) revokeBtn.classList.remove('step-hidden');
+          } else {
+            sendBtn.disabled = !(selectionsComplete() && myName);
+            if (otherSig) {
+              sendBtn.textContent = 'Countersign and accept';
+              if (formNote) formNote.textContent = 'The other person already signed. You can change any selection before countersigning — they will get an email about the change. Type your name and click countersign to accept and finalize.';
+            } else {
+              sendBtn.textContent = 'Save my signature';
+              if (formNote) formNote.textContent = 'Your selections save as you go. Type your name and click to save your signature; the other person will get an email asking them to log in and countersign.';
+            }
+            if (revokeBtn) revokeBtn.classList.add('step-hidden');
+          }
+        }
+      }
+    }
+
+    // Partner banner — shown when a real signer logs in and sees
+    // activity from the other side they haven't yet seen.
+    var banner = document.getElementById('partner-banner');
+    var bannerText = document.getElementById('partner-banner-text');
+    if (banner && bannerText) {
+      var meSigner2 = null;
+      for (var cc = 0; cc < SIGNERS.length; cc++) { if (SIGNERS[cc].id === SIGNER_ROLE) { meSigner2 = SIGNERS[cc]; break; } }
+      var otherSigner = null;
+      if (meSigner2) {
+        for (var dd = 0; dd < SIGNERS.length; dd++) { if (SIGNERS[dd].id !== meSigner2.id) { otherSigner = SIGNERS[dd]; break; } }
+      }
+      var otherSigBan = (otherSigner && state.signatures[otherSigner.id]) ? state.signatures[otherSigner.id].signature : null;
+      var anySelections = false;
+      for (var ee in state.selections) { if (state.selections[ee]) { anySelections = true; break; } }
+      var otherFirst = otherSigner ? (otherSigner.name.split(' ')[0]) : null;
+      if (state.finalizedAt) {
+        banner.classList.add('step-hidden');
+      } else if (otherSigBan && otherFirst) {
+        banner.classList.remove('step-hidden');
+        bannerText.textContent = otherFirst + ' has signed under the selections below. Review them and countersign at the bottom of the page. Change any selection if you want different terms — ' + otherFirst + ' will get an email about the change.';
+      } else if (anySelections && otherFirst && meSigner2) {
+        banner.classList.remove('step-hidden');
+        bannerText.textContent = otherFirst + ' started picking and has not signed yet. The selections below are what they picked so far. Continue where they left off or change anything.';
+      } else {
+        banner.classList.add('step-hidden');
+      }
+    }
+  }
+
+  function scrollTo(id) {
+    var target = document.getElementById(id);
+    if (target) setTimeout(function() { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 140);
+  }
+
+  function persistSelections() {
+    // Only real signers POST; admin and other roles just render.
+    var isReal = false;
+    for (var i = 0; i < SIGNERS.length; i++) { if (SIGNERS[i].id === SIGNER_ROLE) { isReal = true; break; } }
+    if (!isReal) return;
+    // Send the full selections object. The server merges, validates,
+    // and re-emits authoritative draft state on the response.
+    saveDraft({ selections: state.selections }).catch(function() { /* silent — UI is optimistic */ });
+  }
+
+  // Wire up step cards. One click handler per option-id; each click
+  // sets the selection, re-renders, persists, and scrolls to the next
+  // unanswered step (where possible). var loop + IIFE pattern keeps
+  // each handler closure bound to its own card without leaning on
+  // template literals inside the IIFE (which esbuild's inline-script
+  // path has historically tripped on).
+  var allCards = document.querySelectorAll('[data-step-id][data-option-id]');
+  for (var ai = 0; ai < allCards.length; ai++) {
+    (function(card) {
+      card.addEventListener('click', function() {
+        if (state.finalizedAt) return;
+        var stepId = card.getAttribute('data-step-id');
+        var optId = card.getAttribute('data-option-id');
+        if (!stepId || !optId) return;
+        state.selections[stepId] = optId;
+        // Switching consulting to 'no' clears the dependent tier so
+        // the UI doesn't show a stale 'Yes, <tier>' summary.
+        if (stepId === 'consulting' && optId === 'no') {
+          state.selections.consulting_tier = null;
+        }
+        update();
+        persistSelections();
+        // Scroll to the next not-yet-answered visible step.
+        for (var ni = 0; ni < STEPS.length; ni++) {
+          var nstep = STEPS[ni];
+          if (nstep.id === stepId) continue;
+          if (state.selections[nstep.id]) continue;
+          if (nstep.show_when) {
+            var wk = Object.keys(nstep.show_when)[0];
+            var wv = nstep.show_when[wk];
+            if (state.selections[wk] !== wv) continue;
+          }
+          var targetId = nstep.type === 'tier_picker' ? 'step-tiers-' + nstep.id : 'step-choice-' + nstep.id;
+          scrollTo(targetId);
+          return;
+        }
+        // All steps answered — scroll to the form.
+        scrollTo('proposal-form-container');
+      });
+    })(allCards[ai]);
+  }
+
+  // Wire up name inputs.
+  for (var ii = 0; ii < SIGNERS.length; ii++) {
+    var el = document.getElementById('signer-name-' + SIGNERS[ii].id);
+    if (el) el.addEventListener('input', update);
+  }
+
+  // Wire up send.
+  var sendBtn = document.getElementById('send-proposal');
+  if (sendBtn) {
+    sendBtn.addEventListener('click', function() {
+      var meSigner = null;
+      for (var i = 0; i < SIGNERS.length; i++) { if (SIGNERS[i].id === SIGNER_ROLE) { meSigner = SIGNERS[i]; break; } }
+      if (!meSigner) return;
+      var myInput = document.getElementById('signer-name-' + meSigner.id);
+      var signature = myInput ? myInput.value.trim() : '';
+      if (!signature) return;
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Saving...';
+      saveDraft({
+        selections: state.selections,
+        signature: signature
+      }).then(function(result) {
+        if (!result.ok) {
+          var msg = (result.data && result.data.error) || 'Save failed. Email cody@codyasmith.com directly if this keeps happening.';
+          alert(msg);
+          update();
+          return;
+        }
+        if (result.data && result.data.draft) {
+          applyDraftToState(result.data.draft);
+          if (result.data.status === 'finalized') state.finalizedAt = state.finalizedAt || new Date().toISOString();
+        }
+        if (result.data && result.data.status === 'finalized') {
+          var container = document.getElementById('proposal-form-container');
+          var emails = (result.data && result.data.confirmation_emails) || 'you both and Cody';
+          container.innerHTML =
+            '<div class="success-message">' +
+              '<h3>Engagement accepted.</h3>' +
+              '<p>Both signatures are in. Cody will send the formal contracts and the first invoice in the next few days. Reach him at <a href="mailto:cody@codyasmith.com">cody@codyasmith.com</a> or call or text any time with questions.</p>' +
+              '<p class="success-note">Confirmation sent to ' + emails + '.</p>' +
+            '</div>';
+          window.scrollTo({ top: container.offsetTop - 32, behavior: 'smooth' });
+        } else {
+          update();
+        }
+      }).catch(function() {
+        alert('Connection error. Try again or email cody@codyasmith.com.');
+        update();
+      });
+    });
+  }
+
+  // Wire up revoke.
+  var revokeBtn = document.getElementById('revoke-signature');
+  if (revokeBtn) {
+    revokeBtn.addEventListener('click', function() {
+      var meSigner = null;
+      for (var i = 0; i < SIGNERS.length; i++) { if (SIGNERS[i].id === SIGNER_ROLE) { meSigner = SIGNERS[i]; break; } }
+      if (!meSigner) return;
+      if (!confirm('Revoke your signature on this proposal? The other person will get an email about this. You can re-sign after.')) return;
+      revokeBtn.disabled = true;
+      revokeBtn.textContent = 'Revoking...';
+      saveDraft({ revoke: true }).then(function(result) {
+        if (!result.ok) {
+          alert((result.data && result.data.error) || 'Revoke failed.');
+          revokeBtn.disabled = false;
+          revokeBtn.textContent = 'Revoke my signature';
+          return;
+        }
+        if (result.data && result.data.draft) applyDraftToState(result.data.draft);
+        revokeBtn.disabled = false;
+        revokeBtn.textContent = 'Revoke my signature';
+        update();
+      }).catch(function() {
+        alert('Connection error. Try again or email cody@codyasmith.com.');
+        revokeBtn.disabled = false;
+        revokeBtn.textContent = 'Revoke my signature';
+      });
+    });
+  }
+
+  // Initial load.
+  loadDraft().then(function(result) {
+    if (result.ok && result.data && result.data.draft) {
+      applyDraftToState(result.data.draft);
+    }
+    update();
+    if (state.finalizedAt) {
+      var container = document.getElementById('proposal-form-container');
+      if (container) {
+        container.innerHTML =
+          '<div class="success-message">' +
+            '<h3>Engagement accepted.</h3>' +
+            '<p>Both signatures are in. Formal contracts and the first invoice follow within the week.</p>' +
+          '</div>';
+      }
+    }
+  }).catch(function() {
+    update();
+  });
+})();
+</script>
+</body>
+</html>

@@ -43,6 +43,7 @@ if (Astro.request.method === 'POST') {
       actionResult = { ok: false, message: 'CSRF validation failed. Reload and try again.' };
     } else {
       const action = formData.get('action')?.toString();
+      const personalMessage = (formData.get('personal_message')?.toString() || '').trim();
       const details: string[] = [];
 
       if (action === 'provision' || action === 'provision-and-invite') {
@@ -80,6 +81,9 @@ if (Astro.request.method === 'POST') {
             }
             const token = await createMagicLink(userRow.id);
             const loginUrl = `${origin}/portal/auth/verify?token=${token}`;
+            const personalNoteHtml = personalMessage
+              ? '<div style="color: #1a1814; line-height: 1.6; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid #e6ddd0; white-space: pre-wrap;">' + escapeHtml(personalMessage) + '</div>'
+              : '';
 
             if (brevoKey) {
               try {
@@ -96,17 +100,18 @@ if (Astro.request.method === 'POST') {
                     htmlContent: `
                       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
                         <h2 style="color: #171717; margin-bottom: 16px;">Hey ${escapeHtml(signer.name.split(' ')[0])},</h2>
+                        ${personalNoteHtml}
                         <p style="color: #525252; line-height: 1.6; margin-bottom: 12px;">
                           Your engagement proposal is ready in the portal at codyasmith.com. The portal is also where invoices, deliverables, and project status will live once we're working together.
                         </p>
                         <p style="color: #525252; line-height: 1.6; margin-bottom: 24px;">
                           Click below to log in. You'll be asked to set a password on first arrival. This link expires in 15 minutes; if it times out, just enter your email on the login page for a new one.
                         </p>
-                        <a href="${escapeHtml(loginUrl)}" style="display: inline-block; background: #f59e0b; color: #0a0a0a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">
+                        <a href="${escapeHtml(loginUrl)}" style="display: inline-block; background: #c47d5a; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">
                           Log in to your Portal
                         </a>
                         <p style="color: #525252; line-height: 1.6; margin-top: 32px; font-size: 14px;">
-                          Once you're in, your proposal is in the sidebar under "Proposals → Raised Bar."
+                          Once you're in, your proposal is in the sidebar under "Proposals &rarr; Raised Bar."
                         </p>
                         <p style="color: #a3a3a3; font-size: 12px; margin-top: 24px;">
                           <a href="https://codyasmith.com" style="color: #a3a3a3;">codyasmith.com</a>
@@ -206,8 +211,25 @@ const allProvisioned = !!client && !!jasonRow && !!kevinRow;
     <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
       <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">Actions</p>
 
-      <form method="POST" class="space-y-4">
+      <form method="POST" class="space-y-5">
         <input type="hidden" name="csrf-token" value={csrfToken} />
+
+        <div>
+          <label for="personal_message" class="block text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-2">
+            Personal note (optional, sent to both Jason and Kevin)
+          </label>
+          <textarea
+            id="personal_message"
+            name="personal_message"
+            rows="6"
+            placeholder="Jason and Kevin,&#10;&#10;Following up from our call. The full proposal is waiting in the portal..."
+            class="w-full px-4 py-3 bg-neutral-900/40 border border-white/10 rounded-lg text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/40 transition-colors duration-200"
+            style="font-family: var(--font-serif); font-size: 15px; line-height: 1.55;"
+          ></textarea>
+          <p class="text-[11px] text-neutral-600 mt-2 leading-relaxed">
+            Plain text. Line breaks preserved. Appears above the standard invite copy in the email, separated by a hairline rule.
+          </p>
+        </div>
 
         <button
           type="submit"

@@ -5,11 +5,118 @@ import StateLoading from '../../components/portal/StateLoading.astro';
 import StateError from '../../components/portal/StateError.astro';
 import StateEmpty from '../../components/portal/StateEmpty.astro';
 import { getAllClients } from '../../lib/auth';
+import { listAgreementsForClient, getSignersForAgreement, getSignaturesForAgreement } from '../../lib/agreements';
+import turso from '../../lib/turso';
 export const prerender = false;
 
 const user = Astro.locals.user!;
 const isAdmin = user.role === 'admin';
 const clients = isAdmin ? await getAllClients() : [];
+
+// Action-items list for the dashboard. Surfaces every pending thing
+// the client needs to do, in priority order. The dashboard's data
+// widgets below stay; this panel goes on top so a brand-new prospect
+// (no data yet) has an obvious next step instead of an empty-state
+// "nothing here yet" message. Admins skip this; they use the admin
+// tools.
+interface ActionItem {
+  kind: string;
+  icon: string;
+  title: string;
+  body: string;
+  href: string;
+  label: string;
+  urgency: number; // lower = higher priority
+}
+const actionItems: ActionItem[] = [];
+
+if (!isAdmin && user.client_id) {
+  try {
+    // Contracts the user is a signer on and hasn't signed yet.
+    const agreements = await listAgreementsForClient(user.client_id);
+    for (const ag of agreements) {
+      if (ag.status === 'voided' || ag.status === 'executed') continue;
+      if (ag.status !== 'issued' && ag.status !== 'partially_signed') continue;
+      const signers = await getSignersForAgreement(ag.id);
+      const me = signers.find(s => s.email_snapshot.toLowerCase() === (user.email || '').toLowerCase());
+      if (!me) continue;
+      const sigs = await getSignaturesForAgreement(ag.id, false);
+      const mySig = sigs.find(s => s.signer_id === me.id);
+      if (mySig) continue;
+      actionItems.push({
+        kind: 'sign-contract',
+        icon: '✍',
+        title: `Sign your contract: ${ag.title}`,
+        body: 'The standard client services agreement and your Schedule A are waiting in the portal. Complete the intake, check the consent boxes, and sign.',
+        href: `/portal/contracts/${ag.slug}`,
+        label: 'Review and sign',
+        urgency: 10,
+      });
+    }
+
+    // Proposals not yet LOI-accepted.
+    const propRes = await turso.execute({
+      sql: `SELECT slug, title, finalized_at FROM proposals WHERE client_id = ? ORDER BY created_at DESC`,
+      args: [user.client_id],
+    });
+    for (const r of (propRes.rows as any[])) {
+      if (r[2]) continue; // already finalized
+      actionItems.push({
+        kind: 'accept-proposal',
+        icon: '📄',
+        title: `Review your proposal: ${r[1]}`,
+        body: 'Walk through the steps, pick the level of service that fits, and accept to schedule the discussion call. Nothing is owed and nothing is signed at this step.',
+        href: `/portal/proposals/${r[0]}`,
+        label: 'Open the proposal',
+        urgency: 20,
+      });
+    }
+
+    // Pending approvals (existing approvals system).
+    try {
+      const apprRes = await turso.execute({
+        sql: `SELECT id, title FROM approvals WHERE client_id = ? AND status = 'pending' ORDER BY created_at DESC LIMIT 10`,
+        args: [user.client_id],
+      });
+      for (const r of (apprRes.rows as any[])) {
+        actionItems.push({
+          kind: 'approval',
+          icon: '✓',
+          title: `Approve: ${r[1] || 'item'}`,
+          body: 'Cody is waiting on your decision before moving forward on this.',
+          href: '/portal/approvals',
+          label: 'Review approval',
+          urgency: 30,
+        });
+      }
+    } catch { /* approvals table may not exist on every install */ }
+
+    // Unpaid invoices (existing invoices system).
+    try {
+      const invRes = await turso.execute({
+        sql: `SELECT id, invoice_number, total, amount_paid FROM invoices WHERE client_id = ? AND (amount_paid IS NULL OR amount_paid < total) AND status != 'draft' ORDER BY issued_date DESC LIMIT 10`,
+        args: [user.client_id],
+      });
+      for (const r of (invRes.rows as any[])) {
+        const total = Number(r[2] || 0);
+        const paid = Number(r[3] || 0);
+        const owed = Math.max(0, total - paid);
+        if (owed === 0) continue;
+        actionItems.push({
+          kind: 'invoice',
+          icon: '$',
+          title: `Pay invoice ${r[1]}: $${owed.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+          body: 'Balance due. Open the invoice for payment details.',
+          href: '/portal/invoices',
+          label: 'Open invoice',
+          urgency: 25,
+        });
+      }
+    } catch { /* invoices table may not exist on every install */ }
+  } catch { /* leave actionItems as-is on db error */ }
+}
+
+actionItems.sort((a, b) => a.urgency - b.urgency);
 ---
 
 <Portal title="Dashboard">
@@ -19,6 +126,26 @@ const clients = isAdmin ? await getAllClients() : [];
       <p id="data-date" class="text-[10px] font-mono text-neutral-700 tracking-[0.15em] uppercase"></p>
       {isAdmin && <ClientSelector clients={clients} />}
     </div>
+
+    {!isAdmin && actionItems.length > 0 && (
+      <section class="mb-12">
+        <p class="text-[10px] font-mono tracking-[0.18em] uppercase text-amber-400 mb-4">Needs your attention</p>
+        <ul class="space-y-3">
+          {actionItems.map(item => (
+            <li class="group bg-neutral-900/40 border border-white/[0.06] hover:border-amber-500/30 rounded-xl p-5 transition-all duration-300">
+              <a href={item.href} class="flex items-start gap-4">
+                <span class="shrink-0 w-9 h-9 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center text-base font-mono group-hover:bg-amber-500/20 transition-colors duration-300">{item.icon}</span>
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-medium text-neutral-100 mb-1 leading-snug">{item.title}</p>
+                  <p class="text-xs text-neutral-500 leading-relaxed">{item.body}</p>
+                </div>
+                <span class="shrink-0 text-xs font-mono text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300 self-center">{item.label} →</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+    )}
 
     <div id="story" class="hidden">
 

@@ -45,6 +45,13 @@ const adminItems = [
   { href: '/portal/admin/activity', label: 'Activity' },
 ];
 
+// Proposals section. Admin sees the list of active proposals. Clients
+// see only proposals tied to their own engagement (handled per-route
+// for now; for the v1 single proposal this is hardcoded).
+const adminProposalItems = user?.role === 'admin' ? [
+  { href: '/portal/proposals/raised-bar', label: 'Raised Bar' },
+] : [];
+
 // Helper to render a nav link
 const linkClass = (href: string) => [
   'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all duration-300',
@@ -111,6 +118,17 @@ const mobileLinkClass = (href: string) => [
                 <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Admin</p>
               </div>
               {adminItems.map(item => (
+                <a href={item.href} class:list={linkClass(item.href)}>{item.label}</a>
+              ))}
+            </>
+          )}
+
+          {adminProposalItems.length > 0 && (
+            <>
+              <div class="pt-6 pb-2">
+                <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Proposals</p>
+              </div>
+              {adminProposalItems.map(item => (
                 <a href={item.href} class:list={linkClass(item.href)}>{item.label}</a>
               ))}
             </>
@@ -183,6 +201,16 @@ const mobileLinkClass = (href: string) => [
                   <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Admin</p>
                 </div>
                 {adminItems.map(item => (
+                  <a href={item.href} class:list={mobileLinkClass(item.href)}>{item.label}</a>
+                ))}
+              </>
+            )}
+            {adminProposalItems.length > 0 && (
+              <>
+                <div class="pt-4 pb-1">
+                  <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Proposals</p>
+                </div>
+                {adminProposalItems.map(item => (
                   <a href={item.href} class:list={mobileLinkClass(item.href)}>{item.label}</a>
                 ))}
               </>

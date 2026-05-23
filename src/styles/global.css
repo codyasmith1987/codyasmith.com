@@ -996,18 +996,6 @@
   color: var(--color-neutral-300);
 }
 
-.dropcap::first-letter {
-  font-family: var(--font-display);
-  font-variation-settings: "opsz" 144, "SOFT" 30, "WONK" 0;
-  font-weight: 700;
-  font-size: 5.5em;
-  line-height: 0.82;
-  float: left;
-  margin: 0.05em 0.12em 0 -0.04em;
-  color: var(--color-neutral-100);
-  letter-spacing: -0.04em;
-}
-
 .byline {
   font-family: var(--font-mono);
   font-size: 0.6875rem;

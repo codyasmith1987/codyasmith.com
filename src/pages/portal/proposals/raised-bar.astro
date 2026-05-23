@@ -24,6 +24,15 @@ if (!isAuthorized) {
 
 // CSRF token for the interactive accept form below.
 const csrfToken = Astro.locals.csrfToken || '';
+
+// Signer identification. Jason and Kevin sign their own field; admin
+// can view but cannot persist or sign. Email match is case-insensitive.
+const emailLc = (user.email || '').toLowerCase().trim();
+const isAdmin = user.role === 'admin';
+const signerRole = isAdmin
+  ? 'admin'
+  : (emailLc === 'jasonroth1122@gmail.com' ? 'jason'
+      : (emailLc === 'kevo.adams@gmail.com' ? 'kevin' : 'other'));
 ---
 <!DOCTYPE html>
 <html lang="en">
@@ -311,16 +320,28 @@ const csrfToken = Astro.locals.csrfToken || '';
     gap: 18px;
     margin-bottom: 28px;
   }
+  .field-group {
+    display: block;
+  }
+  .field-group.field-readonly input {
+    background: #f3eee2;
+    color: #6b6359;
+    border-color: #e6ddd0;
+    cursor: not-allowed;
+  }
+  .field-group.field-signed input {
+    display: none;
+  }
   .field-label {
     display: block;
     font-size: 13px;
     color: #6b6359;
     letter-spacing: 0.04em;
+    margin: 0 0 8px;
   }
-  .field-label input {
+  .field-group input {
     display: block;
     width: 100%;
-    margin-top: 8px;
     padding: 12px 14px;
     background: #faf7f2;
     border: 1px solid #d4cdc0;
@@ -329,9 +350,33 @@ const csrfToken = Astro.locals.csrfToken || '';
     font-size: 17px;
     transition: border-color 0.18s ease;
   }
-  .field-label input:focus {
+  .field-group input:focus {
     outline: none;
     border-color: #1d2c3a;
+  }
+  .field-status {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: #6b6359;
+    font-style: italic;
+  }
+  .field-status.signed {
+    color: #1d2c3a;
+    font-style: normal;
+    padding: 12px 14px;
+    background: #faf7f2;
+    border: 1px solid #d4cdc0;
+    font-family: "Newsreader", Georgia, serif;
+    font-size: 17px;
+  }
+  .field-status.signed::before {
+    content: "Signed ";
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #6b6359;
+    margin-right: 8px;
   }
   .send-button {
     display: block;
@@ -557,7 +602,7 @@ const csrfToken = Astro.locals.csrfToken || '';
   }
 </style>
 </head>
-<body>
+<body data-signer-role={signerRole}>
 <div class="container">
 
 <div class="portal-back-bar">
@@ -768,22 +813,24 @@ const csrfToken = Astro.locals.csrfToken || '';
   </div>
 
   <div class="form-fields">
-    <label class="field-label">
-      Jason Roth, signing as
+    <div class="field-group" data-signer-block="jason">
+      <p class="field-label">Jason Roth, signing as</p>
       <input type="text" id="jason-name" autocomplete="off" placeholder="Type your full name" />
-    </label>
-    <label class="field-label">
-      Kevin Adams, signing as
+      <p class="field-status" id="jason-status"></p>
+    </div>
+    <div class="field-group" data-signer-block="kevin">
+      <p class="field-label">Kevin Adams, signing as</p>
       <input type="text" id="kevin-name" autocomplete="off" placeholder="Type your full name" />
-    </label>
+      <p class="field-status" id="kevin-status"></p>
+    </div>
   </div>
 
   <button id="send-proposal" type="button" class="send-button" disabled>
-    Send to Cody
+    Save my signature
   </button>
 
-  <p class="form-note">
-    Walk through the four steps above, then type both your names. Send routes a confirmation to you both and a notification to Cody. Formal contracts and the first invoice follow within the week.
+  <p class="form-note" id="form-note">
+    Walk through the four steps above, then type your name. The page saves automatically as you go, so your partner can log in later and find your selections already in place.
   </p>
 </div>
 
@@ -876,21 +923,75 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
     return false;
   }
 
+  // Signer role from <body data-signer-role="..."> set by the Astro
+  // frontmatter. 'jason' and 'kevin' are real signers; 'admin' is the
+  // owner previewing; 'other' should never happen because middleware
+  // gates non-Roth-Group clients away earlier.
+  var SIGNER_ROLE = document.body.getAttribute('data-signer-role') || 'other';
+  var DRAFT_URL = '/portal/api/proposals/raised-bar/accept';
+
+  function getCsrf() {
+    var el = document.querySelector('meta[name="csrf-token"]');
+    return el ? (el.getAttribute('content') || '') : '';
+  }
+
+  function saveDraft(payload) {
+    if (SIGNER_ROLE !== 'jason' && SIGNER_ROLE !== 'kevin') {
+      return Promise.resolve(null);
+    }
+    return fetch(DRAFT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
+      body: JSON.stringify(payload || {}),
+    }).then(function(res) {
+      return res.json().then(function(data) { return { ok: res.ok, data: data }; });
+    });
+  }
+
+  function loadDraft() {
+    return fetch(DRAFT_URL, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+    }).then(function(res) {
+      return res.json().then(function(data) { return { ok: res.ok, data: data }; });
+    });
+  }
+
+  function applyDraftToState(draft) {
+    if (!draft) return;
+    state.mgmtTier = draft.mgmt_tier || null;
+    state.option = draft.option || null;
+    state.consulting = draft.consulting || null;
+    state.consultingTier = draft.consulting_tier || null;
+    state.jasonSig = draft.jason_signature || null;
+    state.kevinSig = draft.kevin_signature || null;
+    state.finalizedAt = draft.finalized_at || null;
+  }
+
+  state.jasonSig = null;
+  state.kevinSig = null;
+  state.finalizedAt = null;
+
+  function setSummary(id, text, isSelected) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    el.classList.toggle('selected', !!isSelected);
+  }
+
   function update() {
     // Mgmt tier highlight
     var tierCards = document.querySelectorAll('[data-tier]');
     for (var i = 0; i < tierCards.length; i++) {
-      var t = tierCards[i].getAttribute('data-tier');
-      tierCards[i].classList.toggle('selected', t === state.mgmtTier);
+      tierCards[i].classList.toggle('selected', tierCards[i].getAttribute('data-tier') === state.mgmtTier);
     }
 
-    // Reveal Step 2 (option) when mgmt tier picked
+    // Reveal Step 2 (option) when mgmt tier picked + update tier-keyed prices
     var optionChoice = document.getElementById('option-choice');
     var step2Prompt = document.getElementById('step2-prompt');
     if (state.mgmtTier) {
       if (optionChoice) optionChoice.classList.add('revealed');
       if (step2Prompt) step2Prompt.style.display = 'none';
-      // Update o1/o2 prices for selected tier
       var o1mEl = document.getElementById('o1-monthly');
       var o2mEl = document.getElementById('o2-monthly');
       var o1onbEl = document.getElementById('o1-onb');
@@ -907,11 +1008,10 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
     // Option highlight
     var optionCards = document.querySelectorAll('[data-option]');
     for (var j = 0; j < optionCards.length; j++) {
-      var o = optionCards[j].getAttribute('data-option');
-      optionCards[j].classList.toggle('selected', o === state.option);
+      optionCards[j].classList.toggle('selected', optionCards[j].getAttribute('data-option') === state.option);
     }
 
-    // Reveal Step 3 (consulting) when option picked
+    // Reveal Step 3
     var consultingChoice = document.getElementById('consulting-choice');
     var step3Prompt = document.getElementById('step3-prompt');
     if (state.option) {
@@ -925,11 +1025,10 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
     // Consulting yes/no highlight
     var consultingCards = document.querySelectorAll('[data-consulting]');
     for (var k = 0; k < consultingCards.length; k++) {
-      var c = consultingCards[k].getAttribute('data-consulting');
-      consultingCards[k].classList.toggle('selected', c === state.consulting);
+      consultingCards[k].classList.toggle('selected', consultingCards[k].getAttribute('data-consulting') === state.consulting);
     }
 
-    // Reveal Step 4 (consulting tier) when consulting=yes
+    // Reveal Step 4
     var consultingH2 = document.getElementById('consulting-step-h2');
     var step4Prompt = document.getElementById('step4-prompt');
     var consultingTiers = document.getElementById('consulting-tiers');
@@ -941,48 +1040,26 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
       if (consultingH2) consultingH2.classList.add('step-hidden');
       if (step4Prompt) step4Prompt.classList.add('step-hidden');
       if (consultingTiers) consultingTiers.classList.remove('revealed');
-      // Clear consulting tier selection if user toggled to 'no'
       if (state.consulting === 'no') state.consultingTier = null;
     }
 
     // Consulting tier highlight
     var consultingTierCards = document.querySelectorAll('[data-consulting-tier]');
     for (var n = 0; n < consultingTierCards.length; n++) {
-      var ct = consultingTierCards[n].getAttribute('data-consulting-tier');
-      consultingTierCards[n].classList.toggle('selected', ct === state.consultingTier);
+      consultingTierCards[n].classList.toggle('selected', consultingTierCards[n].getAttribute('data-consulting-tier') === state.consultingTier);
     }
 
-    // Form summary. Each block guards on its own element existing so a
-    // single missing node does not abort the entire update chain.
-    function setSummary(id, text, isSelected) {
-      var el = document.getElementById(id);
-      if (!el) return;
-      el.textContent = text;
-      el.classList.toggle('selected', !!isSelected);
-    }
-
+    // Form summary
     setSummary('summary-tier',
       state.mgmtTier ? MGMT_TIERS[state.mgmtTier].name : 'Pick above',
       !!state.mgmtTier);
-
-    if (state.option === 'o1') {
-      setSummary('summary-option', 'Option 1: Single unified site', true);
-    } else if (state.option === 'o2') {
-      setSummary('summary-option', 'Option 2: Split setup (with micro-site)', true);
-    } else {
-      setSummary('summary-option', 'Pick above', false);
-    }
-
-    if (state.consulting === 'no') {
-      setSummary('summary-consulting', 'Skipped', true);
-    } else if (state.consulting === 'yes' && state.consultingTier) {
-      setSummary('summary-consulting', 'Yes, ' + CONSULTING_TIERS[state.consultingTier].name, true);
-    } else if (state.consulting === 'yes') {
-      setSummary('summary-consulting', 'Yes, pick a level above', false);
-    } else {
-      setSummary('summary-consulting', 'Pick above', false);
-    }
-
+    if (state.option === 'o1') setSummary('summary-option', 'Option 1: Single unified site', true);
+    else if (state.option === 'o2') setSummary('summary-option', 'Option 2: Split setup (with micro-site)', true);
+    else setSummary('summary-option', 'Pick above', false);
+    if (state.consulting === 'no') setSummary('summary-consulting', 'Skipped', true);
+    else if (state.consulting === 'yes' && state.consultingTier) setSummary('summary-consulting', 'Yes, ' + CONSULTING_TIERS[state.consultingTier].name, true);
+    else if (state.consulting === 'yes') setSummary('summary-consulting', 'Yes, pick a level above', false);
+    else setSummary('summary-consulting', 'Pick above', false);
     if (complete()) {
       setSummary('summary-onetime', moneyInt(oneTimeTotal()), true);
       setSummary('summary-monthly', money(monthlyTotal()) + ' / month', true);
@@ -991,14 +1068,82 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
       setSummary('summary-monthly', '—', false);
     }
 
-    // Send button enable
+    // Per-signer name field display.
+    var jasonBlock = document.querySelector('[data-signer-block="jason"]');
+    var kevinBlock = document.querySelector('[data-signer-block="kevin"]');
     var jasonInput = document.getElementById('jason-name');
     var kevinInput = document.getElementById('kevin-name');
-    var jasonName = jasonInput ? jasonInput.value.trim() : '';
-    var kevinName = kevinInput ? kevinInput.value.trim() : '';
+    var jasonStatus = document.getElementById('jason-status');
+    var kevinStatus = document.getElementById('kevin-status');
+
+    function configureBlock(block, input, status, sig, role) {
+      if (!block || !input || !status) return;
+      if (sig) {
+        // Already signed — show as static "Signed: <name>"
+        block.classList.add('field-signed');
+        block.classList.remove('field-readonly');
+        status.classList.add('signed');
+        status.textContent = sig;
+      } else {
+        status.classList.remove('signed');
+        if (SIGNER_ROLE === role) {
+          // Own field, editable
+          block.classList.remove('field-readonly');
+          input.disabled = false;
+          status.textContent = '';
+        } else if (SIGNER_ROLE === 'admin') {
+          // Admin sees both but they are read-only
+          block.classList.add('field-readonly');
+          input.disabled = true;
+          status.textContent = 'Awaiting ' + (role === 'jason' ? 'Jason' : 'Kevin') + '. (Admin preview)';
+        } else {
+          // Other-signer view: read-only, just shows status
+          block.classList.add('field-readonly');
+          input.disabled = true;
+          input.placeholder = '(awaiting)';
+          status.textContent = 'Awaiting ' + (role === 'jason' ? 'Jason Roth' : 'Kevin Adams') + '.';
+        }
+      }
+    }
+
+    configureBlock(jasonBlock, jasonInput, jasonStatus, state.jasonSig, 'jason');
+    configureBlock(kevinBlock, kevinInput, kevinStatus, state.kevinSig, 'kevin');
+
+    // Send button text + enable based on who is signing and state.
     var sendBtn = document.getElementById('send-proposal');
-    var canSend = !!(complete() && jasonName && kevinName);
-    if (sendBtn) sendBtn.disabled = !canSend;
+    var formNote = document.getElementById('form-note');
+    if (sendBtn) {
+      if (state.finalizedAt) {
+        sendBtn.disabled = true;
+        sendBtn.textContent = 'Engagement accepted';
+      } else if (SIGNER_ROLE === 'admin') {
+        sendBtn.disabled = true;
+        sendBtn.textContent = 'Admin preview — submit disabled';
+        if (formNote) formNote.textContent = 'Admin preview. The proposal must be signed by Jason or Kevin.';
+      } else if (SIGNER_ROLE !== 'jason' && SIGNER_ROLE !== 'kevin') {
+        sendBtn.disabled = true;
+        sendBtn.textContent = 'Signing not available for this user';
+      } else {
+        var myInput = SIGNER_ROLE === 'jason' ? jasonInput : kevinInput;
+        var mySig = SIGNER_ROLE === 'jason' ? state.jasonSig : state.kevinSig;
+        var otherSig = SIGNER_ROLE === 'jason' ? state.kevinSig : state.jasonSig;
+        var myName = myInput ? myInput.value.trim() : '';
+        if (mySig) {
+          sendBtn.disabled = true;
+          sendBtn.textContent = 'You signed. Waiting on the other.';
+          if (formNote) formNote.textContent = 'Your signature is in. The other person will see your selections when they log in and can countersign.';
+        } else {
+          sendBtn.disabled = !(complete() && myName);
+          if (otherSig) {
+            sendBtn.textContent = 'Countersign and accept';
+            if (formNote) formNote.textContent = 'The other person has already signed and the selections are locked in by what they picked. Type your name to countersign — the engagement finalizes and both confirmations send.';
+          } else {
+            sendBtn.textContent = 'Save my signature';
+            if (formNote) formNote.textContent = 'Your selections save as you go. Type your name and click to save your signature; the other person will get an email asking them to log in and countersign.';
+          }
+        }
+      }
+    }
   }
 
   function scrollTo(id) {
@@ -1006,13 +1151,25 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
     if (target) setTimeout(function() { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 140);
   }
 
+  function persistSelections() {
+    if (SIGNER_ROLE !== 'jason' && SIGNER_ROLE !== 'kevin') return;
+    saveDraft({
+      mgmt_tier: state.mgmtTier,
+      option: state.option,
+      consulting: state.consulting,
+      consulting_tier: state.consultingTier,
+    }).catch(function() { /* silent — UI is optimistic */ });
+  }
+
   // Wire up mgmt tier cards
   var tierCards = document.querySelectorAll('[data-tier]');
   for (var ti = 0; ti < tierCards.length; ti++) {
     (function(card) {
       card.addEventListener('click', function() {
+        if (state.finalizedAt) return;
         state.mgmtTier = card.getAttribute('data-tier');
         update();
+        persistSelections();
         if (!state.option) scrollTo('option-choice');
       });
     })(tierCards[ti]);
@@ -1023,8 +1180,10 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
   for (var oi = 0; oi < optionCards.length; oi++) {
     (function(card) {
       card.addEventListener('click', function() {
+        if (state.finalizedAt) return;
         state.option = card.getAttribute('data-option');
         update();
+        persistSelections();
         if (!state.consulting) scrollTo('consulting-choice');
       });
     })(optionCards[oi]);
@@ -1035,8 +1194,10 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
   for (var ci = 0; ci < consultingCards.length; ci++) {
     (function(card) {
       card.addEventListener('click', function() {
+        if (state.finalizedAt) return;
         state.consulting = card.getAttribute('data-consulting');
         update();
+        persistSelections();
         if (state.consulting === 'yes' && !state.consultingTier) scrollTo('consulting-tiers');
         else if (state.consulting === 'no') scrollTo('proposal-form-container');
       });
@@ -1048,69 +1209,90 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
   for (var cti = 0; cti < consultingTierCards.length; cti++) {
     (function(card) {
       card.addEventListener('click', function() {
+        if (state.finalizedAt) return;
         state.consultingTier = card.getAttribute('data-consulting-tier');
         update();
+        persistSelections();
         scrollTo('proposal-form-container');
       });
     })(consultingTierCards[cti]);
   }
 
-  // Wire up name inputs
+  // Wire up name inputs (only update UI; signature is persisted via Send click)
   var inputIds = ['jason-name', 'kevin-name'];
   for (var ii = 0; ii < inputIds.length; ii++) {
     var el = document.getElementById(inputIds[ii]);
     if (el) el.addEventListener('input', update);
   }
 
-  // Wire up send
+  // Wire up send (signs the current user's signature, finalizes if both signed)
   var sendBtn = document.getElementById('send-proposal');
   if (sendBtn) {
     sendBtn.addEventListener('click', function() {
+      if (SIGNER_ROLE !== 'jason' && SIGNER_ROLE !== 'kevin') return;
+      var myInput = SIGNER_ROLE === 'jason' ? document.getElementById('jason-name') : document.getElementById('kevin-name');
+      var signature = myInput ? myInput.value.trim() : '';
+      if (!signature) return;
       sendBtn.disabled = true;
-      sendBtn.textContent = 'Sending...';
-      var csrf = document.querySelector('meta[name="csrf-token"]');
-      var csrfToken = csrf ? csrf.getAttribute('content') : '';
-      var jasonName = document.getElementById('jason-name').value.trim();
-      var kevinName = document.getElementById('kevin-name').value.trim();
-      fetch('/portal/api/proposals/raised-bar/accept', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken || '' },
-        body: JSON.stringify({
-          mgmt_tier: state.mgmtTier,
-          option: state.option,
-          consulting: state.consulting,
-          consulting_tier: state.consultingTier,
-          jason_name: jasonName,
-          kevin_name: kevinName
-        })
-      }).then(function(res) {
-        return res.json().then(function(data) { return { ok: res.ok, data: data }; });
+      sendBtn.textContent = 'Saving...';
+      saveDraft({
+        mgmt_tier: state.mgmtTier,
+        option: state.option,
+        consulting: state.consulting,
+        consulting_tier: state.consultingTier,
+        signature: signature,
       }).then(function(result) {
-        if (result.ok) {
+        if (!result.ok) {
+          var msg = (result.data && result.data.error) || 'Save failed. Email cody@codyasmith.com directly if this keeps happening.';
+          alert(msg);
+          update();
+          return;
+        }
+        if (result.data && result.data.draft) {
+          applyDraftToState(result.data.draft);
+          if (result.data.status === 'finalized') state.finalizedAt = state.finalizedAt || new Date().toISOString();
+        }
+        if (result.data && result.data.status === 'finalized') {
           var container = document.getElementById('proposal-form-container');
-          var emails = (result.data && result.data.confirmation_emails) || 'you both';
+          var emails = (result.data && result.data.confirmation_emails) || 'you both and Cody';
           container.innerHTML =
             '<div class="success-message">' +
-              '<h3>Got it. Engagement accepted.</h3>' +
-              '<p>I will send the formal contracts and the first invoice in the next few days. Reach me at <a href="mailto:cody@codyasmith.com">cody@codyasmith.com</a> or call or text any time with questions.</p>' +
+              '<h3>Engagement accepted.</h3>' +
+              '<p>Both signatures are in. Cody will send the formal contracts and the first invoice in the next few days. Reach him at <a href="mailto:cody@codyasmith.com">cody@codyasmith.com</a> or call or text any time with questions.</p>' +
               '<p class="success-note">Confirmation sent to ' + emails + '.</p>' +
             '</div>';
           window.scrollTo({ top: container.offsetTop - 32, behavior: 'smooth' });
         } else {
-          sendBtn.disabled = false;
-          sendBtn.textContent = 'Send to Cody';
-          var msg = (result.data && result.data.error) || 'Send failed. Email cody@codyasmith.com directly if this keeps happening.';
-          alert(msg);
+          update();
         }
       }).catch(function() {
-        sendBtn.disabled = false;
-        sendBtn.textContent = 'Send to Cody';
         alert('Connection error. Try again or email cody@codyasmith.com.');
+        update();
       });
     });
   }
 
-  update();
+  // Initial load: pull the draft from the server, populate state, render.
+  loadDraft().then(function(result) {
+    if (result.ok && result.data && result.data.draft) {
+      applyDraftToState(result.data.draft);
+    }
+    update();
+    if (state.finalizedAt) {
+      // Already finalized — collapse the form into a static confirmation panel.
+      var container = document.getElementById('proposal-form-container');
+      if (container) {
+        container.innerHTML =
+          '<div class="success-message">' +
+            '<h3>Engagement accepted.</h3>' +
+            '<p>Both signatures are in. Formal contracts and the first invoice follow within the week.</p>' +
+          '</div>';
+      }
+    }
+  }).catch(function() {
+    // If draft fetch fails, still render UI from empty state.
+    update();
+  });
 })();
 </script>
 </body>

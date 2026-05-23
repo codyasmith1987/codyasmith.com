@@ -1,0 +1,178 @@
+---
+// Contract preview page. Renders the standard agreement plus a Schedule
+// A built from the prospect's current proposal draft selections. No
+// agreement record exists yet; this is read-only so the prospect can
+// see what they would sign before any commitment.
+//
+// The preview rebuilds Schedule A on every request from whatever is in
+// proposal_drafts.selections right now, so changing selections on the
+// proposal page changes what shows here on next visit.
+
+export const prerender = false;
+
+import turso from '../../../../lib/turso';
+import { getDraft } from '../../../../lib/proposal-drafts';
+import { getClientMetadata } from '../../../../lib/agreements';
+import { getLatestContractTemplate } from '../../../../lib/contract-templates';
+import { buildScheduleA } from '../../../../lib/contract-schedule';
+import { renderTemplate, renderScheduleA, PRACTICE } from '../../../../lib/contract-render';
+import { computePricing } from '../../../../lib/proposal-pricing';
+import ContractRenderer from '../../../../components/portal/ContractRenderer.astro';
+
+const user = Astro.locals.user;
+if (!user) return Astro.redirect('/portal/login');
+
+const proposalSlug = Astro.params.proposalSlug || '';
+
+// Load proposal row.
+const proposalRow = await (async () => {
+  const result = await turso.execute({
+    sql: `SELECT id, slug, client_id, title, config FROM proposals WHERE slug = ? LIMIT 1`,
+    args: [proposalSlug],
+  });
+  if (result.rows.length === 0) return null;
+  const r = result.rows[0] as any[];
+  let config: any = {};
+  try { config = JSON.parse(r[4] as string); } catch { config = {}; }
+  return {
+    id: r[0] as string,
+    slug: r[1] as string,
+    client_id: r[2] as string,
+    title: r[3] as string,
+    config,
+  };
+})();
+
+if (!proposalRow) {
+  return new Response('Not found', { status: 404 });
+}
+
+// Auth: admin OR matching client.
+const isAdmin = user.role === 'admin';
+if (!isAdmin && user.client_id !== proposalRow.client_id) {
+  return Astro.redirect('/portal/dashboard');
+}
+
+// Load client row (for the legal name fallback) and metadata.
+const clientResult = await turso.execute({
+  sql: `SELECT id, name FROM clients WHERE id = ? LIMIT 1`,
+  args: [proposalRow.client_id],
+});
+const clientRow = clientResult.rows[0];
+const clientFallbackName = (clientRow?.[1] as string | undefined) || 'Client';
+const clientMetadata = await getClientMetadata(proposalRow.client_id);
+
+// Load draft selections.
+const draft = await getDraft(proposalRow.client_id, proposalSlug);
+const selections = draft?.selections || {};
+
+// Compute pricing (returns null if selections incomplete).
+const pricing = computePricing(proposalRow.config?.pricing_formula || '', selections);
+
+// Build Schedule A from whatever's currently selected.
+const effectiveDate = new Date().toISOString().slice(0, 10);
+const scheduleA = buildScheduleA({
+  proposalConfig: proposalRow.config,
+  draftSelections: selections,
+  pricing,
+  clientMetadata: clientMetadata || {},
+  effectiveDate,
+});
+
+// Load template (latest standard).
+const template = await getLatestContractTemplate('standard');
+if (!template) {
+  return new Response('Contract template not found', { status: 500 });
+}
+
+// Render body + Schedule A.
+const renderContext = {
+  client: {
+    legal_entity_name: clientMetadata?.legal_entity_name || clientFallbackName,
+    entity_type: clientMetadata?.entity_type || '[entity type to be confirmed]',
+    state_of_organization: clientMetadata?.state_of_organization || '[state to be confirmed]',
+    primary_contact_name: clientMetadata?.primary_contact_name || undefined,
+    primary_contact_title: clientMetadata?.primary_contact_title || undefined,
+    primary_contact_email: clientMetadata?.primary_contact_email || undefined,
+    primary_contact_phone: clientMetadata?.primary_contact_phone || undefined,
+    principal_address: clientMetadata?.principal_address || undefined,
+    notice_address: clientMetadata?.notice_address || undefined,
+  },
+  schedule_a: scheduleA,
+  practice: PRACTICE,
+  today: effectiveDate,
+};
+
+const bodyHtml = renderTemplate(template.body_markdown, renderContext, 'preview');
+const scheduleAHtml = renderScheduleA(scheduleA, 'preview');
+
+const bannerHtml = `<strong>Preview.</strong> This document is a preview built from your current proposal selections. The executable version is issued in the portal after your discussion call with Cody. Nothing on this page is signed yet.`;
+
+const csrfToken = Astro.locals.csrfToken || '';
+const pageTitle = `${template.title} — ${clientMetadata?.legal_entity_name || clientFallbackName}`;
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+<meta name="csrf-token" content={csrfToken}>
+<title>{pageTitle}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..600&family=Source+Serif+4:opsz,wght@8..60,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream-bg: #faf7f2;
+    --cream-card: #f0ead9;
+    --ink: #1a1814;
+    --ink-soft: #2c2722;
+    --ink-quiet: #6b6359;
+    --sepia: #c47d5a;
+    --rule: #e6ddd0;
+  }
+  body {
+    margin: 0;
+    background: var(--cream-bg);
+    color: var(--ink);
+    font-family: 'Source Serif 4', Georgia, serif;
+  }
+  .preview-shell {
+    min-height: 100vh;
+    padding: 24px 0 64px;
+  }
+  .preview-nav {
+    max-width: 920px;
+    margin: 0 auto 16px;
+    padding: 0 28px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-quiet);
+  }
+  .preview-nav a {
+    color: var(--sepia);
+    text-decoration: none;
+  }
+</style>
+</head>
+<body>
+  <div class="preview-shell">
+    <nav class="preview-nav">
+      <a href={`/portal/proposals/${proposalRow.slug}`}>← Back to proposal</a>
+      <span>Preview &middot; not yet issued</span>
+    </nav>
+    <ContractRenderer
+      bodyHtml={bodyHtml}
+      scheduleAHtml={scheduleAHtml}
+      title={template.title}
+      clientLegalName={clientMetadata?.legal_entity_name || clientFallbackName}
+      status="preview"
+      bannerHtml={bannerHtml}
+    />
+  </div>
+</body>
+</html>

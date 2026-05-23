@@ -12,7 +12,7 @@
     "astro": "astro",
     "migrate:naming": "tsx scripts/migrate-naming.ts",
     "migrate:listener": "tsx scripts/migrate-listener.ts",
-    "test": "tsx tests/run-naming-unit-tests.mjs && tsx tests/run-listener-sentiment-unit-tests.mjs && tsx tests/run-naming-preview-unit-tests.mjs",
+    "test": "tsx tests/run-naming-unit-tests.mjs && tsx tests/run-listener-sentiment-unit-tests.mjs && tsx tests/run-naming-preview-unit-tests.mjs && tsx tests/run-contract-render-tests.mjs",
     "test:integration": "tsx tests/run-naming-integration-tests.mjs && tsx tests/run-listener-sentiment-integration-tests.mjs"
   },
   "dependencies": {
@@ -31,6 +31,7 @@
     "astro": "^6.1.3",
     "bcryptjs": "^3.0.3",
     "cheerio": "^1.2.0",
+    "marked": "^15.0.12",
     "nanoid": "^5.1.7",
     "papaparse": "^5.5.3",
     "pdf-parse": "^2.4.5",

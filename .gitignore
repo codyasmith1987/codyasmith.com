@@ -31,4 +31,6 @@ data/*.db
 
 # OG smoke-test output (run via: npx tsx scripts/test-og.mjs)
 scripts/test-og-output.png
+# PDF smoke-test output (run via: npx tsx scripts/smoke-pdf.ts)
+scripts/_smoke-pdf-output.pdf
 tmp-build.db

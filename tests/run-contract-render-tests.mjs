@@ -191,6 +191,72 @@ async function run() {
     test('pricing: Better tier 3-site monthly equals $1,292.20', Math.abs((pricing?.mgmtMonthly || 0) - 1292.20) < 0.001, `got ${pricing?.mgmtMonthly}`);
   }
 
+  // Test 13: Domain picks land in Schedule A site list.
+  {
+    const selections = {
+      mgmt_tier: 'better',
+      site_setup: 'o2',
+      builders_domain: 'raisedbarbuilders',
+      tailwater_domain: 'tailwaterhailey',
+      consulting: 'no',
+    };
+    const pricing = computePricing('raised_bar_v1', selections);
+    const scheduleA = buildScheduleA({
+      proposalConfig: { pricing_formula: 'raised_bar_v1' },
+      draftSelections: selections,
+      pricing,
+      clientMetadata: {},
+      effectiveDate: '2026-06-01',
+    });
+    const sites = scheduleA.web_management?.sites || [];
+    const buildersSite = sites.find(s => s.domain === 'raisedbarbuilders.com');
+    const tailwaterSite = sites.find(s => s.domain === 'tailwaterhailey.com');
+    test('schedule_a uses picked Builders domain', !!buildersSite, `got: ${sites.map(s => s.domain).join(', ')}`);
+    test('schedule_a uses picked Tailwater domain', !!tailwaterSite, `got: ${sites.map(s => s.domain).join(', ')}`);
+  }
+
+  // Test 14: "discuss" pick falls back to placeholder language.
+  {
+    const selections = {
+      mgmt_tier: 'better',
+      site_setup: 'o1',
+      builders_domain: 'discuss',
+      consulting: 'no',
+    };
+    const pricing = computePricing('raised_bar_v1', selections);
+    const scheduleA = buildScheduleA({
+      proposalConfig: { pricing_formula: 'raised_bar_v1' },
+      draftSelections: selections,
+      pricing,
+      clientMetadata: {},
+      effectiveDate: '2026-06-01',
+    });
+    const sites = scheduleA.web_management?.sites || [];
+    const hasPlaceholder = sites.some(s => s.domain.includes('confirmed by Client at signing'));
+    test('schedule_a falls back to placeholder when domain pick is "discuss"', hasPlaceholder, `got: ${sites.map(s => s.domain).join(', ')}`);
+  }
+
+  // Test 15: Alternative Builders domain pick resolves correctly.
+  {
+    const selections = {
+      mgmt_tier: 'good',
+      site_setup: 'o1',
+      builders_domain: 'raisedbarconstruction',
+      consulting: 'no',
+    };
+    const pricing = computePricing('raised_bar_v1', selections);
+    const scheduleA = buildScheduleA({
+      proposalConfig: { pricing_formula: 'raised_bar_v1' },
+      draftSelections: selections,
+      pricing,
+      clientMetadata: {},
+      effectiveDate: '2026-06-01',
+    });
+    const sites = scheduleA.web_management?.sites || [];
+    const hasAlt = sites.some(s => s.domain === 'raisedbarconstruction.com');
+    test('schedule_a resolves alternative Builders domain', hasAlt, `got: ${sites.map(s => s.domain).join(', ')}`);
+  }
+
   // Print summary.
   const failed = results.filter(r => !r.pass);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);

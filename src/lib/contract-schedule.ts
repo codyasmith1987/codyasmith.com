@@ -129,9 +129,11 @@ function buildScheduleAForRaisedBarV1(ctx: ScheduleAContext): ScheduleA {
   const opt = s.site_setup || '';
   const consulting = s.consulting === 'yes';
   const consultingTier = s.consulting_tier || '';
+  const buildersDomain = s.builders_domain || '';
+  const tailwaterDomain = s.tailwater_domain || '';
   const pricing = ctx.pricing;
 
-  const wmSites = buildRaisedBarSites(opt);
+  const wmSites = buildRaisedBarSites(opt, buildersDomain, tailwaterDomain);
   const wmCount = wmSites.length;
 
   const wmTierDefaults = RB_MGMT_TIER_DEFAULTS[tier as keyof typeof RB_MGMT_TIER_DEFAULTS] || RB_MGMT_TIER_DEFAULTS.better;
@@ -216,23 +218,38 @@ function buildScheduleAForRaisedBarV1(ctx: ScheduleAContext): ScheduleA {
   };
 }
 
-function buildRaisedBarSites(opt: string): Array<{ domain: string; description: string }> {
+function buildRaisedBarSites(opt: string, buildersDomain: string, tailwaterDomain: string): Array<{ domain: string; description: string }> {
   // F3 is the existing takeover site (known URL). The Builders and
-  // Tailwater sites are net-new builds; their domain choices belong to
-  // the Client, not the Practice. The Practice has researched
-  // available .com options and will present them; the Client confirms
-  // the pick before the build kicks off.
+  // Tailwater sites are net-new builds; the domain pick is a step in
+  // the proposal flow. If the Client deferred ("discuss" or not yet
+  // picked), the Schedule A still says "confirmed by Client at
+  // signing" so nothing is locked without their explicit choice.
+  const buildersDisplay = resolveBuildersDomain(buildersDomain);
+  const tailwaterDisplay = resolveTailwaterDomain(tailwaterDomain);
+
   if (opt === 'o2') {
     return [
-      { domain: 'Raised Bar Builders site (domain confirmed by Client at signing)', description: 'general contracting practice site' },
+      { domain: buildersDisplay, description: 'general contracting practice site' },
       { domain: 'f3properties.com', description: 'real estate brokerage takeover' },
-      { domain: 'Tailwater micro-site (domain confirmed by Client at signing)', description: 'three-home pre-sell, standalone URL' },
+      { domain: tailwaterDisplay, description: 'three-home pre-sell, standalone URL' },
     ];
   }
   return [
-    { domain: 'Raised Bar Builders site (domain confirmed by Client at signing)', description: 'general contracting practice site, with Tailwater section embedded' },
+    { domain: buildersDisplay, description: 'general contracting practice site, with Tailwater section embedded' },
     { domain: 'f3properties.com', description: 'real estate brokerage takeover' },
   ];
+}
+
+function resolveBuildersDomain(pick: string): string {
+  if (pick === 'raisedbarbuilders') return 'raisedbarbuilders.com';
+  if (pick === 'raisedbarconstruction') return 'raisedbarconstruction.com';
+  return 'Raised Bar Builders site (domain confirmed by Client at signing)';
+}
+
+function resolveTailwaterDomain(pick: string): string {
+  if (pick === 'tailwaterhailey') return 'tailwaterhailey.com';
+  if (pick === 'livetailwater') return 'livetailwater.com';
+  return 'Tailwater micro-site (domain confirmed by Client at signing)';
 }
 
 const RB_MGMT_TIER_DEFAULTS = {

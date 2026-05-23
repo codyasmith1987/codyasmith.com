@@ -91,7 +91,7 @@ export async function sendContractIssuedEmail(args: {
     <p style="font-size: 15px; color: #4a4239; margin: 0 0 16px;">Hey ${escapeHtml(fn)}, the standard client services agreement is ready for your signature in the portal. Schedule A reflects what we discussed on the call.</p>
     <p style="font-size: 15px; color: #4a4239; margin: 0 0 20px;">Read it through, complete any remaining intake fields, check the two consent boxes, and type your name to sign. The other signer signs independently. When you are both in, the contract is fully executed and a copy lands in your documents area.</p>
     <p style="margin: 24px 0;">
-      <a href="${escapeHtml(args.agreementUrl)}" clicktracking="off" style="display: inline-block; background: #1a1814; color: #faf7f2; padding: 12px 22px; text-decoration: none; font-size: 15px;">Review and sign</a>
+      <a href="${escapeHtml(args.agreementUrl)}" style="display: inline-block; background: #1a1814; color: #faf7f2; padding: 12px 22px; text-decoration: none; font-size: 15px;">Review and sign</a>
     </p>
     <p style="font-size: 14px; color: #6b6359; margin: 16px 0 0;">Questions before signing? Reply to this email or text Cody.</p>
   `;
@@ -117,7 +117,7 @@ export async function sendCountersignNeededEmail(args: {
     <p style="font-size: 15px; color: #4a4239; margin: 0 0 16px;">Hey ${escapeHtml(otherFn)}, ${escapeHtml(fn)} just signed the standard client services agreement on ${escapeHtml(args.signedAt)}. Schedule A and the audit trail are locked at the version they signed.</p>
     <p style="font-size: 15px; color: #4a4239; margin: 0 0 20px;">Review and countersign in the portal to fully execute. If you want to discuss anything before signing, reply to this email or text Cody.</p>
     <p style="margin: 24px 0;">
-      <a href="${escapeHtml(args.agreementUrl)}" clicktracking="off" style="display: inline-block; background: #1a1814; color: #faf7f2; padding: 12px 22px; text-decoration: none; font-size: 15px;">Review and sign</a>
+      <a href="${escapeHtml(args.agreementUrl)}" style="display: inline-block; background: #1a1814; color: #faf7f2; padding: 12px 22px; text-decoration: none; font-size: 15px;">Review and sign</a>
     </p>
   `;
   return sendBrevo({
@@ -143,7 +143,7 @@ export async function sendFullyExecutedEmail(args: {
     <p style="font-size: 15px; color: #4a4239; margin: 0 0 16px;">Hey ${escapeHtml(fn)}, both signatures are in. Your fully executed copy is attached, and the same copy is permanently available in your portal documents area.</p>
     <p style="font-size: 15px; color: #4a4239; margin: 0 0 20px;">Cody will be in touch about kickoff and first-invoice timing.</p>
     <p style="margin: 24px 0;">
-      <a href="${escapeHtml(args.documentsUrl)}" clicktracking="off" style="display: inline-block; background: #1a1814; color: #faf7f2; padding: 12px 22px; text-decoration: none; font-size: 15px;">Open documents area</a>
+      <a href="${escapeHtml(args.documentsUrl)}" style="display: inline-block; background: #1a1814; color: #faf7f2; padding: 12px 22px; text-decoration: none; font-size: 15px;">Open documents area</a>
     </p>
     <p style="font-size: 13px; color: #6b6359; margin: 16px 0 0;">Executed ${escapeHtml(args.finalizedAt)}.</p>
   `;
@@ -173,7 +173,7 @@ export async function sendSignerRevokedEmail(args: {
     <p style="font-size: 15px; color: #4a4239; margin: 0 0 16px;">Hey ${escapeHtml(otherFn)}, ${escapeHtml(fn)} just revoked their signature on the standard client services agreement. They likely want to re-review or change something.</p>
     <p style="font-size: 15px; color: #4a4239; margin: 0 0 20px;">Your signature stays in place; nothing to do unless you want to take yours back too or re-discuss the terms with Cody.</p>
     <p style="margin: 24px 0;">
-      <a href="${escapeHtml(args.agreementUrl)}" clicktracking="off" style="display: inline-block; background: #1a1814; color: #faf7f2; padding: 12px 22px; text-decoration: none; font-size: 15px;">Review the contract</a>
+      <a href="${escapeHtml(args.agreementUrl)}" style="display: inline-block; background: #1a1814; color: #faf7f2; padding: 12px 22px; text-decoration: none; font-size: 15px;">Review the contract</a>
     </p>
   `;
   return sendBrevo({
@@ -199,7 +199,7 @@ export async function sendScheduleChangedEmail(args: {
     ${change}
     <p style="font-size: 15px; color: #4a4239; margin: 0 0 20px;">Open the contract to review the change and re-sign if you agree. If you do not agree, reply to this email or text Cody.</p>
     <p style="margin: 24px 0;">
-      <a href="${escapeHtml(args.agreementUrl)}" clicktracking="off" style="display: inline-block; background: #1a1814; color: #faf7f2; padding: 12px 22px; text-decoration: none; font-size: 15px;">Review and re-sign</a>
+      <a href="${escapeHtml(args.agreementUrl)}" style="display: inline-block; background: #1a1814; color: #faf7f2; padding: 12px 22px; text-decoration: none; font-size: 15px;">Review and re-sign</a>
     </p>
   `;
   return sendBrevo({

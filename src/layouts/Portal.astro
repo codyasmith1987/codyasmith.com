@@ -3,6 +3,7 @@ import '../styles/global.css';
 import '../styles/portal.css';
 import ConfirmModal from '../components/portal/ConfirmModal.astro';
 import Toast from '../components/portal/Toast.astro';
+import { getClientBySlug } from '../lib/auth';
 
 export const prerender = false;
 
@@ -14,6 +15,17 @@ const { title } = Astro.props;
 const user = Astro.locals.user;
 const csrfToken = Astro.locals.csrfToken || '';
 const currentPath = Astro.url.pathname;
+
+// Resolve which proposals the current user should see in the sidebar.
+// For v1 the only proposal is Raised Bar. Admin sees it always; clients
+// see it only if they belong to the proposal's client (Roth Family
+// Companies). Lookup is by slug so the convention can scale to N
+// proposals without code changes.
+const rothFamily = await getClientBySlug('roth-family-companies').catch(() => null);
+const isRothFamilyClient = !!rothFamily && user?.client_id === rothFamily.id;
+const proposalItems = (user?.role === 'admin' || isRothFamilyClient) ? [
+  { href: '/portal/proposals/raised-bar', label: 'Raised Bar' },
+] : [];
 
 // Dashboard — always first
 const topItems = [
@@ -34,23 +46,19 @@ const reportItems = [
   { href: '/portal/files', label: 'Files' },
 ];
 
-// Admin section (admin only)
+// Admin section (admin only). Includes a per-proposal "Manage" entry
+// so the admin can provision the client + users and resend invites for
+// each active proposal in one place.
 const adminItems = [
   { href: '/portal/admin/contracts', label: 'Contracts' },
   { href: '/portal/admin/invoices', label: 'Invoices' },
   { href: '/portal/admin/approvals', label: 'Approvals' },
   { href: '/portal/admin/clients', label: 'Clients' },
   { href: '/portal/admin/users', label: 'Users' },
+  { href: '/portal/admin/proposals/raised-bar', label: 'Manage: Raised Bar' },
   { href: '/portal/admin/csv', label: 'CSV Upload' },
   { href: '/portal/admin/activity', label: 'Activity' },
 ];
-
-// Proposals section. Admin sees the list of active proposals. Clients
-// see only proposals tied to their own engagement (handled per-route
-// for now; for the v1 single proposal this is hardcoded).
-const adminProposalItems = user?.role === 'admin' ? [
-  { href: '/portal/proposals/raised-bar', label: 'Raised Bar' },
-] : [];
 
 // Helper to render a nav link
 const linkClass = (href: string) => [
@@ -112,23 +120,23 @@ const mobileLinkClass = (href: string) => [
             <a href={item.href} class:list={linkClass(item.href)}>{item.label}</a>
           ))}
 
+          {proposalItems.length > 0 && (
+            <>
+              <div class="pt-6 pb-2">
+                <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Proposals</p>
+              </div>
+              {proposalItems.map(item => (
+                <a href={item.href} class:list={linkClass(item.href)}>{item.label}</a>
+              ))}
+            </>
+          )}
+
           {user?.role === 'admin' && (
             <>
               <div class="pt-6 pb-2">
                 <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Admin</p>
               </div>
               {adminItems.map(item => (
-                <a href={item.href} class:list={linkClass(item.href)}>{item.label}</a>
-              ))}
-            </>
-          )}
-
-          {adminProposalItems.length > 0 && (
-            <>
-              <div class="pt-6 pb-2">
-                <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Proposals</p>
-              </div>
-              {adminProposalItems.map(item => (
                 <a href={item.href} class:list={linkClass(item.href)}>{item.label}</a>
               ))}
             </>
@@ -195,22 +203,22 @@ const mobileLinkClass = (href: string) => [
             {reportItems.map(item => (
               <a href={item.href} class:list={mobileLinkClass(item.href)}>{item.label}</a>
             ))}
+            {proposalItems.length > 0 && (
+              <>
+                <div class="pt-4 pb-1">
+                  <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Proposals</p>
+                </div>
+                {proposalItems.map(item => (
+                  <a href={item.href} class:list={mobileLinkClass(item.href)}>{item.label}</a>
+                ))}
+              </>
+            )}
             {user?.role === 'admin' && (
               <>
                 <div class="pt-4 pb-1">
                   <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Admin</p>
                 </div>
                 {adminItems.map(item => (
-                  <a href={item.href} class:list={mobileLinkClass(item.href)}>{item.label}</a>
-                ))}
-              </>
-            )}
-            {adminProposalItems.length > 0 && (
-              <>
-                <div class="pt-4 pb-1">
-                  <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Proposals</p>
-                </div>
-                {adminProposalItems.map(item => (
                   <a href={item.href} class:list={mobileLinkClass(item.href)}>{item.label}</a>
                 ))}
               </>

@@ -328,6 +328,21 @@ export async function userHasPassword(userId: string): Promise<boolean> {
   return result.rows[0][0] != null;
 }
 
+export async function getClientBySlug(slug: string) {
+  const result = await turso.execute({
+    sql: 'SELECT id, name, slug, active FROM clients WHERE slug = ?',
+    args: [slug],
+  });
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0];
+  return {
+    id: row[0] as string,
+    name: row[1] as string,
+    slug: row[2] as string,
+    active: !!(row[3] as number),
+  };
+}
+
 export async function createClient(name: string, slug: string): Promise<string> {
   const id = nanoid();
   await turso.execute({

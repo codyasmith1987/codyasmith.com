@@ -1,10 +1,28 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
-  --font-serif: "Instrument Serif", Georgia, serif;
-  --font-quote: "Lora", Georgia, serif;
-  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+  /* Editorial type stack. Fraunces variable font carries display weight with
+     softened wonky terminals. Newsreader is the reading face. Mono is held
+     back for marginalia and section markers. font-sans falls through to the
+     reading face on purpose so utility classes that grab "font-sans" still
+     compose. font-quote retained for blockquote callbacks on existing pages. */
+  --font-display: "Fraunces", "Times New Roman", serif;
+  --font-serif: "Newsreader", "Iowan Old Style", "Charter", Georgia, serif;
+  --font-sans: "Newsreader", "Iowan Old Style", "Charter", Georgia, serif;
+  --font-quote: "Newsreader", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Editorial spacing scale. Fibonacci-derived so vertical rhythm reads as
+     designed instead of as a Tailwind default (16/24/32/64/96/128 etc.). */
+  --spacing-ed-hair: 0.1875rem;  /* 3px */
+  --spacing-ed-1: 0.4375rem;     /* 7px */
+  --spacing-ed-2: 0.8125rem;     /* 13px */
+  --spacing-ed-3: 1.3125rem;     /* 21px */
+  --spacing-ed-4: 2.125rem;      /* 34px */
+  --spacing-ed-5: 3.4375rem;     /* 55px */
+  --spacing-ed-6: 5.5625rem;     /* 89px */
+  --spacing-ed-7: 9rem;          /* 144px */
+  --spacing-ed-8: 14.5625rem;    /* 233px */
 
   --color-neutral-950: #0a0a0a;
   --color-neutral-900: #171717;
@@ -850,4 +868,485 @@
   filter: brightness(1.08);
   box-shadow: 0 10px 28px color-mix(in srgb, var(--quiz-accent, #c47d5a) 45%, transparent);
   transform: translateY(-1px);
+}
+
+/* ============================================
+   EDITORIAL BROADSHEET SYSTEM
+   Used on the homepage. Asymmetric column grid,
+   high-contrast display type, hairline rules,
+   pull quotes, marginalia. Intentionally not a
+   utility set you can mix into a card grid.
+   ============================================ */
+
+.font-display {
+  font-family: var(--font-display);
+  font-feature-settings: "ss01" on, "ss02" on, "case" on;
+  font-variation-settings: "opsz" 96, "SOFT" 30, "WONK" 0;
+  letter-spacing: -0.022em;
+}
+
+.font-display-soft {
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 144, "SOFT" 100, "WONK" 1;
+  letter-spacing: -0.028em;
+}
+
+.font-news {
+  font-family: var(--font-serif);
+  font-feature-settings: "ss01" on, "onum" on;
+}
+
+.broadsheet {
+  max-width: 78rem;
+  margin: 0 auto;
+  padding-left: clamp(1.5rem, 4vw, 5rem);
+  padding-right: clamp(1.5rem, 4vw, 5rem);
+}
+
+.dateline {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-neutral-500);
+}
+
+.dateline-divider {
+  display: inline-block;
+  width: 1.25rem;
+  height: 0;
+  border-top: 1px solid var(--color-neutral-700);
+  vertical-align: middle;
+  margin: 0 0.75rem;
+}
+
+.masthead-rule {
+  border: 0;
+  border-top: 1px solid var(--color-neutral-700);
+  margin: 0;
+}
+
+.masthead-rule-thick {
+  border: 0;
+  border-top: 3px solid var(--color-neutral-300);
+  margin: 0;
+}
+
+.masthead-rule-hair {
+  border: 0;
+  border-top: 1px solid var(--color-neutral-800);
+  margin: 0;
+}
+
+.display-h1 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-variation-settings: "opsz" 144, "SOFT" 30, "WONK" 0;
+  font-size: clamp(2.75rem, 9vw, 8.5rem);
+  line-height: 0.92;
+  letter-spacing: -0.035em;
+  color: var(--color-neutral-100);
+  text-wrap: balance;
+}
+
+.display-h1 em {
+  font-style: italic;
+  font-variation-settings: "opsz" 144, "SOFT" 100, "WONK" 1;
+  font-weight: 400;
+  color: var(--color-neutral-300);
+}
+
+.display-h2 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-variation-settings: "opsz" 96, "SOFT" 50, "WONK" 0;
+  font-size: clamp(1.75rem, 4.2vw, 3.5rem);
+  line-height: 1.02;
+  letter-spacing: -0.022em;
+  color: var(--color-neutral-100);
+  text-wrap: balance;
+}
+
+.lede {
+  font-family: var(--font-serif);
+  font-variation-settings: "opsz" 18;
+  font-size: clamp(1.0625rem, 1.6vw, 1.375rem);
+  line-height: 1.55;
+  color: var(--color-neutral-300);
+  max-width: 36em;
+}
+
+.lede.lede-narrow {
+  max-width: 28em;
+}
+
+.body-news {
+  font-family: var(--font-serif);
+  font-variation-settings: "opsz" 16;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--color-neutral-400);
+}
+
+.body-news-large {
+  font-family: var(--font-serif);
+  font-variation-settings: "opsz" 22;
+  font-size: clamp(1.125rem, 1.4vw, 1.25rem);
+  line-height: 1.65;
+  color: var(--color-neutral-300);
+}
+
+.dropcap::first-letter {
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 144, "SOFT" 30, "WONK" 0;
+  font-weight: 700;
+  font-size: 5.5em;
+  line-height: 0.82;
+  float: left;
+  margin: 0.05em 0.12em 0 -0.04em;
+  color: var(--color-neutral-100);
+  letter-spacing: -0.04em;
+}
+
+.byline {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-neutral-500);
+}
+
+.section-tag {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-amber-400);
+}
+
+.section-marker {
+  position: sticky;
+  top: 6rem;
+  align-self: start;
+  padding-top: var(--spacing-ed-2);
+  border-top: 3px solid var(--color-neutral-100);
+}
+
+.section-marker__num {
+  display: block;
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 144, "SOFT" 0, "WONK" 0;
+  font-weight: 900;
+  font-size: clamp(3rem, 6vw, 5rem);
+  line-height: 0.85;
+  color: var(--color-neutral-100);
+  letter-spacing: -0.04em;
+}
+
+.section-marker__label {
+  display: block;
+  margin-top: var(--spacing-ed-2);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-neutral-500);
+}
+
+/* Typographic service list. Each item is a row with a number column,
+   the service name as a heading, and the body copy beneath. Hairline
+   rule between items. Hover state pulls the row right a hair and
+   warms the type color. */
+.service-ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: serv;
+}
+
+.service-ol > li {
+  border-top: 1px solid var(--color-neutral-800);
+  position: relative;
+}
+
+.service-ol > li:last-child {
+  border-bottom: 1px solid var(--color-neutral-800);
+}
+
+.service-ol > li > a {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: var(--spacing-ed-4);
+  row-gap: var(--spacing-ed-2);
+  align-items: baseline;
+  padding-top: var(--spacing-ed-4);
+  padding-bottom: var(--spacing-ed-4);
+  text-decoration: none;
+  color: inherit;
+  transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1),
+              color 220ms ease;
+}
+
+.service-ol > li > a:hover {
+  transform: translateX(var(--spacing-ed-2));
+}
+
+.service-ol > li > a:hover .service-ol__name {
+  color: var(--color-amber-400);
+}
+
+.service-ol__num {
+  grid-column: 1;
+  grid-row: 1;
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 96, "SOFT" 30, "WONK" 0;
+  font-weight: 700;
+  font-size: clamp(1.875rem, 3.4vw, 2.625rem);
+  line-height: 0.9;
+  color: var(--color-neutral-500);
+  letter-spacing: -0.02em;
+}
+
+.service-ol__name {
+  grid-column: 2;
+  grid-row: 1;
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 96, "SOFT" 30, "WONK" 0;
+  font-weight: 500;
+  font-size: clamp(1.5rem, 2.6vw, 2.125rem);
+  line-height: 1;
+  color: var(--color-neutral-100);
+  letter-spacing: -0.022em;
+  transition: color 220ms ease;
+}
+
+.service-ol__arrow {
+  grid-column: 3;
+  grid-row: 1;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-variation-settings: "opsz" 96, "SOFT" 100, "WONK" 1;
+  font-size: clamp(1.5rem, 2.6vw, 2.125rem);
+  color: var(--color-neutral-700);
+  transition: color 220ms ease, transform 220ms ease;
+}
+
+.service-ol > li > a:hover .service-ol__arrow {
+  color: var(--color-amber-400);
+  transform: translateX(0.25rem);
+}
+
+.service-ol__body {
+  grid-column: 2 / span 2;
+  grid-row: 2;
+  font-family: var(--font-serif);
+  font-variation-settings: "opsz" 16;
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  color: var(--color-neutral-400);
+  max-width: 38em;
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .service-ol > li > a {
+    grid-template-columns: 3rem 1fr auto;
+    column-gap: var(--spacing-ed-3);
+  }
+}
+
+/* Pull quote: the "Now I do it on purpose." moment. Stretches into the
+   left margin, uses the soft+wonk axes for character, hangs off the body
+   column for a magazine layout feel. */
+.pull-quote {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-style: italic;
+  font-variation-settings: "opsz" 144, "SOFT" 100, "WONK" 1;
+  font-size: clamp(2.25rem, 5.5vw, 4.5rem);
+  line-height: 1.02;
+  letter-spacing: -0.028em;
+  color: var(--color-neutral-100);
+  text-wrap: balance;
+  position: relative;
+  padding-left: 0;
+}
+
+.pull-quote::before {
+  content: "";
+  display: block;
+  width: var(--spacing-ed-5);
+  height: 2px;
+  background: var(--color-amber-400);
+  margin-bottom: var(--spacing-ed-3);
+}
+
+/* Coupon block for the free tool. Dashed border, rotated 1 degree for a
+   torn-out, hand-set feel. Hover removes the rotation and warms the border. */
+.coupon {
+  position: relative;
+  border: 1px dashed var(--color-neutral-700);
+  border-radius: 0;
+  background: var(--color-neutral-900);
+  padding: var(--spacing-ed-5) var(--spacing-ed-5) var(--spacing-ed-4);
+  transform: rotate(-0.6deg);
+  transition: transform 320ms cubic-bezier(0.2, 0.7, 0.2, 1),
+              border-color 220ms ease;
+}
+
+.coupon:hover {
+  transform: rotate(0deg);
+  border-color: var(--color-amber-500);
+}
+
+.coupon::before {
+  content: "FREE COUPON";
+  position: absolute;
+  top: -0.7rem;
+  left: var(--spacing-ed-4);
+  background: var(--color-neutral-950);
+  padding: 0 var(--spacing-ed-2);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.28em;
+  color: var(--color-amber-400);
+}
+
+/* CTA stamp. A bordered, rotated block of type with a postmark hairline
+   ring on the outside. Inspired by ink stamps. Hover straightens it. */
+.cta-stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-ed-3);
+  padding: var(--spacing-ed-3) var(--spacing-ed-5);
+  border: 2px solid var(--color-neutral-100);
+  background: transparent;
+  color: var(--color-neutral-100);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transform: rotate(-1.2deg);
+  position: relative;
+  transition: transform 280ms cubic-bezier(0.2, 0.7, 0.2, 1),
+              background-color 220ms ease,
+              color 220ms ease;
+}
+
+.cta-stamp::before {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border: 1px solid var(--color-neutral-700);
+  pointer-events: none;
+}
+
+.cta-stamp:hover {
+  transform: rotate(0deg);
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-950);
+}
+
+.cta-link {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-variation-settings: "opsz" 22;
+  font-size: 1.125rem;
+  color: var(--color-neutral-400);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 6px;
+  transition: color 220ms ease;
+}
+
+.cta-link:hover {
+  color: var(--color-amber-400);
+}
+
+/* Decorative ornaments. Single-character pieces used between blocks. */
+.ornament {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 144, "SOFT" 100, "WONK" 1;
+  color: var(--color-amber-400);
+  font-size: 1.5rem;
+}
+
+/* Editorial grid: two asymmetric columns. Marker on the left at 1/3 width,
+   body on the right. Stacks under 900px. */
+.editorial-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2.2fr);
+  column-gap: clamp(2rem, 5vw, 6rem);
+  row-gap: var(--spacing-ed-5);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .editorial-grid {
+    grid-template-columns: 1fr;
+  }
+  .section-marker {
+    position: static;
+    padding-top: var(--spacing-ed-3);
+  }
+}
+
+/* Smaller masthead utility for sub-sections. */
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-top: 3px solid var(--color-neutral-100);
+  padding-top: var(--spacing-ed-2);
+  gap: var(--spacing-ed-4);
+}
+
+.folio-num {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+}
+
+/* Sun theme overrides for editorial: rules and stamp invert to dark. */
+[data-theme^="sun-"] .masthead-rule,
+[data-theme^="sun-"] .section-marker {
+  border-color: var(--color-neutral-200);
+}
+
+[data-theme^="sun-"] .display-h1,
+[data-theme^="sun-"] .display-h2,
+[data-theme^="sun-"] .section-marker__num,
+[data-theme^="sun-"] .pull-quote {
+  color: var(--color-neutral-100);
+}
+
+[data-theme^="sun-"] .cta-stamp {
+  border-color: var(--color-neutral-100);
+  color: var(--color-neutral-100);
+}
+
+[data-theme^="sun-"] .cta-stamp:hover {
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-950);
+}
+
+[data-theme^="sun-"] .coupon {
+  background: var(--color-neutral-900);
+  border-color: var(--color-neutral-700);
+}
+
+[data-theme^="sun-"] .coupon::before {
+  background: var(--color-neutral-950);
+}
+
+/* Quiz-active dampens editorial ornaments. */
+html.quiz-active .pull-quote::before,
+html.quiz-active .cta-stamp::before {
+  opacity: 0;
 }

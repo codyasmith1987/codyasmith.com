@@ -21,18 +21,52 @@ const SIGNER_NAME = 'Cody Smith';
 const PROPOSAL_SLUG = 'cody-test';
 const PROPOSAL_TITLE = 'Test Engagement Proposal for Cody';
 
-// Single-signer variant of the Raised Bar config. Reuses every step so
-// the test renders identically to what Jason and Kevin will see; just
-// swaps the signers list and the top-level prep metadata.
+// Single-signer variant of the Raised Bar config. Reuses the steps
+// (mgmt_tier, site_setup, builders_domain, tailwater_domain, consulting,
+// consulting_tier) so the proposal-form mechanics render identically
+// to what real clients see. Replaces the narrative with test-marker
+// copy so the page does not read as Jason and Kevin's actual proposal
+// content with someone else's name pasted on top.
 function buildTestConfig() {
   return {
     ...RAISED_BAR_PROPOSAL_CONFIG,
-    prepared_for: 'Cody Smith',
+    prepared_for: 'Cody Smith (test signer)',
     prepared_on: new Date().toISOString().slice(0, 10),
     title: PROPOSAL_TITLE,
     signers: [
       { id: 'cody', email: SIGNER_EMAIL, name: SIGNER_NAME },
     ],
+    narrative: {
+      intro: `This is a test fixture, not a real engagement proposal. The steps, pricing, and contract preview below are wired to the same raised_bar_v1 formula real clients see, so you can walk the full flow end to end. The narrative paragraphs below are placeholders.`,
+      sections: [
+        {
+          h2: 'What I see in your business',
+          paragraphs: [
+            `Placeholder. In a real proposal, this section reads back to the client what their business is, where it stands today, and what is in their way. It is written from the discovery call notes, not from a template.`,
+            `Use the admin wizard at <a href="/portal/admin/proposals/new">/portal/admin/proposals/new</a> to create real proposals. Each one gets its own intro, "what I see," "what I recommend," and rollout sections.`,
+          ],
+        },
+        {
+          h2: 'What I recommend',
+          paragraphs: [
+            `Placeholder. In a real proposal, this section names the products, explains why they fit, and sets up the picker cards below.`,
+            `The three products are <strong>Web Management</strong>, <strong>Marketing Consulting</strong>, and build work scoped per engagement. Buy one, the other, both, or add a build SOW.`,
+          ],
+        },
+      ],
+      rollout: {
+        h2: 'How it rolls out',
+        intro_html: `Placeholder rollout copy. In a real proposal, this section walks the client through the phasing of the work in plain language.`,
+        phases: [
+          {
+            phase_num: 'Phase 1',
+            h3: 'Test phase',
+            html: `Placeholder. Test the form interaction below.`,
+          },
+        ],
+        outro_html: `End of test narrative.`,
+      },
+    },
   };
 }
 

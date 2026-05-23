@@ -217,16 +217,19 @@ function buildScheduleAForRaisedBarV1(ctx: ScheduleAContext): ScheduleA {
 }
 
 function buildRaisedBarSites(opt: string): Array<{ domain: string; description: string }> {
+  // F3 is an existing site with a known URL. The Builders and Tailwater
+  // sites are net-new builds; the working domains get confirmed at
+  // signing when the registrar entries are nailed down.
   if (opt === 'o2') {
     return [
-      { domain: 'Raised Bar Builders site', description: 'general contracting practice site' },
-      { domain: 'F3 Properties site', description: 'real estate brokerage takeover' },
-      { domain: 'Tailwater micro-site', description: 'three-home pre-sell, standalone URL' },
+      { domain: 'Raised Bar Builders site (domain confirmed at signing)', description: 'general contracting practice site' },
+      { domain: 'f3properties.com', description: 'real estate brokerage takeover' },
+      { domain: 'Tailwater micro-site (domain confirmed at signing)', description: 'three-home pre-sell, standalone URL' },
     ];
   }
   return [
-    { domain: 'Raised Bar Builders site', description: 'general contracting practice site, with Tailwater section embedded' },
-    { domain: 'F3 Properties site', description: 'real estate brokerage takeover' },
+    { domain: 'Raised Bar Builders site (domain confirmed at signing)', description: 'general contracting practice site, with Tailwater section embedded' },
+    { domain: 'f3properties.com', description: 'real estate brokerage takeover' },
   ];
 }
 

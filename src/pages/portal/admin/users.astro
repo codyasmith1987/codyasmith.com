@@ -93,6 +93,13 @@ const clients = await getAllClients();
               )}
               <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                 <button
+                  data-resend-user={u.id}
+                  data-user-name={u.name}
+                  class="text-xs text-neutral-600 hover:text-amber-400 transition-colors duration-300"
+                >
+                  Resend invite
+                </button>
+                <button
                   data-revoke-user={u.id}
                   class="text-xs text-neutral-600 hover:text-amber-400 transition-colors duration-300"
                 >
@@ -120,6 +127,43 @@ const clients = await getAllClients();
 
   <script>
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    // Resend invite
+    document.querySelectorAll('[data-resend-user]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId = (btn as HTMLElement).dataset.resendUser!;
+        const userName = (btn as HTMLElement).dataset.userName!;
+        const original = (btn as HTMLElement).textContent;
+        (btn as HTMLElement).textContent = 'Sending...';
+        (btn as HTMLButtonElement).disabled = true;
+        try {
+          const res = await fetch('/portal/api/admin/resend-invite', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ user_id: userId }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            (btn as HTMLElement).textContent = data.invite_sent ? 'Sent ✓' : 'Link logged';
+            (btn as HTMLElement).classList.add('text-emerald-400');
+            (window as any).__toast(data.invite_sent ? `Invite sent to ${userName}` : 'Brevo not configured; link logged to server', data.invite_sent ? 'success' : 'info');
+          } else {
+            (btn as HTMLElement).textContent = 'Failed';
+            (btn as HTMLElement).classList.add('text-red-400');
+            (window as any).__toast(data.error || 'Failed to resend invite', 'error');
+          }
+        } catch {
+          (btn as HTMLElement).textContent = 'Failed';
+          (btn as HTMLElement).classList.add('text-red-400');
+          (window as any).__toast('Connection error', 'error');
+        }
+        setTimeout(() => {
+          (btn as HTMLElement).textContent = original;
+          (btn as HTMLElement).classList.remove('text-emerald-400', 'text-red-400');
+          (btn as HTMLButtonElement).disabled = false;
+        }, 3000);
+      });
+    });
 
     // Revoke sessions
     document.querySelectorAll('[data-revoke-user]').forEach(btn => {

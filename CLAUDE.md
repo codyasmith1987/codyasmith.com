@@ -90,6 +90,10 @@ This repo is shared. It holds the portal (admin and client surfaces), the person
 - The blog collection
 - Anything under `src/lib/` that the quiz also imports from. Surface before writing and get approval.
 
+**Before debugging any auth, redirect, session, or middleware symptom on the portal:** read `docs/BUGFIX-LOG.md`. Several of these have recurred. If your current symptom matches a logged one, start with the fix in the log before guessing.
+
+**When you fix a non-obvious bug**, append an entry to `docs/BUGFIX-LOG.md` in the format described at the bottom of that file. The point of the log is the pattern, not the patch.
+
 **Portal-side hard rules:**
 
 - No schema changes unless the code forces it. Build with the existing tables (contracts, clients, client_contacts, projects, milestones, users, and the rest) first. Propose a schema change only after showing why it's impossible without one.

@@ -64,7 +64,7 @@ export const POST: APIRoute = async ({ locals, request, url }) => {
               <p style="color: #525252; line-height: 1.6; margin-bottom: 24px;">
                 The link expires in 15 minutes. If it times out, log in with your email at the portal login page for a new one.
               </p>
-              <a href="${escapeHtml(loginUrl)}" style="display: inline-block; background: #f59e0b; color: #0a0a0a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">
+              <a href="${escapeHtml(loginUrl)}" clicktracking="off" style="display: inline-block; background: #f59e0b; color: #0a0a0a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">
                 Log in to your Portal
               </a>
               <p style="color: #a3a3a3; font-size: 12px; margin-top: 32px;">

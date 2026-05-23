@@ -410,7 +410,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
         const codyHtml = `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 22px; color: #1a1814; line-height: 1.55;">
             <h2 style="font-size: 22px; margin: 0 0 16px;">LOI accepted: ${escapeHtml(proposal.title)}</h2>
-            <p style="font-size: 14px; color: #4a4239; margin: 0 0 16px;">Both signers have accepted the Letter of Intent. <strong>Next step</strong>: schedule the call within 24 hours, then issue the master agreement at <a href="https://codyasmith.com/portal/admin/agreements/new?proposal=${escapeHtml(slug)}" style="color: #c47d5a;">/portal/admin/agreements/new</a>.</p>
+            <p style="font-size: 14px; color: #4a4239; margin: 0 0 16px;">Both signers have accepted the Letter of Intent. <strong>Next step</strong>: schedule the call within 24 hours, then issue the master agreement at <a href="https://codyasmith.com/portal/admin/agreements/new?proposal=${escapeHtml(slug)}" clicktracking="off" style="color: #c47d5a;">/portal/admin/agreements/new</a>.</p>
             <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">
               <tr><td style="padding: 6px 0; color: #6b6359;">Web Management</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(pricing?.mgmtTierName || '?')}</td></tr>
               <tr><td style="padding: 6px 0; color: #6b6359;">Site setup</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(pricing?.siteSetupLongLabel || '?')}</td></tr>
@@ -517,7 +517,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
                   <p style="font-size: 15px; color: #4a4239; margin: 0 0 24px;">
                     Log in to the portal to review the selections, change anything you want, and countersign. Both confirmations send when you click countersign.
                   </p>
-                  <a href="https://codyasmith.com/portal/proposals/${escapeHtml(slug)}" style="display: inline-block; background: #c47d5a; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">Log in and countersign</a>
+                  <a href="https://codyasmith.com/portal/proposals/${escapeHtml(slug)}" clicktracking="off" style="display: inline-block; background: #c47d5a; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">Log in and countersign</a>
                   <p style="font-size: 13px; color: #6b6359; margin: 24px 0 0; padding-top: 16px; border-top: 1px solid #e6ddd0;">Cody Smith, Cody A Smith LLC &middot; codyasmith.com</p>
                 </div>
               `,
@@ -557,7 +557,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
               <p style="font-size: 15px; color: #4a4239; margin: 0 0 16px;">
                 If you want to revoke your signature so you can re-review before agreeing, log in and click 'Revoke my signature' on the proposal page. Otherwise this stands and I will be in touch shortly with your contract details.
               </p>
-              <a href="https://codyasmith.com/portal/proposals/${escapeHtml(slug)}" style="display: inline-block; background: #c47d5a; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">Review the proposal</a>
+              <a href="https://codyasmith.com/portal/proposals/${escapeHtml(slug)}" clicktracking="off" style="display: inline-block; background: #c47d5a; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">Review the proposal</a>
               <p style="font-size: 13px; color: #6b6359; margin: 24px 0 0; padding-top: 16px; border-top: 1px solid #e6ddd0;">Cody Smith, Cody A Smith LLC &middot; codyasmith.com</p>
             </div>
           `,

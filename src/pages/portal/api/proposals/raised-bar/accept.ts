@@ -1,17 +1,19 @@
-// Interactive proposal acceptance endpoint.
+// Interactive proposal acceptance endpoint for the Raised Bar engagement.
 //
-// Accepts the Raised Bar engagement signoff from the proposal page form.
-// Authorizes against the same gate as the proposal viewer: admin OR a
-// client user belonging to Raised Bar Group. CSRF is enforced by portal
-// middleware on /portal/api/* (mutating methods).
+// Accepts the four-step decision from the proposal page:
+//   - mgmt_tier: 'good' | 'better' | 'best'
+//   - option:    'o1' | 'o2'  (single unified site vs split with micro-site)
+//   - consulting: 'yes' | 'no'
+//   - consulting_tier: 'good' | 'better' | 'best'  (required only when consulting === 'yes')
+//   - jason_name, kevin_name (typed signatures)
 //
-// On success:
-//   1. Logs activity with the full decision (tier, add-on, signers).
-//   2. Sends Cody a notification email with the decision summary.
-//   3. Sends Jason and Kevin a confirmation email.
+// Authorizes against the same gate as the proposal page (admin OR Raised
+// Bar Group client). Admin is blocked from submit so admin preview does
+// not fire emails. CSRF is enforced by portal middleware on /portal/api/*
+// mutating requests.
 //
-// Returns { ok: true, confirmation_emails } on success so the page can
-// render a thank-you panel with the addresses the emails landed in.
+// On success: logs activity, emails Cody the decision summary, emails
+// Jason and Kevin individual confirmations.
 
 import type { APIRoute } from 'astro';
 import { getClientBySlug } from '../../../../../lib/auth';
@@ -24,31 +26,65 @@ export const prerender = false;
 const json = (data: any, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 
-const TIERS = {
-  good:   { name: 'Good',   monthly: 1031.60, oneTime: 7925 },
-  better: { name: 'Better', monthly: 1891.60, oneTime: 8925 },
-  best:   { name: 'Best',   monthly: 2661.60, oneTime: 10625 },
+const MGMT_TIERS = {
+  good:   { name: 'Good',   base: 297,  onb: 800,  hoursBase: 3 },
+  better: { name: 'Better', base: 497,  onb: 800,  hoursBase: 5 },
+  best:   { name: 'Best',   base: 647,  onb: 1000, hoursBase: 8 },
 } as const;
-const ADDON_MONTHLY: Record<keyof typeof TIERS, number> = { good: 237.60, better: 397.60, best: 517.60 };
-const ADDON_ONETIME = 4500;
+const CONSULTING_TIERS = {
+  good:   { name: 'Good',   monthly: 497,  audit: 1500 },
+  better: { name: 'Better', monthly: 997,  audit: 2500 },
+  best:   { name: 'Best',   monthly: 1497, audit: 4000 },
+} as const;
+const BUILD_BUILDERS = 5625;
+const BUILD_TAILWATER = 4500;
+const F3_ONBOARDING = 800;
 const CLIENT_SLUG = 'raised-bar-group';
 const SIGNER_EMAILS = ['jasonroth1122@gmail.com', 'kevo.adams@gmail.com'];
 
+type MgmtTier = keyof typeof MGMT_TIERS;
+type ConsultingTier = keyof typeof CONSULTING_TIERS;
+type Option = 'o1' | 'o2';
+
 function moneyInt(n: number): string {
-  return '$' + n.toLocaleString('en-US');
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 function money(n: number): string {
   return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function mgmtMonthly(tier: MgmtTier, option: Option): number {
+  const base = MGMT_TIERS[tier].base;
+  const sites = option === 'o2' ? 3 : 2;
+  return base + (sites - 1) * base * 0.80;
+}
+function buildBreakdown(
+  tier: MgmtTier,
+  option: Option,
+  consulting: 'yes' | 'no',
+  consultingTier: ConsultingTier | null,
+): Array<{ label: string; amount: number }> {
+  const rows: Array<{ label: string; amount: number }> = [];
+  rows.push({ label: 'Builders site build', amount: BUILD_BUILDERS });
+  rows.push({ label: 'Builders Web Management onboarding', amount: MGMT_TIERS[tier].onb });
+  rows.push({ label: 'F3 Properties takeover onboarding', amount: F3_ONBOARDING });
+  if (option === 'o2') {
+    rows.push({ label: 'Tailwater micro-site build', amount: BUILD_TAILWATER });
+    rows.push({ label: 'Tailwater multi-site onboarding addition', amount: MGMT_TIERS[tier].onb * 0.25 });
+  }
+  if (consulting === 'yes' && consultingTier) {
+    rows.push({ label: `Marketing Consulting ${CONSULTING_TIERS[consultingTier].name} initial audit`, amount: CONSULTING_TIERS[consultingTier].audit });
+  }
+  return rows;
 }
 
 export const POST: APIRoute = async ({ locals, request }) => {
   const user = locals.user;
   if (!user) return json({ error: 'Not authenticated' }, 401);
 
-  // Acceptance is signed by the client. Admin users can view the
-  // proposal page (preview) but cannot trigger accept — otherwise an
-  // admin clicking Send would fire confirmation emails to Jason and
-  // Kevin without their actual acceptance.
+  // Admin preview mode — admins can view the page but cannot accept the
+  // proposal, otherwise an admin Send would email Jason and Kevin
+  // confirmations without their real acceptance.
   if (user.role === 'admin') {
     return json({ error: 'Admin preview mode. The proposal must be accepted by a Raised Bar Group client user (Jason or Kevin).' }, 403);
   }
@@ -58,58 +94,78 @@ export const POST: APIRoute = async ({ locals, request }) => {
   }
 
   let body: any;
-  try {
-    body = await request.json();
-  } catch {
-    return json({ error: 'Invalid request body' }, 400);
-  }
+  try { body = await request.json(); } catch { return json({ error: 'Invalid request body' }, 400); }
 
-  const tier = String(body?.tier || '').toLowerCase();
-  const addOn = String(body?.add_on || '').toLowerCase();
+  const mgmtTier = String(body?.mgmt_tier || '').toLowerCase();
+  const option = String(body?.option || '').toLowerCase();
+  const consulting = String(body?.consulting || '').toLowerCase();
+  const consultingTierRaw = String(body?.consulting_tier || '').toLowerCase();
   const jasonName = String(body?.jason_name || '').trim();
   const kevinName = String(body?.kevin_name || '').trim();
 
-  if (!(tier in TIERS)) return json({ error: 'Invalid tier' }, 400);
-  if (addOn !== 'yes' && addOn !== 'no') return json({ error: 'Invalid add_on' }, 400);
+  if (!(mgmtTier in MGMT_TIERS)) return json({ error: 'Invalid mgmt_tier' }, 400);
+  if (option !== 'o1' && option !== 'o2') return json({ error: 'Invalid option' }, 400);
+  if (consulting !== 'yes' && consulting !== 'no') return json({ error: 'Invalid consulting' }, 400);
+  let consultingTier: ConsultingTier | null = null;
+  if (consulting === 'yes') {
+    if (!(consultingTierRaw in CONSULTING_TIERS)) return json({ error: 'Consulting tier is required when consulting is yes' }, 400);
+    consultingTier = consultingTierRaw as ConsultingTier;
+  }
   if (!jasonName || jasonName.length > 120) return json({ error: 'Jason name is required' }, 400);
   if (!kevinName || kevinName.length > 120) return json({ error: 'Kevin name is required' }, 400);
 
-  const tierData = TIERS[tier as keyof typeof TIERS];
-  const monthly = tierData.monthly + (addOn === 'yes' ? ADDON_MONTHLY[tier as keyof typeof TIERS] : 0);
-  const oneTime = tierData.oneTime + (addOn === 'yes' ? ADDON_ONETIME : 0);
+  const t = mgmtTier as MgmtTier;
+  const opt = option as Option;
+  const breakdown = buildBreakdown(t, opt, consulting as 'yes' | 'no', consultingTier);
+  const oneTime = breakdown.reduce((s, r) => s + r.amount, 0);
+  const mgmtMo = mgmtMonthly(t, opt);
+  const consultingMo = consulting === 'yes' && consultingTier ? CONSULTING_TIERS[consultingTier].monthly : 0;
+  const monthly = mgmtMo + consultingMo;
   const acceptedAt = new Date().toISOString();
   const sigBy = `${user.name} (${user.email})`;
 
-  // Audit log entry — survives even if the email send fails.
   await logActivity({
     clientId: client?.id || null,
     userId: user.id,
     action: 'accepted',
     entityType: 'proposal',
     entityId: 'raised-bar',
-    summary: `Raised Bar accepted: tier=${tier}, add_on=${addOn}, jason="${jasonName}", kevin="${kevinName}", one_time=${oneTime}, monthly=${monthly.toFixed(2)}, sigBy=${sigBy}`,
+    summary: `Raised Bar accepted: mgmt=${mgmtTier}, option=${option}, consulting=${consulting}${consultingTier ? ' ' + consultingTier : ''}, one_time=${oneTime}, monthly=${monthly.toFixed(2)}, jason="${jasonName}", kevin="${kevinName}", sigBy=${sigBy}`,
   });
 
   const brevoKey = import.meta.env.BREVO_API_KEY;
   const sentTo: string[] = [];
 
   if (!brevoKey) {
-    // No mailer configured. Acceptance is still logged; just report
-    // back so the page can show the thank-you panel and Cody can pick
-    // up the activity row.
     return json({ ok: true, confirmation_emails: '(email service not configured; acceptance logged)' });
   }
 
-  // Notification to Cody.
+  function breakdownTable(): string {
+    return breakdown.map(r =>
+      `<tr><td style="padding: 4px 0; color: #6b6359;">${escapeHtml(r.label)}</td><td style="padding: 4px 0; text-align: right; color: #1a1814;">${escapeHtml(moneyInt(r.amount))}</td></tr>`
+    ).join('');
+  }
+
+  // Cody notification.
   try {
     const codyHtml = `
-      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 22px; color: #1a1814; line-height: 1.55;">
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 22px; color: #1a1814; line-height: 1.55;">
         <h2 style="font-size: 22px; margin: 0 0 16px;">Raised Bar engagement accepted</h2>
         <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">
-          <tr><td style="padding: 6px 0; color: #6b6359;">Tier</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(tierData.name)}</td></tr>
-          <tr><td style="padding: 6px 0; color: #6b6359;">Tailwater micro-site</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${addOn === 'yes' ? 'Yes' : 'No'}</td></tr>
-          <tr><td style="padding: 6px 0; color: #6b6359; border-top: 1px solid #e6ddd0;">One-time at signing</td><td style="padding: 6px 0; text-align: right; font-weight: 600; border-top: 1px solid #e6ddd0;">${escapeHtml(moneyInt(oneTime))}</td></tr>
-          <tr><td style="padding: 6px 0; color: #6b6359;">Monthly recurring</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(money(monthly))}</td></tr>
+          <tr><td style="padding: 6px 0; color: #6b6359;">Web Management</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(MGMT_TIERS[t].name)}</td></tr>
+          <tr><td style="padding: 6px 0; color: #6b6359;">Site setup</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${opt === 'o1' ? 'Option 1: Single unified site (2 sites managed)' : 'Option 2: Split setup with micro-site (3 sites managed)'}</td></tr>
+          <tr><td style="padding: 6px 0; color: #6b6359;">Marketing Consulting</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${consulting === 'yes' && consultingTier ? CONSULTING_TIERS[consultingTier].name : 'Skipped'}</td></tr>
+        </table>
+        <p style="font-size: 12px; color: #6b6359; margin: 0 0 6px; letter-spacing: 0.06em; text-transform: uppercase;">One-time at signing</p>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px;">
+          ${breakdownTable()}
+          <tr><td style="padding: 8px 0 0; border-top: 1px solid #d4cdc0; font-weight: 600;">Total</td><td style="padding: 8px 0 0; text-align: right; border-top: 1px solid #d4cdc0; font-weight: 600;">${escapeHtml(moneyInt(oneTime))}</td></tr>
+        </table>
+        <p style="font-size: 12px; color: #6b6359; margin: 18px 0 6px; letter-spacing: 0.06em; text-transform: uppercase;">Monthly recurring</p>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px;">
+          <tr><td style="padding: 4px 0; color: #6b6359;">Web Management (${escapeHtml(MGMT_TIERS[t].name)}, ${opt === 'o2' ? '3' : '2'} sites)</td><td style="padding: 4px 0; text-align: right; color: #1a1814;">${escapeHtml(money(mgmtMo))}</td></tr>
+          ${consulting === 'yes' && consultingTier ? `<tr><td style="padding: 4px 0; color: #6b6359;">Marketing Consulting (${escapeHtml(CONSULTING_TIERS[consultingTier].name)})</td><td style="padding: 4px 0; text-align: right; color: #1a1814;">${escapeHtml(money(CONSULTING_TIERS[consultingTier].monthly))}</td></tr>` : ''}
+          <tr><td style="padding: 8px 0 0; border-top: 1px solid #d4cdc0; font-weight: 600;">Total</td><td style="padding: 8px 0 0; text-align: right; border-top: 1px solid #d4cdc0; font-weight: 600;">${escapeHtml(money(monthly))}</td></tr>
         </table>
         <p style="font-size: 14px; color: #6b6359; margin: 0 0 8px;">Signed as Jason Roth: <strong style="color: #1a1814;">${escapeHtml(jasonName)}</strong></p>
         <p style="font-size: 14px; color: #6b6359; margin: 0 0 16px;">Signed as Kevin Adams: <strong style="color: #1a1814;">${escapeHtml(kevinName)}</strong></p>
@@ -132,16 +188,17 @@ export const POST: APIRoute = async ({ locals, request }) => {
     logger.error('Brevo Cody notification threw', err);
   }
 
-  // Confirmation to Jason and Kevin.
+  // Signer confirmations.
   for (const signerEmail of SIGNER_EMAILS) {
     try {
       const signerHtml = `
-        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 22px; color: #1a1814; line-height: 1.55;">
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 22px; color: #1a1814; line-height: 1.55;">
           <h2 style="font-size: 22px; margin: 0 0 16px;">Engagement confirmed</h2>
           <p style="font-size: 15px; color: #4a4239; margin: 0 0 16px;">Thanks for sending in your acceptance. Here is what you both picked:</p>
           <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">
-            <tr><td style="padding: 6px 0; color: #6b6359;">Engagement tier</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(tierData.name)}</td></tr>
-            <tr><td style="padding: 6px 0; color: #6b6359;">Tailwater micro-site</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${addOn === 'yes' ? 'Yes, added' : 'No, single unified site'}</td></tr>
+            <tr><td style="padding: 6px 0; color: #6b6359;">Web Management</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(MGMT_TIERS[t].name)}</td></tr>
+            <tr><td style="padding: 6px 0; color: #6b6359;">Site setup</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${opt === 'o1' ? 'Single unified site' : 'Split (with Tailwater micro-site)'}</td></tr>
+            <tr><td style="padding: 6px 0; color: #6b6359;">Marketing Consulting</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${consulting === 'yes' && consultingTier ? CONSULTING_TIERS[consultingTier].name : 'Skipped'}</td></tr>
             <tr><td style="padding: 6px 0; color: #6b6359; border-top: 1px solid #e6ddd0;">One-time at signing</td><td style="padding: 6px 0; text-align: right; font-weight: 600; border-top: 1px solid #e6ddd0;">${escapeHtml(moneyInt(oneTime))}</td></tr>
             <tr><td style="padding: 6px 0; color: #6b6359;">Monthly recurring</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(money(monthly))}</td></tr>
           </table>

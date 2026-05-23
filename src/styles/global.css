@@ -44,6 +44,52 @@
 }
 
 /* ============================================
+   PORTAL EDITORIAL PALETTE
+   Flips the default dark+amber neutral tokens to cream + dark sepia
+   for the portal. Tailwind v4's color utilities reference the CSS
+   variables at runtime (e.g., bg-neutral-950 -> var(--color-neutral-950)),
+   so overriding the variables in this scope flips every pre-existing
+   utility class without per-page edits.
+
+   Applied via body.portal-editorial in Portal.astro, login.astro,
+   set-password.astro.
+
+   Lives in global.css (not portal.css) because portal.css does not
+   get bundled into the client CSS file by the Astro/Vite pipeline,
+   and these rules need to reach the browser.
+   ============================================ */
+
+body.portal-editorial {
+  --color-neutral-950: #faf7f2;   /* page background, cream paper */
+  --color-neutral-900: #f0ead9;   /* card surface */
+  --color-neutral-850: #e8e0cb;
+  --color-neutral-800: #d6cdb5;
+  --color-neutral-700: #a89e8a;
+  --color-neutral-600: #6b6359;   /* muted body text */
+  --color-neutral-500: #4a4239;
+  --color-neutral-400: #38322a;
+  --color-neutral-300: #2c2722;   /* primary body text */
+  --color-neutral-200: #1f1b18;
+  --color-neutral-100: #1a1814;   /* headings, near-black */
+  --color-amber-600: #a86749;
+  --color-amber-500: #c47d5a;     /* terracotta accent */
+  --color-amber-400: #d4906e;
+  background: #faf7f2;
+  color: #1a1814;
+}
+
+body.portal-editorial .border-white\/5  { border-color: rgba(26, 24, 20, 0.06); }
+body.portal-editorial .border-white\/10 { border-color: rgba(26, 24, 20, 0.10); }
+body.portal-editorial .border-white\/15 { border-color: rgba(26, 24, 20, 0.14); }
+body.portal-editorial .border-white\/20 { border-color: rgba(26, 24, 20, 0.18); }
+body.portal-editorial .divide-white\/5  > * + * { border-color: rgba(26, 24, 20, 0.06); }
+body.portal-editorial .divide-white\/10 > * + * { border-color: rgba(26, 24, 20, 0.10); }
+body.portal-editorial .bg-white\/\[0\.03\] { background-color: rgba(26, 24, 20, 0.03); }
+body.portal-editorial .bg-white\/5  { background-color: rgba(26, 24, 20, 0.04); }
+body.portal-editorial .bg-white\/10 { background-color: rgba(26, 24, 20, 0.06); }
+body.portal-editorial .blur-3xl { opacity: 0.35; filter: blur(64px); }
+
+/* ============================================
    SUN THEMES (light base)
    Stars = sharper, more precise, cooler undertone
    Clouds = softer, more atmospheric, warmer undertone

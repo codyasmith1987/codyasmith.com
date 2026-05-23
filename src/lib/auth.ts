@@ -216,14 +216,26 @@ export async function validateSession(token: string): Promise<{
     });
   }
 
+  // SQL columns (positional):
+  //   0: s.id (session_id)         1: s.expires_at
+  //   2: s.user_id                  3: s.created_at
+  //   4: u.email                    5: u.name
+  //   6: u.role                     7: u.client_id
+  //   8: u.permissions
+  //
+  // Previous mapping started at row[4] for id, which silently put u.email
+  // into user.id and shifted every other field by one. The portal's
+  // password-set middleware called userHasPassword(user.id) with what was
+  // actually an email, found no matching user, and forced an infinite
+  // redirect loop to /portal/set-password. See SEC3-008 password-set rule.
   return {
     user: {
-      id: row[4] as string,
-      email: row[5] as string,
-      name: row[6] as string,
-      role: row[7] as 'admin' | 'client',
-      client_id: row[8] as string | null,
-      permissions: (row[9] as string | null) || null,
+      id: row[2] as string,
+      email: row[4] as string,
+      name: row[5] as string,
+      role: row[6] as 'admin' | 'client',
+      client_id: row[7] as string | null,
+      permissions: (row[8] as string | null) || null,
     },
     session: {
       id: sessionId,

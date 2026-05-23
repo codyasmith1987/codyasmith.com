@@ -1,0 +1,208 @@
+---
+// Print-friendly view of the contract. Same body + Schedule A as the
+// execution page, but stripped of nav, sign block, and intake. Designed
+// to print on letter-size paper through the browser's native print
+// dialog.
+
+export const prerender = false;
+
+import {
+  getAgreementBySlug,
+  getSignersForAgreement,
+  getSignaturesForAgreement,
+  getClientMetadata,
+} from '../../../../lib/agreements';
+import { getContractTemplate } from '../../../../lib/contract-templates';
+import { renderTemplate, renderScheduleA, PRACTICE } from '../../../../lib/contract-render';
+import turso from '../../../../lib/turso';
+
+const user = Astro.locals.user;
+if (!user) return Astro.redirect('/portal/login');
+
+const slug = Astro.params.slug || '';
+const agreement = await getAgreementBySlug(slug);
+if (!agreement) return new Response('Not found', { status: 404 });
+
+if (user.role !== 'admin' && user.client_id !== agreement.client_id) {
+  return Astro.redirect('/portal/dashboard');
+}
+
+const template = await getContractTemplate(agreement.template_slug, agreement.template_version);
+if (!template) return new Response('Template not found', { status: 500 });
+
+const clientMetadata = await getClientMetadata(agreement.client_id);
+const signers = await getSignersForAgreement(agreement.id);
+const signatures = await getSignaturesForAgreement(agreement.id, true);
+const activeBySigner: Record<string, any> = {};
+for (const sig of signatures) {
+  if (!sig.revoked_at) activeBySigner[sig.signer_id] = sig;
+}
+
+const clientRow = await turso.execute({
+  sql: `SELECT name FROM clients WHERE id = ? LIMIT 1`,
+  args: [agreement.client_id],
+});
+const clientFallbackName = (clientRow.rows[0]?.[0] as string) || 'Client';
+const clientLegalName = clientMetadata?.legal_entity_name || clientFallbackName;
+
+const renderContext = {
+  client: {
+    legal_entity_name: clientLegalName,
+    entity_type: clientMetadata?.entity_type || '',
+    state_of_organization: clientMetadata?.state_of_organization || '',
+    primary_contact_name: clientMetadata?.primary_contact_name || undefined,
+    primary_contact_title: clientMetadata?.primary_contact_title || undefined,
+    primary_contact_email: clientMetadata?.primary_contact_email || undefined,
+    primary_contact_phone: clientMetadata?.primary_contact_phone || undefined,
+    principal_address: clientMetadata?.principal_address || undefined,
+    notice_address: clientMetadata?.notice_address || undefined,
+  },
+  schedule_a: agreement.schedule_a,
+  practice: PRACTICE,
+  today: new Date().toISOString().slice(0, 10),
+};
+const mode = user.role === 'admin' ? 'admin-rendered' : 'client';
+const bodyHtml = renderTemplate(template.body_markdown, renderContext, mode);
+const scheduleAHtml = renderScheduleA(agreement.schedule_a, mode);
+
+const pageTitle = `${template.title} — ${clientLegalName}`;
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+<title>{pageTitle}</title>
+<style>
+  body {
+    margin: 0;
+    padding: 0.75in;
+    background: #ffffff;
+    color: #111;
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 11pt;
+    line-height: 1.45;
+    max-width: 7in;
+    margin: 0 auto;
+  }
+  .print-header {
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 12pt;
+    margin-bottom: 18pt;
+  }
+  .print-header .eyebrow {
+    font-size: 9pt;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #555;
+    margin: 0 0 6pt;
+  }
+  .print-header h1 {
+    margin: 0 0 6pt;
+    font-size: 20pt;
+    font-weight: 600;
+  }
+  .print-header .meta {
+    font-size: 9pt;
+    color: #555;
+  }
+  h2 {
+    font-size: 14pt;
+    font-weight: 600;
+    margin: 18pt 0 8pt;
+  }
+  h3 {
+    font-size: 12pt;
+    font-weight: 600;
+    margin: 12pt 0 6pt;
+  }
+  p { margin: 0 0 9pt; }
+  ul, ol { margin: 0 0 9pt 18pt; }
+  li { margin-bottom: 4pt; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 9pt 0;
+    font-size: 10pt;
+  }
+  th, td {
+    padding: 6pt 8pt;
+    border: 1px solid #ccc;
+    vertical-align: top;
+    text-align: left;
+  }
+  th { background: #f4f0e8; font-weight: 600; }
+  .schedule-a {
+    margin-top: 24pt;
+    padding-top: 18pt;
+    border-top: 2pt solid #c47d5a;
+  }
+  .signature-record {
+    margin-top: 24pt;
+    padding-top: 18pt;
+    border-top: 1px solid #ccc;
+    font-size: 10pt;
+  }
+  .signature-record .signer {
+    margin-bottom: 9pt;
+  }
+  .metadata-pending {
+    color: #7a1f1f;
+    font-style: italic;
+  }
+  @media print {
+    body { padding: 0; }
+    .print-actions { display: none; }
+  }
+  .print-actions {
+    margin-bottom: 24pt;
+    padding: 12pt;
+    background: #f4f0e8;
+    text-align: center;
+  }
+  .print-actions button {
+    padding: 8pt 16pt;
+    background: #111;
+    color: #fff;
+    border: none;
+    font-size: 11pt;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+  <div class="print-actions">
+    <button type="button" onclick="window.print()">Print this document</button>
+    <span style="margin-left: 12pt; font-size: 10pt;">or use your browser's print menu</span>
+  </div>
+
+  <div class="print-header">
+    <p class="eyebrow">{clientLegalName}</p>
+    <h1>{template.title}</h1>
+    <p class="meta">Status: {agreement.status} &middot; Generated {new Date().toLocaleDateString('en-US', { dateStyle: 'long' })}</p>
+  </div>
+
+  <div set:html={bodyHtml} />
+
+  <div set:html={scheduleAHtml} />
+
+  {signatures.length > 0 && (
+    <div class="signature-record">
+      <h2>Signature record</h2>
+      <p>Signatures captured electronically in the codyasmith.com portal under the Utah Uniform Electronic Transactions Act (Utah Code Title 46 Chapter 4) and the federal ESIGN Act.</p>
+      {signers.map(s => {
+        const active = activeBySigner[s.id];
+        if (!active) return null;
+        return (
+          <div class="signer">
+            <strong>{s.name_snapshot}</strong> ({s.signer_role})<br/>
+            Signed as: <em>{active.signature_value}</em><br/>
+            Signed at: {new Date(active.signed_at).toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' })}
+          </div>
+        );
+      })}
+    </div>
+  )}
+</body>
+</html>

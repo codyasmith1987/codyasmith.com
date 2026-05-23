@@ -217,17 +217,20 @@ function buildScheduleAForRaisedBarV1(ctx: ScheduleAContext): ScheduleA {
 }
 
 function buildRaisedBarSites(opt: string): Array<{ domain: string; description: string }> {
-  // Domains confirmed available May 23, 2026 via RDAP and reserved for
-  // the engagement. F3 is the existing takeover site.
+  // F3 is the existing takeover site (known URL). The Builders and
+  // Tailwater sites are net-new builds; their domain choices belong to
+  // the Client, not the Practice. The Practice has researched
+  // available .com options and will present them; the Client confirms
+  // the pick before the build kicks off.
   if (opt === 'o2') {
     return [
-      { domain: 'raisedbarbuilders.com', description: 'general contracting practice site' },
+      { domain: 'Raised Bar Builders site (domain confirmed by Client at signing)', description: 'general contracting practice site' },
       { domain: 'f3properties.com', description: 'real estate brokerage takeover' },
-      { domain: 'tailwaterhailey.com', description: 'three-home pre-sell micro-site, standalone URL' },
+      { domain: 'Tailwater micro-site (domain confirmed by Client at signing)', description: 'three-home pre-sell, standalone URL' },
     ];
   }
   return [
-    { domain: 'raisedbarbuilders.com', description: 'general contracting practice site, with Tailwater section embedded at tailwaterhailey.com' },
+    { domain: 'Raised Bar Builders site (domain confirmed by Client at signing)', description: 'general contracting practice site, with Tailwater section embedded' },
     { domain: 'f3properties.com', description: 'real estate brokerage takeover' },
   ];
 }

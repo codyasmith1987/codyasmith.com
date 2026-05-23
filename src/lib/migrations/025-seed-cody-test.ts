@@ -13,6 +13,7 @@ import turso from '../turso';
 import { nanoid } from 'nanoid';
 import type { Migration } from '../migrate';
 import { RAISED_BAR_PROPOSAL_CONFIG } from '../proposal-configs/raised-bar';
+import { upsertClientMetadata } from '../agreements';
 
 const CLIENT_SLUG = 'cody-test';
 const CLIENT_NAME = 'Cody Test';
@@ -104,7 +105,24 @@ const migration: Migration = {
       });
     }
 
-    // 3) Proposal.
+    // 3) Client metadata. Pre-filling so the preview contract shows
+    // real values for legal entity, contact, etc., instead of the
+    // [to be confirmed] placeholders. Mirrors what the admin wizard
+    // will capture for real proposals.
+    await upsertClientMetadata({
+      client_id: clientId,
+      legal_entity_name: 'Cody Test LLC',
+      entity_type: 'limited liability company',
+      state_of_organization: 'Utah',
+      principal_address: '604 Morningside Circle, Cedar City, UT 84720',
+      notice_address: '604 Morningside Circle, Cedar City, UT 84720',
+      primary_contact_name: SIGNER_NAME,
+      primary_contact_title: 'Member',
+      primary_contact_email: SIGNER_EMAIL,
+      primary_contact_phone: '435-868-7133',
+    });
+
+    // 4) Proposal.
     const existingProposal = await turso.execute({
       sql: 'SELECT id FROM proposals WHERE slug = ? LIMIT 1',
       args: [PROPOSAL_SLUG],

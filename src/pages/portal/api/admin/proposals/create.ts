@@ -13,6 +13,7 @@ import { nanoid } from 'nanoid';
 import turso from '../../../../../lib/turso';
 import { logActivity } from '../../../../../lib/activity';
 import { logger } from '../../../../../lib/logger';
+import { upsertClientMetadata } from '../../../../../lib/agreements';
 
 export const prerender = false;
 
@@ -75,6 +76,34 @@ export const POST: APIRoute = async ({ locals, request }) => {
     }
     logger.error('Create proposal error', err);
     return json({ error: 'Failed to create proposal' }, 500);
+  }
+
+  // Optional client legal-entity metadata. If the wizard sent any of
+  // these fields, upsert into client_metadata so the contract preview
+  // reads real values instead of [to be confirmed] placeholders.
+  // Treated as best-effort: a failure here does not block proposal
+  // creation, since the proposal can still function with placeholders.
+  const metadata = body?.client_metadata;
+  if (metadata && typeof metadata === 'object') {
+    const hasAny = Object.values(metadata).some(v => typeof v === 'string' && v.trim().length > 0);
+    if (hasAny) {
+      try {
+        await upsertClientMetadata({
+          client_id,
+          legal_entity_name: typeof metadata.legal_entity_name === 'string' ? metadata.legal_entity_name.trim() || null : null,
+          entity_type: typeof metadata.entity_type === 'string' ? metadata.entity_type.trim() || null : null,
+          state_of_organization: typeof metadata.state_of_organization === 'string' ? metadata.state_of_organization.trim() || null : null,
+          principal_address: typeof metadata.principal_address === 'string' ? metadata.principal_address.trim() || null : null,
+          notice_address: typeof metadata.notice_address === 'string' ? metadata.notice_address.trim() || null : null,
+          primary_contact_name: typeof metadata.primary_contact_name === 'string' ? metadata.primary_contact_name.trim() || null : null,
+          primary_contact_title: typeof metadata.primary_contact_title === 'string' ? metadata.primary_contact_title.trim() || null : null,
+          primary_contact_email: typeof metadata.primary_contact_email === 'string' ? metadata.primary_contact_email.trim() || null : null,
+          primary_contact_phone: typeof metadata.primary_contact_phone === 'string' ? metadata.primary_contact_phone.trim() || null : null,
+        });
+      } catch (err) {
+        logger.error('Client metadata upsert failed during proposal create', err);
+      }
+    }
   }
 
   await logActivity({

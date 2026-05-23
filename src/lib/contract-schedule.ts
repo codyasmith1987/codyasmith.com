@@ -107,7 +107,7 @@ export interface DayOneAccess {
 
 export interface PassThroughItem {
   name: string;
-  annual_cost: number;
+  monthly_cost: number;
   billing_note: string;
 }
 
@@ -177,9 +177,9 @@ function buildScheduleAForRaisedBarV1(ctx: ScheduleAContext): ScheduleA {
   // Pass-through items at signing: the $15/site monthly plugin
   // management fee per the business rules. Itemized per site.
   const passThrough: PassThroughItem[] = wmSites.map(site => ({
-    name: `Plugin and software management fee (${site.domain})`,
-    annual_cost: 15 * 12,
-    billing_note: '$15/month, billed monthly with the recurring invoice',
+    name: `Plugin and software management (${site.domain})`,
+    monthly_cost: 15,
+    billing_note: 'billed monthly with the recurring invoice',
   }));
 
   return {

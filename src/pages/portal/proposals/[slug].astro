@@ -424,6 +424,10 @@ const clientConfig = {
     color: #6b6359;
     font-style: italic;
   }
+  .field-status.name-warning {
+    color: #7a1f1f;
+    font-style: normal;
+  }
   .field-status.signed {
     color: #1d2c3a;
     font-style: normal;
@@ -567,6 +571,15 @@ const clientConfig = {
     font-size: 15px;
     line-height: 1.55;
     flex: 1;
+  }
+  /* When a tier card has no price block (e.g., the domain pickers),
+     the features list sits directly under the tagline. Add a divider
+     above so the layout doesn't collapse and the card reads as
+     intentional rather than half-rendered. */
+  .tier .tagline + ul {
+    padding-top: 22px;
+    margin-top: 0;
+    border-top: 1px solid #e6ddd0;
   }
   .tier ul li {
     padding: 0 0 14px 16px;
@@ -909,9 +922,9 @@ const clientConfig = {
 </div>
 
 <div class="contract-link-card">
-  <p class="contract-link-eyebrow">The standard contract</p>
-  <p class="contract-link-body">This is the agreement we sign in the portal after the call. Schedule A, the engagement specifics, already reflects your selections above. Open it any time to read what you are agreeing to before we get on the phone.</p>
-  <a href={`/portal/contracts/preview/${proposalRow.slug}`} class="contract-link-button">View standard contract <span class="contract-link-arrow">&rarr;</span></a>
+  <p class="contract-link-eyebrow">Your engagement agreement</p>
+  <p class="contract-link-body">Already drafted from your selections above. Schedule A, the engagement-specific part, reflects what you've picked. The standard terms in the body apply to every engagement I run. After our call we may adjust Schedule A together; once it's settled the agreement is issued for your signature in the portal.</p>
+  <a href={`/portal/contracts/preview/${proposalRow.slug}`} class="contract-link-button">Open the agreement <span class="contract-link-arrow">&rarr;</span></a>
 </div>
 
 </div>
@@ -1273,10 +1286,26 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
     var sendBtn = document.getElementById('send-proposal');
     var revokeBtn = document.getElementById('revoke-signature');
     var formNote = document.getElementById('form-note');
+    // Loose name-match check. The typed value must contain the first
+    // and last name of the signer (case-insensitive). Stops a logged-in
+    // user from accepting under a random name. Allows middle initials,
+    // suffixes, and casing differences.
+    function nameMatchesSigner(typed, signer) {
+      if (!typed || !signer || !signer.name) return false;
+      var t = String(typed).toLowerCase();
+      var parts = String(signer.name).toLowerCase().split(/\s+/).filter(Boolean);
+      if (parts.length === 0) return false;
+      var first = parts[0];
+      var last = parts.length > 1 ? parts[parts.length - 1] : first;
+      return t.indexOf(first) !== -1 && t.indexOf(last) !== -1;
+    }
+
+    var isSoleSigner = SIGNERS.length === 1;
+
     if (sendBtn) {
       if (state.finalizedAt) {
         sendBtn.disabled = true;
-        sendBtn.textContent = 'Both confirmations in';
+        sendBtn.textContent = isSoleSigner ? 'Confirmation in' : 'Both confirmations in';
         if (revokeBtn) revokeBtn.classList.add('step-hidden');
       } else if (SIGNER_ROLE === 'admin') {
         sendBtn.disabled = true;
@@ -1303,19 +1332,37 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
             }
           }
           var myName = myInput ? myInput.value.trim() : '';
+          var nameOk = nameMatchesSigner(myName, meSigner);
+          // Surface a quiet warning under the name input when the
+          // typed value does not look like the signer. Button stays
+          // disabled until the name matches.
+          var myStatus = document.getElementById('signer-status-' + meSigner.id);
+          if (myStatus && !mySig) {
+            if (myName && !nameOk) {
+              myStatus.textContent = 'Type your name as ' + meSigner.name + '.';
+              myStatus.classList.add('name-warning');
+            } else {
+              myStatus.textContent = '';
+              myStatus.classList.remove('name-warning');
+            }
+          }
           if (mySig) {
             sendBtn.disabled = true;
-            sendBtn.textContent = 'You accepted. Waiting on the other.';
-            if (formNote) formNote.textContent = 'Your acceptance is in. The other person will see your selections when they log in and can co-confirm. If you want to change anything, revoke your acceptance first.';
+            sendBtn.textContent = isSoleSigner ? 'You accepted' : 'You accepted. Waiting on the other.';
+            if (formNote) formNote.textContent = isSoleSigner
+              ? 'Your acceptance is in. Revoke it if you want to change anything.'
+              : 'Your acceptance is in. The other person will see your selections when they log in and can co-confirm. If you want to change anything, revoke your acceptance first.';
             if (revokeBtn) revokeBtn.classList.remove('step-hidden');
           } else {
-            sendBtn.disabled = !(selectionsComplete() && myName);
+            sendBtn.disabled = !(selectionsComplete() && nameOk);
             if (otherSig) {
               sendBtn.textContent = 'Co-confirm and request the call';
               if (formNote) formNote.textContent = 'The other person already accepted. You can change any selection before co-confirming — they will get an email about the change. Type your name and click to co-confirm.';
             } else {
               sendBtn.textContent = 'Accept and request a call';
-              if (formNote) formNote.textContent = 'Your selections save as you go. Type your name and click to accept; the other person will get an email asking them to log in and co-confirm.';
+              if (formNote) formNote.textContent = isSoleSigner
+                ? 'Your selections save as you go. Type your name and click to accept; Cody will reach out within 24 hours to schedule the call.'
+                : 'Your selections save as you go. Type your name and click to accept; the other person will get an email asking them to log in and co-confirm.';
             }
             if (revokeBtn) revokeBtn.classList.add('step-hidden');
           }
@@ -1443,11 +1490,12 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
         }
         if (result.data && result.data.status === 'finalized') {
           var container = document.getElementById('proposal-form-container');
-          var emails = (result.data && result.data.confirmation_emails) || 'you both and Cody';
+          var emails = (result.data && result.data.confirmation_emails) || (isSoleSigner ? 'you and Cody' : 'you both and Cody');
+          var headline = isSoleSigner ? "You're in." : "You're both in.";
           container.innerHTML =
             '<div class="success-message">' +
-              '<h3>You are both in.</h3>' +
-              '<p>This is a Letter of Intent, not a contract yet. Cody reaches out within twenty-four hours to schedule the call. After that call, the formal Standard Client Services Agreement and Schedule A go into the portal for signature. The standard contract is at the bottom of this page if you want to start reading before then.</p>' +
+              '<h3>' + headline + '</h3>' +
+              '<p>This is a Letter of Intent, not a contract yet. Cody reaches out within twenty-four hours to schedule the call. After that call, your engagement agreement is issued in the portal for signature. It is already drafted from your selections; the link is at the bottom of this page if you want to start reading now.</p>' +
               '<p>Reach Cody at <a href="mailto:cody@codyasmith.com">cody@codyasmith.com</a> any time with questions.</p>' +
               '<p class="success-note">Confirmation sent to ' + emails + '.</p>' +
             '</div>';
@@ -1500,10 +1548,11 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
     if (state.finalizedAt) {
       var container = document.getElementById('proposal-form-container');
       if (container) {
+        var headline2 = (SIGNERS && SIGNERS.length === 1) ? "You're in." : "You're both in.";
         container.innerHTML =
           '<div class="success-message">' +
-            '<h3>You are both in.</h3>' +
-            '<p>This is a Letter of Intent, not a contract yet. Cody is in touch to schedule the call; the formal Standard Client Services Agreement goes into the portal for signature after that.</p>' +
+            '<h3>' + headline2 + '</h3>' +
+            '<p>This is a Letter of Intent, not a contract yet. Cody is in touch to schedule the call; your engagement agreement goes into the portal for signature after that.</p>' +
           '</div>';
       }
     }

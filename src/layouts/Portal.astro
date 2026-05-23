@@ -83,7 +83,13 @@ const mobileLinkClass = (href: string) => [
     <title>{title} | Portal</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    {/* Editorial type stack — same Fraunces + Newsreader + JetBrains Mono
+        as the marketing site so the portal reads as part of the same
+        publication, not a tacked-on admin tool. */}
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,400,30,0;9..144,500,30,0;9..144,700,50,1;9..144,900,100,1&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=JetBrains+Mono:wght@400;500&display=swap"
+    />
     <meta name="csrf-token" content={csrfToken} />
   </head>
   <body class="min-h-screen bg-neutral-950 text-neutral-300 font-sans">
@@ -91,10 +97,14 @@ const mobileLinkClass = (href: string) => [
       <!-- Sidebar -->
       <aside class="hidden md:flex w-64 flex-col bg-neutral-900/50 border-r border-white/5">
         <div class="p-6 pb-5 border-b border-white/5">
-          <a href="/portal/dashboard" class="font-serif text-xl text-neutral-100 hover:text-amber-400 transition-colors duration-300">
+          <a
+            href="/portal/dashboard"
+            class="text-2xl text-neutral-100 hover:text-amber-400 transition-colors duration-300"
+            style="font-family: var(--font-display); font-variation-settings: 'opsz' 48, 'SOFT' 30, 'WONK' 0; letter-spacing: -0.022em;"
+          >
             Cody Smith
           </a>
-          <p class="text-[10px] text-neutral-600 font-mono tracking-[0.15em] uppercase mt-1.5">Client Portal</p>
+          <p class="text-[10px] text-neutral-600 tracking-[0.15em] uppercase mt-1.5" style="font-family: var(--font-mono);">Client Portal</p>
         </div>
 
         <nav class="flex-1 px-4 py-6 space-y-1">
@@ -170,7 +180,11 @@ const mobileLinkClass = (href: string) => [
       <!-- Mobile header -->
       <div class="flex flex-col flex-1">
         <header class="md:hidden flex items-center justify-between px-6 py-4 bg-neutral-900/50 border-b border-white/5">
-          <a href="/portal/dashboard" class="font-serif text-lg text-neutral-100">Portal</a>
+          <a
+            href="/portal/dashboard"
+            class="text-xl text-neutral-100"
+            style="font-family: var(--font-display); font-variation-settings: 'opsz' 36, 'SOFT' 30, 'WONK' 0; letter-spacing: -0.022em;"
+          >Portal</a>
           <button id="mobile-menu-btn" class="text-neutral-400 hover:text-neutral-200 transition-colors" aria-label="Menu" aria-expanded="false">
             <svg id="mob-icon-open" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h16M4 18h16" />

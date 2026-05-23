@@ -1,0 +1,593 @@
+---
+// Contract execution page. Loads the issued client_agreements row by
+// slug and renders: contract body (sections 1-25) + Schedule A + inline
+// intake form (missing fields only) + UETA sign block (consent + intent
+// + typed name) + co-signer status + status banner.
+//
+// All four UETA pillars are captured server-side at sign POST time
+// (see src/pages/portal/api/contracts/[slug]/sign.ts).
+
+export const prerender = false;
+
+import {
+  getAgreementBySlug,
+  getSignersForAgreement,
+  getSignaturesForAgreement,
+  getClientMetadata,
+} from '../../../lib/agreements';
+import { getContractTemplate } from '../../../lib/contract-templates';
+import { renderTemplate, renderScheduleA, computeDocumentHash, PRACTICE } from '../../../lib/contract-render';
+import ContractRenderer from '../../../components/portal/ContractRenderer.astro';
+import turso from '../../../lib/turso';
+
+const user = Astro.locals.user;
+if (!user) return Astro.redirect('/portal/login');
+
+const slug = Astro.params.slug || '';
+const agreement = await getAgreementBySlug(slug);
+if (!agreement) return new Response('Not found', { status: 404 });
+
+// Auth: matching client or admin.
+const isAdmin = user.role === 'admin';
+if (!isAdmin && user.client_id !== agreement.client_id) {
+  return Astro.redirect('/portal/dashboard');
+}
+
+// Load supporting data.
+const template = await getContractTemplate(agreement.template_slug, agreement.template_version);
+if (!template) return new Response('Template not found', { status: 500 });
+
+const clientMetadata = await getClientMetadata(agreement.client_id);
+const signers = await getSignersForAgreement(agreement.id);
+const signatures = await getSignaturesForAgreement(agreement.id, true);
+
+// Active signature by signer id (revoked rows kept for the audit
+// trail but ignored for the "are you signed" check).
+const activeBySigner: Record<string, any> = {};
+for (const sig of signatures) {
+  if (!sig.revoked_at) activeBySigner[sig.signer_id] = sig;
+}
+
+// Resolve client legal name + render context.
+const clientRow = await turso.execute({
+  sql: `SELECT name FROM clients WHERE id = ? LIMIT 1`,
+  args: [agreement.client_id],
+});
+const clientFallbackName = (clientRow.rows[0]?.[0] as string) || 'Client';
+const clientLegalName = clientMetadata?.legal_entity_name || clientFallbackName;
+
+const renderContext = {
+  client: {
+    legal_entity_name: clientLegalName,
+    entity_type: clientMetadata?.entity_type || '',
+    state_of_organization: clientMetadata?.state_of_organization || '',
+    primary_contact_name: clientMetadata?.primary_contact_name || undefined,
+    primary_contact_title: clientMetadata?.primary_contact_title || undefined,
+    primary_contact_email: clientMetadata?.primary_contact_email || undefined,
+    primary_contact_phone: clientMetadata?.primary_contact_phone || undefined,
+    principal_address: clientMetadata?.principal_address || undefined,
+    notice_address: clientMetadata?.notice_address || undefined,
+  },
+  schedule_a: agreement.schedule_a,
+  practice: PRACTICE,
+  today: new Date().toISOString().slice(0, 10),
+};
+
+const mode = isAdmin ? 'admin-rendered' : 'client';
+const bodyHtml = renderTemplate(template.body_markdown, renderContext, mode);
+const scheduleAHtml = renderScheduleA(agreement.schedule_a, mode);
+const documentHash = computeDocumentHash({
+  body_html: bodyHtml,
+  schedule_a: agreement.schedule_a,
+  client: renderContext.client,
+});
+
+// Who is the calling user?
+const myEmailLc = (user.email || '').toLowerCase().trim();
+const meSigner = signers.find(s => s.email_snapshot.toLowerCase() === myEmailLc);
+const myActiveSig = meSigner ? activeBySigner[meSigner.id] : null;
+
+// Intake completeness.
+const requiredIntakeFields = [
+  { id: 'legal_entity_name', label: 'Legal entity name', value: clientMetadata?.legal_entity_name, required: true, type: 'text' },
+  { id: 'entity_type', label: 'Entity type (LLC, S-corp, etc.)', value: clientMetadata?.entity_type, required: false, type: 'text' },
+  { id: 'state_of_organization', label: 'State of organization', value: clientMetadata?.state_of_organization, required: false, type: 'text' },
+  { id: 'primary_contact_name', label: 'Primary contact name', value: clientMetadata?.primary_contact_name, required: false, type: 'text' },
+  { id: 'primary_contact_title', label: 'Primary contact title', value: clientMetadata?.primary_contact_title, required: false, type: 'text' },
+  { id: 'primary_contact_email', label: 'Primary contact email', value: clientMetadata?.primary_contact_email, required: true, type: 'email' },
+  { id: 'primary_contact_phone', label: 'Primary contact phone', value: clientMetadata?.primary_contact_phone, required: false, type: 'tel' },
+  { id: 'principal_address', label: 'Principal address', value: clientMetadata?.principal_address, required: false, type: 'textarea' },
+  { id: 'notice_address', label: 'Notice address (if different)', value: clientMetadata?.notice_address, required: false, type: 'textarea' },
+];
+const missingIntake = requiredIntakeFields.filter(f => !f.value);
+const intakeComplete = Boolean(clientMetadata?.legal_entity_name && clientMetadata?.primary_contact_email);
+
+// Status banner.
+let bannerKind = '';
+let bannerHtml = '';
+if (agreement.status === 'executed') {
+  bannerKind = 'executed';
+  bannerHtml = `<strong>Fully executed.</strong> Your copy is in the documents area.`;
+} else if (agreement.status === 'voided') {
+  bannerKind = 'voided';
+  bannerHtml = `<strong>Voided.</strong> This agreement is no longer in force. Reach out to Cody for the next step.`;
+} else {
+  const signedCount = Object.keys(activeBySigner).length;
+  if (signedCount === 0) {
+    bannerKind = 'awaiting';
+    bannerHtml = `This agreement is ready for signature. Both signers complete the sign block below independently.`;
+  } else if (signedCount < signers.length) {
+    const signedNames = signers.filter(s => activeBySigner[s.id]).map(s => (s.name_snapshot || '').split(' ')[0]).join(' and ');
+    bannerKind = 'partial';
+    bannerHtml = `${signedNames} signed. Review and countersign below.`;
+  }
+}
+
+const csrfToken = Astro.locals.csrfToken || '';
+const pageTitle = `${template.title} — ${clientLegalName}`;
+const printHref = `/portal/contracts/${agreement.slug}/print`;
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+<meta name="csrf-token" content={csrfToken}>
+<title>{pageTitle}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..600&family=Source+Serif+4:opsz,wght@8..60,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream-bg: #faf7f2;
+    --cream-card: #f0ead9;
+    --ink: #1a1814;
+    --ink-soft: #2c2722;
+    --ink-quiet: #6b6359;
+    --sepia: #c47d5a;
+    --rule: #e6ddd0;
+    --emerald: #1b5e20;
+    --amber: #8a5a1a;
+    --red: #7a1f1f;
+  }
+  body {
+    margin: 0;
+    background: var(--cream-bg);
+    color: var(--ink);
+    font-family: 'Source Serif 4', Georgia, serif;
+  }
+  .exec-shell { min-height: 100vh; padding: 24px 0 96px; }
+  .exec-nav {
+    max-width: 920px;
+    margin: 0 auto 16px;
+    padding: 0 28px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-quiet);
+  }
+  .exec-nav a { color: var(--sepia); text-decoration: none; }
+  .banner-awaiting { background: #f0ead9; color: #4a4239; }
+  .banner-partial { background: #fce9c8; color: var(--amber); }
+  .banner-executed { background: #d6f0d5; color: var(--emerald); }
+  .banner-voided { background: #f5c6c6; color: var(--red); }
+
+  .intake-form, .sign-block {
+    max-width: 920px;
+    margin: 32px auto;
+    padding: 36px 36px;
+    background: #ffffff;
+    border: 1px solid #d4cdc0;
+    border-radius: 4px;
+  }
+  .intake-form h2, .sign-block h2 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 28px;
+    margin: 0 0 12px;
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .intake-form .intake-intro, .sign-block .sign-intro {
+    color: var(--ink-quiet);
+    font-size: 15px;
+    margin: 0 0 24px;
+    line-height: 1.6;
+  }
+  .intake-row { margin-bottom: 18px; }
+  .intake-row label {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-quiet);
+    margin-bottom: 6px;
+  }
+  .intake-row .required-tag {
+    color: var(--red);
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 11px;
+    margin-left: 6px;
+  }
+  .intake-row input, .intake-row textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d4cdc0;
+    border-radius: 4px;
+    font-family: 'Source Serif 4', Georgia, serif;
+    font-size: 15px;
+    color: var(--ink);
+    background: var(--cream-bg);
+  }
+  .intake-row textarea { min-height: 76px; resize: vertical; }
+  .intake-row .save-status {
+    margin-left: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--emerald);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .intake-row .save-status.visible { opacity: 1; }
+  .intake-complete-banner {
+    padding: 16px 20px;
+    background: #d6f0d5;
+    color: var(--emerald);
+    border-radius: 4px;
+    font-size: 15px;
+  }
+
+  .sign-block .checkbox-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    align-items: flex-start;
+    line-height: 1.5;
+  }
+  .sign-block .checkbox-row input[type="checkbox"] {
+    margin-top: 4px;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+  .sign-block .checkbox-row label {
+    font-size: 14px;
+    color: var(--ink);
+  }
+  .sign-block .signature-input {
+    width: 100%;
+    padding: 14px 16px;
+    border: 1px solid #d4cdc0;
+    border-radius: 4px;
+    font-family: 'Source Serif 4', Georgia, serif;
+    font-size: 18px;
+    color: var(--ink);
+    background: var(--cream-bg);
+    margin-bottom: 12px;
+  }
+  .sign-block .signature-preview {
+    font-family: 'Fraunces', Georgia, serif;
+    font-style: italic;
+    font-size: 22px;
+    color: var(--sepia);
+    margin-bottom: 24px;
+    min-height: 28px;
+  }
+  .sign-block .sign-button {
+    background: var(--ink);
+    color: var(--cream-bg);
+    padding: 14px 28px;
+    border: 1px solid var(--ink);
+    border-radius: 4px;
+    font-family: 'Source Serif 4', Georgia, serif;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.18s ease;
+  }
+  .sign-block .sign-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .sign-block .audit-preview {
+    margin-top: 18px;
+    padding: 14px 16px;
+    background: var(--cream-bg);
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--ink-quiet);
+    line-height: 1.5;
+  }
+  .signer-status-card {
+    max-width: 920px;
+    margin: 16px auto;
+    padding: 20px 24px;
+    background: #ffffff;
+    border: 1px solid #d4cdc0;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+  }
+  .signer-status-card .who {
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .signer-status-card .signed-as {
+    font-family: 'Fraunces', Georgia, serif;
+    font-style: italic;
+    color: var(--sepia);
+  }
+  .signer-status-card .signed-at {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-quiet);
+  }
+  .signer-status-card .revoke-link {
+    background: none;
+    border: none;
+    color: var(--red);
+    cursor: pointer;
+    font-size: 13px;
+    text-decoration: underline;
+  }
+  .signer-status-card .pending-pill {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-quiet);
+  }
+  .sign-error {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: #fdecec;
+    color: var(--red);
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  @media (max-width: 720px) {
+    .intake-form, .sign-block, .signer-status-card { padding: 24px 22px; margin-left: 16px; margin-right: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="exec-shell">
+  <nav class="exec-nav">
+    <a href="/portal/dashboard">&larr; Portal dashboard</a>
+    <a href={printHref}>Print friendly view</a>
+  </nav>
+
+  <ContractRenderer
+    bodyHtml={bodyHtml}
+    scheduleAHtml={scheduleAHtml}
+    title={template.title}
+    clientLegalName={clientLegalName}
+    status={agreement.status}
+    bannerHtml={bannerHtml}
+  />
+
+  {meSigner && agreement.status !== 'executed' && agreement.status !== 'voided' && (
+    <>
+      {!intakeComplete && (
+        <form class="intake-form" id="intake-form" novalidate>
+          <h2>Your company info</h2>
+          <p class="intake-intro">A few fields the contract still needs. Saves as you go.</p>
+          {missingIntake.map(f => (
+            <div class="intake-row">
+              <label for={`intake-${f.id}`}>
+                {f.label}
+                {f.required && <span class="required-tag">Required to sign</span>}
+                <span class="save-status" id={`save-${f.id}`}>Saved</span>
+              </label>
+              {f.type === 'textarea' ? (
+                <textarea id={`intake-${f.id}`} name={f.id} data-intake-field={f.id} data-required={f.required ? 'true' : 'false'}>{f.value || ''}</textarea>
+              ) : (
+                <input type={f.type} id={`intake-${f.id}`} name={f.id} data-intake-field={f.id} data-required={f.required ? 'true' : 'false'} value={f.value || ''} />
+              )}
+            </div>
+          ))}
+        </form>
+      )}
+      {intakeComplete && (
+        <div class="intake-form">
+          <div class="intake-complete-banner">All your details are on file. Continue to the signature block below.</div>
+        </div>
+      )}
+
+      {myActiveSig ? (
+        <div class="signer-status-card">
+          <div>
+            <div class="who">You signed</div>
+            <div class="signed-as">Signed as: {myActiveSig.signature_value}</div>
+            <div class="signed-at">{new Date(myActiveSig.signed_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</div>
+          </div>
+          <button type="button" class="revoke-link" id="revoke-link">Revoke my signature</button>
+        </div>
+      ) : (
+        <form class="sign-block" id="sign-block" novalidate>
+          <h2>Sign in the portal</h2>
+          <p class="sign-intro">
+            By checking the boxes and typing your full legal name, you are signing this agreement electronically. Your typed name is your signature. The portal records the time, your network address, your browser, and a unique fingerprint of the exact document at the moment you sign. These together form the legal record under the Utah Uniform Electronic Transactions Act (Utah Code Title 46 Chapter 4) and the federal ESIGN Act.
+          </p>
+          <div class="checkbox-row">
+            <input type="checkbox" id="consent-checkbox" />
+            <label for="consent-checkbox">I agree to conduct this transaction by electronic means. I understand that my electronic signature has the same legal effect as a handwritten signature.</label>
+          </div>
+          <div class="checkbox-row">
+            <input type="checkbox" id="intent-checkbox" />
+            <label for="intent-checkbox">I have read this agreement, including Schedule A above. I intend to be bound by it as the duly authorized representative of <strong>{clientLegalName}</strong>.</label>
+          </div>
+          <label for="signature-input" style="display: block; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-quiet); margin: 12px 0 6px;">Your full legal name</label>
+          <input type="text" id="signature-input" class="signature-input" placeholder="Type your full legal name" autocomplete="off" />
+          <div class="signature-preview" id="signature-preview"></div>
+          <button type="submit" class="sign-button" id="sign-button" disabled>Complete the items above to sign</button>
+          <div class="sign-error" id="sign-error" style="display: none;"></div>
+          <div class="audit-preview" id="audit-preview">When you click Sign, your IP address, browser, time, and a unique fingerprint of this exact document are permanently stored against your signature.</div>
+        </form>
+      )}
+    </>
+  )}
+
+  {signers.filter(s => s.id !== meSigner?.id).map(s => {
+    const active = activeBySigner[s.id];
+    return (
+      <div class="signer-status-card">
+        <div>
+          <div class="who">{s.name_snapshot}</div>
+          {active ? (
+            <>
+              <div class="signed-as">Signed as: {active.signature_value}</div>
+              <div class="signed-at">{new Date(active.signed_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</div>
+            </>
+          ) : (
+            <div class="pending-pill">Awaiting signature</div>
+          )}
+        </div>
+      </div>
+    );
+  })}
+</div>
+
+<script id="contract-config" type="application/json" set:html={JSON.stringify({
+  slug: agreement.slug,
+  status: agreement.status,
+  intake_complete: intakeComplete,
+  has_active_signature: !!myActiveSig,
+})}></script>
+<script is:inline>
+(function() {
+  var cfg = JSON.parse(document.getElementById('contract-config').textContent || '{}');
+  var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+  var csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
+  // Intake save-on-blur. Saves the entire intake state on every blur,
+  // not just the changed field; simpler and the payload is small.
+  function snapshotIntake() {
+    var fields = document.querySelectorAll('[data-intake-field]');
+    var payload = {};
+    fields.forEach(function(el) {
+      payload[el.getAttribute('data-intake-field')] = el.value;
+    });
+    return payload;
+  }
+
+  function saveIntake(triggeredFieldId) {
+    var status = triggeredFieldId ? document.getElementById('save-' + triggeredFieldId) : null;
+    return fetch('/portal/api/contracts/' + cfg.slug + '/intake', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-csrf-token': csrfToken },
+      body: JSON.stringify(snapshotIntake()),
+    }).then(function(r) {
+      return r.json().then(function(d) { return { ok: r.ok, data: d }; });
+    }).then(function(result) {
+      if (status && result.ok) {
+        status.classList.add('visible');
+        setTimeout(function() { status.classList.remove('visible'); }, 1400);
+      }
+      return result;
+    });
+  }
+
+  document.querySelectorAll('[data-intake-field]').forEach(function(el) {
+    el.addEventListener('blur', function() {
+      saveIntake(el.getAttribute('data-intake-field'));
+    });
+  });
+
+  // Sign block wiring.
+  var consentBox = document.getElementById('consent-checkbox');
+  var intentBox = document.getElementById('intent-checkbox');
+  var sigInput = document.getElementById('signature-input');
+  var sigPreview = document.getElementById('signature-preview');
+  var signBtn = document.getElementById('sign-button');
+  var signForm = document.getElementById('sign-block');
+  var errorBox = document.getElementById('sign-error');
+
+  function refreshSignButton() {
+    if (!signBtn) return;
+    var name = sigInput ? sigInput.value.trim() : '';
+    if (sigPreview) sigPreview.textContent = name ? ('Will be saved as: ' + name) : '';
+    var requiredFields = document.querySelectorAll('[data-intake-field][data-required="true"]');
+    var missingRequired = false;
+    requiredFields.forEach(function(el) {
+      if (!el.value.trim()) missingRequired = true;
+    });
+    var ready = consentBox && consentBox.checked && intentBox && intentBox.checked && name && !missingRequired;
+    signBtn.disabled = !ready;
+    signBtn.textContent = ready ? 'Sign this agreement' : (missingRequired ? 'Complete the required intake fields above first' : 'Complete the items above to sign');
+  }
+  if (consentBox) consentBox.addEventListener('change', refreshSignButton);
+  if (intentBox) intentBox.addEventListener('change', refreshSignButton);
+  if (sigInput) sigInput.addEventListener('input', refreshSignButton);
+  document.querySelectorAll('[data-intake-field]').forEach(function(el) {
+    el.addEventListener('input', refreshSignButton);
+  });
+  refreshSignButton();
+
+  if (signForm) {
+    signForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      if (signBtn) { signBtn.disabled = true; signBtn.textContent = 'Signing...'; }
+      if (errorBox) errorBox.style.display = 'none';
+      // Save any pending intake edits before submitting the sign.
+      saveIntake().then(function() {
+        return fetch('/portal/api/contracts/' + cfg.slug + '/sign', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-csrf-token': csrfToken },
+          body: JSON.stringify({
+            signature_value: sigInput ? sigInput.value.trim() : '',
+            consent: !!(consentBox && consentBox.checked),
+            intent: !!(intentBox && intentBox.checked),
+          }),
+        });
+      }).then(function(r) {
+        return r.json().then(function(d) { return { ok: r.ok, data: d }; });
+      }).then(function(result) {
+        if (!result.ok) {
+          if (errorBox) {
+            errorBox.textContent = (result.data && result.data.error) || 'Sign failed.';
+            errorBox.style.display = 'block';
+          }
+          if (signBtn) { signBtn.disabled = false; refreshSignButton(); }
+          return;
+        }
+        window.location.reload();
+      }).catch(function() {
+        if (errorBox) {
+          errorBox.textContent = 'Connection error. Try again.';
+          errorBox.style.display = 'block';
+        }
+        if (signBtn) { signBtn.disabled = false; refreshSignButton(); }
+      });
+    });
+  }
+
+  var revokeLink = document.getElementById('revoke-link');
+  if (revokeLink) {
+    revokeLink.addEventListener('click', function() {
+      if (!confirm('Revoke your signature? The other person will get an email about this. You can re-sign after.')) return;
+      revokeLink.disabled = true;
+      revokeLink.textContent = 'Revoking...';
+      fetch('/portal/api/contracts/' + cfg.slug + '/revoke', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-csrf-token': csrfToken },
+        body: JSON.stringify({}),
+      }).then(function(r) {
+        if (r.ok) window.location.reload();
+        else { revokeLink.disabled = false; revokeLink.textContent = 'Revoke my signature'; alert('Revoke failed.'); }
+      }).catch(function() {
+        revokeLink.disabled = false;
+        revokeLink.textContent = 'Revoke my signature';
+        alert('Connection error.');
+      });
+    });
+  }
+})();
+</script>
+</body>
+</html>

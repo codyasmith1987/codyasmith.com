@@ -21,6 +21,9 @@ const isAuthorized = user.role === 'admin' || (!!rothFamily && user.client_id ==
 if (!isAuthorized) {
   return Astro.redirect('/portal/dashboard');
 }
+
+// CSRF token for the interactive accept form below.
+const csrfToken = Astro.locals.csrfToken || '';
 ---
 <!DOCTYPE html>
 <html lang="en">
@@ -28,6 +31,7 @@ if (!isAuthorized) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet">
+<meta name="csrf-token" content={csrfToken}>
 <title>Engagement Proposal for Jason Roth and Kevin Adams</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -129,11 +133,229 @@ if (!isAuthorized) {
     display: flex;
     flex-direction: column;
     position: relative;
+    cursor: pointer;
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  }
+  .tier:hover {
+    transform: translateY(-3px);
+    border-color: #6b6359;
   }
   .tier.recommended {
     border: 2px solid #1d2c3a;
     padding: 35px 27px 31px;
     box-shadow: 0 6px 24px rgba(26, 24, 20, 0.07);
+  }
+  .tier.selected,
+  .tier.recommended.selected {
+    border: 2px solid #1d2c3a;
+    padding: 35px 27px 31px;
+    box-shadow: 0 12px 36px rgba(26, 24, 20, 0.13);
+    transform: translateY(-3px);
+  }
+  .tier.selected::after {
+    content: "Selected";
+    position: absolute;
+    bottom: 14px;
+    right: 14px;
+    background: #1d2c3a;
+    color: #faf7f2;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+  }
+  .addon-prompt {
+    color: #6b6359;
+    font-style: italic;
+    margin-top: 8px;
+  }
+  .addon-choice {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin: 32px 0 8px;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.4s ease, max-height 0.4s ease;
+  }
+  .addon-choice.revealed {
+    max-height: 2000px;
+    opacity: 1;
+  }
+  .addon-option {
+    background: #ffffff;
+    border: 1px solid #d4cdc0;
+    padding: 32px 28px;
+    cursor: pointer;
+    position: relative;
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    display: flex;
+    flex-direction: column;
+  }
+  .addon-option:hover {
+    transform: translateY(-3px);
+    border-color: #6b6359;
+  }
+  .addon-option.selected {
+    border: 2px solid #1d2c3a;
+    padding: 31px 27px;
+    box-shadow: 0 12px 36px rgba(26, 24, 20, 0.13);
+    transform: translateY(-3px);
+  }
+  .addon-option.selected::after {
+    content: "Selected";
+    position: absolute;
+    bottom: 14px;
+    right: 14px;
+    background: #1d2c3a;
+    color: #faf7f2;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+  }
+  .addon-option h3 {
+    color: #1d2c3a;
+    margin-top: 0;
+    margin-bottom: 12px;
+    font-size: 22px;
+  }
+  .addon-option p {
+    flex: 1;
+    font-size: 15px;
+    margin-bottom: 20px;
+  }
+  .addon-pricing {
+    padding-top: 18px;
+    border-top: 1px solid #e6ddd0;
+  }
+  .addon-price-line {
+    font-family: "Fraunces", "Times New Roman", serif;
+    font-weight: 500;
+    font-variation-settings: "opsz" 36, "SOFT" 30, "WONK" 0;
+    font-size: 22px;
+    color: #1a1814;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+  .addon-price-detail {
+    font-size: 14px;
+    color: #6b6359;
+    margin: 0;
+  }
+  .proposal-form {
+    margin-top: 32px;
+    padding: 36px;
+    background: #ffffff;
+    border: 1px solid #d4cdc0;
+  }
+  .form-summary {
+    padding-bottom: 28px;
+    margin-bottom: 28px;
+    border-bottom: 1px solid #d4cdc0;
+  }
+  .summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 10px 0;
+    gap: 16px;
+  }
+  .summary-row.totals {
+    border-top: 1px dashed #e6ddd0;
+    margin-top: 12px;
+    padding-top: 18px;
+  }
+  .summary-label {
+    font-size: 14px;
+    color: #6b6359;
+  }
+  .summary-value {
+    font-family: "Fraunces", "Times New Roman", serif;
+    font-variation-settings: "opsz" 36, "SOFT" 30, "WONK" 0;
+    font-size: 18px;
+    color: #6b6359;
+    font-style: italic;
+    text-align: right;
+  }
+  .summary-value.selected {
+    color: #1a1814;
+    font-style: normal;
+  }
+  .summary-row.totals .summary-value {
+    font-size: 22px;
+    color: #1a1814;
+    font-style: normal;
+  }
+  .form-fields {
+    display: grid;
+    gap: 18px;
+    margin-bottom: 28px;
+  }
+  .field-label {
+    display: block;
+    font-size: 13px;
+    color: #6b6359;
+    letter-spacing: 0.04em;
+  }
+  .field-label input {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    padding: 12px 14px;
+    background: #faf7f2;
+    border: 1px solid #d4cdc0;
+    color: #1a1814;
+    font-family: "Newsreader", Georgia, serif;
+    font-size: 17px;
+    transition: border-color 0.18s ease;
+  }
+  .field-label input:focus {
+    outline: none;
+    border-color: #1d2c3a;
+  }
+  .send-button {
+    display: block;
+    width: 100%;
+    padding: 16px 24px;
+    background: #1d2c3a;
+    color: #faf7f2;
+    border: none;
+    font-family: "Newsreader", Georgia, serif;
+    font-size: 17px;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    transition: background 0.18s ease;
+  }
+  .send-button:hover:not(:disabled) {
+    background: #2e445b;
+  }
+  .send-button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+  .form-note {
+    font-size: 14px;
+    color: #6b6359;
+    margin-top: 18px;
+    margin-bottom: 0;
+    font-style: italic;
+  }
+  .success-message {
+    padding: 12px 0;
+  }
+  .success-message h3 {
+    font-size: 26px;
+    margin-bottom: 16px;
+  }
+  .success-note {
+    margin-top: 24px;
+    font-size: 14px;
+    color: #6b6359;
+    font-style: italic;
   }
   .pill {
     position: absolute;
@@ -312,9 +534,9 @@ if (!isAuthorized) {
     h2 { font-size: 26px; margin: 48px 0 18px; padding-top: 36px; }
     .tiers { grid-template-columns: 1fr; gap: 32px; }
     .tier.recommended { padding: 35px 27px 31px; }
-    .sig-row { flex-direction: column; align-items: stretch; gap: 6px; }
-    .sig-row label { width: auto; }
-    .sig-row .field { height: 32px; }
+    .addon-choice { grid-template-columns: 1fr; gap: 24px; }
+    .proposal-form { padding: 28px 22px; }
+    .summary-row { gap: 12px; }
     p { max-width: none; }
   }
 </style>
@@ -353,7 +575,7 @@ if (!isAuthorized) {
 
 <div class="tiers">
 
-  <div class="tier">
+  <div class="tier" data-tier="good">
     <h3>Good</h3>
     <div class="tagline">A start, intentionally light.</div>
     <div class="price-monthly">$1,031.60<span class="suffix"> / month</span></div>
@@ -365,7 +587,7 @@ if (!isAuthorized) {
     </ul>
   </div>
 
-  <div class="tier recommended">
+  <div class="tier recommended" data-tier="better">
     <div class="pill">Recommended</div>
     <h3>Better</h3>
     <div class="tagline">The flagship. The right fit for what you are doing right now.</div>
@@ -378,7 +600,7 @@ if (!isAuthorized) {
     </ul>
   </div>
 
-  <div class="tier">
+  <div class="tier" data-tier="best">
     <h3>Best</h3>
     <div class="tagline">Marketing on a monthly cycle. Same-day priority response.</div>
     <div class="price-monthly">$2,661.60<span class="suffix"> / month</span></div>
@@ -392,13 +614,27 @@ if (!isAuthorized) {
 
 </div>
 
-<h2>Optional: a dedicated Tailwater pre-sell micro-site</h2>
+<h2>Choose your Tailwater approach</h2>
 
-<div class="addon">
-  <h3>Add a standalone Tailwater micro-site</h3>
-  <div class="addon-price">+$4,500 to start. +$237.60 to +$517.60 per month, by tier, only while the micro-site is live.</div>
-  <p>If you want Tailwater on its own URL for the parcel signage, ads, and a focused pre-sell funnel that has no builder content competing for attention, this splits Tailwater out of the unified site into its own micro-site. It is built first and launches first, on its own timeline. The Builders site catches up behind it. After the three homes sell, the micro-site winds down and your monthly returns to the tier number you picked above. Long-term, the recurring is the same whether you add this or not. The add-on is for the pre-sell experience, not the long-term economics.</p>
-  <p><strong>Pick it if</strong> a memorable URL on the signage at the downtown Hailey park matters to the pre-sell. <strong>Skip it if</strong> you are fine letting the Tailwater section inside the builder site do the pre-sell work, with the builder URL pointing visitors to it.</p>
+<p id="tier-prompt" class="addon-prompt">Pick a tier above and your two Tailwater options will appear below.</p>
+
+<div class="addon-choice" id="addon-choice">
+  <div class="addon-option" data-addon="no">
+    <h3>Single unified site</h3>
+    <p>Tailwater is built as a focused section inside the Raised Bar Builders site. Default rollout. After the three homes sell, the Tailwater section becomes a permanent portfolio piece on the builder site. Nothing winds down later.</p>
+    <div class="addon-pricing">
+      <p class="addon-price-line">No additional charge</p>
+      <p class="addon-price-detail">Tier price unchanged.</p>
+    </div>
+  </div>
+  <div class="addon-option" data-addon="yes">
+    <h3>Add a Tailwater micro-site</h3>
+    <p>A standalone URL for the parcel signage, ads, and a focused pre-sell funnel that does not share a site with the builder content. Built first, launches first. The builder site catches up behind it. After the three homes sell, the micro-site winds down and your monthly returns to the tier number above.</p>
+    <div class="addon-pricing">
+      <p class="addon-price-line">+$4,500 to start</p>
+      <p class="addon-price-detail">+<span id="addon-monthly-display">$237.60</span>/month while the micro-site is live</p>
+    </div>
+  </div>
 </div>
 
 <h2>How it rolls out</h2>
@@ -435,17 +671,48 @@ if (!isAuthorized) {
 
 <div class="close">
 
-<h2>Sign and start</h2>
+<h2>Sign and send</h2>
 
-<p>This acceptance starts the work. I send your first invoice and begin Marketing Consulting research the same day this comes back to me signed. The full new-client contract follows within the first week and carries the full legal terms; this signature is enough to get us moving.</p>
+<p>This acceptance starts the work. I send the first invoice and begin Marketing Consulting research the same day you send this in. Formal contracts follow within the week with the full legal terms. This send is enough to get us moving.</p>
 
-<div class="signature-block">
-  <div class="sig-row"><label>Tier (Good, Better, Best):</label><div class="field"></div></div>
-  <div class="sig-row"><label>Tailwater add-on (Y or N):</label><div class="field"></div></div>
-  <div class="sig-row"><label>Jason Roth:</label><div class="field"></div></div>
-  <div class="sig-row"><label>Kevin Adams:</label><div class="field"></div></div>
-  <div class="sig-row"><label>Date:</label><div class="field"></div></div>
-  <div class="sig-instructions">Email this page back to cody@codyasmith.com, signed, with your tier and add-on choice. That is the kickoff.</div>
+<div class="proposal-form" id="proposal-form-container">
+  <div class="form-summary">
+    <div class="summary-row">
+      <span class="summary-label">Engagement tier</span>
+      <span class="summary-value" id="summary-tier">Pick above</span>
+    </div>
+    <div class="summary-row">
+      <span class="summary-label">Tailwater micro-site</span>
+      <span class="summary-value" id="summary-addon">Pick above</span>
+    </div>
+    <div class="summary-row totals">
+      <span class="summary-label">One-time at signing</span>
+      <span class="summary-value" id="summary-onetime">&mdash;</span>
+    </div>
+    <div class="summary-row totals">
+      <span class="summary-label">Monthly recurring</span>
+      <span class="summary-value" id="summary-monthly">&mdash;</span>
+    </div>
+  </div>
+
+  <div class="form-fields">
+    <label class="field-label">
+      Jason Roth, signing as
+      <input type="text" id="jason-name" autocomplete="off" placeholder="Type your full name" />
+    </label>
+    <label class="field-label">
+      Kevin Adams, signing as
+      <input type="text" id="kevin-name" autocomplete="off" placeholder="Type your full name" />
+    </label>
+  </div>
+
+  <button id="send-proposal" type="button" class="send-button" disabled>
+    Send to Cody
+  </button>
+
+  <p class="form-note">
+    Pick a tier and a Tailwater option above, then type both your names. Send routes a confirmation to you both and a notification to Cody. Formal contracts and the first invoice follow within the week.
+  </p>
 </div>
 
 </div>
@@ -455,5 +722,176 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
 </footer>
 
 </div>
+
+<script is:inline>
+(function() {
+  var TIERS = {
+    good:   { name: 'Good',   monthly: 1031.60, oneTime: 7925 },
+    better: { name: 'Better', monthly: 1891.60, oneTime: 8925 },
+    best:   { name: 'Best',   monthly: 2661.60, oneTime: 10625 }
+  };
+  var ADDON_MONTHLY = { good: 237.60, better: 397.60, best: 517.60 };
+  var ADDON_ONETIME = 4500;
+
+  var state = { tier: null, addOn: null };
+
+  function money(n) {
+    return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function moneyInt(n) {
+    return '$' + n.toLocaleString('en-US');
+  }
+
+  function update() {
+    var tierCards = document.querySelectorAll('[data-tier]');
+    for (var i = 0; i < tierCards.length; i++) {
+      var t = tierCards[i].getAttribute('data-tier');
+      tierCards[i].classList.toggle('selected', t === state.tier);
+    }
+
+    var addonChoice = document.getElementById('addon-choice');
+    var tierPrompt = document.getElementById('tier-prompt');
+    if (state.tier) {
+      if (addonChoice) addonChoice.classList.add('revealed');
+      if (tierPrompt) tierPrompt.style.display = 'none';
+      var mo = ADDON_MONTHLY[state.tier];
+      var display = document.getElementById('addon-monthly-display');
+      if (display) display.textContent = money(mo);
+    } else {
+      if (addonChoice) addonChoice.classList.remove('revealed');
+      if (tierPrompt) tierPrompt.style.display = '';
+    }
+
+    var addonCards = document.querySelectorAll('[data-addon]');
+    for (var j = 0; j < addonCards.length; j++) {
+      var a = addonCards[j].getAttribute('data-addon');
+      addonCards[j].classList.toggle('selected', a === state.addOn);
+    }
+
+    var sumTier = document.getElementById('summary-tier');
+    var sumAddon = document.getElementById('summary-addon');
+    var sumOnetime = document.getElementById('summary-onetime');
+    var sumMonthly = document.getElementById('summary-monthly');
+
+    if (state.tier) {
+      sumTier.textContent = TIERS[state.tier].name;
+      sumTier.classList.add('selected');
+    } else {
+      sumTier.textContent = 'Pick above';
+      sumTier.classList.remove('selected');
+    }
+    if (state.addOn === 'yes') {
+      sumAddon.textContent = 'Yes, add the micro-site';
+      sumAddon.classList.add('selected');
+    } else if (state.addOn === 'no') {
+      sumAddon.textContent = 'No, single unified site';
+      sumAddon.classList.add('selected');
+    } else {
+      sumAddon.textContent = 'Pick above';
+      sumAddon.classList.remove('selected');
+    }
+
+    if (state.tier && state.addOn) {
+      var tierData = TIERS[state.tier];
+      var monthly = tierData.monthly + (state.addOn === 'yes' ? ADDON_MONTHLY[state.tier] : 0);
+      var oneTime = tierData.oneTime + (state.addOn === 'yes' ? ADDON_ONETIME : 0);
+      sumOnetime.textContent = moneyInt(oneTime);
+      sumMonthly.textContent = money(monthly) + ' / month';
+    } else {
+      sumOnetime.textContent = '—';
+      sumMonthly.textContent = '—';
+    }
+
+    var jasonInput = document.getElementById('jason-name');
+    var kevinInput = document.getElementById('kevin-name');
+    var jasonName = jasonInput ? jasonInput.value.trim() : '';
+    var kevinName = kevinInput ? kevinInput.value.trim() : '';
+    var sendBtn = document.getElementById('send-proposal');
+    var canSend = !!(state.tier && state.addOn && jasonName && kevinName);
+    if (sendBtn) sendBtn.disabled = !canSend;
+  }
+
+  var tierCards = document.querySelectorAll('[data-tier]');
+  for (var i = 0; i < tierCards.length; i++) {
+    (function(card) {
+      card.addEventListener('click', function() {
+        state.tier = card.getAttribute('data-tier');
+        update();
+        if (state.addOn === null) {
+          var target = document.getElementById('addon-choice');
+          if (target) setTimeout(function() { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 120);
+        }
+      });
+    })(tierCards[i]);
+  }
+
+  var addonCards = document.querySelectorAll('[data-addon]');
+  for (var k = 0; k < addonCards.length; k++) {
+    (function(card) {
+      card.addEventListener('click', function() {
+        state.addOn = card.getAttribute('data-addon');
+        update();
+        if (state.tier) {
+          var target = document.getElementById('proposal-form-container');
+          if (target) setTimeout(function() { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 120);
+        }
+      });
+    })(addonCards[k]);
+  }
+
+  var inputIds = ['jason-name', 'kevin-name'];
+  for (var n = 0; n < inputIds.length; n++) {
+    var el = document.getElementById(inputIds[n]);
+    if (el) el.addEventListener('input', update);
+  }
+
+  var sendBtn = document.getElementById('send-proposal');
+  if (sendBtn) {
+    sendBtn.addEventListener('click', function() {
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Sending...';
+      var csrf = document.querySelector('meta[name="csrf-token"]');
+      var csrfToken = csrf ? csrf.getAttribute('content') : '';
+      var jasonName = document.getElementById('jason-name').value.trim();
+      var kevinName = document.getElementById('kevin-name').value.trim();
+      fetch('/portal/api/proposals/raised-bar/accept', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken || '' },
+        body: JSON.stringify({
+          tier: state.tier,
+          add_on: state.addOn,
+          jason_name: jasonName,
+          kevin_name: kevinName
+        })
+      }).then(function(res) {
+        return res.json().then(function(data) { return { ok: res.ok, data: data }; });
+      }).then(function(result) {
+        if (result.ok) {
+          var container = document.getElementById('proposal-form-container');
+          var emails = (result.data && result.data.confirmation_emails) || 'you both';
+          container.innerHTML =
+            '<div class="success-message">' +
+              '<h3>Got it. Engagement accepted.</h3>' +
+              '<p>I will send the formal contracts and the first invoice in the next few days. Reach me at <a href="mailto:cody@codyasmith.com">cody@codyasmith.com</a> or call or text any time with questions.</p>' +
+              '<p class="success-note">Confirmation sent to ' + emails + '.</p>' +
+            '</div>';
+          window.scrollTo({ top: container.offsetTop - 32, behavior: 'smooth' });
+        } else {
+          sendBtn.disabled = false;
+          sendBtn.textContent = 'Send to Cody';
+          var msg = (result.data && result.data.error) || 'Send failed. Email cody@codyasmith.com directly if this keeps happening.';
+          alert(msg);
+        }
+      }).catch(function() {
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Send to Cody';
+        alert('Connection error. Try again or email cody@codyasmith.com.');
+      });
+    });
+  }
+
+  update();
+})();
+</script>
 </body>
 </html>

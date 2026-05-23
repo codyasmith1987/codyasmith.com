@@ -72,6 +72,24 @@ if (!isAdmin && user.client_id) {
       });
     }
 
+    // Proposals accepted (LOI in), no agreement issued yet. Point at
+    // the contract preview so the prospect can read the drafted
+    // agreement while waiting for the call.
+    if (agreements.length === 0) {
+      for (const r of (propRes.rows as any[])) {
+        if (!r[2]) continue; // not finalized, handled above
+        actionItems.push({
+          kind: 'preview-contract',
+          icon: '📑',
+          title: 'Your engagement agreement is drafted',
+          body: 'Already built from your selections. Read it before our call. After we talk, the agreement goes into the portal for signature.',
+          href: `/portal/contracts/preview/${r[0]}`,
+          label: 'Open the agreement',
+          urgency: 22,
+        });
+      }
+    }
+
     // Pending approvals (existing approvals system).
     try {
       const apprRes = await turso.execute({

@@ -21,6 +21,7 @@
 
 import Portal from '../../../../layouts/Portal.astro';
 import { getAllClients } from '../../../../lib/auth';
+import turso from '../../../../lib/turso';
 
 export const prerender = false;
 
@@ -30,6 +31,28 @@ if (!user || user.role !== 'admin') {
 }
 
 const clients = await getAllClients();
+
+// Pre-load client_metadata for every client so the wizard can pre-fill
+// the legal-entity section when admin picks a client. Falls back to
+// blank if a client has no metadata yet.
+const metaRows = await turso.execute({
+  sql: `SELECT client_id, legal_entity_name, entity_type, state_of_organization, principal_address, notice_address, primary_contact_name, primary_contact_title, primary_contact_email, primary_contact_phone FROM client_metadata`,
+  args: [],
+});
+const clientMetadataMap: Record<string, any> = {};
+for (const r of (metaRows.rows as any[])) {
+  clientMetadataMap[r[0] as string] = {
+    legal_entity_name: r[1] || '',
+    entity_type: r[2] || '',
+    state_of_organization: r[3] || '',
+    principal_address: r[4] || '',
+    notice_address: r[5] || '',
+    primary_contact_name: r[6] || '',
+    primary_contact_title: r[7] || '',
+    primary_contact_email: r[8] || '',
+    primary_contact_phone: r[9] || '',
+  };
+}
 
 // Default 'prepared on' is today in en-US long form, matching the
 // Raised Bar config example (e.g. 'May 22, 2026').
@@ -150,6 +173,47 @@ const todayISO = new Date().toISOString().slice(0, 10);
               class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
             />
             <p class="text-[11px] text-neutral-600 mt-1">Free text. The names that appear in the header.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============== CLIENT LEGAL ENTITY ============== -->
+      <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
+        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-3">Client legal entity</p>
+        <p class="text-[11px] text-neutral-500 mb-5">Fills into Section 1 of the contract and Schedule A. Pre-populated from existing client metadata if you've created proposals for this client before; edit if anything has changed.</p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div class="sm:col-span-2">
+            <label for="legal_entity_name" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Legal entity name</label>
+            <input type="text" id="legal_entity_name" name="legal_entity_name" placeholder="e.g., Raised Bar Group LLC" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300" />
+          </div>
+          <div>
+            <label for="entity_type" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Entity type</label>
+            <input type="text" id="entity_type" name="entity_type" placeholder="limited liability company" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300" />
+          </div>
+          <div>
+            <label for="state_of_organization" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">State of organization</label>
+            <input type="text" id="state_of_organization" name="state_of_organization" placeholder="Idaho" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300" />
+          </div>
+          <div class="sm:col-span-2">
+            <label for="principal_address" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Principal address</label>
+            <input type="text" id="principal_address" name="principal_address" placeholder="123 Main St, City, State 00000" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300" />
+          </div>
+          <div>
+            <label for="primary_contact_name" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Primary contact name</label>
+            <input type="text" id="primary_contact_name" name="primary_contact_name" placeholder="Jane Doe" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300" />
+          </div>
+          <div>
+            <label for="primary_contact_title" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Primary contact title</label>
+            <input type="text" id="primary_contact_title" name="primary_contact_title" placeholder="Member" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300" />
+          </div>
+          <div>
+            <label for="primary_contact_email" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Primary contact email</label>
+            <input type="email" id="primary_contact_email" name="primary_contact_email" placeholder="jane@example.com" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300" />
+          </div>
+          <div>
+            <label for="primary_contact_phone" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Primary contact phone</label>
+            <input type="tel" id="primary_contact_phone" name="primary_contact_phone" placeholder="555-555-5555" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300" />
           </div>
         </div>
       </section>
@@ -303,7 +367,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
     </form>
   </div>
 
-  <script is:inline define:vars={{ todayLong }}>
+  <script is:inline define:vars={{ todayLong, clientMetadataMap }}>
     // ========== Ecosystem pricing reference ==========
     // Pulled from business-design-v2. The wizard uses these to auto-fill
     // a tier_picker step the moment the admin picks an ecosystem.
@@ -403,6 +467,24 @@ const todayISO = new Date().toISOString().slice(0, 10);
       }
     });
     newClientSlug.addEventListener('input', () => { newClientSlug.dataset.manual = '1'; });
+
+    // ========== Pre-fill client legal entity from existing metadata ==========
+    const LEGAL_FIELD_IDS = [
+      'legal_entity_name', 'entity_type', 'state_of_organization',
+      'principal_address', 'primary_contact_name', 'primary_contact_title',
+      'primary_contact_email', 'primary_contact_phone',
+    ];
+    function setLegalFields(meta) {
+      for (const id of LEGAL_FIELD_IDS) {
+        const el = document.getElementById(id);
+        if (el) el.value = (meta && meta[id]) || '';
+      }
+    }
+    clientSelect.addEventListener('change', () => {
+      const meta = clientMetadataMap[clientSelect.value];
+      if (meta) setLegalFields(meta);
+      else setLegalFields(null);
+    });
 
     createClientBtn.addEventListener('click', async () => {
       const name = newClientName.value.trim();
@@ -1023,11 +1105,21 @@ const todayISO = new Date().toISOString().slice(0, 10);
       draftBtn.disabled = true;
       pubBtn.disabled = true;
 
+      // Collect client legal-entity fields. Sent alongside the
+      // proposal payload; the create endpoint upserts them into
+      // client_metadata so the contract preview reads real values
+      // instead of [to be confirmed] placeholders.
+      const client_metadata = {};
+      for (const id of LEGAL_FIELD_IDS) {
+        const el = document.getElementById(id);
+        client_metadata[id] = el ? el.value.trim() : '';
+      }
+
       try {
         const res = await fetch('/portal/api/admin/proposals/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify({ slug, client_id, title, config, status }),
+          body: JSON.stringify({ slug, client_id, title, config, status, client_metadata }),
         });
         const data = await res.json();
         if (res.ok) {

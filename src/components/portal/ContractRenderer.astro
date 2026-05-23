@@ -50,9 +50,16 @@ function statusLabel(s: string): string {
     <div class="contract-doc__banner" set:html={bannerHtml} />
   )}
 
-  <div class="contract-doc__body" set:html={bodyHtml} />
+  {/*
+    Schedule A renders FIRST. It is the engagement-specific section the
+    Client cares about: their tier, fees, sites, hours. The boilerplate
+    body (sections 1-25) follows. Order of the document does not change
+    what is binding; both are part of the same agreement. UX-wise the
+    relevant content goes first.
+  */}
+  <div class="contract-doc__schedule contract-doc__schedule--top" set:html={scheduleAHtml} />
 
-  <div class="contract-doc__schedule" set:html={scheduleAHtml} />
+  <div class="contract-doc__body" set:html={bodyHtml} />
 
   <slot name="signing" />
 </article>
@@ -180,6 +187,29 @@ function statusLabel(s: string): string {
     margin-top: 64px;
     padding-top: 40px;
     border-top: 4px solid #c47d5a;
+  }
+  /* When Schedule A is rendered first (above the body), no top
+     border separator; the body that follows gets a top divider
+     instead. */
+  .contract-doc__schedule--top {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+  .contract-doc__schedule--top + .contract-doc__body {
+    margin-top: 64px;
+    padding-top: 40px;
+    border-top: 1px solid #e6ddd0;
+  }
+  .contract-doc__schedule--top + .contract-doc__body::before {
+    content: 'Standard terms';
+    display: block;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #6b6359;
+    margin-bottom: 16px;
   }
   .contract-doc__schedule :global(h2) {
     font-family: 'Fraunces', Georgia, serif;

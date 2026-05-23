@@ -241,17 +241,17 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
     parts.push('<p><em>To be completed at intake.</em></p>');
   }
 
-  parts.push(`<h3>A.8 Pass-through items at signing</h3>`);
+  parts.push(`<h3>A.8 Pass-through items</h3>`);
   const passes = scheduleA.pass_through_items;
   if (Array.isArray(passes) && passes.length > 0) {
     parts.push('<ul>');
     for (const p of passes) {
-      const note = p.billing_note ? ` (${escapeHtml(p.billing_note)})` : '';
-      parts.push(`<li>${escapeHtml(p.name || '')} &mdash; ${fmtMoney(p.annual_cost)}${note}</li>`);
+      const note = p.billing_note ? ` &mdash; ${escapeHtml(p.billing_note)}` : '';
+      parts.push(`<li>${escapeHtml(p.name || '')}: ${fmtMoney(p.monthly_cost)}/month${note}</li>`);
     }
     parts.push('</ul>');
   } else {
-    parts.push('<p>None at signing.</p>');
+    parts.push('<p>None.</p>');
   }
 
   if (pp.build) {
@@ -271,15 +271,21 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
   }
 
   parts.push(`<h3>A.11 Excluded work</h3>`);
-  parts.push(`<p>The following are not included in any product purchased under this agreement and require either a change order under section 8, a separate Build Statement of Work, or a separate Statement of Work:</p>`);
+  parts.push(`<p>The following are not included in any product purchased under this agreement. Anything in this list requires either a written change order under section 8, a separate Build Statement of Work, or a separate Statement of Work under section 3.2:</p>`);
   parts.push('<ul>');
-  parts.push('<li>Full site redesign, custom theme or plugin development, advanced coding</li>');
-  parts.push('<li>Paid media management, campaign management, ad buying, email marketing automation, social media management, photography, video production</li>');
-  parts.push('<li>Building large volumes of net-new pages or extensive copywriting projects</li>');
-  parts.push('<li>Third-party subscription fees, premium plugins, paid connectors, hosting upgrades beyond agreed scope, domain renewals (handled as pass-through under section 5.6)</li>');
-  parts.push('<li>Legal, accessibility, privacy, or regulatory compliance certification (see section 16)</li>');
-  parts.push('<li>Guaranteed uptime, rankings, lead volume, or attribution accuracy (see section 11)</li>');
-  parts.push('<li>Correction of problems caused by undocumented third-party systems, legacy custom code, or hidden vendor dependencies discovered after work begins</li>');
+  parts.push('<li><strong>Net-new builds and redesigns.</strong> Full site redesigns, custom theme development, custom plugin development, e-commerce builds, membership system builds, learning-management builds, and any other from-scratch build work.</li>');
+  parts.push('<li><strong>Paid media and campaign work.</strong> Paid search management, paid social management, display advertising, retargeting, ad creative production, campaign setup, ad spend management, attribution setup, conversion tracking implementation beyond a one-time install.</li>');
+  parts.push('<li><strong>Content production at scale.</strong> Net-new copywriting for more than a handful of pages, long-form content production, blog post writing, white papers, sales collateral, video scripts, photography, video production, podcast production, and any content creation that goes past light page edits.</li>');
+  parts.push('<li><strong>Email marketing and automation.</strong> Email platform setup, list management, segmentation, drip campaigns, broadcast email sends, transactional email beyond the Practice\'s own portal needs.</li>');
+  parts.push('<li><strong>Social media management.</strong> Posting, community management, response moderation, social-platform paid promotion, influencer coordination.</li>');
+  parts.push('<li><strong>Third-party subscriptions and services.</strong> Plugin licenses, premium themes, SaaS subscriptions, paid API connectors, stock asset libraries, premium hosting upgrades beyond the agreed tier, content delivery network upgrades, domain registrations, and SSL certificates outside what is included with hosting. These are handled as pass-through costs under section 5.6.</li>');
+  parts.push('<li><strong>Compliance and certification.</strong> Legal review, accessibility certification (WCAG 2.x, ADA), privacy compliance certification (GDPR, CCPA, HIPAA, PCI-DSS), regulatory filings, or any formal compliance audit. See section 16.</li>');
+  parts.push('<li><strong>Guarantees of business outcomes.</strong> Search rankings, organic traffic levels, lead volume, conversion rate targets, paid-media performance, attribution accuracy, uptime beyond what the hosting provider itself guarantees. See section 11.</li>');
+  parts.push('<li><strong>Recovery from third-party causes.</strong> Correcting damage caused by other vendors, prior contractors, the Client\'s own staff, or undocumented systems and dependencies discovered after work begins. The Practice will scope and quote this work as billable if the Client wants help.</li>');
+  parts.push('<li><strong>Hardware, equipment, and physical work.</strong> On-site server work, networking hardware, peripherals, in-person training travel.</li>');
+  parts.push('<li><strong>Translation and localization.</strong> Multi-language content, internationalization beyond what the existing site provides, regional compliance variants.</li>');
+  parts.push('<li><strong>SEO link building and outreach.</strong> Manual link acquisition campaigns, guest post outreach, digital PR campaigns. Strategy and recommendations are part of Marketing Consulting; execution is not.</li>');
+  parts.push('<li><strong>Custom integrations.</strong> Building or maintaining bespoke integrations between the Client\'s systems and third-party platforms beyond what the Web Management tier supports as standard.</li>');
   parts.push('</ul>');
 
   parts.push('</section>');

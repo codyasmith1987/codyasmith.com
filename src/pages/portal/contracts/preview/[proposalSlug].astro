@@ -106,10 +106,12 @@ const renderContext = {
 const bodyHtml = renderTemplate(template.body_markdown, renderContext, 'preview');
 const scheduleAHtml = renderScheduleA(scheduleA, 'preview');
 
-const bannerHtml = `<strong>Preview.</strong> This document is a preview built from your current proposal selections. The executable version is issued in the portal after your discussion call with Cody. Nothing on this page is signed yet.`;
+const bannerHtml = `<strong>Your contract, drafted from your selections.</strong> Schedule A below reflects what you've picked so far. The standard terms after that apply to every engagement we run. After our call we may adjust Schedule A together; once it's settled the agreement is issued in the portal for signature. Nothing here is signed yet.`;
 
 const csrfToken = Astro.locals.csrfToken || '';
-const pageTitle = `${template.title} — ${clientMetadata?.legal_entity_name || clientFallbackName}`;
+const displayClientName = clientMetadata?.legal_entity_name || clientFallbackName;
+const renderedTitle = `Engagement agreement for ${displayClientName}`;
+const pageTitle = renderedTitle;
 ---
 <!DOCTYPE html>
 <html lang="en">
@@ -168,8 +170,8 @@ const pageTitle = `${template.title} — ${clientMetadata?.legal_entity_name || 
     <ContractRenderer
       bodyHtml={bodyHtml}
       scheduleAHtml={scheduleAHtml}
-      title={template.title}
-      clientLegalName={clientMetadata?.legal_entity_name || clientFallbackName}
+      title={renderedTitle}
+      clientLegalName={displayClientName}
       status="preview"
       bannerHtml={bannerHtml}
     />

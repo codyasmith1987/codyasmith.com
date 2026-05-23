@@ -42,6 +42,7 @@ import {
   getDraft,
   upsertDraftGeneric,
   markFinalized,
+  unmarkFinalized,
   identifySignerFromConfig,
   type ProposalDraft,
   type ProposalSigner,
@@ -256,11 +257,17 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
     return json({ error: 'You are not an authorized signer on this proposal.' }, 403);
   }
 
-  // Reject further mutations on a finalized draft. The legacy endpoint
-  // returns ok with the existing draft rather than erroring; mirror
-  // that so the front-end re-renders cleanly on a stale tab.
   const existingDraft = await getDraft(proposal.client_id, slug);
-  if (existingDraft?.finalized_at) {
+
+  let body: any;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid request body' }, 400); }
+
+  // Reject most mutations on a finalized draft. EXCEPTION: a signer's
+  // own revoke is allowed even after finalize, so a prospect who clicked
+  // "Accept and request a call" can change their mind before the
+  // formal contract gets issued. Without this carve-out, the success
+  // page has no way back and the prospect is trapped.
+  if (existingDraft?.finalized_at && body?.revoke !== true) {
     return json({
       ok: true,
       status: 'finalized',
@@ -269,9 +276,6 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
       confirmation_emails: '',
     });
   }
-
-  let body: any;
-  try { body = await request.json(); } catch { return json({ error: 'Invalid request body' }, 400); }
 
   // Validate selections payload against the config. Accept either the
   // generic { selections: { stepId: value } } shape OR the legacy
@@ -354,10 +358,19 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
   if (selectionChanged('consulting_tier')) changedStepLabels.push('Marketing Consulting level');
 
   // Apply the upsert with both selections and signatures patches.
-  const draft = await upsertDraftGeneric(proposal.client_id, slug, {
+  let draft = await upsertDraftGeneric(proposal.client_id, slug, {
     selections: selectionsPatch,
     signatures: Object.keys(signaturePatch).length ? signaturePatch : undefined,
   });
+
+  // Un-finalize on revoke. If the prospect is reverting their LOI
+  // acceptance from the success page, the draft's finalized_at must
+  // come off so the form can re-render and they can change selections
+  // or re-accept.
+  if (isRevoke && existingDraft?.finalized_at) {
+    await unmarkFinalized(proposal.client_id, slug);
+    draft = { ...draft, finalized_at: null };
+  }
 
   const signersWithState = describeSigners(proposal.config, draft);
   const signerCount = signersWithState.length;

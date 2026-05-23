@@ -124,10 +124,91 @@ export const RAISED_BAR_PROPOSAL_CONFIG = {
       ],
     },
     {
+      id: 'builders_domain',
+      type: 'tier_picker',
+      depends_on: 'site_setup',
+      h2: 'Step 3: Pick the Raised Bar Builders domain',
+      prompt: `The Builders site needs a domain. I checked .com availability so you have real options to pick from. The name is yours, not mine; recommendation below, but pick whichever you want or defer the call.`,
+      options: [
+        {
+          id: 'raisedbarbuilders',
+          name: 'raisedbarbuilders.com',
+          tagline: 'The literal name. Recommended.',
+          recommended: true,
+          features: [
+            'Clean and direct. Says what the company does.',
+            'Confirmed available.',
+            'Pairs cleanly with the heritage line from your grandfather forward.',
+          ],
+        },
+        {
+          id: 'raisedbarconstruction',
+          name: 'raisedbarconstruction.com',
+          tagline: 'Alternative. Slightly broader.',
+          features: [
+            'Less narrow than "builders," reads as more formal.',
+            'Confirmed available.',
+            'Reasonable backup if you want the term "construction" to lead.',
+          ],
+        },
+        {
+          id: 'discuss',
+          name: 'I want to discuss this with Cody',
+          tagline: 'Defer to the call.',
+          features: [
+            'Pick later, on the call.',
+            'Schedule A on the contract will reflect whatever we land on.',
+            'No commitment to either of the above.',
+          ],
+        },
+      ],
+    },
+    {
+      id: 'tailwater_domain',
+      type: 'tier_picker',
+      depends_on: 'site_setup',
+      show_when: { site_setup: 'o2' },
+      h2: 'Step 4: Pick the Tailwater micro-site domain',
+      prompt: `Only relevant if you picked Option 2 (the standalone Tailwater pre-sell). Tailwater.com itself is taken, so this is the available short-list.`,
+      options: [
+        {
+          id: 'tailwaterhailey',
+          name: 'tailwaterhailey.com',
+          tagline: 'Location-anchored. Recommended.',
+          recommended: true,
+          features: [
+            'Names the place. Strongest for parcel signage and a hyperlocal pre-sell.',
+            'Confirmed available.',
+            'Wraps cleanly when the three homes sell, since the location is the story.',
+          ],
+        },
+        {
+          id: 'livetailwater',
+          name: 'livetailwater.com',
+          tagline: 'Lifestyle CTA. Future-proof.',
+          features: [
+            'Reads as a brand, not just a project.',
+            'Confirmed available.',
+            'Worth picking if Tailwater might become a broader brand later, not just three homes.',
+          ],
+        },
+        {
+          id: 'discuss',
+          name: 'I want to discuss this with Cody',
+          tagline: 'Defer to the call.',
+          features: [
+            'Pick later, on the call.',
+            'Schedule A on the contract will reflect whatever we land on.',
+            'No commitment to either of the above.',
+          ],
+        },
+      ],
+    },
+    {
       id: 'consulting',
       type: 'binary_picker',
       depends_on: 'site_setup',
-      h2: 'Step 3: Add Marketing Consulting?',
+      h2: 'Step 5: Add Marketing Consulting?',
       prompt: 'Pick a site setup above and the consulting choice will appear below.',
       options: [
         {
@@ -151,7 +232,7 @@ export const RAISED_BAR_PROPOSAL_CONFIG = {
       type: 'tier_picker',
       depends_on: 'consulting',
       show_when: { consulting: 'yes' },
-      h2: 'Step 4: Pick a Consulting level',
+      h2: 'Step 6: Pick a Consulting level',
       prompt: 'Choose Good, Better, or Best for the consulting engagement.',
       options: [
         {

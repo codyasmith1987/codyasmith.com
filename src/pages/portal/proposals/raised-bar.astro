@@ -170,6 +170,22 @@ const csrfToken = Astro.locals.csrfToken || '';
     font-style: italic;
     margin-top: 8px;
   }
+  .step-hidden {
+    display: none !important;
+  }
+  .tiers-hidden {
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.4s ease, max-height 0.4s ease;
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+  .tiers-hidden.revealed {
+    max-height: 3000px;
+    opacity: 1;
+    margin: 40px 0 8px;
+  }
   .addon-choice {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -569,21 +585,21 @@ const csrfToken = Astro.locals.csrfToken || '';
 
 <p>One site instead of two is cheaper to build, simpler to run, and there is nothing that has to wind down later. When the three homes sell, your Tailwater section becomes a permanent portfolio piece on the builder site, not an orphan campaign site you keep paying to maintain. If you want a standalone Tailwater micro-site for the pre-sell, with its own URL for the signage at the park and a focused funnel, that is available as a single add-on at the bottom of this page. It is a real option, not a hidden one. You pick it if you want it.</p>
 
-<h2>Your three options</h2>
+<h2>Step 1: Pick a Web Management level</h2>
 
-<p>Pick a level. Good, Better, or Best. The level sets the recurring partnership: how much research and strategy I do for the business every month, how much hands-on work goes into the sites, and how fast I respond. Better is the level that fits where you actually are right now.</p>
+<p>Good, Better, or Best for Web Management. The level sets how often I update your sites, how fast I respond when something breaks, and how many hands-on hours per month sit in your pool. Marketing Consulting is a separate decision farther down the page. Pick management first, then the site setup, then decide if you want consulting on top.</p>
 
 <div class="tiers">
 
   <div class="tier" data-tier="good">
     <h3>Good</h3>
     <div class="tagline">A start, intentionally light.</div>
-    <div class="price-monthly">$1,031.60<span class="suffix"> / month</span></div>
-    <div class="price-onetime">$7,925 to start</div>
+    <div class="price-monthly">$534.60 &ndash; $772.20<span class="suffix"> / month</span></div>
+    <div class="price-onetime">depending on Step 2</div>
     <ul>
-      <li>Marketing Consulting at the lightest level: a baseline competitor and keyword read at the start, then monthly access to my strategic thinking if you have a question. No ongoing roadmap, no monthly strategy call.</li>
-      <li>Web Management for the unified Raised Bar Builders site and the F3 Properties takeover. Your sites stay online, secure, and updated monthly.</li>
-      <li>6 pooled hours per month for hands-on site work.</li>
+      <li>Web Management for the Raised Bar Builders site and the F3 Properties takeover. Sites stay online, secure, monitored, and updated monthly.</li>
+      <li>About 5 to 8 pooled hours per month for hands-on site work, depending on Step 2.</li>
+      <li>Hosting, daily backups, security and uptime monitoring on every site I manage for you.</li>
     </ul>
   </div>
 
@@ -591,50 +607,118 @@ const csrfToken = Astro.locals.csrfToken || '';
     <div class="pill">Recommended</div>
     <h3>Better</h3>
     <div class="tagline">The flagship. The right fit for what you are doing right now.</div>
-    <div class="price-monthly">$1,891.60<span class="suffix"> / month</span></div>
-    <div class="price-onetime">$8,925 to start</div>
+    <div class="price-monthly">$894.60 &ndash; $1,292.20<span class="suffix"> / month</span></div>
+    <div class="price-onetime">depending on Step 2</div>
     <ul>
-      <li>A research-grade audit at the start, then a quarterly cycle of competitive analysis, search engine optimization (SEO) and content roadmap, brand positioning, and a 30-minute monthly strategy call. Quarterly performance reporting.</li>
-      <li>Web Management with bi-weekly software updates, performance optimization, and a monthly health report so you know what is happening.</li>
-      <li>10 pooled hours per month for active page work, copy, images, content updates, whatever the sites need.</li>
+      <li>Everything in Good, plus bi-weekly software updates, performance optimization, and a monthly health report so you always know what is happening.</li>
+      <li>About 9 to 13 pooled hours per month for active page work, copy, images, content updates.</li>
+      <li>The level most clients land on. The price jump from Good buys real visibility into your sites and disproportionate value.</li>
     </ul>
   </div>
 
   <div class="tier" data-tier="best">
     <h3>Best</h3>
-    <div class="tagline">Marketing on a monthly cycle. Same-day priority response.</div>
-    <div class="price-monthly">$2,661.60<span class="suffix"> / month</span></div>
-    <div class="price-onetime">$10,625 to start</div>
+    <div class="tagline">Weekly updates. Same-day priority response.</div>
+    <div class="price-monthly">$1,164.60 &ndash; $1,682.20<span class="suffix"> / month</span></div>
+    <div class="price-onetime">depending on Step 2</div>
     <ul>
-      <li>The deepest audit at the start, then a monthly cycle of competitive analysis, SEO and content roadmap, ongoing brand work, a 60-minute strategy call, monthly performance reporting, and hiring guidance when you bring marketing or web roles in-house.</li>
-      <li>Web Management with weekly updates and same-day priority response when something breaks.</li>
-      <li>16 pooled hours per month. One staff training session per quarter for your team.</li>
+      <li>Everything in Better, plus weekly updates and same-day priority response when something breaks.</li>
+      <li>About 14 to 21 pooled hours per month, depending on Step 2.</li>
+      <li>One staff training session per quarter for your team, on whichever topic helps them most.</li>
     </ul>
   </div>
 
 </div>
 
-<h2>Choose your Tailwater approach</h2>
+<h2>Step 2: Pick your site setup</h2>
 
-<p id="tier-prompt" class="addon-prompt">Pick a tier above and your two Tailwater options will appear below.</p>
+<p id="step2-prompt" class="addon-prompt">Pick a Web Management level above and the two site-setup options will appear below.</p>
 
-<div class="addon-choice" id="addon-choice">
-  <div class="addon-option" data-addon="no">
-    <h3>Single unified site</h3>
-    <p>Tailwater is built as a focused section inside the Raised Bar Builders site. Default rollout. After the three homes sell, the Tailwater section becomes a permanent portfolio piece on the builder site. Nothing winds down later.</p>
+<div class="addon-choice" id="option-choice">
+  <div class="addon-option" data-option="o1">
+    <h3>Option 1: Single unified site</h3>
+    <p>One Raised Bar Builders site, with Tailwater built in as a focused section. Default rollout, Tailwater launches first inside the build, and after the three homes sell the Tailwater section becomes a permanent portfolio piece. Two sites managed: Builders and the F3 Properties takeover.</p>
+    <div class="addon-pricing">
+      <p class="addon-price-line"><span id="o1-monthly">$894.60</span> / month</p>
+      <p class="addon-price-detail">Builders site build: $5,625. F3 takeover onboarding: $800. Web Management onboarding: <span id="o1-onb">$800</span>.</p>
+    </div>
+  </div>
+  <div class="addon-option" data-option="o2">
+    <h3>Option 2: Split setup</h3>
+    <p>Standalone Tailwater micro-site at its own URL for the parcel signage, ads, and a focused pre-sell funnel, plus the Raised Bar Builders site (without the Tailwater section), plus the F3 takeover. Three sites managed. After the three homes sell, the micro-site winds down and your monthly returns to the Option 1 number.</p>
+    <div class="addon-pricing">
+      <p class="addon-price-line"><span id="o2-monthly">$1,292.20</span> / month</p>
+      <p class="addon-price-detail">Adds Tailwater micro-site build $4,500 and a small multi-site onboarding addition (<span id="o2-extra-onb">$200</span>).</p>
+    </div>
+  </div>
+</div>
+
+<h2>Step 3: Add Marketing Consulting?</h2>
+
+<p id="step3-prompt" class="addon-prompt">Pick a site setup above and the consulting choice will appear below.</p>
+
+<div class="addon-choice" id="consulting-choice">
+  <div class="addon-option" data-consulting="no">
+    <h3>Web Management only</h3>
+    <p>Skip Marketing Consulting for now. You can add it later at any time. The recurring stays at your management number from Step 2. Nothing changes about the sites or how I run them.</p>
     <div class="addon-pricing">
       <p class="addon-price-line">No additional charge</p>
-      <p class="addon-price-detail">Tier price unchanged.</p>
+      <p class="addon-price-detail">Mgmt-only monthly.</p>
     </div>
   </div>
-  <div class="addon-option" data-addon="yes">
-    <h3>Add a Tailwater micro-site</h3>
-    <p>A standalone URL for the parcel signage, ads, and a focused pre-sell funnel that does not share a site with the builder content. Built first, launches first. The builder site catches up behind it. After the three homes sell, the micro-site winds down and your monthly returns to the tier number above.</p>
+  <div class="addon-option" data-consulting="yes">
+    <h3>Add Marketing Consulting</h3>
+    <p>Research and strategy applied to the whole family of companies. Competitive analysis, search and content direction, brand positioning. I never execute on the marketing side. You give me direction, I come back with strategy. Sold once for the business, not per site.</p>
     <div class="addon-pricing">
-      <p class="addon-price-line">+$4,500 to start</p>
-      <p class="addon-price-detail">+<span id="addon-monthly-display">$237.60</span>/month while the micro-site is live</p>
+      <p class="addon-price-line">+$497 to +$1,497 / month</p>
+      <p class="addon-price-detail">Pick a level next. Audit at signing ranges $1,500 to $4,000 by level.</p>
     </div>
   </div>
+</div>
+
+<h2 id="consulting-step-h2" class="step-hidden">Step 4: Pick a Consulting level</h2>
+
+<p id="step4-prompt" class="addon-prompt step-hidden">Choose Good, Better, or Best for the consulting engagement.</p>
+
+<div class="tiers tiers-hidden" id="consulting-tiers">
+
+  <div class="tier" data-consulting-tier="good">
+    <h3>Good</h3>
+    <div class="tagline">The lightest consulting engagement.</div>
+    <div class="price-monthly">$497<span class="suffix"> / month</span></div>
+    <div class="price-onetime">$1,500 audit at signing</div>
+    <ul>
+      <li>A baseline competitive and keyword read at the start of the engagement.</li>
+      <li>Monthly access to my strategic thinking if you have a question. No ongoing roadmap, no monthly strategy call.</li>
+      <li>Designed to get you in the door. Most clients move up after a few months because they want the cycle.</li>
+    </ul>
+  </div>
+
+  <div class="tier recommended" data-consulting-tier="better">
+    <div class="pill">Recommended</div>
+    <h3>Better</h3>
+    <div class="tagline">The flagship consulting cycle.</div>
+    <div class="price-monthly">$997<span class="suffix"> / month</span></div>
+    <div class="price-onetime">$2,500 audit at signing</div>
+    <ul>
+      <li>A research-grade audit at the start, then a quarterly cycle of competitive analysis, SEO and content roadmap, and brand positioning.</li>
+      <li>A 30-minute monthly strategy call. Quarterly performance reporting.</li>
+      <li>This is the cycle for a business that is actually trying to grow.</li>
+    </ul>
+  </div>
+
+  <div class="tier" data-consulting-tier="best">
+    <h3>Best</h3>
+    <div class="tagline">Monthly strategy cycle. Hiring guidance included.</div>
+    <div class="price-monthly">$1,497<span class="suffix"> / month</span></div>
+    <div class="price-onetime">$4,000 audit at signing</div>
+    <ul>
+      <li>The deepest audit at the start, then a monthly cycle of competitive analysis, SEO and content roadmap, and ongoing brand work.</li>
+      <li>A 60-minute strategy call every month. Monthly performance reporting.</li>
+      <li>Hiring guidance when you bring marketing or web roles in-house. One staff training session per quarter for your team.</li>
+    </ul>
+  </div>
+
 </div>
 
 <h2>How it rolls out</h2>
@@ -678,12 +762,16 @@ const csrfToken = Astro.locals.csrfToken || '';
 <div class="proposal-form" id="proposal-form-container">
   <div class="form-summary">
     <div class="summary-row">
-      <span class="summary-label">Engagement tier</span>
+      <span class="summary-label">Web Management level</span>
       <span class="summary-value" id="summary-tier">Pick above</span>
     </div>
     <div class="summary-row">
-      <span class="summary-label">Tailwater micro-site</span>
-      <span class="summary-value" id="summary-addon">Pick above</span>
+      <span class="summary-label">Site setup</span>
+      <span class="summary-value" id="summary-option">Pick above</span>
+    </div>
+    <div class="summary-row">
+      <span class="summary-label">Marketing Consulting</span>
+      <span class="summary-value" id="summary-consulting">Pick above</span>
     </div>
     <div class="summary-row totals">
       <span class="summary-label">One-time at signing</span>
@@ -725,126 +813,279 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
 
 <script is:inline>
 (function() {
-  var TIERS = {
-    good:   { name: 'Good',   monthly: 1031.60, oneTime: 7925 },
-    better: { name: 'Better', monthly: 1891.60, oneTime: 8925 },
-    best:   { name: 'Best',   monthly: 2661.60, oneTime: 10625 }
+  // Pricing constants tracking business-design-v2: Web Management is
+  // Ecosystem A (under 30 pages); the Raised Bar Builders build is one
+  // Small build at $5,625. F3 takeover onboarding is a flat $800
+  // (heavier than a standard multi-site addition because of the audit
+  // work). The Tailwater micro-site, when present, is an additional
+  // managed site that takes the 0.80 per-site floor. Marketing
+  // Consulting is Ecosystem B (Growing/Regional, $1M-$10M).
+  var MGMT_TIERS = {
+    good:   { name: 'Good',   base: 297,  onb: 800,  hoursBase: 3 },
+    better: { name: 'Better', base: 497,  onb: 800,  hoursBase: 5 },
+    best:   { name: 'Best',   base: 647,  onb: 1000, hoursBase: 8 }
   };
-  var ADDON_MONTHLY = { good: 237.60, better: 397.60, best: 517.60 };
-  var ADDON_ONETIME = 4500;
+  var CONSULTING_TIERS = {
+    good:   { name: 'Good',   monthly: 497,  audit: 1500 },
+    better: { name: 'Better', monthly: 997,  audit: 2500 },
+    best:   { name: 'Best',   monthly: 1497, audit: 4000 }
+  };
+  var BUILD_BUILDERS = 5625;
+  var BUILD_TAILWATER = 4500;
+  var F3_ONBOARDING = 800;
 
-  var state = { tier: null, addOn: null };
+  var state = {
+    mgmtTier: null,
+    option: null,
+    consulting: null,
+    consultingTier: null
+  };
 
   function money(n) {
     return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
   function moneyInt(n) {
-    return '$' + n.toLocaleString('en-US');
+    return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  }
+
+  function mgmtMonthly(tier, option) {
+    if (!tier) return 0;
+    var base = MGMT_TIERS[tier].base;
+    var sites = option === 'o2' ? 3 : 2;
+    return base + (sites - 1) * base * 0.80;
+  }
+  function mgmtMultiSiteExtraOnb(tier, option) {
+    if (option !== 'o2') return 0;
+    return MGMT_TIERS[tier].onb * 0.25;
+  }
+  function oneTimeBreakdown() {
+    var rows = [];
+    if (state.mgmtTier && state.option) {
+      var mgmtOnb = MGMT_TIERS[state.mgmtTier].onb;
+      rows.push(['Builders site build', BUILD_BUILDERS]);
+      rows.push(['Builders Web Management onboarding', mgmtOnb]);
+      rows.push(['F3 Properties takeover onboarding', F3_ONBOARDING]);
+      if (state.option === 'o2') {
+        rows.push(['Tailwater micro-site build', BUILD_TAILWATER]);
+        rows.push(['Tailwater multi-site onboarding addition', mgmtMultiSiteExtraOnb(state.mgmtTier, state.option)]);
+      }
+      if (state.consulting === 'yes' && state.consultingTier) {
+        rows.push(['Marketing Consulting initial audit', CONSULTING_TIERS[state.consultingTier].audit]);
+      }
+    }
+    return rows;
+  }
+  function oneTimeTotal() {
+    return oneTimeBreakdown().reduce(function(s, r) { return s + r[1]; }, 0);
+  }
+  function monthlyTotal() {
+    var m = mgmtMonthly(state.mgmtTier, state.option);
+    if (state.consulting === 'yes' && state.consultingTier) {
+      m += CONSULTING_TIERS[state.consultingTier].monthly;
+    }
+    return m;
+  }
+  function complete() {
+    if (!state.mgmtTier || !state.option) return false;
+    if (state.consulting === 'no') return true;
+    if (state.consulting === 'yes' && state.consultingTier) return true;
+    return false;
   }
 
   function update() {
+    // Mgmt tier highlight
     var tierCards = document.querySelectorAll('[data-tier]');
     for (var i = 0; i < tierCards.length; i++) {
       var t = tierCards[i].getAttribute('data-tier');
-      tierCards[i].classList.toggle('selected', t === state.tier);
+      tierCards[i].classList.toggle('selected', t === state.mgmtTier);
     }
 
-    var addonChoice = document.getElementById('addon-choice');
-    var tierPrompt = document.getElementById('tier-prompt');
-    if (state.tier) {
-      if (addonChoice) addonChoice.classList.add('revealed');
-      if (tierPrompt) tierPrompt.style.display = 'none';
-      var mo = ADDON_MONTHLY[state.tier];
-      var display = document.getElementById('addon-monthly-display');
-      if (display) display.textContent = money(mo);
+    // Reveal Step 2 (option) when mgmt tier picked
+    var optionChoice = document.getElementById('option-choice');
+    var step2Prompt = document.getElementById('step2-prompt');
+    if (state.mgmtTier) {
+      if (optionChoice) optionChoice.classList.add('revealed');
+      if (step2Prompt) step2Prompt.style.display = 'none';
+      // Update o1/o2 prices for selected tier
+      var o1mEl = document.getElementById('o1-monthly');
+      var o2mEl = document.getElementById('o2-monthly');
+      var o1onbEl = document.getElementById('o1-onb');
+      var o2extraEl = document.getElementById('o2-extra-onb');
+      if (o1mEl) o1mEl.textContent = money(mgmtMonthly(state.mgmtTier, 'o1'));
+      if (o2mEl) o2mEl.textContent = money(mgmtMonthly(state.mgmtTier, 'o2'));
+      if (o1onbEl) o1onbEl.textContent = moneyInt(MGMT_TIERS[state.mgmtTier].onb);
+      if (o2extraEl) o2extraEl.textContent = moneyInt(MGMT_TIERS[state.mgmtTier].onb * 0.25);
     } else {
-      if (addonChoice) addonChoice.classList.remove('revealed');
-      if (tierPrompt) tierPrompt.style.display = '';
+      if (optionChoice) optionChoice.classList.remove('revealed');
+      if (step2Prompt) step2Prompt.style.display = '';
     }
 
-    var addonCards = document.querySelectorAll('[data-addon]');
-    for (var j = 0; j < addonCards.length; j++) {
-      var a = addonCards[j].getAttribute('data-addon');
-      addonCards[j].classList.toggle('selected', a === state.addOn);
+    // Option highlight
+    var optionCards = document.querySelectorAll('[data-option]');
+    for (var j = 0; j < optionCards.length; j++) {
+      var o = optionCards[j].getAttribute('data-option');
+      optionCards[j].classList.toggle('selected', o === state.option);
     }
 
+    // Reveal Step 3 (consulting) when option picked
+    var consultingChoice = document.getElementById('consulting-choice');
+    var step3Prompt = document.getElementById('step3-prompt');
+    if (state.option) {
+      if (consultingChoice) consultingChoice.classList.add('revealed');
+      if (step3Prompt) step3Prompt.style.display = 'none';
+    } else {
+      if (consultingChoice) consultingChoice.classList.remove('revealed');
+      if (step3Prompt) step3Prompt.style.display = '';
+    }
+
+    // Consulting yes/no highlight
+    var consultingCards = document.querySelectorAll('[data-consulting]');
+    for (var k = 0; k < consultingCards.length; k++) {
+      var c = consultingCards[k].getAttribute('data-consulting');
+      consultingCards[k].classList.toggle('selected', c === state.consulting);
+    }
+
+    // Reveal Step 4 (consulting tier) when consulting=yes
+    var consultingH2 = document.getElementById('consulting-step-h2');
+    var step4Prompt = document.getElementById('step4-prompt');
+    var consultingTiers = document.getElementById('consulting-tiers');
+    if (state.consulting === 'yes') {
+      if (consultingH2) consultingH2.classList.remove('step-hidden');
+      if (step4Prompt) step4Prompt.classList.remove('step-hidden');
+      if (consultingTiers) consultingTiers.classList.add('revealed');
+    } else {
+      if (consultingH2) consultingH2.classList.add('step-hidden');
+      if (step4Prompt) step4Prompt.classList.add('step-hidden');
+      if (consultingTiers) consultingTiers.classList.remove('revealed');
+      // Clear consulting tier selection if user toggled to 'no'
+      if (state.consulting === 'no') state.consultingTier = null;
+    }
+
+    // Consulting tier highlight
+    var consultingTierCards = document.querySelectorAll('[data-consulting-tier]');
+    for (var n = 0; n < consultingTierCards.length; n++) {
+      var ct = consultingTierCards[n].getAttribute('data-consulting-tier');
+      consultingTierCards[n].classList.toggle('selected', ct === state.consultingTier);
+    }
+
+    // Form summary
     var sumTier = document.getElementById('summary-tier');
-    var sumAddon = document.getElementById('summary-addon');
+    var sumOption = document.getElementById('summary-option');
+    var sumConsulting = document.getElementById('summary-consulting');
     var sumOnetime = document.getElementById('summary-onetime');
     var sumMonthly = document.getElementById('summary-monthly');
 
-    if (state.tier) {
-      sumTier.textContent = TIERS[state.tier].name;
+    if (state.mgmtTier) {
+      sumTier.textContent = MGMT_TIERS[state.mgmtTier].name;
       sumTier.classList.add('selected');
     } else {
       sumTier.textContent = 'Pick above';
       sumTier.classList.remove('selected');
     }
-    if (state.addOn === 'yes') {
-      sumAddon.textContent = 'Yes, add the micro-site';
-      sumAddon.classList.add('selected');
-    } else if (state.addOn === 'no') {
-      sumAddon.textContent = 'No, single unified site';
-      sumAddon.classList.add('selected');
+    if (state.option === 'o1') {
+      sumOption.textContent = 'Option 1: Single unified site';
+      sumOption.classList.add('selected');
+    } else if (state.option === 'o2') {
+      sumOption.textContent = 'Option 2: Split setup (with micro-site)';
+      sumOption.classList.add('selected');
     } else {
-      sumAddon.textContent = 'Pick above';
-      sumAddon.classList.remove('selected');
+      sumOption.textContent = 'Pick above';
+      sumOption.classList.remove('selected');
+    }
+    if (state.consulting === 'no') {
+      sumConsulting.textContent = 'Skipped';
+      sumConsulting.classList.add('selected');
+    } else if (state.consulting === 'yes' && state.consultingTier) {
+      sumConsulting.textContent = 'Yes, ' + CONSULTING_TIERS[state.consultingTier].name;
+      sumConsulting.classList.add('selected');
+    } else if (state.consulting === 'yes') {
+      sumConsulting.textContent = 'Yes, pick a level above';
+      sumConsulting.classList.remove('selected');
+    } else {
+      sumConsulting.textContent = 'Pick above';
+      sumConsulting.classList.remove('selected');
     }
 
-    if (state.tier && state.addOn) {
-      var tierData = TIERS[state.tier];
-      var monthly = tierData.monthly + (state.addOn === 'yes' ? ADDON_MONTHLY[state.tier] : 0);
-      var oneTime = tierData.oneTime + (state.addOn === 'yes' ? ADDON_ONETIME : 0);
-      sumOnetime.textContent = moneyInt(oneTime);
-      sumMonthly.textContent = money(monthly) + ' / month';
+    if (complete()) {
+      sumOnetime.textContent = moneyInt(oneTimeTotal());
+      sumMonthly.textContent = money(monthlyTotal()) + ' / month';
     } else {
       sumOnetime.textContent = '—';
       sumMonthly.textContent = '—';
     }
 
+    // Send button enable
     var jasonInput = document.getElementById('jason-name');
     var kevinInput = document.getElementById('kevin-name');
     var jasonName = jasonInput ? jasonInput.value.trim() : '';
     var kevinName = kevinInput ? kevinInput.value.trim() : '';
     var sendBtn = document.getElementById('send-proposal');
-    var canSend = !!(state.tier && state.addOn && jasonName && kevinName);
+    var canSend = !!(complete() && jasonName && kevinName);
     if (sendBtn) sendBtn.disabled = !canSend;
   }
 
+  function scrollTo(id) {
+    var target = document.getElementById(id);
+    if (target) setTimeout(function() { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 140);
+  }
+
+  // Wire up mgmt tier cards
   var tierCards = document.querySelectorAll('[data-tier]');
-  for (var i = 0; i < tierCards.length; i++) {
+  for (var ti = 0; ti < tierCards.length; ti++) {
     (function(card) {
       card.addEventListener('click', function() {
-        state.tier = card.getAttribute('data-tier');
+        state.mgmtTier = card.getAttribute('data-tier');
         update();
-        if (state.addOn === null) {
-          var target = document.getElementById('addon-choice');
-          if (target) setTimeout(function() { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 120);
-        }
+        if (!state.option) scrollTo('option-choice');
       });
-    })(tierCards[i]);
+    })(tierCards[ti]);
   }
 
-  var addonCards = document.querySelectorAll('[data-addon]');
-  for (var k = 0; k < addonCards.length; k++) {
+  // Wire up option (o1/o2) cards
+  var optionCards = document.querySelectorAll('[data-option]');
+  for (var oi = 0; oi < optionCards.length; oi++) {
     (function(card) {
       card.addEventListener('click', function() {
-        state.addOn = card.getAttribute('data-addon');
+        state.option = card.getAttribute('data-option');
         update();
-        if (state.tier) {
-          var target = document.getElementById('proposal-form-container');
-          if (target) setTimeout(function() { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 120);
-        }
+        if (!state.consulting) scrollTo('consulting-choice');
       });
-    })(addonCards[k]);
+    })(optionCards[oi]);
   }
 
+  // Wire up consulting yes/no cards
+  var consultingCards = document.querySelectorAll('[data-consulting]');
+  for (var ci = 0; ci < consultingCards.length; ci++) {
+    (function(card) {
+      card.addEventListener('click', function() {
+        state.consulting = card.getAttribute('data-consulting');
+        update();
+        if (state.consulting === 'yes' && !state.consultingTier) scrollTo('consulting-tiers');
+        else if (state.consulting === 'no') scrollTo('proposal-form-container');
+      });
+    })(consultingCards[ci]);
+  }
+
+  // Wire up consulting tier cards
+  var consultingTierCards = document.querySelectorAll('[data-consulting-tier]');
+  for (var cti = 0; cti < consultingTierCards.length; cti++) {
+    (function(card) {
+      card.addEventListener('click', function() {
+        state.consultingTier = card.getAttribute('data-consulting-tier');
+        update();
+        scrollTo('proposal-form-container');
+      });
+    })(consultingTierCards[cti]);
+  }
+
+  // Wire up name inputs
   var inputIds = ['jason-name', 'kevin-name'];
-  for (var n = 0; n < inputIds.length; n++) {
-    var el = document.getElementById(inputIds[n]);
+  for (var ii = 0; ii < inputIds.length; ii++) {
+    var el = document.getElementById(inputIds[ii]);
     if (el) el.addEventListener('input', update);
   }
 
+  // Wire up send
   var sendBtn = document.getElementById('send-proposal');
   if (sendBtn) {
     sendBtn.addEventListener('click', function() {
@@ -858,8 +1099,10 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken || '' },
         body: JSON.stringify({
-          tier: state.tier,
-          add_on: state.addOn,
+          mgmt_tier: state.mgmtTier,
+          option: state.option,
+          consulting: state.consulting,
+          consulting_tier: state.consultingTier,
           jason_name: jasonName,
           kevin_name: kevinName
         })

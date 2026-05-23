@@ -194,6 +194,37 @@ export const POST: APIRoute = async ({ locals, request }) => {
     if (signer === 'kevin') update.kevin_signature = v;
   }
 
+  // Revoke clears the current signer's own signature. Used when the
+  // user receives a 'selections changed' email and decides they want to
+  // re-review before agreeing. Cannot revoke the other person's
+  // signature.
+  let isRevoke = false;
+  if (body.revoke === true) {
+    isRevoke = true;
+    if (signer === 'jason') update.jason_signature = null;
+    if (signer === 'kevin') update.kevin_signature = null;
+  }
+
+  // Detect what selections are changing so we can notify a partner who
+  // has already signed. Signatures are NOT cleared automatically — the
+  // partner stays on the hook and gets an email letting them know what
+  // changed. The email carries a link they can use to revoke their
+  // signature and re-review, otherwise it stands.
+  function selectionChanged(field: 'mgmt_tier' | 'option' | 'consulting' | 'consulting_tier'): boolean {
+    if (!(field in update)) return false;
+    return existingDraft ? existingDraft[field] !== update[field] : update[field] !== null;
+  }
+  const changedFields: string[] = [];
+  if (selectionChanged('mgmt_tier')) changedFields.push('Web Management level');
+  if (selectionChanged('option')) changedFields.push('Site setup');
+  if (selectionChanged('consulting')) changedFields.push('Marketing Consulting yes/no');
+  if (selectionChanged('consulting_tier')) changedFields.push('Marketing Consulting level');
+  const partnerToNotify =
+    changedFields.length > 0
+      ? (signer === 'jason' && existingDraft?.kevin_signature ? 'kevin'
+        : signer === 'kevin' && existingDraft?.jason_signature ? 'jason' : null)
+      : null;
+
   const draft = await upsertDraft(client.id, PROPOSAL_SLUG, update);
 
   // If both signatures are present, finalize (send emails + mark in DB).
@@ -314,7 +345,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
     await markFinalized(client.id, PROPOSAL_SLUG);
     status = 'finalized';
-  } else if (body.signature !== undefined && !both) {
+  } else if (body.signature !== undefined && !isRevoke && !both) {
     status = 'waiting';
 
     // First-signer notification: ping the other signer that their partner has signed.
@@ -323,6 +354,15 @@ export const POST: APIRoute = async ({ locals, request }) => {
       const otherEmail = signer === 'jason' ? 'kevo.adams@gmail.com' : 'jasonroth1122@gmail.com';
       const otherName = signer === 'jason' ? 'Kevin' : 'Jason';
       const justSignedName = signer === 'jason' ? 'Jason' : 'Kevin';
+      const t = draft.mgmt_tier as MgmtTier;
+      const opt = draft.option as Option;
+      const consultingV = draft.consulting as 'yes' | 'no';
+      const consultingT = (draft.consulting_tier as ConsultingTier) || null;
+      const summaryRows = `
+        <tr><td style="padding: 6px 0; color: #6b6359;">Web Management</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(t ? MGMT_TIERS[t].name : '?')}</td></tr>
+        <tr><td style="padding: 6px 0; color: #6b6359;">Site setup</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${opt === 'o1' ? 'Option 1: Single unified site' : opt === 'o2' ? 'Option 2: Split (with micro-site)' : '?'}</td></tr>
+        <tr><td style="padding: 6px 0; color: #6b6359;">Marketing Consulting</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${consultingV === 'yes' && consultingT ? CONSULTING_TIERS[consultingT].name : 'Skipped'}</td></tr>
+      `;
       try {
         await fetch('https://api.brevo.com/v3/smtp/email', {
           method: 'POST',
@@ -330,17 +370,18 @@ export const POST: APIRoute = async ({ locals, request }) => {
           body: JSON.stringify({
             sender: { name: 'Cody Smith', email: 'cody@codyasmith.com' },
             to: [{ email: otherEmail, name: otherName }],
-            subject: stripCRLF(`${justSignedName} has signed the Raised Bar proposal. Your turn.`),
+            subject: stripCRLF(`${justSignedName} signed the Raised Bar proposal. Your turn.`),
             htmlContent: `
               <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 22px; color: #1a1814; line-height: 1.55;">
                 <h2 style="font-size: 22px; margin: 0 0 16px;">Hey ${escapeHtml(otherName)},</h2>
-                <p style="font-size: 15px; color: #4a4239; margin: 0 0 12px;">
-                  ${escapeHtml(justSignedName)} just signed the Raised Bar engagement proposal in the portal. The selections and ${escapeHtml(justSignedName)}'s signature are saved; the proposal is waiting on your countersign.
+                <p style="font-size: 15px; color: #4a4239; margin: 0 0 16px;">
+                  ${escapeHtml(justSignedName)} just signed the Raised Bar engagement proposal. Here is what they picked:
                 </p>
+                <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin: 0 0 20px;">${summaryRows}</table>
                 <p style="font-size: 15px; color: #4a4239; margin: 0 0 24px;">
-                  Log in to the portal at codyasmith.com. The selections will already be in place. Review them, type your name in your signature field, and click countersign. Both confirmations send when you do.
+                  Log in to the portal to review the selections, change anything you want, and countersign. Both confirmations send when you click countersign.
                 </p>
-                <a href="https://codyasmith.com/portal/login" style="display: inline-block; background: #c47d5a; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">Log in and countersign</a>
+                <a href="https://codyasmith.com/portal/proposals/raised-bar" style="display: inline-block; background: #c47d5a; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">Log in and countersign</a>
                 <p style="font-size: 13px; color: #6b6359; margin: 24px 0 0; padding-top: 16px; border-top: 1px solid #e6ddd0;">Cody Smith, Cody A Smith LLC &middot; codyasmith.com</p>
               </div>
             `,
@@ -348,6 +389,89 @@ export const POST: APIRoute = async ({ locals, request }) => {
         });
       } catch (err) {
         logger.error('Brevo first-signer-ping threw', err);
+      }
+    }
+  }
+
+  // Notify a partner who has already signed that the OTHER signer
+  // changed selections. Their signature stays in place; the email
+  // tells them what changed and offers a revoke link so they can
+  // re-review before agreeing. Skip in finalize/waiting/revoke flows
+  // to avoid double-notifying.
+  const brevoKey = import.meta.env.BREVO_API_KEY;
+  if (partnerToNotify && !isRevoke && status !== 'finalized' && body.signature === undefined && brevoKey) {
+    const partnerEmail = partnerToNotify === 'jason' ? 'jasonroth1122@gmail.com' : 'kevo.adams@gmail.com';
+    const partnerName = partnerToNotify === 'jason' ? 'Jason' : 'Kevin';
+    const changerName = signer === 'jason' ? 'Jason' : 'Kevin';
+    const t = draft.mgmt_tier as MgmtTier;
+    const opt = draft.option as Option;
+    const consultingV = draft.consulting as 'yes' | 'no';
+    const consultingT = (draft.consulting_tier as ConsultingTier) || null;
+    const summaryRows = `
+      <tr><td style="padding: 6px 0; color: #6b6359;">Web Management</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(t ? MGMT_TIERS[t].name : '?')}</td></tr>
+      <tr><td style="padding: 6px 0; color: #6b6359;">Site setup</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${opt === 'o1' ? 'Option 1: Single unified site' : opt === 'o2' ? 'Option 2: Split (with micro-site)' : '?'}</td></tr>
+      <tr><td style="padding: 6px 0; color: #6b6359;">Marketing Consulting</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${consultingV === 'yes' && consultingT ? CONSULTING_TIERS[consultingT].name : 'Skipped'}</td></tr>
+    `;
+    try {
+      await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: { 'api-key': brevoKey, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          sender: { name: 'Cody Smith', email: 'cody@codyasmith.com' },
+          to: [{ email: partnerEmail, name: partnerName }],
+          subject: stripCRLF(`${changerName} changed selections on the Raised Bar proposal`),
+          htmlContent: `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 22px; color: #1a1814; line-height: 1.55;">
+              <h2 style="font-size: 22px; margin: 0 0 16px;">Hey ${escapeHtml(partnerName)},</h2>
+              <p style="font-size: 15px; color: #4a4239; margin: 0 0 16px;">
+                ${escapeHtml(changerName)} changed selections on the Raised Bar engagement proposal you already signed. Your signature stays in place by default. Here is the current state:
+              </p>
+              <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin: 0 0 20px;">${summaryRows}</table>
+              <p style="font-size: 15px; color: #4a4239; margin: 0 0 16px;">
+                If you want to revoke your signature so you can re-review before agreeing, log in and click 'Revoke my signature' on the proposal page. Otherwise this stands and I will be in touch shortly with your contract details.
+              </p>
+              <a href="https://codyasmith.com/portal/proposals/raised-bar" style="display: inline-block; background: #c47d5a; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">Review the proposal</a>
+              <p style="font-size: 13px; color: #6b6359; margin: 24px 0 0; padding-top: 16px; border-top: 1px solid #e6ddd0;">Cody Smith, Cody A Smith LLC &middot; codyasmith.com</p>
+            </div>
+          `,
+        }),
+      });
+    } catch (err) {
+      logger.error('Brevo change-notification threw', err);
+    }
+  }
+
+  // Notify the OTHER signer when this user revokes their own signature.
+  if (isRevoke && brevoKey) {
+    const otherSig = signer === 'jason' ? existingDraft?.kevin_signature : existingDraft?.jason_signature;
+    if (otherSig) {
+      const otherEmail = signer === 'jason' ? 'kevo.adams@gmail.com' : 'jasonroth1122@gmail.com';
+      const otherName = signer === 'jason' ? 'Kevin' : 'Jason';
+      const revokerName = signer === 'jason' ? 'Jason' : 'Kevin';
+      try {
+        await fetch('https://api.brevo.com/v3/smtp/email', {
+          method: 'POST',
+          headers: { 'api-key': brevoKey, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            sender: { name: 'Cody Smith', email: 'cody@codyasmith.com' },
+            to: [{ email: otherEmail, name: otherName }],
+            subject: stripCRLF(`${revokerName} revoked their signature on the Raised Bar proposal`),
+            htmlContent: `
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 22px; color: #1a1814; line-height: 1.55;">
+                <h2 style="font-size: 22px; margin: 0 0 16px;">Hey ${escapeHtml(otherName)},</h2>
+                <p style="font-size: 15px; color: #4a4239; margin: 0 0 16px;">
+                  ${escapeHtml(revokerName)} revoked their signature on the Raised Bar engagement proposal. They likely want to re-review or change something. Your signature stays in place.
+                </p>
+                <p style="font-size: 15px; color: #4a4239; margin: 0 0 24px;">
+                  Nothing to do right now. They will re-sign when they are ready; you will get the standard confirmation email when both signatures are back in place.
+                </p>
+                <p style="font-size: 13px; color: #6b6359; margin: 24px 0 0; padding-top: 16px; border-top: 1px solid #e6ddd0;">Cody Smith, Cody A Smith LLC &middot; codyasmith.com</p>
+              </div>
+            `,
+          }),
+        });
+      } catch (err) {
+        logger.error('Brevo revoke-notification threw', err);
       }
     }
   }

@@ -46,6 +46,7 @@ import {
   type ProposalDraft,
   type ProposalSigner,
 } from '../../../../../lib/proposal-drafts';
+import { computePricing, type PricingResult } from '../../../../../lib/proposal-pricing';
 import turso from '../../../../../lib/turso';
 
 export const prerender = false;
@@ -137,99 +138,15 @@ function buildOptionIndex(config: any): Record<string, Set<string>> {
   return index;
 }
 
-// raised_bar_v1 pricing formula. Mirrors the legacy accept endpoint
-// math so the totals on the Cody-notification email and the activity
-// log entry stay identical to what the hardcoded version emitted.
-const RB_MGMT_TIERS = {
-  good:   { name: 'Good',   base: 297,  onb: 800 },
-  better: { name: 'Better', base: 497,  onb: 800 },
-  best:   { name: 'Best',   base: 647,  onb: 1000 },
-} as const;
-const RB_CONSULTING_TIERS = {
-  good:   { name: 'Good',   monthly: 497,  audit: 1500 },
-  better: { name: 'Better', monthly: 997,  audit: 2500 },
-  best:   { name: 'Best',   monthly: 1497, audit: 4000 },
-} as const;
-const RB_BUILD_BUILDERS = 5625;
-const RB_BUILD_TAILWATER = 4500;
-const RB_F3_ONBOARDING = 800;
-
-type RbMgmtTier = keyof typeof RB_MGMT_TIERS;
-type RbConsultingTier = keyof typeof RB_CONSULTING_TIERS;
-type RbOption = 'o1' | 'o2';
+// Pricing formula now lives in src/lib/proposal-pricing.ts so the
+// preview-mode contract renderer and the proposal accept flow share
+// one source of truth.
 
 function moneyInt(n: number): string {
   return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 function money(n: number): string {
   return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-type PricingResult = {
-  oneTime: number;
-  monthly: number;
-  breakdown: Array<{ label: string; amount: number }>;
-  mgmtMonthly: number;
-  consultingMonthly: number;
-  // Display strings used in the email templates so we don't duplicate
-  // formatting logic between the formula and the email builder.
-  mgmtTierName: string;
-  consultingTierName: string;
-  siteSetupShortLabel: string;
-  siteSetupLongLabel: string;
-};
-
-function computeRaisedBarV1(selections: Record<string, string | null>): PricingResult | null {
-  const tier = (selections.mgmt_tier || '') as RbMgmtTier;
-  const opt = (selections.site_setup || '') as RbOption;
-  const consulting = (selections.consulting || '') as 'yes' | 'no' | '';
-  const consultingTier = (selections.consulting_tier || '') as RbConsultingTier | '';
-
-  if (!(tier in RB_MGMT_TIERS) || (opt !== 'o1' && opt !== 'o2')) return null;
-  if (consulting !== 'yes' && consulting !== 'no') return null;
-  if (consulting === 'yes' && !(consultingTier in RB_CONSULTING_TIERS)) return null;
-
-  const sites = opt === 'o2' ? 3 : 2;
-  const base = RB_MGMT_TIERS[tier].base;
-  const mgmtMo = base + (sites - 1) * base * 0.80;
-  const consultingMo = consulting === 'yes' && consultingTier ? RB_CONSULTING_TIERS[consultingTier as RbConsultingTier].monthly : 0;
-
-  const breakdown: Array<{ label: string; amount: number }> = [];
-  breakdown.push({ label: 'Builders site build', amount: RB_BUILD_BUILDERS });
-  breakdown.push({ label: 'Builders Web Management onboarding', amount: RB_MGMT_TIERS[tier].onb });
-  breakdown.push({ label: 'F3 Properties takeover onboarding', amount: RB_F3_ONBOARDING });
-  if (opt === 'o2') {
-    breakdown.push({ label: 'Tailwater micro-site build', amount: RB_BUILD_TAILWATER });
-    breakdown.push({ label: 'Tailwater multi-site onboarding addition', amount: RB_MGMT_TIERS[tier].onb * 0.25 });
-  }
-  if (consulting === 'yes' && consultingTier) {
-    breakdown.push({
-      label: `Marketing Consulting ${RB_CONSULTING_TIERS[consultingTier as RbConsultingTier].name} initial audit`,
-      amount: RB_CONSULTING_TIERS[consultingTier as RbConsultingTier].audit,
-    });
-  }
-  const oneTime = breakdown.reduce((s, r) => s + r.amount, 0);
-  const monthly = mgmtMo + consultingMo;
-
-  return {
-    oneTime,
-    monthly,
-    breakdown,
-    mgmtMonthly: mgmtMo,
-    consultingMonthly: consultingMo,
-    mgmtTierName: RB_MGMT_TIERS[tier].name,
-    consultingTierName: consulting === 'yes' && consultingTier ? RB_CONSULTING_TIERS[consultingTier as RbConsultingTier].name : '',
-    siteSetupShortLabel: opt === 'o1' ? 'Single unified site' : 'Split (with Tailwater micro-site)',
-    siteSetupLongLabel: opt === 'o1'
-      ? 'Option 1: Single unified site (2 sites managed)'
-      : 'Option 2: Split setup with micro-site (3 sites managed)',
-  };
-}
-
-// Dispatch by config.pricing_formula. New formulas plug in here.
-function computePricing(formula: string, selections: Record<string, string | null>): PricingResult | null {
-  if (formula === 'raised_bar_v1') return computeRaisedBarV1(selections);
-  return null;
 }
 
 // Helper: check whether the draft has all the selections it needs to
@@ -492,7 +409,8 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
       try {
         const codyHtml = `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 22px; color: #1a1814; line-height: 1.55;">
-            <h2 style="font-size: 22px; margin: 0 0 16px;">${escapeHtml(proposal.title)} accepted</h2>
+            <h2 style="font-size: 22px; margin: 0 0 16px;">LOI accepted: ${escapeHtml(proposal.title)}</h2>
+            <p style="font-size: 14px; color: #4a4239; margin: 0 0 16px;">Both signers have accepted the Letter of Intent. <strong>Next step</strong>: schedule the call within 24 hours, then issue the master agreement at <a href="https://codyasmith.com/portal/admin/agreements/new?proposal=${escapeHtml(slug)}" style="color: #c47d5a;">/portal/admin/agreements/new</a>.</p>
             <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">
               <tr><td style="padding: 6px 0; color: #6b6359;">Web Management</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(pricing?.mgmtTierName || '?')}</td></tr>
               <tr><td style="padding: 6px 0; color: #6b6359;">Site setup</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(pricing?.siteSetupLongLabel || '?')}</td></tr>
@@ -510,7 +428,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
               <tr><td style="padding: 8px 0 0; border-top: 1px solid #d4cdc0; font-weight: 600;">Total</td><td style="padding: 8px 0 0; text-align: right; border-top: 1px solid #d4cdc0; font-weight: 600;">${escapeHtml(money(monthly))}</td></tr>
             </table>
             ${signedAsRows}
-            <p style="font-size: 12px; color: #a3a3a3; margin: 0;">Finalized ${escapeHtml(acceptedAt)}.</p>
+            <p style="font-size: 12px; color: #a3a3a3; margin: 0;">LOI accepted ${escapeHtml(acceptedAt)}.</p>
           </div>
         `;
         const r1 = await fetch('https://api.brevo.com/v3/smtp/email', {
@@ -519,7 +437,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
           body: JSON.stringify({
             sender: { name: 'Cody A Smith Portal', email: 'cody@codyasmith.com' },
             to: [{ email: 'cody@codyasmith.com', name: 'Cody Smith' }],
-            subject: stripCRLF(`${proposal.title} accepted`),
+            subject: stripCRLF(`LOI accepted: ${proposal.title}`),
             htmlContent: codyHtml,
           }),
         });
@@ -532,10 +450,11 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
       // Per-signer confirmations.
       for (const s of signersWithState) {
         try {
+          const signerFirstName = (s.name || '').split(' ')[0] || 'there';
           const signerHtml = `
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 22px; color: #1a1814; line-height: 1.55;">
-              <h2 style="font-size: 22px; margin: 0 0 16px;">Engagement confirmed</h2>
-              <p style="font-size: 15px; color: #4a4239; margin: 0 0 16px;">Both signatures are in. Here is what you both picked:</p>
+              <h2 style="font-size: 22px; margin: 0 0 16px;">${escapeHtml(proposal.title)} confirmed</h2>
+              <p style="font-size: 15px; color: #4a4239; margin: 0 0 16px;">Hey ${escapeHtml(signerFirstName)}, both confirmations are in. This is a Letter of Intent, not a contract yet. Here is what you both picked:</p>
               <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">
                 <tr><td style="padding: 6px 0; color: #6b6359;">Web Management</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(pricing?.mgmtTierName || '?')}</td></tr>
                 <tr><td style="padding: 6px 0; color: #6b6359;">Site setup</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(pricing?.siteSetupShortLabel || '?')}</td></tr>
@@ -544,7 +463,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
                 <tr><td style="padding: 6px 0; color: #6b6359;">Monthly recurring</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(money(monthly))}</td></tr>
               </table>
               <p style="font-size: 15px; color: #4a4239; margin: 0 0 16px;">
-                Formal contracts and the first invoice will follow within the week. I will be in touch directly. Reach me at <a href="mailto:cody@codyasmith.com" style="color: #c47d5a;">cody@codyasmith.com</a> or by phone with anything you need before then.
+                I will reach out within the next 24 hours to schedule the call. After we talk, I send the formal Standard Client Services Agreement and Schedule A into the portal for signature. The standard contract is already visible at the bottom of your proposal page if you want to start reading. Reach me at <a href="mailto:cody@codyasmith.com" style="color: #c47d5a;">cody@codyasmith.com</a> or by phone any time.
               </p>
               <p style="font-size: 13px; color: #6b6359; margin: 24px 0 0; padding-top: 16px; border-top: 1px solid #e6ddd0;">Cody Smith, Cody A Smith LLC &middot; codyasmith.com</p>
             </div>
@@ -555,7 +474,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
             body: JSON.stringify({
               sender: { name: 'Cody Smith', email: 'cody@codyasmith.com' },
               to: [{ email: s.email }],
-              subject: stripCRLF(`${proposal.title} confirmed`),
+              subject: stripCRLF(`${proposal.title} confirmed — Cody will be in touch`),
               htmlContent: signerHtml,
             }),
           });

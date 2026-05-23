@@ -11,6 +11,8 @@
 // is not purchased; the renderer in contract-render.ts then omits the
 // section entirely.
 
+import { PRODUCT_REGISTRY, buildContextForProduct } from './products';
+
 export interface ScheduleAContext {
   proposalConfig: any;
   draftSelections: Record<string, string | null>;
@@ -115,9 +117,83 @@ export interface PassThroughItem {
 export function buildScheduleA(ctx: ScheduleAContext): ScheduleA {
   const formula = ctx.proposalConfig?.pricing_formula;
   if (formula === 'raised_bar_v1') return buildScheduleAForRaisedBarV1(ctx);
+  if (formula === 'product_driven_v1') return buildScheduleAForProductDrivenV1(ctx);
   // Fallback for unknown formulas: render an empty Schedule A so the
   // contract page still loads. Admin will fill manually.
   return emptyScheduleA(ctx.effectiveDate);
+}
+
+// product_driven_v1: walks the config's in-scope products, asks each
+// for its Schedule A contribution, and composes a full Schedule A.
+// Mirrors the buildScheduleAForRaisedBarV1 output shape so the
+// renderer reads it without changes.
+function buildScheduleAForProductDrivenV1(ctx: ScheduleAContext): ScheduleA {
+  const config = ctx.proposalConfig;
+  const products: string[] = Array.isArray(config?.products) ? config.products : [];
+  if (products.length === 0) return emptyScheduleA(ctx.effectiveDate);
+
+  // Start with an empty Schedule A; each product fills its slots.
+  const base = emptyScheduleA(ctx.effectiveDate);
+  // Designated-contact client side from clientMetadata, when present.
+  // Proposal-time Schedule A previews may run before the client fills
+  // their metadata at contract intake; treat missing metadata as nulls
+  // rather than throwing.
+  const meta = ctx.clientMetadata || {};
+  base.designated_contacts = {
+    client: {
+      name: meta.primary_contact_name || null,
+      title: meta.primary_contact_title || null,
+      address: meta.notice_address || meta.principal_address || null,
+      email: meta.primary_contact_email || null,
+      phone: meta.primary_contact_phone || null,
+    },
+  };
+
+  const productVars = config?.product_vars || {};
+  const composed: ScheduleA = {
+    ...base,
+    pass_through_items: [],
+    day_one_access: { ...base.day_one_access, items: [...(base.day_one_access.items || [])] },
+  };
+
+  for (const id of products) {
+    const product = PRODUCT_REGISTRY[id];
+    if (!product) continue;
+    const productCtx = buildContextForProduct({
+      id,
+      selections: ctx.draftSelections,
+      productVars,
+      products,
+    });
+    const pricing = product.computePricing(productCtx);
+    const contribution = product.buildScheduleAContribution(productCtx, pricing);
+
+    if (contribution.products_purchased) {
+      Object.assign(composed.products_purchased, contribution.products_purchased);
+    }
+    if (contribution.web_management) composed.web_management = contribution.web_management;
+    if (contribution.marketing_consulting) composed.marketing_consulting = contribution.marketing_consulting;
+    if (contribution.build_sow_ref) composed.build_sow_ref = contribution.build_sow_ref;
+    if (contribution.other_sow_ref) composed.other_sow_ref = contribution.other_sow_ref;
+    if (Array.isArray(contribution.pass_through_items)) {
+      composed.pass_through_items.push(...contribution.pass_through_items);
+    }
+    if (Array.isArray(contribution.day_one_access_items)) {
+      composed.day_one_access.items.push(...contribution.day_one_access_items);
+    }
+    if (contribution.hours_addendum && contribution.hours_addendum.included_hours != null) {
+      composed.hours_and_rates.included_hours = contribution.hours_addendum.included_hours;
+    }
+  }
+
+  // If web_management is in scope but no day-one access items were
+  // added by the product, fall back to the standard intake list.
+  if (composed.products_purchased.web_management && composed.day_one_access.items.length === 0) {
+    composed.day_one_access.items = [...DEFAULT_DAY_ONE_ACCESS_ITEMS];
+  }
+  composed.day_one_access.required_by = ctx.effectiveDate;
+
+  return composed;
 }
 
 // Raised Bar v1: two products (Web Management + optional Marketing

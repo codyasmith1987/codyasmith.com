@@ -88,9 +88,39 @@ export function computeRaisedBarV1(selections: Record<string, string | null>): P
   };
 }
 
+// product_driven_v1 -----------------------------------------------------
+
+// composePricing lives in the products registry; importing it as a
+// value here works because products/types.ts and products/index.ts
+// only type-import PricingResult from this file (no runtime circular).
+import { composePricing } from './products';
+
+// The new formula for proposals built via the product-and-variable
+// composer. Reads config.products + config.product_vars, asks each
+// product for its pricing contribution, and composes a PricingResult
+// in the same shape the legacy raised_bar_v1 emits.
+export function computeProductDrivenV1(
+  selections: Record<string, string | null>,
+  config: any,
+): PricingResult | null {
+  return composePricing({ config, selections });
+}
+
 // Dispatcher ----------------------------------------------------------
 
-export function computePricing(formula: string, selections: Record<string, string | null>): PricingResult | null {
+// computePricing accepts an optional config arg so product_driven_v1
+// can read product_vars off the proposal. Legacy raised_bar_v1 ignores
+// it. Backward-compatible: existing callers that don't pass config
+// still hit the legacy path correctly.
+export function computePricing(
+  formula: string,
+  selections: Record<string, string | null>,
+  config?: any,
+): PricingResult | null {
   if (formula === 'raised_bar_v1') return computeRaisedBarV1(selections);
+  if (formula === 'product_driven_v1') {
+    if (!config) return null;
+    return computeProductDrivenV1(selections, config);
+  }
   return null;
 }

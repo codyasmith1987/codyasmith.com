@@ -1,27 +1,24 @@
 ---
-// Admin wizard: build a new proposal row from a single-page form.
+// Admin wizard: build a proposal from product picks and routing variables.
 //
-// Output is a row in the `proposals` table with a config JSON blob
-// matching the shape in src/lib/proposal-configs/raised-bar.ts. The
-// generic renderer (Phase 2) is the consumer; this wizard just
-// captures the inputs and POSTs them.
+// The wizard collects compose-args (which client, which products, per-product
+// variables, narrative variables, signer rows) and POSTs them to
+// /portal/api/admin/proposals/create. The server calls composeProposal()
+// from src/lib/products/index.ts to produce the full proposal config from
+// canonical product definitions in src/lib/products/.
 //
-// V1 simplifications:
-//   - Single-page form, no multi-step UI. The form is long but linear.
-//   - Three step templates (tier_picker for management, binary_picker
-//     for site setup, binary_picker for consulting yes/no, tier_picker
-//     for consulting). Each is a sub-form the admin picks from a
-//     dropdown and fills in.
-//   - 'depends_on' is implicit by step order; no explicit picker.
-//   - Drag-to-reorder is out of scope. Add and remove only; insertion
-//     order = final order.
-//   - 'Add new client' inline opens a slot above the select that
-//     creates a client server-side first via the existing
-//     create-client endpoint, then resolves to the new id.
+// What the wizard does NOT do: pick headings, pick copy, pick step structure,
+// pick prices, pick legal-entity fields. Those are derived (headings + copy
+// + steps + prices from product definitions) or collected later (legal
+// entity from the client at contract intake).
+//
+// Auto-derive on client pick: title, slug, prepared_on, prepared_for, and
+// initial signer rows. Admin can override any of those four.
 
 import Portal from '../../../../layouts/Portal.astro';
-import { getAllClients } from '../../../../lib/auth';
+import { getAllClients, getUsersByClientId } from '../../../../lib/auth';
 import turso from '../../../../lib/turso';
+import { PRODUCT_REGISTRY, PRODUCT_ORDER } from '../../../../lib/products';
 
 export const prerender = false;
 
@@ -32,30 +29,48 @@ if (!user || user.role !== 'admin') {
 
 const clients = await getAllClients();
 
-// Pre-load client_metadata for every client so the wizard can pre-fill
-// the legal-entity section when admin picks a client. Falls back to
-// blank if a client has no metadata yet.
-const metaRows = await turso.execute({
-  sql: `SELECT client_id, legal_entity_name, entity_type, state_of_organization, principal_address, notice_address, primary_contact_name, primary_contact_title, primary_contact_email, primary_contact_phone FROM client_metadata`,
-  args: [],
-});
-const clientMetadataMap: Record<string, any> = {};
-for (const r of (metaRows.rows as any[])) {
-  clientMetadataMap[r[0] as string] = {
-    legal_entity_name: r[1] || '',
-    entity_type: r[2] || '',
-    state_of_organization: r[3] || '',
-    principal_address: r[4] || '',
-    notice_address: r[5] || '',
-    primary_contact_name: r[6] || '',
-    primary_contact_title: r[7] || '',
-    primary_contact_email: r[8] || '',
-    primary_contact_phone: r[9] || '',
-  };
+// Pre-load per-client signer candidates so the wizard can pre-fill signer
+// rows the moment the admin picks a client. Falls back to an empty list.
+const usersByClient: Record<string, Array<{ id: string; name: string; email: string }>> = {};
+for (const c of clients) {
+  const users = await getUsersByClientId(c.id);
+  usersByClient[c.id] = users
+    .filter(u => u.role !== 'admin')
+    .map(u => ({ id: u.id, name: u.name, email: u.email }));
 }
 
-// Default 'prepared on' is today in en-US long form, matching the
-// Raised Bar config example (e.g. 'May 22, 2026').
+// Latest aggregate total_urls per client so the WM page_count input
+// can pre-fill from real crawl data when present.
+const totalUrlsRows = await turso.execute({
+  sql: `SELECT client_id, metric_value FROM metrics
+        WHERE metric_key = 'total_urls'
+        ORDER BY client_id, month DESC`,
+  args: [],
+});
+const latestTotalUrls: Record<string, number> = {};
+for (const row of totalUrlsRows.rows as any[]) {
+  const cid = row[0] as string;
+  if (latestTotalUrls[cid] === undefined) {
+    latestTotalUrls[cid] = Math.round(row[1] as number);
+  }
+}
+
+// Build a serializable product manifest for client-side rendering: just
+// the metadata the wizard needs to draw inputs. Pricing and Schedule A
+// composition happen server-side in composeProposal().
+const productManifest = PRODUCT_ORDER.map(id => {
+  const p = PRODUCT_REGISTRY[id];
+  return {
+    id: p.id,
+    name: p.name,
+    short_name: p.short_name,
+    variableSchema: p.variableSchema,
+    ecosystemLabels: Object.fromEntries(
+      Object.entries(p.ecosystems).map(([eid, eco]: any) => [eid, { label: eco.label, band: eco.band }])
+    ),
+  };
+});
+
 const todayLong = new Date().toLocaleDateString('en-US', {
   year: 'numeric', month: 'long', day: 'numeric',
 });
@@ -68,262 +83,126 @@ const todayISO = new Date().toISOString().slice(0, 10);
       <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin / Proposals</p>
       <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">New proposal</h1>
       <p class="text-neutral-500 text-sm mt-3">
-        Build the config for a client proposal. Save as draft to revisit, or publish to make it visible to assigned client users.
+        Pick the client and the products in scope. The system composes the rest from product definitions.
       </p>
     </div>
 
     <form id="proposal-form" class="space-y-10">
-      <!-- ============== BASICS ============== -->
+
+      <!-- 1. CLIENT -->
       <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
-        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">Basics</p>
+        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">1. Client</p>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <div class="sm:col-span-2">
-            <label for="client_id" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Client</label>
-            <div class="flex items-center gap-3">
-              <select
-                id="client_id"
-                name="client_id"
-                required
-                class="flex-1 px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
-              >
-                <option value="">Select a client</option>
-                {clients.map(c => (
-                  <option value={c.id} data-slug={c.slug} data-name={c.name}>{c.name}</option>
-                ))}
-              </select>
-              <button type="button" id="add-client-btn" class="px-4 py-3 bg-neutral-800 border border-white/10 text-neutral-300 text-sm rounded-lg hover:border-amber-500/40 hover:text-amber-400 transition-colors">
-                Add new
-              </button>
-            </div>
+        <div class="flex items-center gap-3">
+          <select
+            id="client_id"
+            name="client_id"
+            required
+            class="flex-1 px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
+          >
+            <option value="">Select a client</option>
+            {clients.map(c => (
+              <option value={c.id} data-slug={c.slug} data-name={c.name}>{c.name}</option>
+            ))}
+          </select>
+          <button type="button" id="add-client-btn" class="px-4 py-3 bg-neutral-800 border border-white/10 text-neutral-300 text-sm rounded-lg hover:border-amber-500/40 hover:text-amber-400 transition-colors">
+            Add new
+          </button>
+        </div>
 
-            <!-- Inline 'add new client' slot, hidden by default -->
-            <div id="add-client-slot" class="hidden mt-3 p-4 bg-neutral-900/40 border border-amber-500/20 rounded-lg space-y-3">
-              <p class="text-[10px] font-mono text-amber-400 tracking-wide uppercase">Create new client</p>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <input
-                  type="text"
-                  id="new_client_name"
-                  placeholder="Business name"
-                  class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30"
-                />
-                <input
-                  type="text"
-                  id="new_client_slug"
-                  placeholder="business-slug"
-                  pattern="[a-z0-9\-]+"
-                  class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30"
-                />
-              </div>
-              <div class="flex items-center gap-3">
-                <button type="button" id="create-client-btn" class="px-4 py-2 bg-amber-500 text-neutral-950 font-medium text-xs rounded-md hover:bg-amber-400 transition-colors">
-                  Create client
-                </button>
-                <button type="button" id="cancel-add-client-btn" class="text-xs text-neutral-500 hover:text-neutral-300 transition-colors">Cancel</button>
-                <p id="new-client-msg" class="text-xs hidden"></p>
-              </div>
-            </div>
+        <div id="add-client-slot" class="hidden mt-3 p-4 bg-neutral-900/40 border border-amber-500/20 rounded-lg space-y-3">
+          <p class="text-[10px] font-mono text-amber-400 tracking-wide uppercase">Create new client</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <input type="text" id="new_client_name" placeholder="Business name"
+              class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+            <input type="text" id="new_client_slug" placeholder="business-slug" pattern="[a-z0-9\-]+"
+              class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
           </div>
-
-          <div class="sm:col-span-2">
-            <label for="title" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Proposal title</label>
-            <input
-              type="text"
-              id="title"
-              name="title"
-              required
-              placeholder="Engagement Proposal for Jane Doe"
-              class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
-            />
-            <p class="text-[11px] text-neutral-600 mt-1">Appears at the top of the proposal page.</p>
-          </div>
-
-          <div>
-            <label for="slug" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Slug</label>
-            <input
-              type="text"
-              id="slug"
-              name="slug"
-              required
-              pattern="[a-z0-9\-]+"
-              placeholder="auto-from-title"
-              class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
-            />
-            <p class="text-[11px] text-neutral-600 mt-1">URL path. Lowercase, hyphens only. Auto-derived from title.</p>
-          </div>
-
-          <div>
-            <label for="prepared_on" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Prepared on</label>
-            <input
-              type="date"
-              id="prepared_on"
-              name="prepared_on"
-              value={todayISO}
-              class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
-            />
-          </div>
-
-          <div class="sm:col-span-2">
-            <label for="prepared_for" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Prepared for</label>
-            <input
-              type="text"
-              id="prepared_for"
-              name="prepared_for"
-              placeholder="Jane Doe and John Smith"
-              class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
-            />
-            <p class="text-[11px] text-neutral-600 mt-1">Free text. The names that appear in the header.</p>
+          <div class="flex items-center gap-3">
+            <button type="button" id="create-client-btn" class="px-4 py-2 bg-amber-500 text-neutral-950 font-medium text-xs rounded-md hover:bg-amber-400 transition-colors">
+              Create client
+            </button>
+            <button type="button" id="cancel-add-client-btn" class="text-xs text-neutral-500 hover:text-neutral-300 transition-colors">Cancel</button>
+            <p id="new-client-msg" class="text-xs hidden"></p>
           </div>
         </div>
+
+        <p id="client-prefill-note" class="hidden mt-3 text-[11px] text-amber-400/80"></p>
       </section>
 
-      <!-- ============== CLIENT LEGAL ENTITY ============== -->
+      <!-- 2. PRODUCTS IN SCOPE -->
       <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
-        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-3">Client legal entity</p>
-        <p class="text-[11px] text-neutral-500 mb-5">Fills into Section 1 of the contract and Schedule A. Pre-populated from existing client metadata if you've created proposals for this client before; edit if anything has changed.</p>
+        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">2. Products in scope</p>
+        <p class="text-[11px] text-neutral-500 mb-5">Pick one or more. Each contributes its own narrative, steps, pricing, and Schedule A.</p>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-          <div class="sm:col-span-2">
-            <label for="legal_entity_name" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Legal entity name</label>
-            <input type="text" id="legal_entity_name" name="legal_entity_name" placeholder="e.g., Raised Bar Group LLC" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300" />
-          </div>
-          <div>
-            <label for="entity_type" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Entity type</label>
-            <input type="text" id="entity_type" name="entity_type" placeholder="limited liability company" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300" />
-          </div>
-          <div>
-            <label for="state_of_organization" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">State of organization</label>
-            <input type="text" id="state_of_organization" name="state_of_organization" placeholder="Idaho" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300" />
-          </div>
-          <div class="sm:col-span-2">
-            <label for="principal_address" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Principal address</label>
-            <input type="text" id="principal_address" name="principal_address" placeholder="123 Main St, City, State 00000" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300" />
-          </div>
-          <div>
-            <label for="primary_contact_name" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Primary contact name</label>
-            <input type="text" id="primary_contact_name" name="primary_contact_name" placeholder="Jane Doe" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300" />
-          </div>
-          <div>
-            <label for="primary_contact_title" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Primary contact title</label>
-            <input type="text" id="primary_contact_title" name="primary_contact_title" placeholder="Member" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300" />
-          </div>
-          <div>
-            <label for="primary_contact_email" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Primary contact email</label>
-            <input type="email" id="primary_contact_email" name="primary_contact_email" placeholder="jane@example.com" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300" />
-          </div>
-          <div>
-            <label for="primary_contact_phone" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Primary contact phone</label>
-            <input type="tel" id="primary_contact_phone" name="primary_contact_phone" placeholder="555-555-5555" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300" />
-          </div>
-        </div>
-      </section>
-
-      <!-- ============== NARRATIVE ============== -->
-      <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
-        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">Narrative</p>
-
-        <div class="space-y-5">
-          <div>
-            <label for="intro" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Intro paragraph</label>
-            <textarea
-              id="intro"
-              name="intro"
-              rows="4"
-              placeholder="After our call, I sat with your business and the market you sell into..."
-              class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
-            ></textarea>
-            <p class="text-[11px] text-neutral-600 mt-1">Plain text or simple HTML. Single paragraph.</p>
-          </div>
-
-          <div>
-            <label for="what_i_see" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">What I see in your business</label>
-            <textarea
-              id="what_i_see"
-              name="what_i_see"
-              rows="8"
-              placeholder="One paragraph per line break (blank line between paragraphs)..."
-              class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
-            ></textarea>
-            <p class="text-[11px] text-neutral-600 mt-1">Separate paragraphs with a blank line. Simple HTML allowed for emphasis.</p>
-          </div>
-
-          <div>
-            <label for="what_i_recommend" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">What I recommend</label>
-            <textarea
-              id="what_i_recommend"
-              name="what_i_recommend"
-              rows="8"
-              placeholder="One paragraph per line break (blank line between paragraphs)..."
-              class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
-            ></textarea>
-          </div>
-
-          <div class="pt-4 border-t border-white/5">
-            <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-3">Rollout section</p>
-
-            <div class="space-y-4">
+        <div id="products-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {productManifest.map(p => (
+            <label class="flex items-start gap-3 p-4 bg-neutral-900/40 border border-white/5 rounded-lg cursor-pointer hover:border-amber-500/30 transition-colors" data-product-card={p.id}>
+              <input type="checkbox" value={p.id} class="mt-1 product-pick" />
               <div>
-                <label for="rollout_intro" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Rollout intro (HTML allowed)</label>
-                <textarea
-                  id="rollout_intro"
-                  name="rollout_intro"
-                  rows="2"
-                  placeholder="If you pick <strong>Option 1</strong> in Step 2:"
-                  class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
-                ></textarea>
+                <p class="text-sm text-neutral-200 font-medium">{p.name}</p>
+                <p class="text-[11px] text-neutral-500 mt-1 font-mono">{p.id}</p>
               </div>
+            </label>
+          ))}
+        </div>
+      </section>
 
-              <div id="phases-container" class="space-y-3"></div>
+      <!-- 3. PER-PRODUCT VARIABLES -->
+      <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8" id="vars-section" hidden>
+        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">3. Per-product variables</p>
+        <p class="text-[11px] text-neutral-500 mb-5">Routing variables for each in-scope product. Defaults pre-fill from client data when available.</p>
 
-              <button type="button" id="add-phase-btn" class="text-xs text-amber-400 hover:text-amber-300 transition-colors">
-                + Add phase
-              </button>
+        <div id="vars-container" class="space-y-6"></div>
+      </section>
 
-              <div>
-                <label for="rollout_outro" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Rollout outro (HTML allowed)</label>
-                <textarea
-                  id="rollout_outro"
-                  name="rollout_outro"
-                  rows="3"
-                  placeholder="If you pick Option 2, the order shifts..."
-                  class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
-                ></textarea>
-              </div>
-            </div>
+      <!-- 4. NARRATIVE VARIABLES -->
+      <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
+        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">4. Narrative variables</p>
+        <p class="text-[11px] text-neutral-500 mb-5">These drive snippet selection in the composed narrative.</p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2" for="narr_industry">Industry</label>
+            <select id="narr_industry" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+              <option value="">Select</option>
+              <option value="solo">Solo professional</option>
+              <option value="professional-services">Professional services firm</option>
+              <option value="contractor">Contractor or trades</option>
+              <option value="ecommerce">E-commerce</option>
+              <option value="family-of-companies">Family of companies</option>
+              <option value="nonprofit">Nonprofit</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2" for="narr_urgency">Urgency</label>
+            <select id="narr_urgency" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+              <option value="">Select</option>
+              <option value="tactical">Tactical (fix what is broken)</option>
+              <option value="growth">Growth (lean in)</option>
+              <option value="maintenance">Maintenance (steady state)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2" for="narr_focus">Focus</label>
+            <select id="narr_focus" multiple size="5" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+              <option value="revenue">Revenue</option>
+              <option value="brand">Brand</option>
+              <option value="takeover">Takeover</option>
+              <option value="search">Search</option>
+              <option value="pre-sell">Pre-sell</option>
+              <option value="hiring">Hiring</option>
+            </select>
+            <p class="text-[10px] text-neutral-600 mt-1">Hold Ctrl or Cmd to pick more than one.</p>
           </div>
         </div>
       </section>
 
-      <!-- ============== STEPS ============== -->
+      <!-- 5. SIGNERS -->
       <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
-        <div class="flex items-center justify-between mb-5">
-          <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase">Interactive steps</p>
-          <span class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase" id="step-count">0 steps</span>
-        </div>
-
-        <div id="steps-container" class="space-y-4"></div>
-
-        <div class="mt-6 pt-5 border-t border-white/5 flex flex-wrap items-center gap-3">
-          <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase mr-2">Add step:</p>
-          <button type="button" data-add-step="mgmt_tier" class="px-3 py-2 bg-neutral-800 border border-white/10 text-neutral-300 text-xs rounded-md hover:border-amber-500/40 hover:text-amber-400 transition-colors">
-            Web Management tier
-          </button>
-          <button type="button" data-add-step="site_setup" class="px-3 py-2 bg-neutral-800 border border-white/10 text-neutral-300 text-xs rounded-md hover:border-amber-500/40 hover:text-amber-400 transition-colors">
-            Site setup (binary)
-          </button>
-          <button type="button" data-add-step="consulting_yn" class="px-3 py-2 bg-neutral-800 border border-white/10 text-neutral-300 text-xs rounded-md hover:border-amber-500/40 hover:text-amber-400 transition-colors">
-            Consulting yes/no
-          </button>
-          <button type="button" data-add-step="consulting_tier" class="px-3 py-2 bg-neutral-800 border border-white/10 text-neutral-300 text-xs rounded-md hover:border-amber-500/40 hover:text-amber-400 transition-colors">
-            Consulting tier
-          </button>
-        </div>
-      </section>
-
-      <!-- ============== SIGNERS ============== -->
-      <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
-        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">Signers</p>
-        <p class="text-[11px] text-neutral-600 mb-4">Add one row per person who needs to sign. Emails should match existing portal users; if they don't, create the user separately at Admin / Users.</p>
+        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">5. Signers</p>
+        <p class="text-[11px] text-neutral-500 mb-4">Pre-filled from existing portal users on the client. Add rows for new signers.</p>
 
         <div id="signers-container" class="space-y-3"></div>
 
@@ -332,33 +211,47 @@ const todayISO = new Date().toISOString().slice(0, 10);
         </button>
       </section>
 
-      <!-- ============== PRICING FORMULA ============== -->
+      <!-- 6. HEADER OVERRIDES (collapsed by default; auto-derived from client) -->
       <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
-        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">Pricing formula</p>
-        <select
-          id="pricing_formula"
-          name="pricing_formula"
-          class="w-full sm:w-72 px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
-        >
-          <option value="raised_bar_v1">raised_bar_v1</option>
-        </select>
-        <p class="text-[11px] text-neutral-600 mt-2">Only one formula is wired up right now. New formulas land via code, not config.</p>
+        <details>
+          <summary class="cursor-pointer">
+            <span class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase">6. Header overrides</span>
+            <span class="text-[11px] text-neutral-500 ml-3">(optional; auto-derived from client)</span>
+          </summary>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-5">
+            <div class="sm:col-span-2">
+              <label for="title" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Title</label>
+              <input type="text" id="title" placeholder="Auto: Engagement Proposal for {client}"
+                class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+            </div>
+            <div>
+              <label for="slug" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Slug</label>
+              <input type="text" id="slug" placeholder="Auto: client-slug" pattern="[a-z0-9\-]+"
+                class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
+            </div>
+            <div>
+              <label for="prepared_on" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Prepared on</label>
+              <input type="date" id="prepared_on" value={todayISO}
+                class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+            </div>
+            <div class="sm:col-span-2">
+              <label for="prepared_for" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Prepared for</label>
+              <input type="text" id="prepared_for" placeholder="Auto: composed from signer names"
+                class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+            </div>
+          </div>
+        </details>
       </section>
 
-      <!-- ============== ACTIONS ============== -->
+      <!-- ACTIONS -->
       <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
-        <button
-          type="button"
-          id="save-draft-btn"
-          class="flex-1 px-6 py-3 bg-neutral-800 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/40 hover:text-amber-400 transition-colors"
-        >
+        <button type="button" id="save-draft-btn"
+          class="flex-1 px-6 py-3 bg-neutral-800 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/40 hover:text-amber-400 transition-colors">
           Save as draft
         </button>
-        <button
-          type="button"
-          id="publish-btn"
-          class="flex-1 px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300"
-        >
+        <button type="button" id="publish-btn"
+          class="flex-1 px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300">
           Publish
         </button>
       </div>
@@ -367,81 +260,74 @@ const todayISO = new Date().toISOString().slice(0, 10);
     </form>
   </div>
 
-  <script is:inline define:vars={{ todayLong, clientMetadataMap }}>
-    // ========== Ecosystem pricing reference ==========
-    // Pulled from business-design-v2. The wizard uses these to auto-fill
-    // a tier_picker step the moment the admin picks an ecosystem.
-    const WEB_MGMT_PRICING = {
-      A: {
-        label: 'Eco A (Small, <30 pages)',
-        good:   { monthly: 297,  onb: 800,  hrs: 3 },
-        better: { monthly: 497,  onb: 800,  hrs: 5 },
-        best:   { monthly: 647,  onb: 1000, hrs: 8 },
-      },
-      B: {
-        label: 'Eco B (Mid, 30-150 pages)',
-        good:   { monthly: 497, onb: 1200, hrs: 5 },
-        better: { monthly: 797, onb: 1200, hrs: 8 },
-        best:   { monthly: 997, onb: 1500, hrs: 12 },
-      },
-      C: {
-        label: 'Eco C (Large, 150+ pages)',
-        good:   { monthly: 997,  onb: 2000, hrs: 8 },
-        better: { monthly: 1497, onb: 2000, hrs: 12 },
-        best:   { monthly: 1997, onb: 2500, hrs: 18 },
-      },
+  <script is:inline define:vars={{ todayLong, productManifest, usersByClient, latestTotalUrls }}>
+    // =========================================================================
+    // Wizard state
+    // =========================================================================
+    const state = {
+      client_id: '',
+      client_name: '',
+      client_slug: '',
+      products: [],                    // array of product ids picked
+      product_vars: {},                // { productId: { var_id: value, ... } }
+      narrative_variables: {},         // { industry, urgency, focus[] }
+      signers: [],                     // [{ name, email }]
+      overrides: {},                   // { title?, slug?, prepared_for?, prepared_on? }
     };
 
-    const CONSULTING_PRICING = {
-      A: {
-        label: 'Eco A (<$1M revenue)',
-        good:   { monthly: 297,  audit: 750 },
-        better: { monthly: 497,  audit: 1500 },
-        best:   { monthly: 797,  audit: 2500 },
-      },
-      B: {
-        label: 'Eco B ($1M-$10M revenue)',
-        good:   { monthly: 497,  audit: 1500 },
-        better: { monthly: 997,  audit: 2500 },
-        best:   { monthly: 1497, audit: 4000 },
-      },
-      C: {
-        label: 'Eco C ($10M+ revenue)',
-        good:   { monthly: 1497, audit: 4000 },
-        better: { monthly: 2497, audit: 6000 },
-        best:   { monthly: 3997, audit: 10000 },
-      },
-    };
+    // =========================================================================
+    // CSRF + helpers
+    // =========================================================================
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
-    // Multi-site formula: monthly = base + (sites-1) * base * 0.80
-    //                    onboarding = base + (sites-1) * base * 0.25
-    function fmtMoney(n) {
-      return '$' + Math.round(n).toLocaleString('en-US');
-    }
-    function multiSiteMonthly(base, sites) {
-      return base + (Math.max(1, sites) - 1) * base * 0.80;
-    }
-    function multiSiteOnb(base, sites) {
-      return base + (Math.max(1, sites) - 1) * base * 0.25;
-    }
-
-    // ========== Slug + title auto-link ==========
-    const slugInput = document.getElementById('slug');
-    const titleInput = document.getElementById('title');
     function slugify(s) {
-      return s.toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, '');
+      return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     }
-    titleInput.addEventListener('input', () => {
-      if (!slugInput.dataset.manual) {
-        slugInput.value = slugify(titleInput.value);
+
+    function showMsg(text, type) {
+      const el = document.getElementById('submit-msg');
+      el.textContent = text;
+      el.className = 'text-sm ' + (type === 'ok' ? 'text-emerald-400' : 'text-red-400');
+      el.classList.remove('hidden');
+    }
+
+    // =========================================================================
+    // Client pick + add-new
+    // =========================================================================
+    const clientSelect = document.getElementById('client_id');
+    const prefillNote = document.getElementById('client-prefill-note');
+
+    clientSelect.addEventListener('change', () => {
+      const opt = clientSelect.selectedOptions[0];
+      if (!opt) return;
+      state.client_id = opt.value;
+      state.client_name = opt.dataset.name || '';
+      state.client_slug = opt.dataset.slug || '';
+      if (state.client_id) {
+        const users = usersByClient[state.client_id] || [];
+        // Reset signers from client users.
+        state.signers = users.map(u => ({ name: u.name, email: u.email }));
+        renderSigners();
+        // Pre-fill page_count when WM is in scope and a crawl exists.
+        if (state.products.includes('web-management') && latestTotalUrls[state.client_id]) {
+          state.product_vars['web-management'] = {
+            ...(state.product_vars['web-management'] || {}),
+            page_count: latestTotalUrls[state.client_id],
+          };
+          renderVars();
+        }
+        // Pre-fill header defaults note.
+        const hints = [];
+        hints.push(`Title -> Engagement Proposal for ${state.client_name}`);
+        hints.push(`Slug -> ${state.client_slug}`);
+        if (latestTotalUrls[state.client_id]) hints.push(`Crawl total_urls -> ${latestTotalUrls[state.client_id]}`);
+        prefillNote.textContent = hints.join('  |  ');
+        prefillNote.classList.remove('hidden');
+      } else {
+        prefillNote.classList.add('hidden');
       }
     });
-    slugInput.addEventListener('input', () => { slugInput.dataset.manual = '1'; });
 
-    // ========== Add new client inline ==========
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const addClientBtn = document.getElementById('add-client-btn');
     const addClientSlot = document.getElementById('add-client-slot');
     const cancelAddClientBtn = document.getElementById('cancel-add-client-btn');
@@ -449,7 +335,6 @@ const todayISO = new Date().toISOString().slice(0, 10);
     const newClientName = document.getElementById('new_client_name');
     const newClientSlug = document.getElementById('new_client_slug');
     const newClientMsg = document.getElementById('new-client-msg');
-    const clientSelect = document.getElementById('client_id');
 
     addClientBtn.addEventListener('click', () => {
       addClientSlot.classList.remove('hidden');
@@ -462,29 +347,9 @@ const todayISO = new Date().toISOString().slice(0, 10);
       newClientMsg.classList.add('hidden');
     });
     newClientName.addEventListener('input', () => {
-      if (!newClientSlug.dataset.manual) {
-        newClientSlug.value = slugify(newClientName.value);
-      }
+      if (!newClientSlug.dataset.manual) newClientSlug.value = slugify(newClientName.value);
     });
     newClientSlug.addEventListener('input', () => { newClientSlug.dataset.manual = '1'; });
-
-    // ========== Pre-fill client legal entity from existing metadata ==========
-    const LEGAL_FIELD_IDS = [
-      'legal_entity_name', 'entity_type', 'state_of_organization',
-      'principal_address', 'primary_contact_name', 'primary_contact_title',
-      'primary_contact_email', 'primary_contact_phone',
-    ];
-    function setLegalFields(meta) {
-      for (const id of LEGAL_FIELD_IDS) {
-        const el = document.getElementById(id);
-        if (el) el.value = (meta && meta[id]) || '';
-      }
-    }
-    clientSelect.addEventListener('change', () => {
-      const meta = clientMetadataMap[clientSelect.value];
-      if (meta) setLegalFields(meta);
-      else setLegalFields(null);
-    });
 
     createClientBtn.addEventListener('click', async () => {
       const name = newClientName.value.trim();
@@ -495,609 +360,312 @@ const todayISO = new Date().toISOString().slice(0, 10);
         newClientMsg.classList.remove('hidden');
         return;
       }
-      createClientBtn.disabled = true;
-      createClientBtn.textContent = 'Creating...';
+      newClientMsg.textContent = 'Creating...';
+      newClientMsg.className = 'text-xs text-neutral-400';
+      newClientMsg.classList.remove('hidden');
       try {
-        const res = await fetch('/portal/api/admin/create-client', {
+        const res = await fetch('/portal/api/admin/clients/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
           body: JSON.stringify({ name, slug }),
         });
         const data = await res.json();
         if (res.ok) {
-          // Add new <option> and select it
           const opt = document.createElement('option');
           opt.value = data.id;
-          opt.textContent = data.name;
-          opt.dataset.slug = data.slug;
-          opt.dataset.name = data.name;
+          opt.dataset.slug = slug;
+          opt.dataset.name = name;
+          opt.textContent = name;
+          opt.selected = true;
           clientSelect.appendChild(opt);
-          clientSelect.value = data.id;
+          clientSelect.dispatchEvent(new Event('change'));
           addClientSlot.classList.add('hidden');
           newClientName.value = '';
           newClientSlug.value = '';
-          newClientSlug.dataset.manual = '';
           newClientMsg.classList.add('hidden');
         } else {
           newClientMsg.textContent = data.error || 'Failed to create client';
           newClientMsg.className = 'text-xs text-red-400';
-          newClientMsg.classList.remove('hidden');
         }
-      } catch (err) {
+      } catch {
         newClientMsg.textContent = 'Connection error';
         newClientMsg.className = 'text-xs text-red-400';
-        newClientMsg.classList.remove('hidden');
       }
-      createClientBtn.disabled = false;
-      createClientBtn.textContent = 'Create client';
     });
 
-    // ========== Phases (rollout) ==========
-    const phasesContainer = document.getElementById('phases-container');
-    let phaseCounter = 0;
-    function addPhaseRow(initial = {}) {
-      phaseCounter++;
-      const idx = phaseCounter;
-      const div = document.createElement('div');
-      div.className = 'p-4 bg-neutral-900/40 border border-white/10 rounded-lg space-y-2';
-      div.dataset.phaseRow = String(idx);
-      div.innerHTML = `
-        <div class="flex items-center justify-between mb-1">
-          <p class="text-[10px] font-mono text-amber-400 tracking-wide uppercase">Phase ${idx}</p>
-          <button type="button" data-remove-phase="${idx}" class="text-xs text-neutral-500 hover:text-red-400 transition-colors">Remove</button>
-        </div>
-        <input type="text" data-phase-num placeholder="Phase 1" value="${escapeAttr(initial.phase_num || ('Phase ' + idx))}" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-xs font-mono focus:outline-none focus:border-amber-500/30" />
-        <input type="text" data-phase-h3 placeholder="Heading for this phase" value="${escapeAttr(initial.h3 || '')}" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
-        <textarea data-phase-html rows="3" placeholder="What happens in this phase (HTML allowed)" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/30">${escapeText(initial.html || '')}</textarea>
-      `;
-      phasesContainer.appendChild(div);
-      div.querySelector('[data-remove-phase]').addEventListener('click', () => div.remove());
-    }
-    document.getElementById('add-phase-btn').addEventListener('click', () => addPhaseRow());
-
-    // ========== Signers ==========
-    const signersContainer = document.getElementById('signers-container');
-    let signerCounter = 0;
-    function addSignerRow(initial = {}) {
-      signerCounter++;
-      const idx = signerCounter;
-      const div = document.createElement('div');
-      div.className = 'p-4 bg-neutral-900/40 border border-white/10 rounded-lg';
-      div.dataset.signerRow = String(idx);
-      div.innerHTML = `
-        <div class="flex items-center justify-between mb-3">
-          <p class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase">Signer ${idx}</p>
-          <button type="button" data-remove-signer="${idx}" class="text-xs text-neutral-500 hover:text-red-400 transition-colors">Remove</button>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <input type="text" data-signer-name placeholder="Full name" value="${escapeAttr(initial.name || '')}" class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
-          <input type="email" data-signer-email placeholder="email@example.com" value="${escapeAttr(initial.email || '')}" class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
-          <input type="text" data-signer-label placeholder="signing as" value="${escapeAttr(initial.label || '')}" class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
-        </div>
-      `;
-      signersContainer.appendChild(div);
-      div.querySelector('[data-remove-signer]').addEventListener('click', () => div.remove());
-    }
-    document.getElementById('add-signer-btn').addEventListener('click', () => addSignerRow());
-    // Start with one signer row
-    addSignerRow();
-
-    // ========== Steps ==========
-    const stepsContainer = document.getElementById('steps-container');
-    const stepCount = document.getElementById('step-count');
-    let stepCounter = 0;
-
-    function updateStepCount() {
-      const n = stepsContainer.querySelectorAll('[data-step-row]').length;
-      stepCount.textContent = n + (n === 1 ? ' step' : ' steps');
-    }
-
-    function escapeAttr(s) {
-      return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
-    function escapeText(s) {
-      return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
-
-    function defaultMgmtFeatures(eco, level) {
-      const p = WEB_MGMT_PRICING[eco][level];
-      if (level === 'good') {
-        return [
-          'Sites stay online, secure, monitored, and updated monthly.',
-          `About ${p.hrs} pooled hours per month for hands-on site work.`,
-          'Hosting, daily backups, security and uptime monitoring on every site I manage for you.',
-        ];
-      }
-      if (level === 'better') {
-        return [
-          'Everything in Good, plus bi-weekly software updates, performance optimization, and a monthly health report.',
-          `About ${p.hrs} pooled hours per month for active page work, copy, images, content updates.`,
-          'The level most clients land on. The price jump from Good buys real visibility into your sites.',
-        ];
-      }
-      return [
-        'Everything in Better, plus weekly updates and same-day priority response when something breaks.',
-        `About ${p.hrs} pooled hours per month.`,
-        'One staff training session per quarter for your team.',
-      ];
-    }
-
-    function defaultConsultingFeatures(eco, level) {
-      const p = CONSULTING_PRICING[eco][level];
-      if (level === 'good') {
-        return [
-          'A baseline competitive and keyword read at the start of the engagement.',
-          'Monthly access to my strategic thinking if you have a question.',
-          'Designed to get you in the door. Most clients move up after a few months.',
-        ];
-      }
-      if (level === 'better') {
-        return [
-          'A research-grade audit at the start, then a quarterly cycle of competitive analysis, SEO and content roadmap, and brand positioning.',
-          'A 30-minute monthly strategy call. Quarterly performance reporting.',
-          'This is the cycle for a business that is actually trying to grow.',
-        ];
-      }
-      return [
-        'The deepest audit at the start, then a monthly cycle of competitive analysis, SEO and content roadmap, and ongoing brand work.',
-        'A 60-minute strategy call every month. Monthly performance reporting.',
-        'Hiring guidance when you bring marketing or web roles in-house.',
-      ];
-    }
-
-    function buildStep(template) {
-      stepCounter++;
-      const idx = stepCounter;
-      const wrap = document.createElement('div');
-      wrap.className = 'p-5 bg-neutral-900/40 border border-white/10 rounded-xl';
-      wrap.dataset.stepRow = String(idx);
-      wrap.dataset.stepTemplate = template;
-
-      const header = `
-        <div class="flex items-center justify-between mb-4">
-          <p class="text-[10px] font-mono text-amber-400 tracking-wide uppercase">Step ${idx} / ${labelForTemplate(template)}</p>
-          <button type="button" data-remove-step="${idx}" class="text-xs text-neutral-500 hover:text-red-400 transition-colors">Remove</button>
-        </div>
-      `;
-
-      const stepIdField = `
-        <div class="mb-4">
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-1">Step id (used in config)</label>
-          <input type="text" data-step-id value="${escapeAttr(suggestStepId(template))}" placeholder="step_id_snake_case" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-xs font-mono focus:outline-none focus:border-amber-500/30" />
-        </div>
-      `;
-
-      const h2Field = `
-        <div class="mb-3">
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-1">Heading</label>
-          <input type="text" data-step-h2 placeholder="Step 1: Pick a Web Management level" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
-        </div>
-      `;
-
-      const promptField = `
-        <div class="mb-4">
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-1">Prompt copy (above the cards)</label>
-          <textarea data-step-prompt rows="2" placeholder="What this step asks the client to pick..." class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/30"></textarea>
-        </div>
-      `;
-
-      wrap.innerHTML = header + stepIdField + h2Field + promptField + bodyFor(template);
-      stepsContainer.appendChild(wrap);
-
-      wrap.querySelector('[data-remove-step]').addEventListener('click', () => {
-        wrap.remove();
-        updateStepCount();
+    // =========================================================================
+    // Product picks
+    // =========================================================================
+    const productPicks = document.querySelectorAll('.product-pick');
+    productPicks.forEach(box => {
+      box.addEventListener('change', () => {
+        state.products = Array.from(productPicks).filter(b => b.checked).map(b => b.value);
+        renderVars();
       });
+    });
 
-      // Wire up template-specific listeners
-      if (template === 'mgmt_tier' || template === 'consulting_tier') {
-        const ecoSelect = wrap.querySelector('[data-eco]');
-        const sitesInput = wrap.querySelector('[data-sites]');
-        const refresh = () => fillTierPickerDefaults(wrap, template);
-        ecoSelect.addEventListener('change', refresh);
-        if (sitesInput) sitesInput.addEventListener('input', refresh);
-        // Trigger fill on first paint
-        refresh();
-      }
-      if (template === 'consulting_yn') {
-        const ecoSelect = wrap.querySelector('[data-yes-eco]');
-        const refresh = () => fillConsultingYnDefaults(wrap);
-        ecoSelect.addEventListener('change', refresh);
-        refresh();
-      }
-      if (template === 'site_setup') {
-        // Default labels already in markup; nothing dynamic to wire.
-      }
+    // =========================================================================
+    // Per-product variables
+    // =========================================================================
+    const varsSection = document.getElementById('vars-section');
+    const varsContainer = document.getElementById('vars-container');
 
-      updateStepCount();
+    function renderVars() {
+      if (state.products.length === 0) {
+        varsSection.hidden = true;
+        return;
+      }
+      varsSection.hidden = false;
+      varsContainer.innerHTML = '';
+      for (const id of state.products) {
+        const product = productManifest.find(p => p.id === id);
+        if (!product) continue;
+        const block = document.createElement('div');
+        block.className = 'p-5 bg-neutral-900/40 border border-white/5 rounded-lg';
+        const heading = document.createElement('p');
+        heading.className = 'text-sm font-medium text-neutral-200 mb-3';
+        heading.textContent = product.name;
+        block.appendChild(heading);
+
+        if (product.variableSchema.length === 0) {
+          const note = document.createElement('p');
+          note.className = 'text-[11px] text-neutral-500';
+          note.textContent = 'No routing variables.';
+          block.appendChild(note);
+        }
+
+        for (const field of product.variableSchema) {
+          const wrap = document.createElement('div');
+          wrap.className = 'mb-3';
+          const label = document.createElement('label');
+          label.className = 'block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-1';
+          label.textContent = field.label;
+          wrap.appendChild(label);
+
+          let input;
+          const currentVal = state.product_vars[id]?.[field.id];
+          if (field.type === 'select') {
+            input = document.createElement('select');
+            input.className = 'w-full px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30';
+            const blank = document.createElement('option');
+            blank.value = '';
+            blank.textContent = 'Select';
+            input.appendChild(blank);
+            for (const o of (field.options || [])) {
+              const opt = document.createElement('option');
+              opt.value = o.id;
+              opt.textContent = o.label;
+              if (currentVal !== undefined && currentVal === o.id) opt.selected = true;
+              input.appendChild(opt);
+            }
+          } else if (field.type === 'number') {
+            input = document.createElement('input');
+            input.type = 'number';
+            input.className = 'w-full px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-md text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
+            if (currentVal !== undefined && currentVal !== null) input.value = String(currentVal);
+            else if (field.default !== undefined && field.default !== null) input.value = String(field.default);
+          } else if (field.type === 'boolean') {
+            input = document.createElement('input');
+            input.type = 'checkbox';
+            input.className = 'h-4 w-4';
+            if (currentVal === true) input.checked = true;
+          } else {
+            input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'w-full px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30';
+            if (currentVal !== undefined && currentVal !== null) input.value = String(currentVal);
+          }
+          input.dataset.product = id;
+          input.dataset.var = field.id;
+          input.dataset.kind = field.type;
+          input.addEventListener('input', onVarChange);
+          input.addEventListener('change', onVarChange);
+          wrap.appendChild(input);
+
+          if (field.help) {
+            const help = document.createElement('p');
+            help.className = 'text-[10px] text-neutral-500 mt-1';
+            help.textContent = field.help;
+            wrap.appendChild(help);
+          }
+          block.appendChild(wrap);
+        }
+
+        // Live ecosystem routing display
+        const ecoNote = document.createElement('p');
+        ecoNote.className = 'text-[11px] text-amber-400/80 mt-2 font-mono';
+        ecoNote.dataset.ecoNote = id;
+        ecoNote.textContent = computeRoutingNote(id);
+        block.appendChild(ecoNote);
+
+        varsContainer.appendChild(block);
+      }
     }
 
-    function labelForTemplate(t) {
-      if (t === 'mgmt_tier') return 'Web Management tier picker';
-      if (t === 'site_setup') return 'Site setup (binary)';
-      if (t === 'consulting_yn') return 'Consulting yes/no';
-      if (t === 'consulting_tier') return 'Consulting tier picker';
-      return t;
+    function onVarChange(e) {
+      const t = e.currentTarget;
+      const pid = t.dataset.product;
+      const vid = t.dataset.var;
+      const kind = t.dataset.kind;
+      state.product_vars[pid] = state.product_vars[pid] || {};
+      let val;
+      if (kind === 'number') {
+        const n = parseFloat(t.value);
+        val = Number.isFinite(n) ? n : null;
+      } else if (kind === 'boolean') {
+        val = !!t.checked;
+      } else {
+        val = t.value;
+      }
+      state.product_vars[pid][vid] = val;
+      // Refresh routing note for this product.
+      const note = varsContainer.querySelector(`[data-eco-note="${pid}"]`);
+      if (note) note.textContent = computeRoutingNote(pid);
     }
 
-    function suggestStepId(t) {
-      if (t === 'mgmt_tier') return 'mgmt_tier';
-      if (t === 'site_setup') return 'site_setup';
-      if (t === 'consulting_yn') return 'consulting';
-      if (t === 'consulting_tier') return 'consulting_tier';
-      return 'step';
-    }
-
-    function bodyFor(template) {
-      if (template === 'mgmt_tier') {
-        return `
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-            <div>
-              <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-1">Ecosystem</label>
-              <select data-eco class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
-                <option value="A">${WEB_MGMT_PRICING.A.label}</option>
-                <option value="B">${WEB_MGMT_PRICING.B.label}</option>
-                <option value="C">${WEB_MGMT_PRICING.C.label}</option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-1">Sites managed</label>
-              <select data-sites class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-              </select>
-            </div>
-          </div>
-          ${tierBlock('good', 'Good')}
-          ${tierBlock('better', 'Better', true)}
-          ${tierBlock('best', 'Best')}
-        `;
+    function computeRoutingNote(productId) {
+      // Mirrors each product's routeEcosystem(). Kept simple and inline
+      // so the wizard can render the routed ecosystem live without an
+      // extra server roundtrip on every keystroke.
+      const vars = state.product_vars[productId] || {};
+      if (productId === 'web-management') {
+        const n = vars.page_count;
+        if (typeof n !== 'number') return 'Ecosystem: not yet (need page count)';
+        if (n < 30) return 'Ecosystem: A (under 30 pages)';
+        if (n <= 150) return 'Ecosystem: B (30 to 150 pages)';
+        return 'Ecosystem: C (150 or more pages)';
       }
-      if (template === 'site_setup') {
-        return `
-          ${binaryOptionBlock('o1', 'Option 1')}
-          ${binaryOptionBlock('o2', 'Option 2')}
-        `;
+      if (productId === 'marketing-consulting') {
+        const b = vars.revenue_band;
+        if (b === 'under-1m') return 'Ecosystem: A (under $1M revenue)';
+        if (b === '1m-to-10m') return 'Ecosystem: B ($1M to $10M revenue)';
+        if (b === 'over-10m') return 'Ecosystem: C ($10M or more)';
+        return 'Ecosystem: not yet (need revenue band)';
       }
-      if (template === 'consulting_yn') {
-        return `
-          <div class="p-3 bg-neutral-900/30 border border-white/10 rounded-md mb-3">
-            <p class="text-[10px] font-mono text-amber-400 tracking-wide uppercase mb-2">Option: Web Management only (no)</p>
-            <input type="text" data-no-name value="Web Management only" class="w-full px-3 py-2 mb-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
-            <textarea data-no-desc rows="3" placeholder="Description for the 'no' option" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/30">Skip Marketing Consulting for now. You can add it later at any time.</textarea>
-          </div>
-          <div class="p-3 bg-neutral-900/30 border border-white/10 rounded-md mb-3">
-            <p class="text-[10px] font-mono text-amber-400 tracking-wide uppercase mb-2">Option: Add Marketing Consulting (yes)</p>
-            <input type="text" data-yes-name value="Add Marketing Consulting" class="w-full px-3 py-2 mb-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
-            <textarea data-yes-desc rows="3" placeholder="Description for the 'yes' option" class="w-full px-3 py-2 mb-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/30">Research and strategy applied to the whole business. Competitive analysis, search and content direction, brand positioning.</textarea>
-            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-1 mt-2">Ecosystem (for the consulting price preview)</label>
-            <select data-yes-eco class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
-              <option value="A">${CONSULTING_PRICING.A.label}</option>
-              <option value="B">${CONSULTING_PRICING.B.label}</option>
-              <option value="C">${CONSULTING_PRICING.C.label}</option>
-            </select>
-            <p data-yes-price class="text-[11px] text-neutral-500 mt-2"></p>
-          </div>
-        `;
+      if (productId === 'build') {
+        const s = vars.build_size;
+        if (s === 'small') return 'Build size: Small ($5,625)';
+        if (s === 'mid') return 'Build size: Mid ($11,875)';
+        if (s === 'large') return 'Build size: Large ($22,500)';
+        return 'Build size: not yet';
       }
-      if (template === 'consulting_tier') {
-        return `
-          <div class="mb-4">
-            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-1">Ecosystem</label>
-            <select data-eco class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
-              <option value="A">${CONSULTING_PRICING.A.label}</option>
-              <option value="B">${CONSULTING_PRICING.B.label}</option>
-              <option value="C">${CONSULTING_PRICING.C.label}</option>
-            </select>
-          </div>
-          ${tierBlock('good', 'Good')}
-          ${tierBlock('better', 'Better', true)}
-          ${tierBlock('best', 'Best')}
-        `;
+      if (productId === 'training') {
+        const m = vars.mode;
+        if (m === 'bundled') return 'Mode: Bundled (free with Best tier)';
+        if (m === 'a-la-carte') return 'Mode: A la carte';
+        return 'Mode: not yet';
+      }
+      if (productId === 'other-sow') {
+        const t = vars.title;
+        return t ? `SOW: ${t}` : 'SOW: title pending';
       }
       return '';
     }
 
-    function tierBlock(id, label, recommended = false) {
-      return `
-        <div class="p-3 bg-neutral-900/30 border border-white/10 rounded-md mb-3" data-tier="${id}">
-          <div class="flex items-center justify-between mb-2">
-            <p class="text-[10px] font-mono text-amber-400 tracking-wide uppercase">${label}${recommended ? ' (recommended)' : ''}</p>
-            <label class="text-[10px] font-mono text-neutral-500 flex items-center gap-1">
-              <input type="checkbox" data-tier-recommended ${recommended ? 'checked' : ''} class="accent-amber-500" />
-              Recommended
-            </label>
-          </div>
-          <input type="text" data-tier-name value="${escapeAttr(label)}" class="w-full px-3 py-2 mb-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="Tier name" />
-          <input type="text" data-tier-tagline placeholder="Tagline" class="w-full px-3 py-2 mb-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
-            <input type="text" data-tier-price-label placeholder="$XXX" class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
-            <input type="text" data-tier-price-suffix value="/ month" placeholder="/ month" class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
-            <input type="text" data-tier-price-subline placeholder="subline" class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
-          </div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-1">Features (one per line)</label>
-          <textarea data-tier-features rows="4" placeholder="One feature per line" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/30"></textarea>
-        </div>
-      `;
-    }
-
-    function binaryOptionBlock(id, label) {
-      return `
-        <div class="p-3 bg-neutral-900/30 border border-white/10 rounded-md mb-3" data-binary="${id}">
-          <p class="text-[10px] font-mono text-amber-400 tracking-wide uppercase mb-2">${label}</p>
-          <input type="text" data-binary-name value="${escapeAttr(label + ': ')}" class="w-full px-3 py-2 mb-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="Option name" />
-          <textarea data-binary-html rows="3" placeholder="Description (HTML allowed)" class="w-full px-3 py-2 mb-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/30"></textarea>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <input type="text" data-binary-price-dynamic placeholder="mgmtMonthly:o1 (formula key)" class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
-            <input type="text" data-binary-price-detail placeholder="Price detail HTML" class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
-          </div>
-        </div>
-      `;
-    }
-
-    function fillTierPickerDefaults(wrap, template) {
-      const eco = wrap.querySelector('[data-eco]').value;
-      const sitesEl = wrap.querySelector('[data-sites]');
-      const sites = sitesEl ? parseInt(sitesEl.value, 10) || 1 : 1;
-      const pricing = template === 'mgmt_tier' ? WEB_MGMT_PRICING[eco] : CONSULTING_PRICING[eco];
-
-      ['good', 'better', 'best'].forEach(level => {
-        const tierEl = wrap.querySelector(`[data-tier="${level}"]`);
-        if (!tierEl) return;
-        const p = pricing[level];
-        const priceLabel = tierEl.querySelector('[data-tier-price-label]');
-        const priceSubline = tierEl.querySelector('[data-tier-price-subline]');
-        const features = tierEl.querySelector('[data-tier-features]');
-        const tagline = tierEl.querySelector('[data-tier-tagline]');
-
-        if (template === 'mgmt_tier') {
-          const monthly = multiSiteMonthly(p.monthly, sites);
-          const onb = multiSiteOnb(p.onb, sites);
-          priceLabel.value = `${fmtMoney(monthly)}`;
-          priceSubline.value = sites > 1 ? `${sites} sites; onb ${fmtMoney(onb)}` : `onb ${fmtMoney(onb)}`;
-          if (!features.dataset.manual) {
-            features.value = defaultMgmtFeatures(eco, level).join('\n');
-          }
-          if (!tagline.dataset.manual) {
-            tagline.value = level === 'good' ? 'A start, intentionally light.'
-              : level === 'better' ? 'The flagship.'
-              : 'Weekly updates. Same-day priority response.';
-          }
-        } else {
-          priceLabel.value = `${fmtMoney(p.monthly)}`;
-          priceSubline.value = `${fmtMoney(p.audit)} audit at signing`;
-          if (!features.dataset.manual) {
-            features.value = defaultConsultingFeatures(eco, level).join('\n');
-          }
-          if (!tagline.dataset.manual) {
-            tagline.value = level === 'good' ? 'The lightest consulting engagement.'
-              : level === 'better' ? 'The flagship consulting cycle.'
-              : 'Monthly strategy cycle. Hiring guidance included.';
-          }
-        }
-        features.addEventListener('input', () => { features.dataset.manual = '1'; }, { once: true });
-        tagline.addEventListener('input', () => { tagline.dataset.manual = '1'; }, { once: true });
-      });
-    }
-
-    function fillConsultingYnDefaults(wrap) {
-      const eco = wrap.querySelector('[data-yes-eco]').value;
-      const p = CONSULTING_PRICING[eco];
-      const preview = wrap.querySelector('[data-yes-price]');
-      preview.textContent = `Range: +${fmtMoney(p.good.monthly)} to +${fmtMoney(p.best.monthly)} / month. Audit at signing ${fmtMoney(p.good.audit)} to ${fmtMoney(p.best.audit)}.`;
-    }
-
-    // Hook up the Add-step buttons
-    document.querySelectorAll('[data-add-step]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        buildStep(btn.dataset.addStep);
-      });
+    // =========================================================================
+    // Narrative variables (industry / urgency / focus)
+    // =========================================================================
+    document.getElementById('narr_industry').addEventListener('change', e => {
+      state.narrative_variables.industry = e.target.value || undefined;
+    });
+    document.getElementById('narr_urgency').addEventListener('change', e => {
+      state.narrative_variables.urgency = e.target.value || undefined;
+    });
+    document.getElementById('narr_focus').addEventListener('change', e => {
+      const picks = Array.from(e.target.selectedOptions).map(o => o.value);
+      state.narrative_variables.focus = picks.length ? picks : undefined;
     });
 
-    // ========== Serialize and submit ==========
-    function serializeConfig() {
-      const errors = [];
+    // =========================================================================
+    // Signers
+    // =========================================================================
+    const signersContainer = document.getElementById('signers-container');
+    const addSignerBtn = document.getElementById('add-signer-btn');
 
+    function renderSigners() {
+      signersContainer.innerHTML = '';
+      if (state.signers.length === 0) {
+        addSignerRow({ name: '', email: '' });
+        return;
+      }
+      for (const s of state.signers) addSignerRow(s);
+    }
+
+    function addSignerRow(s) {
+      const row = document.createElement('div');
+      row.className = 'flex items-center gap-2';
+      row.innerHTML = `
+        <input type="text" placeholder="Full name" value="${escapeHtml(s.name)}" data-signer-name
+          class="flex-1 px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+        <input type="email" placeholder="email@domain.com" value="${escapeHtml(s.email)}" data-signer-email
+          class="flex-1 px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+        <button type="button" data-remove-signer class="px-3 py-2 text-xs text-neutral-500 hover:text-red-400 transition-colors">Remove</button>
+      `;
+      row.querySelectorAll('input').forEach(inp => inp.addEventListener('input', syncSigners));
+      row.querySelector('[data-remove-signer]').addEventListener('click', () => {
+        row.remove();
+        syncSigners();
+      });
+      signersContainer.appendChild(row);
+    }
+
+    function syncSigners() {
+      state.signers = [];
+      signersContainer.querySelectorAll(':scope > div').forEach(r => {
+        const name = r.querySelector('[data-signer-name]').value.trim();
+        const email = r.querySelector('[data-signer-email]').value.trim().toLowerCase();
+        if (name || email) state.signers.push({ name, email });
+      });
+    }
+
+    function escapeHtml(s) {
+      return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    addSignerBtn.addEventListener('click', () => {
+      addSignerRow({ name: '', email: '' });
+    });
+
+    renderSigners();
+
+    // =========================================================================
+    // Header overrides
+    // =========================================================================
+    function syncOverrides() {
       const title = document.getElementById('title').value.trim();
+      const slug = document.getElementById('slug').value.trim();
       const prepared_for = document.getElementById('prepared_for').value.trim();
-      const prepared_on_iso = document.getElementById('prepared_on').value;
-      const intro = document.getElementById('intro').value.trim();
-      const what_i_see = document.getElementById('what_i_see').value.trim();
-      const what_i_recommend = document.getElementById('what_i_recommend').value.trim();
-      const rollout_intro = document.getElementById('rollout_intro').value.trim();
-      const rollout_outro = document.getElementById('rollout_outro').value.trim();
-      const pricing_formula = document.getElementById('pricing_formula').value;
-
-      // Convert prepared_on (YYYY-MM-DD) to long form ('May 22, 2026').
-      let prepared_on = todayLong;
-      if (prepared_on_iso) {
-        const d = new Date(prepared_on_iso + 'T12:00:00');
+      const preparedIso = document.getElementById('prepared_on').value;
+      let prepared_on = '';
+      if (preparedIso) {
+        const d = new Date(preparedIso + 'T12:00:00');
         if (!isNaN(d.getTime())) {
           prepared_on = d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
         }
       }
-
-      function paragraphsFrom(text) {
-        if (!text) return [];
-        return text.split(/\n\s*\n+/).map(p => p.replace(/\n/g, ' ').trim()).filter(Boolean);
-      }
-
-      const narrativeSections = [];
-      if (what_i_see) {
-        narrativeSections.push({ h2: 'What I see in your business', paragraphs: paragraphsFrom(what_i_see) });
-      }
-      if (what_i_recommend) {
-        narrativeSections.push({ h2: 'What I recommend', paragraphs: paragraphsFrom(what_i_recommend) });
-      }
-
-      // Phases
-      const phases = [];
-      phasesContainer.querySelectorAll('[data-phase-row]').forEach(row => {
-        const phase_num = row.querySelector('[data-phase-num]').value.trim();
-        const h3 = row.querySelector('[data-phase-h3]').value.trim();
-        const html = row.querySelector('[data-phase-html]').value.trim();
-        if (phase_num || h3 || html) {
-          phases.push({ phase_num, h3, html });
-        }
-      });
-
-      const rollout = (phases.length || rollout_intro || rollout_outro) ? {
-        h2: 'How it rolls out',
-        intro_html: rollout_intro,
-        phases,
-        outro_html: rollout_outro,
-      } : undefined;
-
-      // Steps
-      const steps = [];
-      stepsContainer.querySelectorAll('[data-step-row]').forEach(row => {
-        const template = row.dataset.stepTemplate;
-        const id = (row.querySelector('[data-step-id]')?.value || '').trim();
-        const h2 = (row.querySelector('[data-step-h2]')?.value || '').trim();
-        const prompt = (row.querySelector('[data-step-prompt]')?.value || '').trim();
-        if (!id) { errors.push(`Step is missing an id`); return; }
-
-        if (template === 'mgmt_tier' || template === 'consulting_tier') {
-          const eco = row.querySelector('[data-eco]')?.value || 'A';
-          const options = [];
-          ['good', 'better', 'best'].forEach(level => {
-            const tierEl = row.querySelector(`[data-tier="${level}"]`);
-            if (!tierEl) return;
-            const name = tierEl.querySelector('[data-tier-name]').value.trim();
-            const tagline = tierEl.querySelector('[data-tier-tagline]').value.trim();
-            const price_label = tierEl.querySelector('[data-tier-price-label]').value.trim();
-            const price_suffix = tierEl.querySelector('[data-tier-price-suffix]').value.trim();
-            const price_subline = tierEl.querySelector('[data-tier-price-subline]').value.trim();
-            const features = tierEl.querySelector('[data-tier-features]').value.split('\n').map(s => s.trim()).filter(Boolean);
-            const recommended = tierEl.querySelector('[data-tier-recommended]').checked;
-            const opt = { id: level, name, tagline, price_label, price_suffix, price_subline, features };
-            if (recommended) opt.recommended = true;
-            options.push(opt);
-          });
-          const step = { id, type: 'tier_picker', h2, prompt, ecosystem: eco, options };
-          if (template === 'mgmt_tier') {
-            const sites = parseInt(row.querySelector('[data-sites]').value, 10) || 1;
-            step.sites = sites;
-          }
-          if (steps.length > 0) step.depends_on = steps[steps.length - 1].id;
-          steps.push(step);
-        } else if (template === 'site_setup') {
-          const options = [];
-          ['o1', 'o2'].forEach(optId => {
-            const binEl = row.querySelector(`[data-binary="${optId}"]`);
-            if (!binEl) return;
-            const name = binEl.querySelector('[data-binary-name]').value.trim();
-            const html = binEl.querySelector('[data-binary-html]').value.trim();
-            const price_dynamic = binEl.querySelector('[data-binary-price-dynamic]').value.trim();
-            const price_detail_html = binEl.querySelector('[data-binary-price-detail]').value.trim();
-            options.push({ id: optId, name, html, price_dynamic, price_detail_html });
-          });
-          const step = { id, type: 'binary_picker', h2, prompt, options };
-          if (steps.length > 0) step.depends_on = steps[steps.length - 1].id;
-          steps.push(step);
-        } else if (template === 'consulting_yn') {
-          const noName = row.querySelector('[data-no-name]').value.trim();
-          const noDesc = row.querySelector('[data-no-desc]').value.trim();
-          const yesName = row.querySelector('[data-yes-name]').value.trim();
-          const yesDesc = row.querySelector('[data-yes-desc]').value.trim();
-          const eco = row.querySelector('[data-yes-eco]').value;
-          const p = CONSULTING_PRICING[eco];
-          const step = {
-            id,
-            type: 'binary_picker',
-            h2,
-            prompt,
-            ecosystem: eco,
-            options: [
-              { id: 'no',  name: noName,  html: noDesc, price_label: 'No additional charge', price_detail_html: 'Mgmt-only monthly.' },
-              { id: 'yes', name: yesName, html: yesDesc,
-                price_label: `+${fmtMoney(p.good.monthly)} to +${fmtMoney(p.best.monthly)} / month`,
-                price_detail_html: `Pick a level next. Audit at signing ranges ${fmtMoney(p.good.audit)} to ${fmtMoney(p.best.audit)} by level.` },
-            ],
-          };
-          if (steps.length > 0) step.depends_on = steps[steps.length - 1].id;
-          steps.push(step);
-        }
-      });
-
-      // Auto-add show_when to consulting_tier steps if a prior consulting yn step exists.
-      for (let i = 0; i < steps.length; i++) {
-        const s = steps[i];
-        // Heuristic: a consulting_tier step that follows a binary with options yes/no
-        // should show only when the prior step's selection is 'yes'.
-        if (s.type === 'tier_picker' && /consulting/i.test(s.id) && i > 0) {
-          const prev = steps[i - 1];
-          const hasYes = prev.options && prev.options.some(o => o.id === 'yes');
-          if (hasYes) {
-            s.show_when = { [prev.id]: 'yes' };
-            s.depends_on = prev.id;
-          }
-        }
-      }
-
-      // Signers
-      const signers = [];
-      signersContainer.querySelectorAll('[data-signer-row]').forEach(row => {
-        const name = row.querySelector('[data-signer-name]').value.trim();
-        const email = row.querySelector('[data-signer-email]').value.trim().toLowerCase();
-        const label = row.querySelector('[data-signer-label]').value.trim();
-        if (!name && !email) return;
-        if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-          errors.push(`Signer "${name || '(unnamed)'}" needs a valid email`);
-          return;
-        }
-        const id = email.split('@')[0].replace(/[^a-z0-9]+/g, '_').slice(0, 24) || `s${signers.length + 1}`;
-        const entry = { id, name, email };
-        if (label) entry.label = label;
-        signers.push(entry);
-      });
-
-      if (signers.length === 0) errors.push('At least one signer is required');
-
-      const config = {
-        version: 1,
-        prepared_for,
-        prepared_on,
-        title,
-        narrative: {
-          intro,
-          sections: narrativeSections,
-          ...(rollout ? { rollout } : {}),
-        },
-        steps,
-        signers,
-        pricing_formula,
-      };
-
-      return { config, errors };
+      const overrides = {};
+      if (title) overrides.title = title;
+      if (slug) overrides.slug = slug;
+      if (prepared_for) overrides.prepared_for = prepared_for;
+      if (prepared_on && prepared_on !== todayLong) overrides.prepared_on = prepared_on;
+      state.overrides = overrides;
     }
 
+    // =========================================================================
+    // Submit
+    // =========================================================================
     async function submitProposal(status) {
-      const msg = document.getElementById('submit-msg');
-      msg.classList.add('hidden');
+      syncOverrides();
+      syncSigners();
 
-      const client_id = document.getElementById('client_id').value;
-      const slug = document.getElementById('slug').value.trim();
-      const title = document.getElementById('title').value.trim();
-
-      if (!client_id) {
-        showMsg(msg, 'Select a client', 'error');
-        return;
-      }
-      if (!title) {
-        showMsg(msg, 'Title is required', 'error');
-        return;
-      }
-      if (!slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
-        showMsg(msg, 'Slug must be lowercase letters, numbers, and hyphens', 'error');
-        return;
-      }
-
-      const { config, errors } = serializeConfig();
-      if (errors.length > 0) {
-        showMsg(msg, errors.join('. '), 'error');
-        return;
+      if (!state.client_id) { showMsg('Pick a client first.', 'error'); return; }
+      if (state.products.length === 0) { showMsg('Pick at least one product.', 'error'); return; }
+      if (state.signers.length === 0) { showMsg('At least one signer is required.', 'error'); return; }
+      for (const s of state.signers) {
+        if (!s.email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s.email)) {
+          showMsg(`Signer "${s.name || '(unnamed)'}" needs a valid email.`, 'error');
+          return;
+        }
       }
 
       const draftBtn = document.getElementById('save-draft-btn');
@@ -1105,42 +673,38 @@ const todayISO = new Date().toISOString().slice(0, 10);
       draftBtn.disabled = true;
       pubBtn.disabled = true;
 
-      // Collect client legal-entity fields. Sent alongside the
-      // proposal payload; the create endpoint upserts them into
-      // client_metadata so the contract preview reads real values
-      // instead of [to be confirmed] placeholders.
-      const client_metadata = {};
-      for (const id of LEGAL_FIELD_IDS) {
-        const el = document.getElementById(id);
-        client_metadata[id] = el ? el.value.trim() : '';
-      }
+      const payload = {
+        client_id: state.client_id,
+        status,
+        compose: {
+          products: state.products,
+          product_vars: state.product_vars,
+          narrative_variables: state.narrative_variables,
+          signers: state.signers,
+          overrides: state.overrides,
+        },
+      };
 
       try {
         const res = await fetch('/portal/api/admin/proposals/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify({ slug, client_id, title, config, status, client_metadata }),
+          body: JSON.stringify(payload),
         });
         const data = await res.json();
         if (res.ok) {
-          showMsg(msg, `Created "${title}". Redirecting...`, 'ok');
+          showMsg(`Created proposal. Redirecting...`, 'ok');
           setTimeout(() => { window.location.href = '/portal/admin/proposals'; }, 800);
         } else {
-          showMsg(msg, data.error || 'Failed to create proposal', 'error');
+          showMsg(data.error || 'Failed to create proposal', 'error');
           draftBtn.disabled = false;
           pubBtn.disabled = false;
         }
-      } catch (err) {
-        showMsg(msg, 'Connection error', 'error');
+      } catch {
+        showMsg('Connection error', 'error');
         draftBtn.disabled = false;
         pubBtn.disabled = false;
       }
-    }
-
-    function showMsg(el, text, type) {
-      el.textContent = text;
-      el.className = 'text-sm ' + (type === 'ok' ? 'text-emerald-400' : 'text-red-400');
-      el.classList.remove('hidden');
     }
 
     document.getElementById('save-draft-btn').addEventListener('click', () => submitProposal('draft'));

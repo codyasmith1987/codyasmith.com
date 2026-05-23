@@ -1,3 +1,57 @@
+/* ============================================
+   PORTAL EDITORIAL PALETTE
+   Flips the default dark+amber neutral tokens to the cream + dark-sepia
+   editorial palette used by the marketing homepage and the proposal page.
+   Apply via the `portal-editorial` class on <body> in any portal-facing
+   layout (Portal.astro, login.astro, set-password.astro).
+
+   Tailwind v4 reads color utilities (bg-neutral-*, text-amber-*) from
+   CSS custom properties at runtime, so overriding the variables flips
+   every pre-existing utility class in one shot — no per-page edits
+   needed. White-opacity borders (border-white/5 etc.) are remapped
+   below; they render invisible on cream otherwise.
+   ============================================ */
+
+body.portal-editorial {
+  --color-neutral-950: #faf7f2;   /* page background, cream paper */
+  --color-neutral-900: #f0ead9;   /* card surface */
+  --color-neutral-850: #e8e0cb;
+  --color-neutral-800: #d6cdb5;
+  --color-neutral-700: #a89e8a;
+  --color-neutral-600: #6b6359;   /* muted body text */
+  --color-neutral-500: #4a4239;
+  --color-neutral-400: #38322a;
+  --color-neutral-300: #2c2722;   /* primary body text */
+  --color-neutral-200: #1f1b18;
+  --color-neutral-100: #1a1814;   /* headings, near-black */
+
+  /* Terracotta accent replaces template amber. */
+  --color-amber-600: #a86749;
+  --color-amber-500: #c47d5a;
+  --color-amber-400: #d4906e;
+
+  background: #faf7f2;
+  color: #1a1814;
+}
+
+/* Hairlines that were white-on-dark need to become sepia-on-cream. */
+body.portal-editorial .border-white\/5  { border-color: rgba(26, 24, 20, 0.06); }
+body.portal-editorial .border-white\/10 { border-color: rgba(26, 24, 20, 0.10); }
+body.portal-editorial .border-white\/15 { border-color: rgba(26, 24, 20, 0.14); }
+body.portal-editorial .border-white\/20 { border-color: rgba(26, 24, 20, 0.18); }
+body.portal-editorial .divide-white\/5 > * + * { border-color: rgba(26, 24, 20, 0.06); }
+body.portal-editorial .divide-white\/10 > * + * { border-color: rgba(26, 24, 20, 0.10); }
+
+/* Subtle white-tinted backgrounds (hover states, soft cards) need the
+   same treatment so they still register on cream. */
+body.portal-editorial .bg-white\/\[0\.03\] { background-color: rgba(26, 24, 20, 0.03); }
+body.portal-editorial .bg-white\/5 { background-color: rgba(26, 24, 20, 0.04); }
+body.portal-editorial .bg-white\/10 { background-color: rgba(26, 24, 20, 0.06); }
+
+/* Ambient glow under the login form reads as AI-template chrome on
+   cream. Tone way down. */
+body.portal-editorial .blur-3xl { opacity: 0.35; filter: blur(64px); }
+
 /* Shared portal animations — extracted from individual page <style> blocks */
 
 @keyframes fadeUp {

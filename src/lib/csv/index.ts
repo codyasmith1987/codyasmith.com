@@ -18,6 +18,7 @@ import { parse as parseSiteAudit } from './parsers/site-audit';
 import { parse as parseAccessibility } from './parsers/accessibility';
 import { parse as parseIssueUrls } from './parsers/issue-urls';
 import { parse as parseRawCsv } from './parsers/raw-csv';
+import { parseGa4 } from './parsers/ga4';
 
 // Maps CSV formats to the source tags they write, so we can clear old data before re-importing
 const FORMAT_SOURCES: Record<string, { tables: string[]; source: string }> = {
@@ -36,6 +37,15 @@ const FORMAT_SOURCES: Record<string, { tables: string[]; source: string }> = {
   site_audit: { tables: ['site_issues'], source: 'site_audit' },
   accessibility: { tables: ['metrics', 'accessibility_urls'], source: 'accessibility' },
   issue_urls: { tables: ['site_issue_urls'], source: 'issue_urls' },
+  // GA4 exports. Reports snapshot fans out to multiple tables; the
+  // others map 1:1. Listed individually so the supersede sweep
+  // clears the right rows on re-upload (a fresh Reports snapshot
+  // should wipe last cycle's topline + source_medium + campaigns).
+  ga4_reports_snapshot: { tables: ['ga4_topline', 'ga4_source_medium', 'ga4_campaigns'], source: 'ga4_reports_snapshot' },
+  ga4_traffic_acquisition: { tables: ['ga4_channels'], source: 'ga4_traffic_acquisition' },
+  ga4_pages: { tables: ['ga4_pages'], source: 'ga4_pages' },
+  ga4_tech: { tables: ['ga4_tech'], source: 'ga4_tech' },
+  ga4_geography: { tables: ['ga4_geography'], source: 'ga4_geography' },
   // Stored-but-not-yet-typed CSVs. Cleared on re-upload like every
   // other format so the same filename doesn't accumulate raw copies.
   unknown_stored: { tables: ['raw_csv_data'], source: 'unknown_stored' },
@@ -181,6 +191,13 @@ export async function ingestCSV(
       }
       case 'issue_urls':
         rowCount = await parseIssueUrls(raw, clientId, month, uploadId, filename);
+        break;
+      case 'ga4_reports_snapshot':
+      case 'ga4_traffic_acquisition':
+      case 'ga4_pages':
+      case 'ga4_tech':
+      case 'ga4_geography':
+        rowCount = await parseGa4(raw, clientId, month, uploadId, format);
         break;
     }
 

@@ -27,4 +27,15 @@ export const CSV_CHILD_TABLES: string[] = [
   // yet have a typed parser for. Swept on re-upload + delete so the
   // same filename can't accumulate raw copies.
   'raw_csv_data',
+  // GA4 tables — per Slice B of the data-ingestion overhaul. One
+  // GA4 file maps to multiple tables (Reports snapshot fans out to
+  // topline + source_medium + campaigns), so all of them need to
+  // be on the sweep list.
+  'ga4_topline',
+  'ga4_channels',
+  'ga4_source_medium',
+  'ga4_pages',
+  'ga4_tech',
+  'ga4_geography',
+  'ga4_campaigns',
 ];

@@ -14,6 +14,7 @@
 export const CSV_CHILD_TABLES: string[] = [
   'metrics',
   'site_issues',
+  'site_issue_urls',
   'keyword_rankings',
   'crawl_urls',
   'redirect_chains',

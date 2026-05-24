@@ -15,6 +15,7 @@ export type CsvFormat =
   | 'content_urls'
   | 'security_urls'
   | 'structured_data_urls'
+  | 'issue_urls'
   | 'unknown';
 
 interface FormatSignature {
@@ -98,6 +99,22 @@ export function detectFormat(raw: string, filename: string): { format: CsvFormat
   const firstLine = raw.split('\n')[0].trim().toLowerCase();
   if (firstLine.startsWith('site crawled') || firstLine.startsWith('"site crawled')) {
     return { format: 'crawl_overview', headers: [] };
+  }
+
+  // Per-issue URL exports from Screaming Frog. The filename matches a
+  // known per-issue CSV (h1_missing.csv, page_titles_below_30_characters.csv,
+  // etc.); each file lists the URLs that have that issue, with the URL
+  // in the first column "Address." Caught BEFORE the site_audit
+  // fallback so these route to the dedicated issue-urls parser that
+  // populates site_issue_urls (and therefore the per-issue pop-out on
+  // the health page).
+  const normalizedName = filename.toLowerCase().replace(/^.*[\\/]/, '');
+  // Match on the known map (imported lazily to avoid a circular
+  // dependency on the parser). The shape is { filename: issue_name }.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { ISSUE_CSV_FILENAME_MAP } = require('./parsers/issue-urls');
+  if (ISSUE_CSV_FILENAME_MAP[normalizedName]) {
+    return { format: 'issue_urls', headers: [] };
   }
 
   // Try to parse first few rows to get headers

@@ -165,7 +165,7 @@ const allProvisioned = !!client && !!jasonRow && !!kevinRow;
     <div class="mb-10">
       <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin · Proposals</p>
       <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Raised Bar</h1>
-      <p class="text-neutral-300 text-sm mt-3">Jason Roth and Kevin Adams. Proposal at <a class="text-amber-400 hover:text-amber-300" href="/portal/proposals/raised-bar">/portal/proposals/raised-bar</a>.</p>
+      <p class="text-neutral-500 text-sm mt-3">Jason Roth and Kevin Adams. Proposal at <a class="text-amber-400 hover:text-amber-300" href="/portal/proposals/raised-bar">/portal/proposals/raised-bar</a>.</p>
     </div>
 
     {actionResult && (
@@ -185,23 +185,23 @@ const allProvisioned = !!client && !!jasonRow && !!kevinRow;
     )}
 
     <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-8">
-      <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-5">Current state</p>
+      <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">Current state</p>
       <div class="space-y-3 text-sm">
         <div class="flex items-center justify-between">
           <span class="text-neutral-300">Client: {CLIENT_NAME}</span>
-          <span class:list={['text-[10px] font-mono uppercase px-2.5 py-1 rounded-full', client ? 'bg-emerald-500/10 text-emerald-400' : 'bg-neutral-800 text-neutral-300']}>
+          <span class:list={['text-[10px] font-mono uppercase px-2.5 py-1 rounded-full', client ? 'bg-emerald-500/10 text-emerald-400' : 'bg-neutral-800 text-neutral-500']}>
             {client ? 'Exists' : 'Missing'}
           </span>
         </div>
         <div class="flex items-center justify-between">
           <span class="text-neutral-300">{SIGNERS[0].name} ({SIGNERS[0].email})</span>
-          <span class:list={['text-[10px] font-mono uppercase px-2.5 py-1 rounded-full', jasonRow ? 'bg-emerald-500/10 text-emerald-400' : 'bg-neutral-800 text-neutral-300']}>
+          <span class:list={['text-[10px] font-mono uppercase px-2.5 py-1 rounded-full', jasonRow ? 'bg-emerald-500/10 text-emerald-400' : 'bg-neutral-800 text-neutral-500']}>
             {jasonRow ? 'Exists' : 'Missing'}
           </span>
         </div>
         <div class="flex items-center justify-between">
           <span class="text-neutral-300">{SIGNERS[1].name} ({SIGNERS[1].email})</span>
-          <span class:list={['text-[10px] font-mono uppercase px-2.5 py-1 rounded-full', kevinRow ? 'bg-emerald-500/10 text-emerald-400' : 'bg-neutral-800 text-neutral-300']}>
+          <span class:list={['text-[10px] font-mono uppercase px-2.5 py-1 rounded-full', kevinRow ? 'bg-emerald-500/10 text-emerald-400' : 'bg-neutral-800 text-neutral-500']}>
             {kevinRow ? 'Exists' : 'Missing'}
           </span>
         </div>
@@ -209,13 +209,13 @@ const allProvisioned = !!client && !!jasonRow && !!kevinRow;
     </div>
 
     <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
-      <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-5">Actions</p>
+      <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">Actions</p>
 
       <form method="POST" class="space-y-5">
         <input type="hidden" name="csrf-token" value={csrfToken} />
 
         <div>
-          <label for="personal_message" class="block text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-2">
+          <label for="personal_message" class="block text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-2">
             Personal note (optional, sent to both Jason and Kevin)
           </label>
           <textarea
@@ -226,7 +226,7 @@ const allProvisioned = !!client && !!jasonRow && !!kevinRow;
             class="w-full px-4 py-3 bg-neutral-900/40 border border-white/10 rounded-lg text-neutral-200 text-sm leading-relaxed focus:outline-none focus:border-amber-500/40 transition-colors duration-200"
             style="font-family: var(--font-serif); font-size: 15px; line-height: 1.55;"
           ></textarea>
-          <p class="text-[11px] text-neutral-400 mt-2 leading-relaxed">
+          <p class="text-[11px] text-neutral-600 mt-2 leading-relaxed">
             Plain text. Line breaks preserved. Appears above the standard invite copy in the email, separated by a hairline rule.
           </p>
         </div>
@@ -250,7 +250,7 @@ const allProvisioned = !!client && !!jasonRow && !!kevinRow;
         </button>
       </form>
 
-      <p class="text-xs text-neutral-400 mt-6">
+      <p class="text-xs text-neutral-600 mt-6">
         Provisioning is idempotent. Existing records are not overwritten. Invite emails generate a fresh magic link each send and replace prior unused links.
       </p>
     </div>

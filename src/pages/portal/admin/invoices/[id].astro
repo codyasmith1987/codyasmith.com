@@ -28,7 +28,7 @@ const statusColors: Record<string, string> = {
 <Portal title={invoice.invoice_number}>
   <div class="max-w-4xl mx-auto">
     <div class="mb-6">
-      <a href={`/portal/admin/contracts/${invoice.contract_id}`} class="text-xs text-neutral-400 hover:text-amber-400 transition-colors">&larr; {contract?.title || 'Contract'}</a>
+      <a href={`/portal/admin/contracts/${invoice.contract_id}`} class="text-xs text-neutral-600 hover:text-amber-400 transition-colors">&larr; {contract?.title || 'Contract'}</a>
     </div>
 
     <div class="flex items-start justify-between mb-8">
@@ -38,9 +38,9 @@ const statusColors: Record<string, string> = {
       </div>
       <div class="flex items-center gap-3">
         <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[invoice.status] || ''}`}>{invoice.status}</span>
-        {invoice.last_reminder_sent && <span class="text-[10px] text-neutral-400">Reminder sent {invoice.last_reminder_sent.split('T')[0]}</span>}
+        {invoice.last_reminder_sent && <span class="text-[10px] text-neutral-600">Reminder sent {invoice.last_reminder_sent.split('T')[0]}</span>}
         <a href={`/portal/api/admin/invoices/${id}/pdf`} class="text-xs text-amber-400 hover:text-amber-300 transition-colors">Download PDF</a>
-        <button id="delete-invoice" class="text-xs text-neutral-400 hover:text-red-400 transition-colors">Delete</button>
+        <button id="delete-invoice" class="text-xs text-neutral-600 hover:text-red-400 transition-colors">Delete</button>
       </div>
     </div>
 
@@ -48,7 +48,7 @@ const statusColors: Record<string, string> = {
     <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-8">
       <div class="grid grid-cols-1 sm:grid-cols-4 gap-5">
         <div>
-          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Status</label>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Status</label>
           <select id="f-status" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
             {['draft', 'sent', 'paid', 'partial', 'overdue', 'cancelled'].map(s => (
               <option value={s} selected={s === invoice.status}>{s}</option>
@@ -56,15 +56,15 @@ const statusColors: Record<string, string> = {
           </select>
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Issued date</label>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Issued date</label>
           <input type="date" id="f-issued" value={invoice.issued_date || ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Due date</label>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Due date</label>
           <input type="date" id="f-due" value={invoice.due_date || ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Client visible</label>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Client visible</label>
           <select id="f-visible" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
             <option value="1" selected={invoice.client_visible === 1}>Yes</option>
             <option value="0" selected={invoice.client_visible === 0}>No</option>
@@ -72,7 +72,7 @@ const statusColors: Record<string, string> = {
         </div>
       </div>
       <div class="mt-5">
-        <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Notes</label>
+        <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Notes</label>
         <textarea id="f-notes" rows="2" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">{invoice.notes || ''}</textarea>
       </div>
       <button id="save-invoice" class="mt-6 px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300">Save changes</button>
@@ -81,7 +81,7 @@ const statusColors: Record<string, string> = {
     <!-- Line items -->
     <div class="mb-8">
       <div class="flex items-center justify-between mb-4">
-        <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase">Line items</p>
+        <p class="text-[10px] font-mono text-neutral-700 tracking-[0.15em] uppercase">Line items</p>
         <button id="show-add-item" class="text-xs text-amber-400 hover:text-amber-300 transition-colors">+ Add item</button>
       </div>
 
@@ -93,7 +93,7 @@ const statusColors: Record<string, string> = {
         </div>
         <div class="flex gap-3 mt-4">
           <button type="submit" class="px-5 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all">Add</button>
-          <button type="button" id="cancel-add-item" class="text-sm text-neutral-300 hover:text-neutral-300">Cancel</button>
+          <button type="button" id="cancel-add-item" class="text-sm text-neutral-500 hover:text-neutral-300">Cancel</button>
         </div>
       </form>
 
@@ -102,10 +102,10 @@ const statusColors: Record<string, string> = {
           <table class="w-full text-sm">
             <thead>
               <tr class="border-b border-white/5">
-                <th class="text-left px-5 py-3 text-[10px] font-mono text-neutral-400 uppercase tracking-wide">Description</th>
-                <th class="text-right px-5 py-3 text-[10px] font-mono text-neutral-400 uppercase tracking-wide">Qty</th>
-                <th class="text-right px-5 py-3 text-[10px] font-mono text-neutral-400 uppercase tracking-wide">Price</th>
-                <th class="text-right px-5 py-3 text-[10px] font-mono text-neutral-400 uppercase tracking-wide">Amount</th>
+                <th class="text-left px-5 py-3 text-[10px] font-mono text-neutral-600 uppercase tracking-wide">Description</th>
+                <th class="text-right px-5 py-3 text-[10px] font-mono text-neutral-600 uppercase tracking-wide">Qty</th>
+                <th class="text-right px-5 py-3 text-[10px] font-mono text-neutral-600 uppercase tracking-wide">Price</th>
+                <th class="text-right px-5 py-3 text-[10px] font-mono text-neutral-600 uppercase tracking-wide">Amount</th>
                 <th class="w-10"></th>
               </tr>
             </thead>
@@ -117,26 +117,26 @@ const statusColors: Record<string, string> = {
                   <td class="px-5 py-3 text-right text-neutral-400 font-mono">${item.unit_price.toFixed(2)}</td>
                   <td class="px-5 py-3 text-right text-neutral-200 font-mono">${item.amount.toFixed(2)}</td>
                   <td class="px-3 py-3">
-                    <button data-delete-item={item.id} class="text-neutral-400 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 text-xs">&times;</button>
+                    <button data-delete-item={item.id} class="text-neutral-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 text-xs">&times;</button>
                   </td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr class="border-t border-white/10">
-                <td colspan="3" class="px-5 py-3 text-right text-[10px] font-mono text-neutral-400 uppercase">Subtotal</td>
+                <td colspan="3" class="px-5 py-3 text-right text-[10px] font-mono text-neutral-600 uppercase">Subtotal</td>
                 <td class="px-5 py-3 text-right text-neutral-200 font-mono font-medium">${invoice.subtotal.toFixed(2)}</td>
                 <td></td>
               </tr>
               {invoice.tax > 0 && (
                 <tr>
-                  <td colspan="3" class="px-5 py-2 text-right text-[10px] font-mono text-neutral-400 uppercase">Tax</td>
+                  <td colspan="3" class="px-5 py-2 text-right text-[10px] font-mono text-neutral-600 uppercase">Tax</td>
                   <td class="px-5 py-2 text-right text-neutral-400 font-mono">${invoice.tax.toFixed(2)}</td>
                   <td></td>
                 </tr>
               )}
               <tr>
-                <td colspan="3" class="px-5 py-3 text-right text-[10px] font-mono text-neutral-300 uppercase font-semibold">Total</td>
+                <td colspan="3" class="px-5 py-3 text-right text-[10px] font-mono text-neutral-500 uppercase font-semibold">Total</td>
                 <td class="px-5 py-3 text-right text-amber-400 font-mono font-semibold">${invoice.total.toFixed(2)}</td>
                 <td></td>
               </tr>
@@ -144,14 +144,14 @@ const statusColors: Record<string, string> = {
           </table>
         </div>
       ) : (
-        <p class="text-sm text-neutral-400 py-4">No line items. Add items to calculate the invoice total.</p>
+        <p class="text-sm text-neutral-600 py-4">No line items. Add items to calculate the invoice total.</p>
       )}
     </div>
 
     <!-- Payments -->
     <div class="mb-8">
       <div class="flex items-center justify-between mb-4">
-        <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase">Payments (${invoice.amount_paid.toFixed(2)} of ${invoice.total.toFixed(2)})</p>
+        <p class="text-[10px] font-mono text-neutral-700 tracking-[0.15em] uppercase">Payments (${invoice.amount_paid.toFixed(2)} of ${invoice.total.toFixed(2)})</p>
         <button id="show-add-payment" class="text-xs text-amber-400 hover:text-amber-300 transition-colors">+ Record payment</button>
       </div>
 
@@ -171,7 +171,7 @@ const statusColors: Record<string, string> = {
         </div>
         <div class="flex gap-3 mt-4">
           <button type="submit" class="px-5 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all">Record</button>
-          <button type="button" id="cancel-add-payment" class="text-sm text-neutral-300 hover:text-neutral-300">Cancel</button>
+          <button type="button" id="cancel-add-payment" class="text-sm text-neutral-500 hover:text-neutral-300">Cancel</button>
         </div>
       </form>
 
@@ -181,13 +181,13 @@ const statusColors: Record<string, string> = {
             <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-4 flex items-center justify-between">
               <div>
                 <p class="text-sm font-mono text-emerald-400">${p.amount.toFixed(2)}</p>
-                <p class="text-xs text-neutral-400 mt-0.5">{p.paid_at.split('T')[0]} {p.payment_method ? `via ${p.payment_method}` : ''} {p.reference ? `(${p.reference})` : ''}</p>
+                <p class="text-xs text-neutral-600 mt-0.5">{p.paid_at.split('T')[0]} {p.payment_method ? `via ${p.payment_method}` : ''} {p.reference ? `(${p.reference})` : ''}</p>
               </div>
             </div>
           ))}
         </div>
       ) : (
-        <p class="text-sm text-neutral-400 py-4">No payments recorded.</p>
+        <p class="text-sm text-neutral-600 py-4">No payments recorded.</p>
       )}
     </div>
   </div>

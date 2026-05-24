@@ -175,12 +175,12 @@ const statusBadge: Record<string, string> = {
                     href={`/portal/proposals/${p.slug}`}
                     target="_blank"
                     rel="noopener"
-                    class="text-[10px] font-mono text-neutral-400 hover:text-amber-400 transition-colors"
+                    class="text-[10px] font-mono text-neutral-600 hover:text-amber-400 transition-colors"
                   >
                     /{p.slug}
                   </a>
                 </div>
-                <p class="text-xs text-neutral-300 mt-1">{p.title}</p>
+                <p class="text-xs text-neutral-500 mt-1">{p.title}</p>
 
                 {p.signers.length > 0 && (
                   <div class="flex items-center gap-4 mt-3 text-xs">
@@ -189,9 +189,9 @@ const statusBadge: Record<string, string> = {
                         {s.signed ? (
                           <span class="text-emerald-400">✓</span>
                         ) : (
-                          <span class="text-neutral-400">○</span>
+                          <span class="text-neutral-600">○</span>
                         )}
-                        <span class:list={[s.signed ? 'text-neutral-300' : 'text-neutral-400']}>
+                        <span class:list={[s.signed ? 'text-neutral-300' : 'text-neutral-600']}>
                           {s.name}
                         </span>
                       </span>
@@ -199,7 +199,7 @@ const statusBadge: Record<string, string> = {
                   </div>
                 )}
 
-                <div class="flex items-center gap-4 mt-3 text-[10px] font-mono text-neutral-400">
+                <div class="flex items-center gap-4 mt-3 text-[10px] font-mono text-neutral-700">
                   {p.created_at && <span>Created {fmtDate(p.created_at)}</span>}
                   {p.published_at && <span>Published {fmtDate(p.published_at)}</span>}
                   {p.finalized_at && <span>Finalized {fmtDate(p.finalized_at)}</span>}
@@ -219,13 +219,13 @@ const statusBadge: Record<string, string> = {
                     href={`/portal/proposals/${p.slug}`}
                     target="_blank"
                     rel="noopener"
-                    class="text-xs text-neutral-400 hover:text-amber-400 transition-colors duration-300"
+                    class="text-xs text-neutral-600 hover:text-amber-400 transition-colors duration-300"
                   >
                     View as client
                   </a>
                   <a
                     href={`/portal/admin/proposals/${p.slug}`}
-                    class="text-xs text-neutral-400 hover:text-amber-400 transition-colors duration-300"
+                    class="text-xs text-neutral-600 hover:text-amber-400 transition-colors duration-300"
                   >
                     Manage
                   </a>
@@ -233,7 +233,7 @@ const statusBadge: Record<string, string> = {
                     data-delete-proposal={p.slug}
                     data-proposal-title={p.title}
                     data-client-name={p.client_name}
-                    class="text-xs text-neutral-400 hover:text-red-400 transition-colors duration-300"
+                    class="text-xs text-neutral-600 hover:text-red-400 transition-colors duration-300"
                   >
                     Delete
                   </button>
@@ -246,7 +246,7 @@ const statusBadge: Record<string, string> = {
     ) : (
       <div class="text-center py-16">
         <p class="font-serif text-xl text-neutral-100 mb-2">No proposals yet</p>
-        <p class="text-sm text-neutral-300">Create your first one.</p>
+        <p class="text-sm text-neutral-500">Create your first one.</p>
       </div>
     )}
   </div>

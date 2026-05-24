@@ -41,37 +41,37 @@ const statusColors: Record<string, string> = {
     {!contractId ? (
       <div class="text-center py-16">
         <p class="font-serif text-xl text-neutral-100 mb-2">Select a contract</p>
-        <p class="text-sm text-neutral-300">Choose a contract above to view its change orders.</p>
+        <p class="text-sm text-neutral-500">Choose a contract above to view its change orders.</p>
       </div>
     ) : (
       <>
         <div class="flex items-center justify-between mb-6">
-          <p class="text-sm text-neutral-300">{selectedContract?.title}</p>
+          <p class="text-sm text-neutral-500">{selectedContract?.title}</p>
           <button id="show-create-co" class="px-5 py-2.5 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all">New change order</button>
         </div>
 
         <form id="create-co-form" class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-8 hidden">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div class="sm:col-span-2">
-              <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Title</label>
+              <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Title</label>
               <input type="text" id="co-title" required class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="Add blog section" />
             </div>
             <div>
-              <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Cost impact ($)</label>
+              <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Cost impact ($)</label>
               <input type="number" id="co-cost" step="0.01" value="0" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
             </div>
             <div>
-              <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Time impact (days)</label>
+              <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Time impact (days)</label>
               <input type="number" id="co-days" value="0" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
             </div>
             <div class="sm:col-span-2">
-              <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Description</label>
+              <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Description</label>
               <textarea id="co-desc" rows="3" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="Scope change details..."></textarea>
             </div>
           </div>
           <div class="flex gap-3 mt-6">
             <button type="submit" class="px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all">Create</button>
-            <button type="button" id="cancel-create-co" class="text-sm text-neutral-300 hover:text-neutral-300">Cancel</button>
+            <button type="button" id="cancel-create-co" class="text-sm text-neutral-500 hover:text-neutral-300">Cancel</button>
           </div>
         </form>
 
@@ -82,8 +82,8 @@ const statusColors: Record<string, string> = {
                 <div class="flex items-start justify-between">
                   <div>
                     <p class="text-sm font-medium text-neutral-200">{co.title}</p>
-                    {co.description && <p class="text-xs text-neutral-300 mt-2">{co.description}</p>}
-                    <div class="flex items-center gap-4 mt-2 text-xs text-neutral-400">
+                    {co.description && <p class="text-xs text-neutral-500 mt-2">{co.description}</p>}
+                    <div class="flex items-center gap-4 mt-2 text-xs text-neutral-600">
                       <span>Cost: ${co.cost_impact.toFixed(2)}</span>
                       <span>Time: +{co.time_impact_days} days</span>
                     </div>
@@ -101,7 +101,7 @@ const statusColors: Record<string, string> = {
         ) : (
           <div class="text-center py-16">
             <p class="font-serif text-xl text-neutral-100 mb-2">No change orders</p>
-            <p class="text-sm text-neutral-300">Create one above if the scope has changed.</p>
+            <p class="text-sm text-neutral-500">Create one above if the scope has changed.</p>
           </div>
         )}
       </>

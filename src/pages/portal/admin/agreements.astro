@@ -89,7 +89,7 @@ const statusLabel: Record<string, string> = {
       <div>
         <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin</p>
         <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Agreements</h1>
-        <p class="text-sm text-neutral-300 mt-2">Client services agreements: drafted, issued, partial, executed.</p>
+        <p class="text-sm text-neutral-500 mt-2">Client services agreements: drafted, issued, partial, executed.</p>
       </div>
       <a
         href="/portal/admin/agreements/new"
@@ -124,23 +124,23 @@ const statusLabel: Record<string, string> = {
               <div class="min-w-0 flex-1">
                 <div class="flex items-baseline gap-3 flex-wrap">
                   <p class="text-sm font-medium text-neutral-200">{clientById[a.client_id] || 'Unknown client'}</p>
-                  <a href={`/portal/contracts/${a.slug}`} target="_blank" rel="noopener" class="text-[10px] font-mono text-neutral-400 hover:text-amber-400 transition-colors">/{a.slug}</a>
+                  <a href={`/portal/contracts/${a.slug}`} target="_blank" rel="noopener" class="text-[10px] font-mono text-neutral-600 hover:text-amber-400 transition-colors">/{a.slug}</a>
                   <span class={`px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded ${statusBadge[a.status] || statusBadge.draft}`}>{statusLabel[a.status] || a.status}</span>
                 </div>
-                <p class="text-xs text-neutral-300 mt-1">{a.title}</p>
+                <p class="text-xs text-neutral-500 mt-1">{a.title}</p>
 
                 {a.signers.length > 0 && (
                   <div class="flex items-center gap-4 mt-3 text-xs">
                     {a.signers.map(s => (
                       <span class="flex items-center gap-1.5">
-                        {s.signed ? <span class="text-emerald-400">✓</span> : <span class="text-neutral-400">○</span>}
-                        <span class:list={[s.signed ? 'text-neutral-300' : 'text-neutral-400']}>{s.name}</span>
+                        {s.signed ? <span class="text-emerald-400">✓</span> : <span class="text-neutral-600">○</span>}
+                        <span class:list={[s.signed ? 'text-neutral-300' : 'text-neutral-600']}>{s.name}</span>
                       </span>
                     ))}
                   </div>
                 )}
 
-                <div class="flex items-center gap-4 mt-3 text-[10px] font-mono text-neutral-400">
+                <div class="flex items-center gap-4 mt-3 text-[10px] font-mono text-neutral-700">
                   {a.created_at && <span>Created {fmtDate(a.created_at)}</span>}
                   {a.issued_at && <span>Issued {fmtDate(a.issued_at)}</span>}
                   {a.finalized_at && <span>Executed {fmtDate(a.finalized_at)}</span>}
@@ -159,8 +159,8 @@ const statusLabel: Record<string, string> = {
       </div>
     ) : (
       <div class="text-center py-16">
-        <p class="text-sm text-neutral-300">No agreements yet.</p>
-        <p class="text-xs text-neutral-400 mt-2">Issue one from a finalized proposal above, or start a new blank agreement.</p>
+        <p class="text-sm text-neutral-500">No agreements yet.</p>
+        <p class="text-xs text-neutral-600 mt-2">Issue one from a finalized proposal above, or start a new blank agreement.</p>
       </div>
     )}
   </div>

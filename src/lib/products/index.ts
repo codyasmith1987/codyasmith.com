@@ -605,7 +605,7 @@ function buildContextForProduct(args: {
       return { id: p, tierId: otherTier };
     });
 
-  return { ecosystemId, tierId, variables, otherProducts };
+  return { ecosystemId, tierId, variables, otherProducts, selections: args.selections };
 }
 
 // Exported for use in contract-schedule.ts product_driven_v1 branch.

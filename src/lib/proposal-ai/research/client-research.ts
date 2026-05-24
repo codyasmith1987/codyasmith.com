@@ -38,7 +38,7 @@ import type {
 const VALID_REVENUE: ReadonlySet<RevenueBand> = new Set(['under-1m', '1m-to-10m', 'over-10m', 'unknown']);
 const VALID_CONFIDENCE: ReadonlySet<ConfidenceLevel> = new Set(['low', 'medium', 'high']);
 const VALID_INDUSTRY: ReadonlySet<IndustryGuess> = new Set([
-  'solo', 'professional-services', 'contractor', 'manufacturing',
+  'solo', 'professional-services', 'contractor',
   'family-of-companies', 'nonprofit', 'other', 'unknown',
 ]);
 const VALID_URGENCY: ReadonlySet<UrgencyGuess> = new Set(['tactical', 'growth', 'maintenance', 'unknown']);

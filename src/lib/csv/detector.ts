@@ -16,6 +16,11 @@ export type CsvFormat =
   | 'security_urls'
   | 'structured_data_urls'
   | 'issue_urls'
+  // 'unknown' is still emitted by detectFormat for files that don't
+  // match a signature; the ingest pipeline routes those to the raw
+  // fallback and updates the upload row to 'unknown_stored' so
+  // anything visible in the DB is post-routing.
+  | 'unknown_stored'
   | 'unknown';
 
 interface FormatSignature {

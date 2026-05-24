@@ -17,6 +17,7 @@ import { parse as parseKeywordSuggestions } from './parsers/keyword-suggestions'
 import { parse as parseSiteAudit } from './parsers/site-audit';
 import { parse as parseAccessibility } from './parsers/accessibility';
 import { parse as parseIssueUrls } from './parsers/issue-urls';
+import { parse as parseRawCsv } from './parsers/raw-csv';
 
 // Maps CSV formats to the source tags they write, so we can clear old data before re-importing
 const FORMAT_SOURCES: Record<string, { tables: string[]; source: string }> = {
@@ -35,6 +36,9 @@ const FORMAT_SOURCES: Record<string, { tables: string[]; source: string }> = {
   site_audit: { tables: ['site_issues'], source: 'site_audit' },
   accessibility: { tables: ['metrics', 'accessibility_urls'], source: 'accessibility' },
   issue_urls: { tables: ['site_issue_urls'], source: 'issue_urls' },
+  // Stored-but-not-yet-typed CSVs. Cleared on re-upload like every
+  // other format so the same filename doesn't accumulate raw copies.
+  unknown_stored: { tables: ['raw_csv_data'], source: 'unknown_stored' },
 };
 
 async function clearPreviousData(clientId: string, month: string, format: string, currentUploadId: string): Promise<string | null> {
@@ -96,11 +100,26 @@ export async function ingestCSV(
   });
 
   if (format === 'unknown') {
-    await turso.execute({
-      sql: 'UPDATE csv_uploads SET error = ? WHERE id = ?',
-      args: ['Unrecognized CSV format', uploadId],
-    });
-    return { uploadId, format, rowCount: 0, headers, error: 'Unrecognized CSV format. Headers: ' + headers.join(', ') };
+    // Don't reject. Store the raw text + headers so a later parser
+    // can be added and process this file retroactively without
+    // re-upload. The detector ran first to confirm this is a CSV
+    // shape; if Papa.parse failed to extract headers the file may
+    // still be malformed but we'd rather store it than lose it.
+    try {
+      const clearedUploadId = await clearPreviousData(clientId, month, 'unknown_stored', uploadId);
+      const rowCount = await parseRawCsv(raw, clientId, month, uploadId, filename);
+      await turso.execute({
+        sql: 'UPDATE csv_uploads SET detected_format = ?, row_count = ?, processed_at = datetime(\'now\') WHERE id = ?',
+        args: ['unknown_stored', rowCount, uploadId],
+      });
+      return { uploadId, format: 'unknown_stored' as CsvFormat, rowCount, headers };
+    } catch (err: any) {
+      await turso.execute({
+        sql: 'UPDATE csv_uploads SET error = ? WHERE id = ?',
+        args: [`Stored as raw but encountered: ${err.message}`, uploadId],
+      });
+      return { uploadId, format, rowCount: 0, headers, error: err.message };
+    }
   }
 
   try {

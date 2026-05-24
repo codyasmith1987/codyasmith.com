@@ -133,9 +133,17 @@ function formatLabel(format: string): string {
                   <span class="text-xs font-mono text-neutral-500">{u.month}</span>
                   <span class:list={[
                     'text-[10px] font-mono tracking-wide px-2.5 py-0.5 rounded-full',
-                    u.error ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400',
+                    u.error
+                      ? 'bg-red-500/10 text-red-400'
+                      : u.detected_format === 'unknown_stored'
+                        ? 'bg-amber-500/15 text-amber-600'
+                        : 'bg-emerald-500/10 text-emerald-400',
                   ]}>
-                    {u.error ? 'Error' : formatLabel(u.detected_format)}
+                    {u.error
+                      ? 'Error'
+                      : u.detected_format === 'unknown_stored'
+                        ? 'Stored, not yet visualized'
+                        : formatLabel(u.detected_format)}
                   </span>
                 </div>
               </div>
@@ -186,18 +194,31 @@ function formatLabel(format: string): string {
 
     function renderResultCard(filename: string, data: any, idx: number) {
       const card = document.createElement('div');
-      card.className = `csv-result bg-neutral-900/30 border rounded-xl p-5 ${data.error ? 'border-red-500/15' : 'border-emerald-500/15'}`;
+      const borderClass = data.error
+        ? 'border-red-500/15'
+        : data.format === 'unknown_stored'
+          ? 'border-amber-500/20'
+          : 'border-emerald-500/15';
+      card.className = `csv-result bg-neutral-900/30 border rounded-xl p-5 ${borderClass}`;
       card.style.animationDelay = `${idx * 0.05}s`;
+      const stored = data.format === 'unknown_stored';
+      const formatLine = stored
+        ? `Stored, not yet visualized. <span class="text-amber-600">${escAll(filename)}</span> kept in raw_csv_data so a typed parser can pick it up later.`
+        : (data.format && data.format !== 'unknown')
+          ? `Detected: <span class="text-emerald-400">${escAll(String(data.format).replace(/_/g, ' '))}</span>${data.row_count ? `, ${escAll(data.row_count)} rows processed` : ''}`
+          : '';
+      const statusChip = data.error
+        ? `<span class="text-xs text-red-400">${escAll(data.error)}</span>`
+        : stored
+          ? '<span class="text-[10px] font-mono text-amber-600 tracking-wide uppercase">Stored</span>'
+          : '<span class="text-[10px] font-mono text-emerald-400 tracking-wide uppercase">Done</span>';
       card.innerHTML = `
         <div class="flex items-center justify-between">
           <div>
             <p class="text-sm font-medium text-neutral-200">${escAll(filename)}</p>
-            <p class="text-xs text-neutral-400 mt-1">
-              ${data.format && data.format !== 'unknown' ? `Detected: <span class="text-emerald-400">${escAll(String(data.format).replace(/_/g, ' '))}</span>` : ''}
-              ${data.row_count ? `, ${escAll(data.row_count)} rows processed` : ''}
-            </p>
+            <p class="text-xs text-neutral-400 mt-1">${formatLine}</p>
           </div>
-          ${data.error ? `<span class="text-xs text-red-400">${escAll(data.error)}</span>` : '<span class="text-[10px] font-mono text-emerald-400 tracking-wide uppercase">Done</span>'}
+          ${statusChip}
         </div>
       `;
       resultsDiv.appendChild(card);

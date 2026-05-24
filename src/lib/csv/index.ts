@@ -16,6 +16,7 @@ import { parse as parseKeywordResearch } from './parsers/keyword-research';
 import { parse as parseKeywordSuggestions } from './parsers/keyword-suggestions';
 import { parse as parseSiteAudit } from './parsers/site-audit';
 import { parse as parseAccessibility } from './parsers/accessibility';
+import { parse as parseIssueUrls } from './parsers/issue-urls';
 
 // Maps CSV formats to the source tags they write, so we can clear old data before re-importing
 const FORMAT_SOURCES: Record<string, { tables: string[]; source: string }> = {
@@ -33,6 +34,7 @@ const FORMAT_SOURCES: Record<string, { tables: string[]; source: string }> = {
   image_optimization: { tables: ['metrics'], source: 'image_optimization' },
   site_audit: { tables: ['site_issues'], source: 'site_audit' },
   accessibility: { tables: ['metrics', 'accessibility_urls'], source: 'accessibility' },
+  issue_urls: { tables: ['site_issue_urls'], source: 'issue_urls' },
 };
 
 async function clearPreviousData(clientId: string, month: string, format: string, currentUploadId: string): Promise<string | null> {
@@ -158,6 +160,9 @@ export async function ingestCSV(
         rowCount = await parseAccessibilityUrls(raw, clientId, month, uploadId);
         break;
       }
+      case 'issue_urls':
+        rowCount = await parseIssueUrls(raw, clientId, month, uploadId, filename);
+        break;
     }
 
     await turso.execute({

@@ -152,10 +152,20 @@ const clients = isAdmin ? await getAllClients() : [];
       }
 
       try {
-        const res = await fetch(`/portal/api/dashboard/issues?client_id=${cid}`);
-        if (!res.ok) throw new Error('Failed to load health data');
-        const data = await res.json();
+        // Load issues + crawl-stats in parallel. Crawl-stats supplies
+        // the honest "real page count" and "distinct affected URLs"
+        // numbers so the headline can drop the misleading "page
+        // instances" rollup. When site_issue_urls has not been
+        // populated yet (no per-issue CSVs uploaded), distinct count
+        // falls back to summing affected_urls.
+        const [issuesRes, statsRes] = await Promise.all([
+          fetch(`/portal/api/dashboard/issues?client_id=${cid}`),
+          fetch(`/portal/api/dashboard/crawl-stats?client_id=${cid}`).catch(() => null),
+        ]);
+        if (!issuesRes.ok) throw new Error('Failed to load health data');
+        const data = await issuesRes.json();
         const issues = data.issues || [];
+        const stats = statsRes && statsRes.ok ? await statsRes.json() : { total_html_pages: 0, distinct_affected_urls: 0 };
 
         loadingEl.classList.add('hidden');
 
@@ -179,15 +189,30 @@ const clients = isAdmin ? await getAllClients() : [];
         document.getElementById('health-grade').textContent = grade.icon;
         document.getElementById('health-grade').className = `w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold shrink-0 ${grade.color}`;
 
-        const totalUrls = issues.reduce((s, i) => s + (i.affected_urls || 0), 0);
+        // Honest counts. total_html_pages is the number of REAL pages
+        // on the site (status 200, html content-type). distinct_affected_urls
+        // is the count of those pages with at least one issue. Falls
+        // back to a rolled-up affected_urls sum when the per-issue
+        // URL lists have not been ingested yet.
+        const totalHtmlPages = Number(stats.total_html_pages) || 0;
+        let distinctAffectedUrls = Number(stats.distinct_affected_urls) || 0;
+        if (distinctAffectedUrls === 0) {
+          distinctAffectedUrls = issues.reduce((s, i) => s + (i.affected_urls || 0), 0);
+        }
+        // Build the "X of Y" framing only when we actually have a real
+        // page count to anchor against. Otherwise just name the
+        // distinct-affected count without the denominator.
+        const pageFraming = totalHtmlPages > 0
+          ? `${distinctAffectedUrls} of your ${totalHtmlPages} page${totalHtmlPages !== 1 ? 's' : ''}`
+          : `${distinctAffectedUrls} page${distinctAffectedUrls !== 1 ? 's' : ''}`;
         let headline = '', desc = '';
 
         if (grade.label === 'Excellent' || grade.label === 'Good') {
           headline = `Site health: ${grade.label}`;
-          desc = `Your site is in good shape. ${issues.length} issues found across ${totalUrls.toLocaleString()} page instances, but nothing critical. The items below are opportunities to polish, not emergencies.`;
+          desc = `Your site is in good shape. ${issues.length} issue categor${issues.length !== 1 ? 'ies' : 'y'} found across ${pageFraming}, but nothing critical. The items below are opportunities to polish, not emergencies.`;
         } else if (grade.label === 'Fair') {
           headline = `Site health: ${grade.label} (fixable issues)`;
-          desc = `${issues.length} issues found, with ${high > 0 ? `${high} high-priority item${high !== 1 ? 's' : ''} that should be addressed soon` : `${medium} medium-priority items worth cleaning up`}. These are affecting ${totalUrls.toLocaleString()} page instances. None of this is unusual for a site that's actively being worked on.`;
+          desc = `${issues.length} issue categor${issues.length !== 1 ? 'ies' : 'y'} found, with ${high > 0 ? `${high} high-priority item${high !== 1 ? 's' : ''} that should be addressed soon` : `${medium} medium-priority item${medium !== 1 ? 's' : ''} worth cleaning up`}. ${pageFraming} ${distinctAffectedUrls === 1 ? 'has' : 'have'} at least one. None of this is unusual for a site that's actively being worked on.`;
         } else {
           headline = `Site health: ${grade.label}`;
           desc = `${high} high-priority issue${high !== 1 ? 's' : ''} and ${medium} medium-priority issue${medium !== 1 ? 's' : ''} found. These are actively hurting your search rankings and should be addressed. The list below is ordered by impact.`;
@@ -205,6 +230,49 @@ const clients = isAdmin ? await getAllClients() : [];
         const ungrouped = issues.filter(i => !groupedNames.has(i.issue_name));
         if (ungrouped.length > 0) {
           grouped.push({ name: 'Other', description: 'Additional items from the site audit', issues: ungrouped });
+        }
+
+        // Wire up the per-issue expandable URL fetch after rendering.
+        // Each <details data-issue-card> fetches its URL list the first
+        // time it opens; subsequent toggles use the cached render.
+        const fetchedIssueUrls = new Set();
+        function attachIssueUrlExpanders() {
+          document.querySelectorAll('[data-issue-card]').forEach(el => {
+            el.addEventListener('toggle', async (e) => {
+              const details = e.currentTarget;
+              if (!details.open) return;
+              const issueName = details.getAttribute('data-issue-name');
+              if (!issueName || fetchedIssueUrls.has(issueName)) return;
+              fetchedIssueUrls.add(issueName);
+              const slot = details.querySelector('[data-issue-urls]');
+              if (!slot) return;
+              try {
+                const res = await fetch(`/portal/api/dashboard/issue-urls?client_id=${cid}&issue_name=${encodeURIComponent(issueName)}`);
+                const data = await res.json();
+                if (!data.urls || data.urls.length === 0) {
+                  slot.innerHTML = `<span class="text-neutral-500 italic">No affected pages stored yet for this issue. Re-upload the per-issue CSV (${escapeHtml(issueName)}) from Screaming Frog to populate the list.</span>`;
+                  return;
+                }
+                slot.innerHTML = '<ul class="space-y-1">' + data.urls.map(u => {
+                  const safeUrl = escapeHtml(u.url);
+                  // Surface the first scalar extra (often a length or
+                  // count) next to the URL so each row has context
+                  // without dumping the whole extras blob.
+                  let extraNote = '';
+                  if (u.extras && typeof u.extras === 'object') {
+                    const keys = Object.keys(u.extras).filter(k => /length|pixel|character|count|word/i.test(k));
+                    if (keys.length > 0) {
+                      const k = keys[0];
+                      extraNote = ` <span class="text-neutral-400">(${escapeHtml(String(k))}: ${escapeHtml(String(u.extras[k]))})</span>`;
+                    }
+                  }
+                  return `<li class="text-[11px] font-mono"><a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="text-amber-600 hover:text-amber-700 hover:underline break-all">${safeUrl}</a>${extraNote}</li>`;
+                }).join('') + '</ul>';
+              } catch (err) {
+                slot.innerHTML = `<span class="text-red-500">Failed to load URL list. Try again.</span>`;
+              }
+            });
+          });
         }
 
         document.getElementById('issue-groups').innerHTML = grouped.map((group, gi) => `
@@ -225,25 +293,41 @@ const clients = isAdmin ? await getAllClients() : [];
                 const dotLabel = ['critical', 'high'].includes(p) ? 'High priority' : p === 'medium' ? 'Medium priority' : 'Low priority';
                 const issueName = String(i.issue_name || '');
                 const explanation = ISSUE_EXPLAIN[issueName.toLowerCase()] || i.description || '';
+                const count = Number(i.affected_urls) || 0;
+                // Each issue is a <details> so clicking the row
+                // reveals the affected-URL list, fetched on first
+                // expand. Per the page-trust work that surfaced when
+                // KelseyVerse showed "354 page instances" — admins
+                // and clients both want clickable URLs to inspect.
                 return `
-                  <div class="px-6 py-4 hover:bg-white/[0.01] transition-colors duration-300">
-                    <div class="flex items-start gap-3">
-                      <div class="w-2 h-2 rounded-full ${dotColor} mt-1.5 shrink-0" title="${dotLabel}" aria-label="${dotLabel}"></div>
-                      <div class="flex-1 min-w-0">
-                        <div class="flex items-center justify-between gap-4">
-                          <span class="text-sm text-neutral-200">${escapeHtml(issueName)}</span>
-                          <span class="text-[10px] font-mono text-neutral-500 shrink-0">${Number(i.affected_urls) || 0} pages</span>
+                  <details class="group/issue px-6 py-4 hover:bg-white/[0.01] transition-colors duration-300"
+                           data-issue-card data-issue-name="${escapeHtml(issueName)}">
+                    <summary class="list-none cursor-pointer">
+                      <div class="flex items-start gap-3">
+                        <div class="w-2 h-2 rounded-full ${dotColor} mt-1.5 shrink-0" title="${dotLabel}" aria-label="${dotLabel}"></div>
+                        <div class="flex-1 min-w-0">
+                          <div class="flex items-center justify-between gap-4">
+                            <span class="text-sm text-neutral-200">${escapeHtml(issueName)}</span>
+                            <span class="text-[10px] font-mono text-neutral-500 shrink-0">${count} page${count !== 1 ? 's' : ''} <span class="ml-1 text-neutral-400 group-open/issue:rotate-90 inline-block transition-transform">▸</span></span>
+                          </div>
+                          ${explanation ? `<p class="text-xs text-neutral-500 mt-1.5 leading-relaxed">${escapeHtml(explanation)}</p>` : ''}
+                          ${i.how_to_fix ? `<p class="text-xs text-amber-600 mt-1">Fix: ${escapeHtml(i.how_to_fix)}</p>` : ''}
                         </div>
-                        ${explanation ? `<p class="text-xs text-neutral-500 mt-1.5 leading-relaxed">${escapeHtml(explanation)}</p>` : ''}
-                        ${i.how_to_fix ? `<p class="text-xs text-amber-600 mt-1">Fix: ${escapeHtml(i.how_to_fix)}</p>` : ''}
                       </div>
+                    </summary>
+                    <div data-issue-urls class="mt-3 ml-5 text-[11px] text-neutral-500">
+                      <span class="text-neutral-400 italic">Loading affected pages...</span>
                     </div>
-                  </div>
+                  </details>
                 `;
               }).join('')}
             </div>
           </div>
         `).join('');
+
+        // Now that the issue groups are in the DOM, attach the
+        // on-expand fetch handler to each issue card.
+        attachIssueUrlExpanders();
       } catch (err) {
         loadingEl.classList.add('hidden');
         document.getElementById('health-error-detail').textContent = err.message || 'Could not connect to the server.';

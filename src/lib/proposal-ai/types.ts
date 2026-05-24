@@ -137,8 +137,13 @@ export interface CodyTimeIntensitySignal {
 }
 
 export interface SalesAngle {
-  angle: string;                          // one short phrase to lead with
+  angle: string;                          // one short phrase the prospect uses to pitch their customers
   supporting_evidence: string;             // quote or paraphrase from scraped content
+  // Which of Cody's products amplifies / supports this stated value
+  // prop. Audit finding 2A/B: the bridge from prospect's stated
+  // pitch to which of Cody's products serves it. Optional; absent
+  // when the angle is generic or no product clearly supports it.
+  product_implication?: 'web_management' | 'marketing_consulting' | 'build' | 'training' | 'none';
 }
 
 // Concrete things broken or under-served on the prospect's site or

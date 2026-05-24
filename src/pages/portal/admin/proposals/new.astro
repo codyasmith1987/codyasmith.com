@@ -756,8 +756,251 @@ const todayISO = new Date().toISOString().slice(0, 10);
           }
         }
 
+        // Build product: when Build is in scope, surface the
+        // deployment-options editor. Multi-option builds (Raised Bar
+        // pattern) get the two-column choice cards on the proposal
+        // page; the data model is in src/lib/products/types.ts
+        // BuildOption and the composer reads it from
+        // ctx.variables.build_options. Empty array (or fewer than 2
+        // entries) = no picker; standard single-option flow.
+        if (id === 'build') {
+          block.appendChild(buildOptionsEditor(id));
+        }
+
         varsContainer.appendChild(block);
       }
+    }
+
+    // Build options editor. Lets admin author multiple deployment
+    // shapes for a Build product (e.g., Raised Bar's "unified site
+    // with section inside" vs "standalone micro-site + separate
+    // brand site"). Two or more options become a binary/n-ary picker
+    // on the proposal page; each option's rollout phases swap when
+    // the prospect picks; pricing delta and Schedule A note apply.
+    function buildOptionsEditor(productId) {
+      const wrap = document.createElement('div');
+      wrap.className = 'mt-4 p-3 bg-neutral-900/30 border border-white/5 rounded-md';
+      const header = document.createElement('p');
+      header.className = 'text-[10px] font-mono text-neutral-500 tracking-wide uppercase mb-1';
+      header.textContent = 'Deployment options (optional)';
+      wrap.appendChild(header);
+      const desc = document.createElement('p');
+      desc.className = 'text-[11px] text-neutral-400 mb-3 leading-relaxed';
+      desc.textContent = 'When the build can ship in more than one shape (e.g., unified site vs split sites), define each option here. Two or more options become a two-column choice on the proposal page. Leave empty for a single-shape build.';
+      wrap.appendChild(desc);
+      const list = document.createElement('div');
+      list.className = 'space-y-3';
+      wrap.appendChild(list);
+      const addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.className = 'mt-3 text-xs px-3 py-1.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-700 hover:bg-amber-500/20 transition-colors';
+      addBtn.textContent = '+ Add option';
+      addBtn.addEventListener('click', () => {
+        if (!state.product_vars[productId]) state.product_vars[productId] = {};
+        const opts = Array.isArray(state.product_vars[productId].build_options)
+          ? state.product_vars[productId].build_options
+          : [];
+        opts.push({
+          id: 'opt' + (opts.length + 1),
+          name: `Option ${opts.length + 1}: `,
+          pitch: '',
+          pricing_delta: 0,
+          rollout_phases: [],
+          schedule_a_note: '',
+        });
+        state.product_vars[productId].build_options = opts;
+        renderBuildOptionsList(list, productId);
+      });
+      wrap.appendChild(addBtn);
+      renderBuildOptionsList(list, productId);
+      return wrap;
+    }
+
+    function renderBuildOptionsList(container, productId) {
+      container.innerHTML = '';
+      const opts = (state.product_vars[productId] && Array.isArray(state.product_vars[productId].build_options))
+        ? state.product_vars[productId].build_options
+        : [];
+      if (opts.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'text-[11px] text-neutral-500 italic';
+        empty.textContent = 'No options defined. Single-shape build.';
+        container.appendChild(empty);
+        return;
+      }
+      if (opts.length === 1) {
+        const warn = document.createElement('p');
+        warn.className = 'text-[11px] text-amber-700';
+        warn.textContent = 'Note: single option will not render a picker. Add a second option to surface the two-column choice on the proposal page.';
+        container.appendChild(warn);
+      }
+      opts.forEach((opt, i) => {
+        container.appendChild(buildOptionRow(opt, i, productId, container));
+      });
+    }
+
+    function buildOptionRow(opt, index, productId, listContainer) {
+      const card = document.createElement('div');
+      card.className = 'p-3 bg-neutral-900/40 border border-white/5 rounded';
+      const topRow = document.createElement('div');
+      topRow.className = 'flex items-center justify-between gap-3 mb-2';
+      const idLabel = document.createElement('span');
+      idLabel.className = 'text-[10px] font-mono text-neutral-500 uppercase tracking-wide';
+      idLabel.textContent = `Option ${index + 1}  ·  id: ${opt.id}`;
+      topRow.appendChild(idLabel);
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'text-xs text-neutral-400 hover:text-red-600 transition-colors';
+      removeBtn.textContent = 'Remove';
+      removeBtn.addEventListener('click', () => {
+        state.product_vars[productId].build_options.splice(index, 1);
+        renderBuildOptionsList(listContainer, productId);
+      });
+      topRow.appendChild(removeBtn);
+      card.appendChild(topRow);
+
+      const nameWrap = document.createElement('div');
+      nameWrap.className = 'mb-2';
+      nameWrap.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Name (shown on the proposal card)</label>`;
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30';
+      nameInput.value = opt.name || '';
+      nameInput.placeholder = 'Option 1: Single unified site';
+      nameInput.addEventListener('input', () => { opt.name = nameInput.value; });
+      nameWrap.appendChild(nameInput);
+      card.appendChild(nameWrap);
+
+      const pitchWrap = document.createElement('div');
+      pitchWrap.className = 'mb-2';
+      pitchWrap.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Pitch (HTML allowed, shown on the option card)</label>`;
+      const pitchInput = document.createElement('textarea');
+      pitchInput.rows = 3;
+      pitchInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
+      pitchInput.value = opt.pitch || '';
+      pitchInput.placeholder = 'One site with a focused section for the pre-sell.';
+      pitchInput.addEventListener('input', () => { opt.pitch = pitchInput.value; });
+      pitchWrap.appendChild(pitchInput);
+      card.appendChild(pitchWrap);
+
+      const grid = document.createElement('div');
+      grid.className = 'mb-2 grid grid-cols-2 gap-3';
+      const deltaCol = document.createElement('div');
+      deltaCol.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Pricing delta ($, can be negative)</label>`;
+      const deltaInput = document.createElement('input');
+      deltaInput.type = 'number';
+      deltaInput.step = '1';
+      deltaInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
+      deltaInput.value = opt.pricing_delta != null ? String(opt.pricing_delta) : '0';
+      deltaInput.addEventListener('input', () => {
+        const n = parseFloat(deltaInput.value);
+        opt.pricing_delta = Number.isFinite(n) ? n : 0;
+      });
+      deltaCol.appendChild(deltaInput);
+      grid.appendChild(deltaCol);
+
+      const idCol = document.createElement('div');
+      idCol.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Option id (lowercase, letters/digits/hyphens)</label>`;
+      const optIdInput = document.createElement('input');
+      optIdInput.type = 'text';
+      optIdInput.pattern = '[a-z0-9_-]+';
+      optIdInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
+      optIdInput.value = opt.id || '';
+      optIdInput.addEventListener('input', () => {
+        opt.id = optIdInput.value.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+        idLabel.textContent = `Option ${index + 1}  ·  id: ${opt.id}`;
+      });
+      idCol.appendChild(optIdInput);
+      grid.appendChild(idCol);
+      card.appendChild(grid);
+
+      const sowWrap = document.createElement('div');
+      sowWrap.className = 'mb-2';
+      sowWrap.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Schedule A note (in the contract when this option is picked)</label>`;
+      const sowInput = document.createElement('textarea');
+      sowInput.rows = 2;
+      sowInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
+      sowInput.value = opt.schedule_a_note || '';
+      sowInput.placeholder = 'Single site build covering both the brand and the pre-sell section.';
+      sowInput.addEventListener('input', () => { opt.schedule_a_note = sowInput.value; });
+      sowWrap.appendChild(sowInput);
+      card.appendChild(sowWrap);
+
+      card.appendChild(buildPhasesEditor(opt));
+      return card;
+    }
+
+    function buildPhasesEditor(opt) {
+      const wrap = document.createElement('div');
+      wrap.className = 'mt-2 pl-3 border-l-2 border-amber-500/30';
+      const label = document.createElement('p');
+      label.className = 'text-[10px] font-mono text-neutral-500 mb-2 uppercase tracking-wide';
+      label.textContent = 'Rollout phases (under "How it rolls out" when this option is picked)';
+      wrap.appendChild(label);
+      const phasesList = document.createElement('div');
+      phasesList.className = 'space-y-2';
+      wrap.appendChild(phasesList);
+      const renderPhases = () => {
+        phasesList.innerHTML = '';
+        if (!Array.isArray(opt.rollout_phases)) opt.rollout_phases = [];
+        if (opt.rollout_phases.length === 0) {
+          const empty = document.createElement('p');
+          empty.className = 'text-[11px] text-neutral-500 italic';
+          empty.textContent = 'No phases. Add the first.';
+          phasesList.appendChild(empty);
+        }
+        opt.rollout_phases.forEach((phase, pIdx) => {
+          const row = document.createElement('div');
+          row.className = 'p-2 bg-neutral-900/30 border border-white/5 rounded';
+          const phaseTop = document.createElement('div');
+          phaseTop.className = 'flex items-center justify-between gap-2 mb-1';
+          phaseTop.innerHTML = `<span class="text-[10px] font-mono text-amber-700 uppercase tracking-wide">Phase ${pIdx + 1}</span>`;
+          const phaseRemove = document.createElement('button');
+          phaseRemove.type = 'button';
+          phaseRemove.className = 'text-[11px] text-neutral-400 hover:text-red-600 transition-colors';
+          phaseRemove.textContent = 'Remove';
+          phaseRemove.addEventListener('click', () => {
+            opt.rollout_phases.splice(pIdx, 1);
+            renderPhases();
+          });
+          phaseTop.appendChild(phaseRemove);
+          row.appendChild(phaseTop);
+          const h3Input = document.createElement('input');
+          h3Input.type = 'text';
+          h3Input.className = 'w-full px-2 py-1.5 mb-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30';
+          h3Input.value = phase.h3 || '';
+          h3Input.placeholder = 'Phase header';
+          h3Input.addEventListener('input', () => {
+            phase.h3 = h3Input.value;
+            phase.phase_num = `Phase ${pIdx + 1}`;
+          });
+          row.appendChild(h3Input);
+          const htmlInput = document.createElement('textarea');
+          htmlInput.rows = 2;
+          htmlInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
+          htmlInput.value = phase.html || '';
+          htmlInput.placeholder = 'Phase description (HTML allowed).';
+          htmlInput.addEventListener('input', () => { phase.html = htmlInput.value; });
+          row.appendChild(htmlInput);
+          phasesList.appendChild(row);
+        });
+      };
+      const addPhase = document.createElement('button');
+      addPhase.type = 'button';
+      addPhase.className = 'mt-2 text-[11px] px-2 py-1 rounded bg-neutral-900 border border-white/10 text-neutral-300 hover:border-amber-500/40 hover:text-amber-700 transition-colors';
+      addPhase.textContent = '+ Add phase';
+      addPhase.addEventListener('click', () => {
+        if (!Array.isArray(opt.rollout_phases)) opt.rollout_phases = [];
+        opt.rollout_phases.push({
+          phase_num: `Phase ${opt.rollout_phases.length + 1}`,
+          h3: '',
+          html: '',
+        });
+        renderPhases();
+      });
+      wrap.appendChild(addPhase);
+      renderPhases();
+      return wrap;
     }
 
     // Per-site editor (multi-site WM). One row per managed site:
@@ -1925,14 +2168,29 @@ const todayISO = new Date().toISOString().slice(0, 10);
       if (angles.length) {
         const card = document.createElement('div');
         card.className = 'p-4 bg-neutral-900/40 border border-white/5 rounded-md';
-        const items = angles.map(a => `
-          <div class="py-3 border-b border-white/5 last:border-0 last:pb-0 first:pt-0">
-            <p class="text-sm text-neutral-100 leading-relaxed">${escapeHtml(a.angle)}</p>
-            ${a.supporting_evidence ? `<p class="text-[11px] text-neutral-500 mt-1 leading-relaxed">${escapeHtml(a.supporting_evidence)}</p>` : ''}
-          </div>`).join('');
+        const PRODUCT_IMPL_LABELS = {
+          web_management: 'WM amplifies this',
+          marketing_consulting: 'MC sharpens this',
+          build: 'Build can foreground this',
+          training: 'Training keeps this sharp',
+          none: 'no clear product fit',
+        };
+        const items = angles.map(a => {
+          const impl = a.product_implication && PRODUCT_IMPL_LABELS[a.product_implication]
+            ? `<span class="text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-700 shrink-0 ml-2">${escapeHtml(PRODUCT_IMPL_LABELS[a.product_implication])}</span>`
+            : '';
+          return `
+            <div class="py-3 border-b border-white/5 last:border-0 last:pb-0 first:pt-0">
+              <div class="flex items-baseline justify-between gap-3 flex-wrap">
+                <p class="text-sm text-neutral-100 leading-relaxed flex-1 min-w-0">${escapeHtml(a.angle)}</p>
+                ${impl}
+              </div>
+              ${a.supporting_evidence ? `<p class="text-[11px] text-neutral-500 mt-1 leading-relaxed">${escapeHtml(a.supporting_evidence)}</p>` : ''}
+            </div>`;
+        }).join('');
         card.innerHTML = `
           <p class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase mb-1">How they describe themselves to their customers</p>
-          <p class="text-[11px] text-neutral-400 mb-3 leading-relaxed">Their value props, in their own language. Echoed in the proposal opener. Starting points for connecting my products to their value chain.</p>
+          <p class="text-[11px] text-neutral-400 mb-3 leading-relaxed">Their value props, in their own language. Echoed in the proposal opener. Each angle is tagged with the product that amplifies or supports it, so the connection from their pitch to mine is explicit.</p>
           ${items}
         `;
         researchStrategyBody.appendChild(card);

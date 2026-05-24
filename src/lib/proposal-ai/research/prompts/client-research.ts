@@ -10,7 +10,7 @@
 // applied per-field with a click. The prompt tells Gemini to be
 // honest about uncertainty (confidence flags, "unknown" fallback).
 
-export const PROMPT_VERSION = 'client-research-v8';
+export const PROMPT_VERSION = 'client-research-v9';
 
 export const SYSTEM_PROMPT = `You are a research assistant for Cody A Smith LLC, a Web Management and Marketing Consulting practice. You look at scraped web content about a prospective client and return a structured assessment used to seed a proposal builder.
 
@@ -79,7 +79,13 @@ Sales-angles logic:
   - Each angle is what the PROSPECT TELLS THEIR CUSTOMERS about themselves: their value proposition, their pitch language, what they brag about, what they say differentiates them. Pulled VERBATIM or near-verbatim from their site's marketing copy.
   - Three to five entries. Each backed by a quote or paraphrase from the actual scraped content (supporting_evidence field).
   - These are used in the proposal opener to echo the prospect's language back to them. They feel understood. They are NOT internal problems; they are external pitches.
-  - Examples: "Quality is Priority #1" (from MCM's own copy), "Direct access to engineering without bureaucracy" (paraphrased from MCM's pitch), "Built faster than the industry average" (from their site).
+  - Each angle gets a product_implication field: which of Cody's products would AMPLIFY or SUPPORT that stated value prop:
+      web_management when the angle is about reliability, quality, attention to detail, professionalism, things a maintained site reinforces (a site that conveys quality has to stay running)
+      marketing_consulting when the angle is about positioning, story, differentiation, strategic clarity (a story that needs sharpening, audience-clarity work, content strategy)
+      build when the angle implies a structural site change (e.g., they pitch a new product line that needs its own site, they pitch a sub-brand that needs separate presence)
+      training when the angle implies staff knowledge (they pitch their team's expertise; training keeps that expertise sharp on the digital side)
+      none when no product clearly amplifies the angle (e.g., business-model claims, factory-floor specifics)
+  - Examples: "Quality is Priority #1" -> web_management (the site that conveys quality has to stay running). "Direct access to engineering without bureaucracy" -> marketing_consulting (sharpen this differentiation across the site and content). "Built faster than the industry average" -> build (when they would benefit from a dedicated speed-story page or section).
 
 Internal-gaps logic:
 
@@ -178,10 +184,16 @@ export function buildUserPrompt(input: UserPromptInput): string {
   "clv_horizon": { "signal": "long-term-stable" | "medium-term" | "churn-risk" | "unknown", "rationale": "one short sentence" },
   "cody_time_intensity": { "level": "low" | "medium" | "high", "rationale": "one short sentence" },
   "sales_angles": [
-    { "angle": "one short phrase in the client's own language", "supporting_evidence": "quote or paraphrase from scraped content" }
+    {
+      "angle": "one short phrase in the client's own language",
+      "supporting_evidence": "quote or paraphrase from scraped content",
+      "product_implication": "web_management" | "marketing_consulting" | "build" | "training" | "none"
+    }
     // 3 to 5 entries. These are what the PROSPECT tells THEIR customers
     // (their pitch to their audience). Used in the proposal opener to
     // echo their language back. Pulled verbatim from scraped marketing copy.
+    // product_implication is which of Cody's products would amplify or
+    // support each stated value prop (see logic section above).
   ],
   "internal_gaps": [
     {
@@ -325,7 +337,11 @@ export const RESPONSE_SCHEMA: any = {
       type: 'ARRAY',
       items: {
         type: 'OBJECT',
-        properties: { angle: { type: 'STRING' }, supporting_evidence: { type: 'STRING' } },
+        properties: {
+          angle: { type: 'STRING' },
+          supporting_evidence: { type: 'STRING' },
+          product_implication: { type: 'STRING' },
+        },
         required: ['angle', 'supporting_evidence'],
       },
     },

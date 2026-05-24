@@ -84,12 +84,25 @@ export interface ScheduleA {
 
 export interface WebManagementSection {
   tier_name: string;
-  sites: Array<{ domain: string; description: string }>;
+  // Each site carries its own ecosystem and per-site monthly + onboarding
+  // contribution per the locked multi-site formula (2026-05-24):
+  // primary pays full base for its own ecosystem; each additional site
+  // pays 0.80 of its own ecosystem base. The contract renders these
+  // per-site rows so the buyer sees how the total breaks down.
+  sites: Array<{
+    domain: string;
+    description: string;
+    ecosystem?: string;           // 'A' | 'B' | 'C' for the routed eco
+    monthly_contribution?: number;
+    onboarding_contribution?: number;
+    is_primary?: boolean;
+  }>;
   site_count: number;
-  monthly_base: number;
-  monthly_total: number;
+  monthly_base: number;           // primary's monthly base, for reference
+  monthly_total: number;          // sum across all sites with multi-site discount
   included_hours: number;
-  onboarding_fee: number;
+  onboarding_fee: number;         // primary's onboarding base, for reference
+  onboarding_total?: number;      // sum across all sites with multi-site discount
   update_cadence: string;
   response_time: string;
   quarterly_training_sessions: number | null;

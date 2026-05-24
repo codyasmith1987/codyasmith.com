@@ -196,36 +196,42 @@ const statusColors: Record<string, string> = {
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
     // Save invoice
-    document.getElementById('save-invoice')?.addEventListener('click', async () => {
-      const res = await fetch(`/portal/api/admin/invoices/${invoiceId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify({
-          status: document.getElementById('f-status').value,
-          issued_date: document.getElementById('f-issued').value || null,
-          due_date: document.getElementById('f-due').value || null,
-          client_visible: Number(document.getElementById('f-visible').value),
-          notes: document.getElementById('f-notes').value.trim() || null,
-        }),
+    document.getElementById('save-invoice')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      await window.__withButtonLoading(btn, 'Saving…', async () => {
+        const res = await fetch(`/portal/api/admin/invoices/${invoiceId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({
+            status: document.getElementById('f-status').value,
+            issued_date: document.getElementById('f-issued').value || null,
+            due_date: document.getElementById('f-due').value || null,
+            client_visible: Number(document.getElementById('f-visible').value),
+            notes: document.getElementById('f-notes').value.trim() || null,
+          }),
+        });
+        if (res.ok) window.__toast('Invoice saved.', 'success');
+        else window.__toast('Failed to save invoice.', 'error');
       });
-      if (res.ok) window.__toast({ type: 'success', message: 'Invoice updated' });
-      else window.__toast({ type: 'error', message: 'Failed to save' });
     });
 
     // Delete invoice
-    document.getElementById('delete-invoice')?.addEventListener('click', async () => {
+    document.getElementById('delete-invoice')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
       const confirmed = await window.__confirm({
         title: 'Delete invoice', message: 'This will permanently delete this invoice, all line items, and payment records.',
         confirmLabel: 'Delete', danger: true,
       });
       if (!confirmed) return;
-      const res = await fetch(`/portal/api/admin/invoices/${invoiceId}`, {
-        method: 'DELETE', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+      await window.__withButtonLoading(btn, 'Deleting…', async () => {
+        const res = await fetch(`/portal/api/admin/invoices/${invoiceId}`, {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        });
+        if (res.ok) {
+          window.__toast('Invoice deleted.', 'success');
+          setTimeout(() => window.location.href = `/portal/admin/contracts/${contractId}`, 600);
+        } else window.__toast('Failed to delete invoice.', 'error');
       });
-      if (res.ok) {
-        window.__toast({ type: 'success', message: 'Invoice deleted' });
-        setTimeout(() => window.location.href = `/portal/admin/contracts/${contractId}`, 600);
-      } else window.__toast({ type: 'error', message: 'Failed to delete' });
     });
 
     // Add line item
@@ -235,35 +241,40 @@ const statusColors: Record<string, string> = {
 
     itemForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const res = await fetch(`/portal/api/admin/invoices/${invoiceId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify({
-          action: 'add_item',
-          description: document.getElementById('ai-desc').value.trim(),
-          quantity: Number(document.getElementById('ai-qty').value),
-          unit_price: Number(document.getElementById('ai-price').value),
-        }),
+      const btn = itemForm.querySelector('button[type="submit"]');
+      await window.__withButtonLoading(btn, 'Adding…', async () => {
+        const res = await fetch(`/portal/api/admin/invoices/${invoiceId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({
+            action: 'add_item',
+            description: document.getElementById('ai-desc').value.trim(),
+            quantity: Number(document.getElementById('ai-qty').value),
+            unit_price: Number(document.getElementById('ai-price').value),
+          }),
+        });
+        if (res.ok) {
+          window.__toast('Line item added. Totals recalculated.', 'success');
+          setTimeout(() => location.reload(), 600);
+        } else window.__toast('Failed to add line item.', 'error');
       });
-      if (res.ok) {
-        window.__toast({ type: 'success', message: 'Item added' });
-        setTimeout(() => location.reload(), 600);
-      } else window.__toast({ type: 'error', message: 'Failed to add item' });
     });
 
     // Delete line items
     document.querySelectorAll('[data-delete-item]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const itemId = btn.dataset.deleteItem;
-        const res = await fetch(`/portal/api/admin/invoices/${invoiceId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify({ action: 'delete_item', item_id: itemId }),
+        await window.__withButtonLoading(btn, '…', async () => {
+          const res = await fetch(`/portal/api/admin/invoices/${invoiceId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ action: 'delete_item', item_id: itemId }),
+          });
+          if (res.ok) {
+            window.__toast('Line item removed. Totals recalculated.', 'success');
+            setTimeout(() => location.reload(), 600);
+          } else window.__toast('Failed to remove line item.', 'error');
         });
-        if (res.ok) {
-          window.__toast({ type: 'success', message: 'Item removed' });
-          setTimeout(() => location.reload(), 600);
-        } else window.__toast({ type: 'error', message: 'Failed to remove item' });
       });
     });
 
@@ -274,21 +285,24 @@ const statusColors: Record<string, string> = {
 
     payForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const res = await fetch('/portal/api/admin/payments/record', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify({
-          invoice_id: invoiceId,
-          amount: Number(document.getElementById('ap-amount').value),
-          payment_method: document.getElementById('ap-method').value || undefined,
-          paid_at: document.getElementById('ap-date').value + 'T12:00:00Z',
-          reference: document.getElementById('ap-ref').value.trim() || undefined,
-        }),
+      const btn = payForm.querySelector('button[type="submit"]');
+      await window.__withButtonLoading(btn, 'Recording…', async () => {
+        const res = await fetch('/portal/api/admin/payments/record', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({
+            invoice_id: invoiceId,
+            amount: Number(document.getElementById('ap-amount').value),
+            payment_method: document.getElementById('ap-method').value || undefined,
+            paid_at: document.getElementById('ap-date').value + 'T12:00:00Z',
+            reference: document.getElementById('ap-ref').value.trim() || undefined,
+          }),
+        });
+        if (res.ok) {
+          window.__toast('Payment recorded. Invoice totals updated.', 'success');
+          setTimeout(() => location.reload(), 600);
+        } else window.__toast('Failed to record payment.', 'error');
       });
-      if (res.ok) {
-        window.__toast({ type: 'success', message: 'Payment recorded' });
-        setTimeout(() => location.reload(), 600);
-      } else window.__toast({ type: 'error', message: 'Failed to record payment' });
     });
   </script>
 </Portal>

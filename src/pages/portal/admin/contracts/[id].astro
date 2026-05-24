@@ -232,7 +232,8 @@ const statusColors: Record<string, string> = {
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
     // Save contract
-    document.getElementById('save-contract')?.addEventListener('click', async () => {
+    document.getElementById('save-contract')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
       const v = (id) => document.getElementById(id)?.value;
       const body = {
         status: v('f-status'),
@@ -249,18 +250,19 @@ const statusColors: Record<string, string> = {
         description: document.getElementById('f-desc').value.trim() || null,
       };
 
-      const res = await fetch(`/portal/api/admin/contracts/${contractId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify(body),
+      await window.__withButtonLoading(btn, 'Saving…', async () => {
+        const res = await fetch(`/portal/api/admin/contracts/${contractId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify(body),
+        });
+        if (res.ok) {
+          window.__toast('Contract saved.', 'success');
+        } else {
+          const err = await res.json().catch(() => ({ error: 'Failed' }));
+          window.__toast(err.error || 'Failed to save contract.', 'error');
+        }
       });
-
-      if (res.ok) {
-        window.__toast({ type: 'success', message: 'Contract updated' });
-      } else {
-        const err = await res.json().catch(() => ({ error: 'Failed' }));
-        window.__toast({ type: 'error', message: err.error || 'Failed to save' });
-      }
     });
 
     // Delete contract

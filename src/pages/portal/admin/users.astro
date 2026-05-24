@@ -168,21 +168,21 @@ const clients = await getAllClients();
     // Revoke sessions
     document.querySelectorAll('[data-revoke-user]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const userId = (btn as HTMLElement).dataset.revokeUser!;
-        const res = await fetch('/portal/api/admin/revoke-sessions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify({ user_id: userId }),
+        const button = btn as HTMLButtonElement;
+        const userId = button.dataset.revokeUser!;
+        await (window as any).__withButtonLoading(button, 'Revoking…', async () => {
+          const res = await fetch('/portal/api/admin/revoke-sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ user_id: userId }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            (window as any).__toast(`Revoked ${data.sessions_revoked} session${data.sessions_revoked === 1 ? '' : 's'}.`, 'success');
+          } else {
+            (window as any).__toast('Failed to revoke sessions.', 'error');
+          }
         });
-        if (res.ok) {
-          const data = await res.json();
-          (btn as HTMLElement).textContent = `Revoked (${data.sessions_revoked})`;
-          (btn as HTMLElement).classList.add('text-amber-600');
-          setTimeout(() => {
-            (btn as HTMLElement).textContent = 'Revoke sessions';
-            (btn as HTMLElement).classList.remove('text-amber-600');
-          }, 2000);
-        }
       });
     });
 

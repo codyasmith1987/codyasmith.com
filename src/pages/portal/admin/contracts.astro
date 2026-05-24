@@ -230,6 +230,7 @@ const statusColors: Record<string, string> = {
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      const submitBtn = form.querySelector('button[type="submit"]') as HTMLButtonElement;
       const val = (id: string) => (document.getElementById(id) as HTMLInputElement)?.value;
       const body = {
         client_id: val('cc-client'),
@@ -247,20 +248,21 @@ const statusColors: Record<string, string> = {
         description: (document.getElementById('cc-desc') as HTMLTextAreaElement).value.trim() || undefined,
       };
 
-      const res = await fetch('/portal/api/admin/contracts/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify(body),
+      await (window as any).__withButtonLoading(submitBtn, 'Creating…', async () => {
+        const res = await fetch('/portal/api/admin/contracts/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify(body),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          (window as any).__toast('Contract created.', 'success');
+          setTimeout(() => window.location.href = `/portal/admin/contracts/${data.id}`, 600);
+        } else {
+          const err = await res.json().catch(() => ({ error: 'Failed' }));
+          (window as any).__toast(err.error || 'Failed to create contract.', 'error');
+        }
       });
-
-      if (res.ok) {
-        const data = await res.json();
-        (window as any).__toast({ type: 'success', message: 'Contract created' });
-        setTimeout(() => window.location.href = `/portal/admin/contracts/${data.id}`, 600);
-      } else {
-        const err = await res.json().catch(() => ({ error: 'Failed' }));
-        (window as any).__toast({ type: 'error', message: err.error || 'Failed to create contract' });
-      }
     });
 
     // Generate invoices button

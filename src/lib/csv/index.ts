@@ -37,7 +37,14 @@ const FORMAT_SOURCES: Record<string, { tables: string[]; source: string }> = {
   image_optimization: { tables: ['metrics'], source: 'image_optimization' },
   site_audit: { tables: ['site_issues'], source: 'site_audit' },
   accessibility: { tables: ['metrics', 'accessibility_urls'], source: 'accessibility' },
-  issue_urls: { tables: ['site_issue_urls'], source: 'issue_urls' },
+  // issue_urls deliberately OMITTED. Multiple per-issue SF CSVs
+  // (h1_missing.csv, h2_missing.csv, security_missing_hsts_header.csv,
+  // etc.) all share detected_format='issue_urls', so a format-level
+  // sweep would have the second per-issue upload wipe the first's
+  // rows in the same batch. The issue-urls parser handles its own
+  // dedup by issue_name (DELETE WHERE issue_name = ...), which is
+  // the right key — re-uploading h1_missing.csv replaces only the
+  // H1: Missing rows and leaves h2_missing.csv's data alone.
   // GA4 exports. Reports snapshot fans out to multiple tables; the
   // others map 1:1. Listed individually so the supersede sweep
   // clears the right rows on re-upload (a fresh Reports snapshot
@@ -58,9 +65,13 @@ const FORMAT_SOURCES: Record<string, { tables: string[]; source: string }> = {
   gsc_search_appearance: { tables: ['gsc_dimensions'], source: 'gsc_search_appearance' },
   gsc_chart: { tables: ['gsc_chart'], source: 'gsc_chart' },
   gsc_filters: { tables: ['gsc_filters'], source: 'gsc_filters' },
-  // Stored-but-not-yet-typed CSVs. Cleared on re-upload like every
-  // other format so the same filename doesn't accumulate raw copies.
-  unknown_stored: { tables: ['raw_csv_data'], source: 'unknown_stored' },
+  // unknown_stored deliberately OMITTED. Same reasoning as
+  // issue_urls: many distinct filenames (validation_all.csv,
+  // ai_all.csv, mobile_all.csv, etc.) all share
+  // detected_format='unknown_stored', so a format-level sweep would
+  // have the second unknown upload wipe the first's raw storage.
+  // raw-csv.ts handles its own per-filename dedup so uploading the
+  // same filename twice replaces, while sibling unknowns coexist.
 };
 
 async function clearPreviousData(clientId: string, month: string, format: string, currentUploadId: string): Promise<string | null> {

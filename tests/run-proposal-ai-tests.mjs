@@ -13,6 +13,7 @@ import { lintSnippet, listVoiceRules } from '../src/lib/proposal-ai/voice-lint.t
 import {
   researchClient,
   validateClientResearch,
+  extractBrandFromTitle,
 } from '../src/lib/proposal-ai/research/client-research.ts';
 import { deriveCacheKey } from '../src/lib/proposal-ai/cache.ts';
 
@@ -24,6 +25,34 @@ function test(name, pass, detail = '') {
 }
 
 async function run() {
+
+  // ---------------------------------------------------------------------
+  // Brand extraction from Serper titles
+  // ---------------------------------------------------------------------
+
+  // Typical MCM-style result: "MCM Engineering II | Switchgear Manufacturer"
+  test('brand: extracts brand from pipe-separated title',
+    extractBrandFromTitle('MCM Engineering II | Switchgear Manufacturer', 'mcmeng2.com') === 'Switchgear Manufacturer'
+    || extractBrandFromTitle('MCM Engineering II | Switchgear Manufacturer', 'mcmeng2.com') === 'MCM Engineering II');
+
+  // Dash-separated
+  test('brand: dash-separated, prefers longer candidate',
+    extractBrandFromTitle('Acme - Welcome', 'acme.com') === 'Acme');
+
+  // Welcome-to stripped
+  test('brand: strips "Welcome to" prefix',
+    extractBrandFromTitle('Welcome to Acme Corporation', 'acme.com') === 'Acme Corporation');
+
+  // Domain alone is rejected
+  test('brand: rejects bare domain',
+    extractBrandFromTitle('acme.com', 'acme.com') === null);
+
+  // Generic page names rejected
+  test('brand: rejects "Home"',
+    extractBrandFromTitle('Home', 'acme.com') === null);
+
+  // Empty / null input
+  test('brand: null on empty', extractBrandFromTitle('', 'acme.com') === null);
 
   // ---------------------------------------------------------------------
   // Voice lint

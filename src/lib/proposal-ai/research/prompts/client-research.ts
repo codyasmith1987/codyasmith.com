@@ -10,7 +10,7 @@
 // applied per-field with a click. The prompt tells Gemini to be
 // honest about uncertainty (confidence flags, "unknown" fallback).
 
-export const PROMPT_VERSION = 'client-research-v3';
+export const PROMPT_VERSION = 'client-research-v4';
 
 export const SYSTEM_PROMPT = `You are a research assistant for Cody A Smith LLC, a Web Management and Marketing Consulting practice. You look at scraped web content about a prospective client and return a structured assessment used to seed a proposal builder.
 
@@ -45,12 +45,24 @@ export interface UserPromptInput {
   sitemap_url_count: number | null;     // null if sitemap fetch failed
   sitemap_source: string;
   scraped_excerpts: Array<{ url: string; text: string }>;
+  // Brand candidates extracted from the homepage title and used to
+  // run brand-anchored Serper queries. May be empty when the site
+  // title was unparseable. Helps Gemini cross-check that the entity
+  // it identifies from the scraped content matches what the public
+  // records refer to.
+  brand_candidates?: string[];
 }
 
 export function buildUserPrompt(input: UserPromptInput): string {
   const lines: string[] = [];
   lines.push(`Primary domain (authoritative): ${input.domain}`);
   lines.push(`CLIENT_NAME (database label, may NOT be the real entity name): ${input.client_name}`);
+  if (input.brand_candidates && input.brand_candidates.length > 0) {
+    lines.push(`Brand candidates extracted from the homepage title: ${input.brand_candidates.join(', ')}`);
+    lines.push('The Serper queries used these brand candidates, so the public-record results below should be about the same entity. If they do not match what the scraped homepage content describes, return "unknown" for the conflicting field with low confidence.');
+  } else {
+    lines.push('No brand candidate could be extracted from the homepage title; rely entirely on the scraped content to identify the business name.');
+  }
   lines.push('');
   lines.push(`Identify the real business name from the scraped content of ${input.domain} first; use it for every inference. Do NOT use CLIENT_NAME as the entity.`);
   if (input.sitemap_url_count !== null) {

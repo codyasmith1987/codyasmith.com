@@ -40,6 +40,18 @@ export async function parse(
     // Swallow — we still want to store the raw text.
   }
 
+  // Per-filename dedup. Re-uploading the same file replaces its raw
+  // storage; uploading a different unknown file (e.g., validation_all
+  // and ai_all in the same SF crawl batch) preserves both. The
+  // central detected_format-level supersede sweep is skipped for
+  // unknown_stored (see FORMAT_SOURCES note) since it would
+  // cannibalize sibling unknowns within the same batch.
+  await turso.execute({
+    sql: `DELETE FROM raw_csv_data
+          WHERE client_id = ? AND month = ? AND filename = ?`,
+    args: [clientId, month, filename],
+  });
+
   await turso.execute({
     sql: `INSERT INTO raw_csv_data
             (id, client_id, csv_upload_id, month, filename, headers, row_count, raw_text)

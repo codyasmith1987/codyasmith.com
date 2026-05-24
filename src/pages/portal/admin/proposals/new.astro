@@ -1249,11 +1249,12 @@ const todayISO = new Date().toISOString().slice(0, 10);
       researchBtn.disabled = false;
     });
 
-    // Track which research findings the admin has applied. Set is keyed
-    // by block label. Persists across re-renders of the research panel
-    // so the visual "applied" state survives strategy-panel updates and
-    // research-result refreshes.
-    const appliedFindings = new Set();
+    // Track which research findings the admin has applied. Map keyed
+    // by block label; value is the pre-apply snapshot the unapply
+    // action restores. Snapshot per block depends on what the apply
+    // touched (a product scope flag, a narrative variable, a primary
+    // domain). Per audit finding 5.
+    const appliedFindings = new Map();
 
     // Map a numeric/string confidence value to clearer admin-facing text.
     // The AI uses high / medium / low which is opaque without context.
@@ -1278,6 +1279,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           apply: () => {
             if (r.estimated_revenue_band === 'unknown') return false;
             const beforeInScope = state.products.includes('marketing-consulting');
+            const priorRevenueBand = state.product_vars['marketing-consulting']?.revenue_band ?? null;
             pitchProduct('marketing-consulting', { revenue_band: r.estimated_revenue_band });
             showResearchApplyMsg(
               beforeInScope
@@ -1286,7 +1288,23 @@ const todayISO = new Date().toISOString().slice(0, 10);
               'ok'
             );
             renderEngagementStrategy(r);
-            return true;
+            return { addedToScope: !beforeInScope, priorRevenueBand };
+          },
+          unapply: (snapshot) => {
+            // Restore the prior revenue_band value. If Apply added MC
+            // to scope (was not in scope before), remove MC entirely
+            // so the engagement returns to the pre-Apply state.
+            if (snapshot && snapshot.addedToScope) {
+              unpitchProduct('marketing-consulting');
+              showResearchApplyMsg('Marketing Consulting removed from scope (revenue band unapplied).', 'ok');
+            } else {
+              if (state.product_vars['marketing-consulting']) {
+                state.product_vars['marketing-consulting'].revenue_band = snapshot ? snapshot.priorRevenueBand : null;
+                renderVars();
+              }
+              showResearchApplyMsg('Revenue band unapplied.', 'ok');
+            }
+            renderEngagementStrategy(r);
           },
           disabled: r.estimated_revenue_band === 'unknown',
         },
@@ -1299,13 +1317,24 @@ const todayISO = new Date().toISOString().slice(0, 10);
           apply: () => {
             const sel = document.getElementById('narr_industry');
             if (sel && r.inferred_industry !== 'unknown') {
+              const priorIndustry = state.narrative_variables.industry || '';
               sel.value = r.inferred_industry;
               sel.dispatchEvent(new Event('change', { bubbles: true }));
               state.narrative_variables.industry = r.inferred_industry;
               showResearchApplyMsg(`Industry set to ${r.inferred_industry}.`, 'ok');
-              return true;
+              return { priorIndustry };
             }
             return false;
+          },
+          unapply: (snapshot) => {
+            const sel = document.getElementById('narr_industry');
+            const prior = (snapshot && snapshot.priorIndustry) || '';
+            if (sel) {
+              sel.value = prior;
+              sel.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            state.narrative_variables.industry = prior || undefined;
+            showResearchApplyMsg('Industry unapplied.', 'ok');
           },
           disabled: r.inferred_industry === 'unknown',
         },
@@ -1318,13 +1347,24 @@ const todayISO = new Date().toISOString().slice(0, 10);
           apply: () => {
             const sel = document.getElementById('narr_urgency');
             if (sel && r.inferred_urgency !== 'unknown') {
+              const priorUrgency = state.narrative_variables.urgency || '';
               sel.value = r.inferred_urgency;
               sel.dispatchEvent(new Event('change', { bubbles: true }));
               state.narrative_variables.urgency = r.inferred_urgency;
               showResearchApplyMsg(`Urgency set to ${r.inferred_urgency}.`, 'ok');
-              return true;
+              return { priorUrgency };
             }
             return false;
+          },
+          unapply: (snapshot) => {
+            const sel = document.getElementById('narr_urgency');
+            const prior = (snapshot && snapshot.priorUrgency) || '';
+            if (sel) {
+              sel.value = prior;
+              sel.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            state.narrative_variables.urgency = prior || undefined;
+            showResearchApplyMsg('Urgency unapplied.', 'ok');
           },
           disabled: r.inferred_urgency === 'unknown',
         },
@@ -1337,13 +1377,26 @@ const todayISO = new Date().toISOString().slice(0, 10);
           apply: () => {
             const sel = document.getElementById('narr_focus');
             if (sel && Array.isArray(r.inferred_focus) && r.inferred_focus.length > 0) {
+              const priorFocus = Array.isArray(state.narrative_variables.focus)
+                ? [...state.narrative_variables.focus]
+                : [];
               Array.from(sel.options).forEach(o => { o.selected = r.inferred_focus.includes(o.value); });
               sel.dispatchEvent(new Event('change', { bubbles: true }));
               state.narrative_variables.focus = r.inferred_focus.length ? r.inferred_focus : undefined;
               showResearchApplyMsg(`Focus tags set: ${r.inferred_focus.join(', ')}.`, 'ok');
-              return true;
+              return { priorFocus };
             }
             return false;
+          },
+          unapply: (snapshot) => {
+            const sel = document.getElementById('narr_focus');
+            const prior = (snapshot && Array.isArray(snapshot.priorFocus)) ? snapshot.priorFocus : [];
+            if (sel) {
+              Array.from(sel.options).forEach(o => { o.selected = prior.includes(o.value); });
+              sel.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            state.narrative_variables.focus = prior.length ? prior : undefined;
+            showResearchApplyMsg('Focus tags unapplied.', 'ok');
           },
           disabled: !r.inferred_focus || r.inferred_focus.length === 0,
         },
@@ -1355,7 +1408,10 @@ const todayISO = new Date().toISOString().slice(0, 10);
           destination: 'Informational only (no wizard mapping yet)',
           apply: () => {
             showResearchApplyMsg(`CMS noted as ${r.detected_cms}. Informational, no wizard variable to update.`, 'ok');
-            return true;
+            return {}; // empty snapshot — nothing to unapply other than the badge
+          },
+          unapply: () => {
+            showResearchApplyMsg('CMS marker cleared.', 'ok');
           },
           disabled: !r.detected_cms || r.detected_cms === 'unknown',
         },
@@ -1369,6 +1425,9 @@ const todayISO = new Date().toISOString().slice(0, 10);
           apply: () => {
             if (r.estimated_page_count == null) return false;
             const beforeInScope = state.products.includes('web-management');
+            const priorVars = beforeInScope
+              ? { ...(state.product_vars['web-management'] || {}) }
+              : null;
             pitchProduct('web-management', seedsForProductFromResearch('web-management', r));
             showResearchApplyMsg(
               beforeInScope
@@ -1377,7 +1436,18 @@ const todayISO = new Date().toISOString().slice(0, 10);
               'ok'
             );
             renderEngagementStrategy(r);
-            return true;
+            return { addedToScope: !beforeInScope, priorVars };
+          },
+          unapply: (snapshot) => {
+            if (snapshot && snapshot.addedToScope) {
+              unpitchProduct('web-management');
+              showResearchApplyMsg('Web Management removed from scope (page count unapplied).', 'ok');
+            } else if (state.product_vars['web-management'] && snapshot && snapshot.priorVars) {
+              state.product_vars['web-management'] = { ...snapshot.priorVars };
+              renderVars();
+              showResearchApplyMsg('Page count unapplied.', 'ok');
+            }
+            renderEngagementStrategy(r);
           },
           disabled: r.estimated_page_count == null,
         },
@@ -1395,21 +1465,37 @@ const todayISO = new Date().toISOString().slice(0, 10);
             }
             if (primary.domain === state.client_domain) {
               showResearchApplyMsg(`Primary domain already set to ${primary.domain}.`, 'ok');
-              return true;
+              return { priorDomain: state.client_domain, changed: false };
             }
             if (confirm(`Set client domain to ${primary.domain}?`)) {
+              const priorDomain = state.client_domain || '';
               researchDomainInput.value = primary.domain;
               researchDomainSave.click();
               showResearchApplyMsg(`Primary domain set to ${primary.domain}.`, 'ok');
-              return true;
+              return { priorDomain, changed: true };
             }
             return false;
+          },
+          unapply: (snapshot) => {
+            // Domain change is persisted server-side, so an undo from
+            // this card is informational only — admin needs to use
+            // the research-domain input to restore. Surface that
+            // explicitly so it doesn't read as a silent failure.
+            if (snapshot && snapshot.changed && snapshot.priorDomain) {
+              showResearchApplyMsg(
+                `Domain was changed to ${state.client_domain} server-side. To revert to ${snapshot.priorDomain}, edit the chip above.`,
+                'ok'
+              );
+            } else {
+              showResearchApplyMsg('Domains-found marker cleared.', 'ok');
+            }
           },
           disabled: !r.domains_found || r.domains_found.length === 0,
         },
       ];
       for (const b of blocks) {
         const isApplied = appliedFindings.has(b.label);
+        const snapshot = appliedFindings.get(b.label);
         const row = document.createElement('div');
         // Applied row gets a left amber border accent + a subtle amber-tinted
         // background to make the applied state unmistakable on first glance.
@@ -1448,29 +1534,41 @@ const todayISO = new Date().toISOString().slice(0, 10);
           ${b.evidence ? `<p class="text-[11px] text-neutral-400 mt-1 leading-relaxed">${escapeHtml(b.evidence)}</p>` : ''}
           ${b.destination ? `<p class="text-[11px] text-neutral-500 mt-2 leading-relaxed">↳ ${escapeHtml(b.destination)}</p>` : ''}
         `;
+        // Action button. Three states:
+        //   disabled: no value to apply (e.g., "unknown" / empty)
+        //   not applied: primary amber Apply button
+        //   applied: ghost Unapply button (border + amber text) that
+        //     reverts via b.unapply(snapshot)
         const btn = document.createElement('button');
         btn.type = 'button';
-        // Button state: disabled, applied (muted with checkmark), or
-        // ready-to-apply (primary amber action). Re-clicking an applied
-        // button re-applies (idempotent for re-runs).
         if (b.disabled) {
           btn.className = 'px-3 py-2 text-xs rounded-md bg-neutral-900 border border-white/5 text-neutral-600 cursor-not-allowed';
           btn.textContent = 'Apply';
           btn.disabled = true;
         } else if (isApplied) {
-          btn.className = 'px-3 py-2 text-xs rounded-md bg-amber-500/15 border border-amber-500/40 text-amber-600 hover:bg-amber-500/25 transition-colors';
-          btn.innerHTML = '✓ Applied';
+          btn.className = 'px-3 py-2 text-xs rounded-md bg-amber-500/10 border border-amber-500/40 text-amber-700 hover:bg-amber-500/20 transition-colors';
+          btn.innerHTML = 'Unapply';
+          btn.title = 'Revert this finding to its pre-apply state';
+          btn.addEventListener('click', () => {
+            if (typeof b.unapply === 'function') {
+              b.unapply(snapshot);
+            }
+            appliedFindings.delete(b.label);
+            renderResearchResults(r);
+          });
         } else {
           btn.className = 'px-3 py-2 text-xs rounded-md bg-amber-500 text-neutral-950 font-semibold hover:bg-amber-400 transition-colors';
           btn.textContent = 'Apply';
+          btn.addEventListener('click', () => {
+            // apply() returns false on no-op, true/object snapshot on success.
+            const result = b.apply();
+            if (result === false) return;
+            // Object result IS the snapshot; bare true means "no snapshot needed."
+            const snap = typeof result === 'object' && result !== null ? result : {};
+            appliedFindings.set(b.label, snap);
+            renderResearchResults(r);
+          });
         }
-        btn.addEventListener('click', () => {
-          const ok = b.apply();
-          if (ok !== false) {
-            appliedFindings.add(b.label);
-            renderResearchResults(r); // re-render so the row shows applied state
-          }
-        });
         row.appendChild(meta);
         row.appendChild(btn);
         researchResults.appendChild(row);
@@ -1531,8 +1629,9 @@ const todayISO = new Date().toISOString().slice(0, 10);
       const clv = r && r.clv_horizon;
       const intensity = r && r.cody_time_intensity;
       const angles = (r && r.sales_angles) || [];
+      const gaps = (r && r.internal_gaps) || [];
       const risks = (r && r.risk_signals) || [];
-      const haveAny = mix || clv || intensity || angles.length || risks.length;
+      const haveAny = mix || clv || intensity || angles.length || gaps.length || risks.length;
       if (!haveAny) {
         researchStrategy.classList.add('hidden');
         return;
@@ -1684,8 +1783,12 @@ const todayISO = new Date().toISOString().slice(0, 10);
       }
 
       // -------------------------------------------------------------
-      // Sales angles. List of observations, each with evidence. Clouds:
-      // simple list, no decoration.
+      // How they describe themselves (the prospect's customer-facing
+      // pitch). Per finding 2 in the audit: this is NOT my pitch to
+      // them; it is THEIR pitch to their own customers. The proposal
+      // opener echoes these back so they feel understood. They are
+      // also starting points for which of my products amplifies each
+      // stated value.
       // -------------------------------------------------------------
       if (angles.length) {
         const card = document.createElement('div');
@@ -1696,7 +1799,50 @@ const todayISO = new Date().toISOString().slice(0, 10);
             ${a.supporting_evidence ? `<p class="text-[11px] text-neutral-500 mt-1 leading-relaxed">${escapeHtml(a.supporting_evidence)}</p>` : ''}
           </div>`).join('');
         card.innerHTML = `
-          <p class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase mb-3">Sales angles to lead with</p>
+          <p class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase mb-1">How they describe themselves to their customers</p>
+          <p class="text-[11px] text-neutral-400 mb-3 leading-relaxed">Their value props, in their own language. Echoed in the proposal opener. Starting points for connecting my products to their value chain.</p>
+          ${items}
+        `;
+        researchStrategyBody.appendChild(card);
+      }
+
+      // -------------------------------------------------------------
+      // Internal gaps — what is broken or under-served. Distinct from
+      // the angles above (which is their pitch). Each gap maps to one
+      // of my products that could fix it. Per audit finding 2C.
+      // -------------------------------------------------------------
+      if (gaps.length) {
+        const card = document.createElement('div');
+        card.className = 'p-4 bg-neutral-900/40 border border-white/5 rounded-md';
+        const sevPill = (sev) => {
+          if (sev === 'high') return 'bg-red-500/10 border border-red-500/40 text-red-700';
+          if (sev === 'medium') return 'bg-amber-500/10 border border-amber-500/40 text-amber-700';
+          return 'bg-neutral-900 border border-white/10 text-neutral-500';
+        };
+        const PRODUCT_IMPL_LABELS = {
+          web_management: 'WM',
+          marketing_consulting: 'MC',
+          build: 'Build',
+          training: 'Training',
+          none: 'no product',
+        };
+        const items = gaps.map(g => {
+          const sev = `<span class="text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded ${sevPill(g.severity)} shrink-0">${escapeHtml(g.severity)}</span>`;
+          const impl = g.product_implication && PRODUCT_IMPL_LABELS[g.product_implication]
+            ? `<span class="text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-700 shrink-0">${escapeHtml(PRODUCT_IMPL_LABELS[g.product_implication])} fixes this</span>`
+            : '';
+          return `
+            <div class="py-3 border-b border-white/5 last:border-0 last:pb-0 first:pt-0">
+              <div class="flex items-baseline justify-between gap-3 flex-wrap">
+                <p class="text-sm text-neutral-100 leading-relaxed flex-1 min-w-0">${escapeHtml(g.gap)}</p>
+                <div class="flex items-baseline gap-2 shrink-0">${sev}${impl}</div>
+              </div>
+              ${g.evidence ? `<p class="text-[11px] text-neutral-500 mt-1 leading-relaxed">${escapeHtml(g.evidence)}</p>` : ''}
+            </div>`;
+        }).join('');
+        card.innerHTML = `
+          <p class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase mb-1">What is broken or under-served</p>
+          <p class="text-[11px] text-neutral-400 mb-3 leading-relaxed">Concrete things I can fix. What they have NOT said out loud but the data reveals. Each maps to a product.</p>
           ${items}
         `;
         researchStrategyBody.appendChild(card);

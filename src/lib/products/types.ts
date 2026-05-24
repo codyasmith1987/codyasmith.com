@@ -233,7 +233,18 @@ export interface ProductContext {
   // = 1). WM's buildScheduleAContribution renders real domain rows
   // from this list when present. Empty / undefined falls back to
   // placeholder rows derived from variables.site_count.
-  managedSites?: Array<{ domain: string; label?: string | null; is_primary?: boolean }>;
+  //
+  // page_count routes each site to its OWN ecosystem in the multi-site
+  // pricing pipeline (2026-05-24 locked formula per
+  // docs/audits/proposal-chain-audit-2026-05-24.md finding 1). Null
+  // means "no data yet" -- the pricing pipeline falls back to the
+  // primary site's ecosystem for that site.
+  managedSites?: Array<{
+    domain: string;
+    label?: string | null;
+    is_primary?: boolean;
+    page_count?: number | null;
+  }>;
   // Engagement-strategy synthesis from the research call, when present.
   // Optional so legacy composer calls without research still work.
   engagementStrategy?: EngagementStrategy | null;

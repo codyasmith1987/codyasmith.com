@@ -17,6 +17,9 @@ import {
   routeWebManagementEcosystem,
   computeMultiSiteMonthly,
   computeMultiSiteOnboarding,
+  computeMultiSiteSum,
+  buildPerSiteBases,
+  MULTI_SITE_DISCOUNT,
   WM_ECOSYSTEMS,
   webManagementProduct,
 } from '../src/lib/products/web-management.ts';
@@ -51,29 +54,82 @@ async function run() {
   test('WM: null -> null', routeWebManagementEcosystem(null) === null);
 
   // -------------------------------------------------------------------
-  // WM multi-site monthly: base + (n-1) * base * 0.80
+  // WM multi-site formula (2026-05-24 locked):
+  // Each site routes to its own ecosystem by its own page count. Tier
+  // is set once for the engagement. Primary contributes full base;
+  // each additional site contributes its OWN ecosystem base * 0.80.
+  // Linear, no compounding. Same discount applies to monthly AND
+  // onboarding.
   // -------------------------------------------------------------------
-  test('WM monthly: 1 site at base 497 = 497',
+  test('WM MULTI_SITE_DISCOUNT = 0.80', MULTI_SITE_DISCOUNT === 0.80);
+
+  // computeMultiSiteSum: per-site array of bases, primary first.
+  test('WM sum: empty = 0', computeMultiSiteSum([]) === 0);
+  test('WM sum: single site [797] = 797', computeMultiSiteSum([797]) === 797);
+  test('WM sum: 2 sites [797, 797] = 797 + 797*0.8 = 1434.6',
+    computeMultiSiteSum([797, 797]) === 1434.6,
+    `got ${computeMultiSiteSum([797, 797])}`);
+  // Mixed ecosystem: primary Eco B Better $797, site2 Eco A Better
+  // $497, site3 Eco C Better $1497. Per the locked formula:
+  // 797 + 497*0.8 + 1497*0.8 = 797 + 397.6 + 1197.6 = 2392.2
+  test('WM sum: mixed-eco [797, 497, 1497] = 2392.2',
+    computeMultiSiteSum([797, 497, 1497]) === 2392.2,
+    `got ${computeMultiSiteSum([797, 497, 1497])}`);
+
+  // Legacy single-ecosystem helpers (still used for fallback when no
+  // per-site page counts are available). Should yield the same result
+  // as the sum form with all sites at the same base.
+  test('WM monthly (legacy 1-eco): 1 site at base 497 = 497',
     computeMultiSiteMonthly(497, 1) === 497);
-  test('WM monthly: 2 sites at base 497 = 497 + 0.8*497 = 894.6',
+  test('WM monthly (legacy 1-eco): 2 sites at base 497 = 894.6',
     computeMultiSiteMonthly(497, 2) === 894.6,
     `got ${computeMultiSiteMonthly(497, 2)}`);
-  test('WM monthly: 3 sites at base 497 = 497 + 2*0.8*497 = 1292.2',
+  test('WM monthly (legacy 1-eco): 3 sites at base 497 = 1292.2',
     computeMultiSiteMonthly(497, 3) === 1292.2,
     `got ${computeMultiSiteMonthly(497, 3)}`);
 
-  // -------------------------------------------------------------------
-  // WM multi-site ONBOARDING gotcha: per-site at full ecosystem base
-  // (NOT discounted, per 05 Section 4)
-  // -------------------------------------------------------------------
-  test('WM onboarding gotcha: 1 site at base 1200 = 1200',
+  // Onboarding now uses the SAME discount as monthly (per Cody's
+  // 2026-05-24 decision). Previously full base per site; now 0.80
+  // per additional site, primary at full base.
+  test('WM onboarding (locked formula): 1 site at base 1200 = 1200',
     computeMultiSiteOnboarding(1200, 1) === 1200);
-  test('WM onboarding gotcha: 2 sites at base 1200 = 2400 (NOT 1200 + 300)',
-    computeMultiSiteOnboarding(1200, 2) === 2400,
+  test('WM onboarding (locked formula): 2 sites at base 1200 = 1200 + 0.8*1200 = 2160',
+    computeMultiSiteOnboarding(1200, 2) === 2160,
     `got ${computeMultiSiteOnboarding(1200, 2)}`);
-  test('WM onboarding gotcha: 3 sites at base 1200 = 3600',
-    computeMultiSiteOnboarding(1200, 3) === 3600,
+  test('WM onboarding (locked formula): 3 sites at base 1200 = 1200 + 2*0.8*1200 = 3120',
+    computeMultiSiteOnboarding(1200, 3) === 3120,
     `got ${computeMultiSiteOnboarding(1200, 3)}`);
+
+  // buildPerSiteBases: given managedSites + tier + primary ecosystem,
+  // returns per-site monthly and onboarding bases. Sites without
+  // page_count fall back to the primary ecosystem.
+  const perSiteMixed = buildPerSiteBases({
+    managedSites: [
+      { is_primary: true, page_count: 100 },   // Eco B
+      { is_primary: false, page_count: 15 },   // Eco A
+      { is_primary: false, page_count: 200 },  // Eco C
+    ],
+    tierId: 'better',
+    primaryEcosystemId: 'B',
+  });
+  test('WM buildPerSiteBases mixed-eco monthly: [797, 497, 1497]',
+    JSON.stringify(perSiteMixed.monthlyBases) === JSON.stringify([797, 497, 1497]),
+    `got ${JSON.stringify(perSiteMixed.monthlyBases)}`);
+  test('WM buildPerSiteBases mixed-eco onboarding: [1200, 800, 2000]',
+    JSON.stringify(perSiteMixed.onboardingBases) === JSON.stringify([1200, 800, 2000]),
+    `got ${JSON.stringify(perSiteMixed.onboardingBases)}`);
+
+  // Null page_count falls back to primary's ecosystem.
+  const perSiteFallback = buildPerSiteBases({
+    managedSites: [
+      { is_primary: true, page_count: 100 },   // Eco B
+      { is_primary: false, page_count: null }, // unknown -> falls back to B
+    ],
+    tierId: 'better',
+    primaryEcosystemId: 'B',
+  });
+  test('WM buildPerSiteBases null-fallback uses primary eco for monthly',
+    JSON.stringify(perSiteFallback.monthlyBases) === JSON.stringify([797, 797]));
 
   // -------------------------------------------------------------------
   // WM product computePricing end-to-end at Eco B Better, 1 + 3 sites
@@ -104,13 +160,34 @@ async function run() {
     otherProducts: [],
   });
   // 797 + 2*0.8*797 = 797 + 1275.2 = 2072.2
-  test('WM 3 sites at Eco B Better: monthly = 2072.2',
+  test('WM 3 sites at Eco B Better (single-eco fallback): monthly = 2072.2',
     wmPricing3Sites.monthly === 2072.2,
     `got ${wmPricing3Sites.monthly}`);
-  // 1200 * 3 = 3600 (per-site full base, NOT discounted)
-  test('WM 3 sites at Eco B Better: onboarding = 3600 (per-site full base)',
-    wmPricing3Sites.oneTime === 3600,
+  // 1200 + 2*0.8*1200 = 1200 + 1920 = 3120 (locked formula, same
+  // discount as monthly; previously 3600 with full-base-per-site)
+  test('WM 3 sites at Eco B Better (single-eco fallback): onboarding = 3120',
+    wmPricing3Sites.oneTime === 3120,
     `got ${wmPricing3Sites.oneTime}`);
+
+  // Per-site ecosystem path: managedSites with page_count values
+  // routes each site to its own ecosystem.
+  const wmPricingMixed = webManagementProduct.computePricing({
+    ecosystemId: 'B', // primary
+    tierId: 'better',
+    variables: { page_count: 100, site_count: 3 },
+    otherProducts: [],
+    managedSites: [
+      { domain: 'primary.com', is_primary: true, page_count: 100 },   // Eco B
+      { domain: 'small.com', is_primary: false, page_count: 15 },     // Eco A
+      { domain: 'big.com', is_primary: false, page_count: 200 },      // Eco C
+    ],
+  });
+  test('WM 3 sites mixed-eco (Eco B/A/C) Better: monthly = 2392.2',
+    wmPricingMixed.monthly === 2392.2,
+    `got ${wmPricingMixed.monthly}`);
+  test('WM 3 sites mixed-eco (Eco B/A/C) Better: onboarding = 3440',
+    wmPricingMixed.oneTime === 3440,
+    `got ${wmPricingMixed.oneTime}`);
 
   // -------------------------------------------------------------------
   // MC ecosystem routing thresholds

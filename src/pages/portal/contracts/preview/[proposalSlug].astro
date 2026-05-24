@@ -77,6 +77,7 @@ const managedSites = (await listManagedSites(proposalRow.client_id)).map(s => ({
   domain: s.domain,
   label: s.label,
   is_primary: s.is_primary,
+  page_count: s.page_count,
 }));
 
 // Build Schedule A from whatever's currently selected.

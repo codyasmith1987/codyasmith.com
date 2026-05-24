@@ -22,7 +22,14 @@ export interface ScheduleAContext {
   // Managed sites for the client, read from client_sites where
   // is_managed = 1. Used by the WM product's buildScheduleAContribution
   // to render real domain rows on Schedule A instead of placeholders.
-  managedSites?: Array<{ domain: string; label?: string | null; is_primary?: boolean }>;
+  // Per-site page_count routes each site's WM ecosystem in the
+  // multi-site pricing pipeline (2026-05-24 locked formula).
+  managedSites?: Array<{
+    domain: string;
+    label?: string | null;
+    is_primary?: boolean;
+    page_count?: number | null;
+  }>;
 }
 
 export interface PricingLike {

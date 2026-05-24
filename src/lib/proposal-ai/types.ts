@@ -88,6 +88,66 @@ export type CmsGuess =
   | 'custom'
   | 'unknown';
 
+// =========================================================================
+// Engagement-strategy synthesis fields
+// =========================================================================
+//
+// The research call is a sales tool. It gathers raw signals from public
+// info and scrape data, then synthesizes them into an engagement-strategy
+// briefing for Cody: which products to pitch, which tier per product,
+// likely CLV horizon, expected hands-on time, sales angles to lead with,
+// risks to watch.
+//
+// All of these are ADMIN-FACING. The "no dangling tier references" rule
+// (feedback_no_dangling_tier_references) keeps tier names out of client-
+// facing copy while ecosystem routing is unbuilt. The wizard renders the
+// strategy as an admin briefing; the client never sees these fields.
+
+export type CodyProductId =
+  | 'web_management'
+  | 'marketing_consulting'
+  | 'build'
+  | 'training';
+
+export type TierLevel = 'good' | 'better' | 'best';
+
+export interface ProductMixRecommendation {
+  recommended: boolean;
+  rationale: string;
+  confidence: ConfidenceLevel;
+}
+
+export interface TierRecommendation {
+  tier: TierLevel;
+  rationale: string;
+}
+
+export type ClvHorizon = 'long-term-stable' | 'medium-term' | 'churn-risk' | 'unknown';
+
+export interface ClvHorizonSignal {
+  signal: ClvHorizon;
+  rationale: string;
+}
+
+export type TimeIntensityLevel = 'low' | 'medium' | 'high';
+
+export interface CodyTimeIntensitySignal {
+  level: TimeIntensityLevel;
+  rationale: string;
+}
+
+export interface SalesAngle {
+  angle: string;                          // one short phrase to lead with
+  supporting_evidence: string;             // quote or paraphrase from scraped content
+}
+
+export type RiskSeverity = 'low' | 'medium' | 'high';
+
+export interface RiskSignal {
+  risk: string;
+  severity: RiskSeverity;
+}
+
 export interface ClientResearchResult {
   estimated_revenue_band: RevenueBand;
   revenue_evidence: string;
@@ -111,6 +171,32 @@ export interface ClientResearchResult {
   domains_found: DomainGuess[];
   estimated_page_count: number | null;
   page_count_source: string;
+
+  // -----------------------------------------------------------------
+  // Engagement-strategy synthesis. Admin-facing only.
+  // -----------------------------------------------------------------
+
+  // Which products to pitch. Each product gets a yes/no with rationale
+  // and confidence so the admin can sanity-check the call.
+  recommended_product_mix: Record<CodyProductId, ProductMixRecommendation>;
+
+  // Tier per product the mix recommended. Products not in the mix
+  // are absent from this map.
+  recommended_tier_per_product: Partial<Record<CodyProductId, TierRecommendation>>;
+
+  // Likely engagement-length signal. Drives whether to invest in
+  // structural improvements (long-term) or quick wins (churn-risk).
+  clv_horizon: ClvHorizonSignal;
+
+  // Expected ongoing hands-on time per cycle. Low = mostly advisory.
+  // High = heavy execution, multi-site, low decision velocity.
+  cody_time_intensity: CodyTimeIntensitySignal;
+
+  // Three to five sales angles, each backed by scraped-content evidence.
+  sales_angles: SalesAngle[];
+
+  // Sponsor-style risks, organizational gaps, decision-velocity warnings.
+  risk_signals: RiskSignal[];
 
   notes: string;
 }

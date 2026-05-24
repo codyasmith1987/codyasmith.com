@@ -203,6 +203,18 @@ const todayISO = new Date().toISOString().slice(0, 10);
           <p id="research-status" class="hidden mt-3 text-[11px] text-neutral-400"></p>
 
           <div id="research-results" class="hidden mt-4 space-y-3"></div>
+
+          <!--
+            Engagement-strategy panel. Admin-facing only; never composed
+            into client-facing narrative copy (no-dangling-tier-references
+            rule keeps tier names off the client side until ecosystem
+            routing is fully built). This is a briefing for me.
+          -->
+          <div id="research-strategy" class="hidden mt-6 pt-6 border-t border-white/5">
+            <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-1">Engagement strategy</p>
+            <p class="text-[11px] text-neutral-500 mb-4">Synthesis briefing. Admin-only; not for client copy.</p>
+            <div id="research-strategy-body" class="space-y-4"></div>
+          </div>
         </div>
       </section>
 
@@ -905,6 +917,8 @@ const todayISO = new Date().toISOString().slice(0, 10);
     const researchDomainMsg = document.getElementById('research-domain-msg');
     const researchStatus = document.getElementById('research-status');
     const researchResults = document.getElementById('research-results');
+    const researchStrategy = document.getElementById('research-strategy');
+    const researchStrategyBody = document.getElementById('research-strategy-body');
     const derivedDomainsSlot = document.getElementById('derived-domains-slot');
     const derivedDomainsList = document.getElementById('derived-domains-list');
 
@@ -1059,6 +1073,8 @@ const todayISO = new Date().toISOString().slice(0, 10);
       researchPanel.classList.remove('hidden');
       researchResults.classList.add('hidden');
       researchResults.innerHTML = '';
+      researchStrategy.classList.add('hidden');
+      researchStrategyBody.innerHTML = '';
       researchStatus.classList.add('hidden');
       renderDerivedDomains();
       if (state.client_domain) {
@@ -1305,6 +1321,127 @@ const todayISO = new Date().toISOString().slice(0, 10);
         notes.className = 'text-[11px] text-amber-400/80 mt-2';
         notes.textContent = 'Notes: ' + r.notes;
         researchResults.appendChild(notes);
+      }
+      renderEngagementStrategy(r);
+    }
+
+    // -----------------------------------------------------------------
+    // Engagement-strategy synthesis panel (admin-only).
+    //
+    // The six synthesis fields the research call now returns:
+    //   recommended_product_mix       -- which of WM/MC/Build/Training
+    //   recommended_tier_per_product  -- good/better/best per recommended
+    //   clv_horizon                   -- long-term-stable | medium-term | churn-risk | unknown
+    //   cody_time_intensity           -- low | medium | high
+    //   sales_angles[]                -- short phrases each with evidence
+    //   risk_signals[]                -- sponsor/decision/velocity warnings
+    //
+    // No Apply buttons here. Each is a briefing card with rationale.
+    // -----------------------------------------------------------------
+    const PRODUCT_LABELS = {
+      web_management: 'Web Management',
+      marketing_consulting: 'Marketing Consulting',
+      build: 'Build',
+      training: 'Training',
+    };
+    function renderEngagementStrategy(r) {
+      researchStrategyBody.innerHTML = '';
+      const mix = r && r.recommended_product_mix;
+      const tiers = (r && r.recommended_tier_per_product) || {};
+      const clv = r && r.clv_horizon;
+      const intensity = r && r.cody_time_intensity;
+      const angles = (r && r.sales_angles) || [];
+      const risks = (r && r.risk_signals) || [];
+      const haveAny = mix || clv || intensity || angles.length || risks.length;
+      if (!haveAny) {
+        researchStrategy.classList.add('hidden');
+        return;
+      }
+      researchStrategy.classList.remove('hidden');
+
+      // Product-mix grid.
+      if (mix) {
+        const card = document.createElement('div');
+        card.className = 'p-3 bg-neutral-900/40 border border-white/5 rounded-md';
+        const ids = ['web_management', 'marketing_consulting', 'build', 'training'];
+        const rows = ids.map(id => {
+          const slot = mix[id];
+          if (!slot) return '';
+          const recColor = slot.recommended ? 'text-emerald-400' : 'text-neutral-500';
+          const recLabel = slot.recommended ? 'pitch' : 'skip';
+          const tier = tiers[id];
+          const tierLine = tier ? `<p class="text-[11px] text-amber-300/80 mt-1">Tier: ${escapeHtml(tier.tier)}${tier.rationale ? '. ' + escapeHtml(tier.rationale) : ''}</p>` : '';
+          return `
+            <div class="py-2 border-b border-white/5 last:border-0">
+              <div class="flex items-baseline justify-between gap-3">
+                <p class="text-sm text-neutral-200">${escapeHtml(PRODUCT_LABELS[id] || id)}</p>
+                <p class="text-[11px] font-mono ${recColor}">${recLabel} <span class="text-neutral-600">${escapeHtml(slot.confidence || '')}</span></p>
+              </div>
+              ${slot.rationale ? `<p class="text-[11px] text-neutral-500 mt-1">${escapeHtml(slot.rationale)}</p>` : ''}
+              ${tierLine}
+            </div>`;
+        }).join('');
+        card.innerHTML = `
+          <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Recommended product mix</p>
+          ${rows}
+        `;
+        researchStrategyBody.appendChild(card);
+      }
+
+      // CLV + time-intensity row.
+      if (clv || intensity) {
+        const card = document.createElement('div');
+        card.className = 'p-3 bg-neutral-900/40 border border-white/5 rounded-md grid grid-cols-1 sm:grid-cols-2 gap-3';
+        const clvBlock = clv ? `
+          <div>
+            <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase">CLV horizon</p>
+            <p class="text-sm text-neutral-200 mt-1">${escapeHtml(clv.signal)}</p>
+            ${clv.rationale ? `<p class="text-[11px] text-neutral-500 mt-1">${escapeHtml(clv.rationale)}</p>` : ''}
+          </div>` : '<div></div>';
+        const intBlock = intensity ? `
+          <div>
+            <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase">Cody time intensity</p>
+            <p class="text-sm text-neutral-200 mt-1">${escapeHtml(intensity.level)}</p>
+            ${intensity.rationale ? `<p class="text-[11px] text-neutral-500 mt-1">${escapeHtml(intensity.rationale)}</p>` : ''}
+          </div>` : '<div></div>';
+        card.innerHTML = clvBlock + intBlock;
+        researchStrategyBody.appendChild(card);
+      }
+
+      // Sales angles.
+      if (angles.length) {
+        const card = document.createElement('div');
+        card.className = 'p-3 bg-neutral-900/40 border border-white/5 rounded-md';
+        const items = angles.map(a => `
+          <div class="py-1.5 border-b border-white/5 last:border-0">
+            <p class="text-sm text-neutral-200">${escapeHtml(a.angle)}</p>
+            ${a.supporting_evidence ? `<p class="text-[11px] text-neutral-500 mt-0.5">${escapeHtml(a.supporting_evidence)}</p>` : ''}
+          </div>`).join('');
+        card.innerHTML = `
+          <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Sales angles to lead with</p>
+          ${items}
+        `;
+        researchStrategyBody.appendChild(card);
+      }
+
+      // Risk signals.
+      if (risks.length) {
+        const card = document.createElement('div');
+        card.className = 'p-3 bg-neutral-900/40 border border-white/5 rounded-md';
+        const sevColor = { low: 'text-neutral-500', medium: 'text-amber-400', high: 'text-red-400' };
+        const items = risks.map(rs => {
+          const color = sevColor[rs.severity] || 'text-neutral-500';
+          return `
+            <div class="py-1.5 border-b border-white/5 last:border-0 flex items-baseline justify-between gap-3">
+              <p class="text-sm text-neutral-200">${escapeHtml(rs.risk)}</p>
+              <p class="text-[11px] font-mono ${color}">${escapeHtml(rs.severity)}</p>
+            </div>`;
+        }).join('');
+        card.innerHTML = `
+          <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Risk signals</p>
+          ${items}
+        `;
+        researchStrategyBody.appendChild(card);
       }
     }
 

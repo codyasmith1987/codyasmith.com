@@ -33,6 +33,17 @@ import type {
   FocusTag,
   CmsGuess,
   DomainGuess,
+  CodyProductId,
+  TierLevel,
+  ProductMixRecommendation,
+  TierRecommendation,
+  ClvHorizon,
+  ClvHorizonSignal,
+  TimeIntensityLevel,
+  CodyTimeIntensitySignal,
+  SalesAngle,
+  RiskSeverity,
+  RiskSignal,
 } from '../types';
 
 const VALID_REVENUE: ReadonlySet<RevenueBand> = new Set(['under-1m', '1m-to-10m', 'over-10m', 'unknown']);
@@ -49,6 +60,15 @@ const VALID_CMS: ReadonlySet<CmsGuess> = new Set([
   'wordpress', 'squarespace', 'wix', 'shopify', 'webflow',
   'duda', 'godaddy-builder', 'custom', 'unknown',
 ]);
+const VALID_PRODUCT_IDS: ReadonlySet<CodyProductId> = new Set([
+  'web_management', 'marketing_consulting', 'build', 'training',
+]);
+const VALID_TIER: ReadonlySet<TierLevel> = new Set(['good', 'better', 'best']);
+const VALID_CLV: ReadonlySet<ClvHorizon> = new Set([
+  'long-term-stable', 'medium-term', 'churn-risk', 'unknown',
+]);
+const VALID_INTENSITY: ReadonlySet<TimeIntensityLevel> = new Set(['low', 'medium', 'high']);
+const VALID_SEVERITY: ReadonlySet<RiskSeverity> = new Set(['low', 'medium', 'high']);
 
 export interface ResearchClientArgs {
   clientName: string;
@@ -354,6 +374,13 @@ export function validateClientResearch(raw: unknown): ClientResearchResult {
     estimated_page_count: pageCount,
     page_count_source: strField(o.page_count_source, 'page_count_source'),
 
+    recommended_product_mix: validateProductMix(o.recommended_product_mix),
+    recommended_tier_per_product: validateTierMap(o.recommended_tier_per_product),
+    clv_horizon: validateClvHorizon(o.clv_horizon),
+    cody_time_intensity: validateTimeIntensity(o.cody_time_intensity),
+    sales_angles: validateSalesAngles(o.sales_angles),
+    risk_signals: validateRiskSignals(o.risk_signals),
+
     notes: strField(o.notes, 'notes'),
   };
 }
@@ -361,6 +388,105 @@ export function validateClientResearch(raw: unknown): ClientResearchResult {
 function strField(v: unknown, name: string): string {
   if (typeof v !== 'string') throw new Error(`${name} must be a string`);
   return v;
+}
+
+// -------------------------------------------------------------------------
+// Engagement-strategy field validators
+// -------------------------------------------------------------------------
+// Each is permissive on shape (returns safe defaults) but strict on enum
+// values. The wizard renders the strategy panel from these structures.
+
+function validateProductMix(raw: unknown): Record<CodyProductId, ProductMixRecommendation> {
+  const empty: ProductMixRecommendation = { recommended: false, rationale: '', confidence: 'low' };
+  const out: Record<CodyProductId, ProductMixRecommendation> = {
+    web_management: { ...empty },
+    marketing_consulting: { ...empty },
+    build: { ...empty },
+    training: { ...empty },
+  };
+  if (!raw || typeof raw !== 'object') return out;
+  const o = raw as Record<string, unknown>;
+  for (const id of VALID_PRODUCT_IDS) {
+    const slot = o[id];
+    if (!slot || typeof slot !== 'object') continue;
+    const s = slot as Record<string, unknown>;
+    out[id] = {
+      recommended: s.recommended === true,
+      rationale: typeof s.rationale === 'string' ? s.rationale : '',
+      confidence: typeof s.confidence === 'string' && VALID_CONFIDENCE.has(s.confidence as ConfidenceLevel)
+        ? (s.confidence as ConfidenceLevel)
+        : 'low',
+    };
+  }
+  return out;
+}
+
+function validateTierMap(raw: unknown): Partial<Record<CodyProductId, TierRecommendation>> {
+  const out: Partial<Record<CodyProductId, TierRecommendation>> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  const o = raw as Record<string, unknown>;
+  for (const id of VALID_PRODUCT_IDS) {
+    const slot = o[id];
+    if (!slot || typeof slot !== 'object') continue;
+    const s = slot as Record<string, unknown>;
+    if (typeof s.tier !== 'string' || !VALID_TIER.has(s.tier as TierLevel)) continue;
+    out[id] = {
+      tier: s.tier as TierLevel,
+      rationale: typeof s.rationale === 'string' ? s.rationale : '',
+    };
+  }
+  return out;
+}
+
+function validateClvHorizon(raw: unknown): ClvHorizonSignal {
+  if (!raw || typeof raw !== 'object') return { signal: 'unknown', rationale: '' };
+  const o = raw as Record<string, unknown>;
+  const signal = typeof o.signal === 'string' && VALID_CLV.has(o.signal as ClvHorizon)
+    ? (o.signal as ClvHorizon)
+    : 'unknown';
+  const rationale = typeof o.rationale === 'string' ? o.rationale : '';
+  return { signal, rationale };
+}
+
+function validateTimeIntensity(raw: unknown): CodyTimeIntensitySignal {
+  if (!raw || typeof raw !== 'object') return { level: 'medium', rationale: '' };
+  const o = raw as Record<string, unknown>;
+  const level = typeof o.level === 'string' && VALID_INTENSITY.has(o.level as TimeIntensityLevel)
+    ? (o.level as TimeIntensityLevel)
+    : 'medium';
+  const rationale = typeof o.rationale === 'string' ? o.rationale : '';
+  return { level, rationale };
+}
+
+function validateSalesAngles(raw: unknown): SalesAngle[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SalesAngle[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const o = item as Record<string, unknown>;
+    const angle = typeof o.angle === 'string' ? o.angle.trim() : '';
+    const evidence = typeof o.supporting_evidence === 'string' ? o.supporting_evidence.trim() : '';
+    // Drop angles without evidence per the no-fabrication rule.
+    if (!angle || !evidence) continue;
+    out.push({ angle, supporting_evidence: evidence });
+  }
+  return out;
+}
+
+function validateRiskSignals(raw: unknown): RiskSignal[] {
+  if (!Array.isArray(raw)) return [];
+  const out: RiskSignal[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const o = item as Record<string, unknown>;
+    const risk = typeof o.risk === 'string' ? o.risk.trim() : '';
+    if (!risk) continue;
+    const severity = typeof o.severity === 'string' && VALID_SEVERITY.has(o.severity as RiskSeverity)
+      ? (o.severity as RiskSeverity)
+      : 'medium';
+    out.push({ risk, severity });
+  }
+  return out;
 }
 
 // =========================================================================

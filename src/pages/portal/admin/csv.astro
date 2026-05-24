@@ -17,35 +17,35 @@ function formatLabel(format: string): string {
     <div class="mb-10">
       <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin</p>
       <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">CSV Upload</h1>
-      <p class="text-sm text-neutral-500 mt-3 leading-relaxed">Drop CSVs from Ubersuggest, Screaming Frog, and other tools. Format is auto-detected. Drag many at once, or pick an entire export folder.</p>
+      <p class="text-sm text-neutral-300 mt-3 leading-relaxed">Drop CSVs from Ubersuggest, Screaming Frog, and other tools. Format is auto-detected. Drag many at once, or pick an entire export folder.</p>
     </div>
 
     <!-- What we ingest -->
     <details class="mb-8 bg-neutral-900/20 border border-white/5 rounded-xl">
-      <summary class="cursor-pointer px-5 py-3 text-[10px] font-mono text-neutral-500 tracking-[0.15em] uppercase hover:text-amber-400 transition-colors">
+      <summary class="cursor-pointer px-5 py-3 text-[10px] font-mono text-neutral-300 tracking-[0.15em] uppercase hover:text-amber-400 transition-colors">
         Which files feed which portal surfaces
       </summary>
       <div class="px-5 pb-5 pt-2 text-xs text-neutral-400 leading-relaxed space-y-3">
         <div>
           <p class="text-neutral-300 font-medium mb-1">Screaming Frog (drop the whole export folder)</p>
-          <ul class="space-y-1 list-disc list-inside text-[11px] text-neutral-500">
-            <li><code class="text-amber-400/80">internal_html.csv</code> or <code class="text-amber-400/80">internal_all.csv</code> — per-URL master (titles, meta, H1, word count, depth, response time). Powers per-URL insights and domain auto-detect.</li>
-            <li><code class="text-amber-400/80">crawl_overview.csv</code> — site-wide aggregates by section (Internal, External, Security, Response Codes, Page Titles, etc.). Powers summary widgets.</li>
-            <li><code class="text-amber-400/80">issues_overview_report.csv</code> — health page issues with priority and fix guidance.</li>
-            <li><code class="text-amber-400/80">redirects.csv</code> — redirect chain analysis with hop count and loop detection.</li>
-            <li><code class="text-amber-400/80">images_all.csv</code> — image audit (file size, dimensions, inlink count).</li>
-            <li><code class="text-amber-400/80">accessibility_all.csv</code> — WCAG violation counts (currently aggregated).</li>
+          <ul class="space-y-1 list-disc list-inside text-[11px] text-neutral-300">
+            <li><code class="text-amber-200">internal_html.csv</code> or <code class="text-amber-200">internal_all.csv</code> — per-URL master (titles, meta, H1, word count, depth, response time). Powers per-URL insights and domain auto-detect.</li>
+            <li><code class="text-amber-200">crawl_overview.csv</code> — site-wide aggregates by section (Internal, External, Security, Response Codes, Page Titles, etc.). Powers summary widgets.</li>
+            <li><code class="text-amber-200">issues_overview_report.csv</code> — health page issues with priority and fix guidance.</li>
+            <li><code class="text-amber-200">redirects.csv</code> — redirect chain analysis with hop count and loop detection.</li>
+            <li><code class="text-amber-200">images_all.csv</code> — image audit (file size, dimensions, inlink count).</li>
+            <li><code class="text-amber-200">accessibility_all.csv</code> — WCAG violation counts (currently aggregated).</li>
           </ul>
         </div>
         <div>
           <p class="text-neutral-300 font-medium mb-1">Rank trackers</p>
-          <ul class="space-y-1 list-disc list-inside text-[11px] text-neutral-500">
+          <ul class="space-y-1 list-disc list-inside text-[11px] text-neutral-300">
             <li>Position tracking exports (Ahrefs / SEMrush / SE Ranking) — powers the keywords page.</li>
             <li>Keyword research exports (Ubersuggest style) — alternate keywords source.</li>
             <li>Keyword suggestions / opportunities — third keywords source.</li>
           </ul>
         </div>
-        <p class="text-[11px] text-neutral-600">Other CSVs (Page Titles All, Meta Description All, H1 All, etc.) are derivable from <code>internal_html.csv</code> and don't need separate upload.</p>
+        <p class="text-[11px] text-neutral-400">Other CSVs (Page Titles All, Meta Description All, H1 All, etc.) are derivable from <code>internal_html.csv</code> and don't need separate upload.</p>
       </div>
     </details>
 
@@ -53,23 +53,23 @@ function formatLabel(format: string): string {
     <form id="csv-form" class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-10">
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
         <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Client</label>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Client</label>
           <select id="csv-client" required class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-300 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300">
             <option value="">Select...</option>
             {clients.map(c => <option value={c.id}>{c.name}</option>)}
           </select>
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Month</label>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Month</label>
           <input type="month" id="csv-month" required
             value={new Date().toISOString().slice(0, 7)}
             class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-300 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300" />
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">CSV files</label>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">CSV files</label>
           <input type="file" id="csv-files" accept=".csv" multiple required
-            class="w-full text-sm text-neutral-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-amber-500 file:text-neutral-950 hover:file:bg-amber-400 file:cursor-pointer file:transition-colors file:duration-300" />
-          <p class="text-[10px] text-neutral-600 mt-1.5">Or <button type="button" id="pick-folder-btn" class="text-amber-400 hover:text-amber-300 underline">pick a folder</button> to upload every CSV in it. Unknown formats are reported but don't block the rest.</p>
+            class="w-full text-sm text-neutral-300 file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-amber-500 file:text-neutral-950 hover:file:bg-amber-400 file:cursor-pointer file:transition-colors file:duration-300" />
+          <p class="text-[10px] text-neutral-400 mt-1.5">Or <button type="button" id="pick-folder-btn" class="text-amber-400 hover:text-amber-300 underline">pick a folder</button> to upload every CSV in it. Unknown formats are reported but don't block the rest.</p>
           <input type="file" id="csv-folder" webkitdirectory="" multiple class="hidden" />
         </div>
       </div>
@@ -77,7 +77,7 @@ function formatLabel(format: string): string {
         <button type="submit" id="csv-btn" class="px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.2)] disabled:opacity-50 disabled:hover:shadow-none">
           Upload & Process
         </button>
-        <span id="csv-progress" class="text-sm text-neutral-600 hidden"></span>
+        <span id="csv-progress" class="text-sm text-neutral-400 hidden"></span>
       </div>
     </form>
 
@@ -86,7 +86,7 @@ function formatLabel(format: string): string {
 
     <!-- Manual metric entry -->
     <details class="mb-10 group">
-      <summary class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase cursor-pointer hover:text-amber-400 transition-colors duration-300">Manual metric entry</summary>
+      <summary class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase cursor-pointer hover:text-amber-400 transition-colors duration-300">Manual metric entry</summary>
       <form id="manual-form" class="bg-neutral-900/30 border border-white/5 rounded-2xl p-6 mt-4">
         <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
           <select id="m-client" required class="px-3 py-2.5 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-300 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300">
@@ -113,7 +113,7 @@ function formatLabel(format: string): string {
     {uploads.length > 0 && (
       <div>
         <div class="flex items-center justify-between mb-4">
-          <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase">Recent uploads</p>
+          <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase">Recent uploads</p>
           <div class="flex items-center gap-4">
             <button type="button" id="clear-failed-btn" class="text-[11px] text-red-400/80 hover:text-red-300 transition-colors">
               Clear failed (0-row) uploads
@@ -129,8 +129,8 @@ function formatLabel(format: string): string {
               <div>
                 <p class="text-sm font-medium text-neutral-200">{u.original_name}</p>
                 <div class="flex items-center gap-3 mt-1">
-                  <span class="text-xs text-neutral-600">{u.client_name}</span>
-                  <span class="text-xs font-mono text-neutral-700">{u.month}</span>
+                  <span class="text-xs text-neutral-400">{u.client_name}</span>
+                  <span class="text-xs font-mono text-neutral-400">{u.month}</span>
                   <span class:list={[
                     'text-[10px] font-mono tracking-wide px-2.5 py-0.5 rounded-full',
                     u.error ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400',
@@ -140,8 +140,8 @@ function formatLabel(format: string): string {
                 </div>
               </div>
               <div class="flex items-center gap-4">
-                <span class="text-xs font-mono text-neutral-700">{u.row_count} rows</span>
-                <button type="button" data-delete-upload={u.id} class="text-[11px] text-neutral-600 hover:text-red-400 transition-colors">
+                <span class="text-xs font-mono text-neutral-400">{u.row_count} rows</span>
+                <button type="button" data-delete-upload={u.id} class="text-[11px] text-neutral-400 hover:text-red-400 transition-colors">
                   Delete
                 </button>
               </div>
@@ -190,7 +190,7 @@ function formatLabel(format: string): string {
         <div class="flex items-center justify-between">
           <div>
             <p class="text-sm font-medium text-neutral-200">${escAll(filename)}</p>
-            <p class="text-xs text-neutral-600 mt-1">
+            <p class="text-xs text-neutral-400 mt-1">
               ${data.format && data.format !== 'unknown' ? `Detected: <span class="text-emerald-400">${escAll(String(data.format).replace(/_/g, ' '))}</span>` : ''}
               ${data.row_count ? `, ${escAll(data.row_count)} rows processed` : ''}
             </p>

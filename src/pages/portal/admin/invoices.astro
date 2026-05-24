@@ -37,7 +37,7 @@ const statusColors: Record<string, string> = {
     {!clientId ? (
       <div class="text-center py-16">
         <p class="font-serif text-xl text-neutral-100 mb-2">Select a client</p>
-        <p class="text-sm text-neutral-500">Choose a client above to view their invoices.</p>
+        <p class="text-sm text-neutral-300">Choose a client above to view their invoices.</p>
       </div>
     ) : invoices.length > 0 ? (
       <div class="space-y-3">
@@ -46,7 +46,7 @@ const statusColors: Record<string, string> = {
             <div class="flex items-center justify-between">
               <div>
                 <p class="text-sm font-medium font-mono text-neutral-200 group-hover:text-amber-400 transition-colors">{inv.invoice_number}</p>
-                <div class="flex items-center gap-4 mt-1 text-xs text-neutral-600">
+                <div class="flex items-center gap-4 mt-1 text-xs text-neutral-400">
                   {inv.issued_date && <span>Issued: {inv.issued_date}</span>}
                   {inv.due_date && <span>Due: {inv.due_date}</span>}
                 </div>
@@ -55,7 +55,7 @@ const statusColors: Record<string, string> = {
                 <div class="text-right">
                   <p class="text-sm font-mono text-neutral-300">${inv.total.toFixed(2)}</p>
                   {inv.amount_paid > 0 && inv.amount_paid < inv.total && (
-                    <p class="text-[10px] text-neutral-600">Paid: ${inv.amount_paid.toFixed(2)}</p>
+                    <p class="text-[10px] text-neutral-400">Paid: ${inv.amount_paid.toFixed(2)}</p>
                   )}
                 </div>
                 <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[inv.status] || ''}`}>{inv.status}</span>
@@ -67,7 +67,7 @@ const statusColors: Record<string, string> = {
     ) : (
       <div class="text-center py-16">
         <p class="font-serif text-xl text-neutral-100 mb-2">No invoices</p>
-        <p class="text-sm text-neutral-500">Create invoices from a contract's detail page.</p>
+        <p class="text-sm text-neutral-300">Create invoices from a contract's detail page.</p>
       </div>
     )}
   </div>

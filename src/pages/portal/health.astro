@@ -37,15 +37,15 @@ const clients = isAdmin ? await getAllClients() : [];
         <div class="grid grid-cols-3 gap-6">
           <div class="text-center">
             <p id="count-critical" class="text-2xl font-bold text-red-400 mb-1">0</p>
-            <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase">critical / high</p>
+            <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">critical / high</p>
           </div>
           <div class="text-center">
             <p id="count-medium" class="text-2xl font-bold text-amber-400 mb-1">0</p>
-            <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase">medium</p>
+            <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">medium</p>
           </div>
           <div class="text-center">
-            <p id="count-low" class="text-2xl font-bold text-neutral-500 mb-1">0</p>
-            <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase">low priority</p>
+            <p id="count-low" class="text-2xl font-bold text-neutral-300 mb-1">0</p>
+            <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">low priority</p>
           </div>
         </div>
       </div>
@@ -205,9 +205,9 @@ const clients = isAdmin ? await getAllClients() : [];
               <div class="flex items-center justify-between">
                 <div>
                   <h3 class="text-sm font-medium text-neutral-200">${escapeHtml(group.name)}</h3>
-                  <p class="text-xs text-neutral-600 mt-0.5">${escapeHtml(group.description)}</p>
+                  <p class="text-xs text-neutral-400 mt-0.5">${escapeHtml(group.description)}</p>
                 </div>
-                <span class="text-[10px] font-mono text-neutral-700 tracking-wide">${group.issues.length} issue${group.issues.length !== 1 ? 's' : ''}</span>
+                <span class="text-[10px] font-mono text-neutral-400 tracking-wide">${group.issues.length} issue${group.issues.length !== 1 ? 's' : ''}</span>
               </div>
             </div>
             <div class="divide-y divide-white/[0.03]">
@@ -224,10 +224,10 @@ const clients = isAdmin ? await getAllClients() : [];
                       <div class="flex-1 min-w-0">
                         <div class="flex items-center justify-between gap-4">
                           <span class="text-sm text-neutral-200">${escapeHtml(issueName)}</span>
-                          <span class="text-[10px] font-mono text-neutral-700 shrink-0">${Number(i.affected_urls) || 0} pages</span>
+                          <span class="text-[10px] font-mono text-neutral-400 shrink-0">${Number(i.affected_urls) || 0} pages</span>
                         </div>
-                        ${explanation ? `<p class="text-xs text-neutral-500 mt-1.5 leading-relaxed">${escapeHtml(explanation)}</p>` : ''}
-                        ${i.how_to_fix ? `<p class="text-xs text-amber-500/40 mt-1">Fix: ${escapeHtml(i.how_to_fix)}</p>` : ''}
+                        ${explanation ? `<p class="text-xs text-neutral-300 mt-1.5 leading-relaxed">${escapeHtml(explanation)}</p>` : ''}
+                        ${i.how_to_fix ? `<p class="text-xs text-amber-200 mt-1">Fix: ${escapeHtml(i.how_to_fix)}</p>` : ''}
                       </div>
                     </div>
                   </div>
@@ -263,7 +263,7 @@ const clients = isAdmin ? await getAllClients() : [];
 
     function renderUrlList(items, formatter) {
       if (!items || items.length === 0) {
-        return '<p class="text-xs text-neutral-500">No URLs.</p>';
+        return '<p class="text-xs text-neutral-300">No URLs.</p>';
       }
       return `<ul class="mt-3 space-y-1.5 text-[11px] font-mono text-neutral-400">
         ${items.map(formatter).join('')}
@@ -280,12 +280,12 @@ const clients = isAdmin ? await getAllClients() : [];
       const stats = (opts.stat_lines || []).map(s => `
         <div>
           <p class="text-2xl font-bold ${sev(s.severity)} mb-1">${s.count}</p>
-          <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase">${escapeHtml(s.label)}</p>
+          <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">${escapeHtml(s.label)}</p>
         </div>
       `).join('');
       const detailsBlock = opts.sample_html
         ? `<details class="mt-4 border-t border-white/5 pt-4">
-             <summary class="cursor-pointer text-[11px] font-mono text-amber-400/80 hover:text-amber-300 transition-colors">Show URLs</summary>
+             <summary class="cursor-pointer text-[11px] font-mono text-amber-200 hover:text-amber-300 transition-colors">Show URLs</summary>
              ${opts.sample_html}
            </details>`
         : '';
@@ -293,7 +293,7 @@ const clients = isAdmin ? await getAllClients() : [];
         <div class="health-animate bg-neutral-900/30 border border-white/5 rounded-2xl overflow-hidden" id="${opts.id}">
           <div class="px-6 py-5 border-b border-white/5">
             <h3 class="text-sm font-medium text-neutral-200">${escapeHtml(opts.title)}</h3>
-            ${opts.description ? `<p class="text-xs text-neutral-600 mt-0.5">${escapeHtml(opts.description)}</p>` : ''}
+            ${opts.description ? `<p class="text-xs text-neutral-400 mt-0.5">${escapeHtml(opts.description)}</p>` : ''}
           </div>
           <div class="px-6 py-5">
             <div class="grid grid-cols-${Math.min(3, Math.max(1, (opts.stat_lines || []).length))} gap-6">${stats}</div>
@@ -341,19 +341,19 @@ const clients = isAdmin ? await getAllClients() : [];
         if (totalIssues > 0) {
           const parts = [];
           if (tq.sample_missing.length) {
-            parts.push(`<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">Missing</p>` +
+            parts.push(`<p class="text-[10px] font-mono text-neutral-300 mt-3 uppercase tracking-wide">Missing</p>` +
               renderUrlList(tq.sample_missing, x => `<li>${escapeHtml(shorten(x.url))}</li>`));
           }
           if (tq.sample_too_long.length) {
-            parts.push(`<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">Over 60 chars</p>` +
-              renderUrlList(tq.sample_too_long, x => `<li>${escapeHtml(shorten(x.url))} <span class="text-neutral-600">${x.title_length} chars</span></li>`));
+            parts.push(`<p class="text-[10px] font-mono text-neutral-300 mt-3 uppercase tracking-wide">Over 60 chars</p>` +
+              renderUrlList(tq.sample_too_long, x => `<li>${escapeHtml(shorten(x.url))} <span class="text-neutral-400">${x.title_length} chars</span></li>`));
           }
           if (tq.sample_too_short.length) {
-            parts.push(`<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">Under 30 chars</p>` +
-              renderUrlList(tq.sample_too_short, x => `<li>${escapeHtml(shorten(x.url))} <span class="text-neutral-600">${x.title_length} chars</span></li>`));
+            parts.push(`<p class="text-[10px] font-mono text-neutral-300 mt-3 uppercase tracking-wide">Under 30 chars</p>` +
+              renderUrlList(tq.sample_too_short, x => `<li>${escapeHtml(shorten(x.url))} <span class="text-neutral-400">${x.title_length} chars</span></li>`));
           }
           if (tq.sample_duplicates.length) {
-            parts.push(`<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">Duplicates</p>` +
+            parts.push(`<p class="text-[10px] font-mono text-neutral-300 mt-3 uppercase tracking-wide">Duplicates</p>` +
               renderUrlList(tq.sample_duplicates, x => `<li>"${escapeHtml(shorten(x.title, 50))}" used ${x.count} times</li>`));
           }
           sampleHtml = parts.join('');
@@ -376,13 +376,13 @@ const clients = isAdmin ? await getAllClients() : [];
           { count: ib.total_blocked, label: 'pages blocked from index', severity: 'medium' },
         ];
         const byStatusItems = Object.entries(ib.by_status)
-          .map(([k, v]) => `<li>${escapeHtml(k)} <span class="text-neutral-600">${v} page${v !== 1 ? 's' : ''}</span></li>`)
+          .map(([k, v]) => `<li>${escapeHtml(k)} <span class="text-neutral-400">${v} page${v !== 1 ? 's' : ''}</span></li>`)
           .join('');
         const sampleHtml =
-          `<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">By reason</p>
+          `<p class="text-[10px] font-mono text-neutral-300 mt-3 uppercase tracking-wide">By reason</p>
            <ul class="mt-2 space-y-1.5 text-[11px] font-mono text-neutral-400">${byStatusItems}</ul>` +
           renderUrlList(ib.samples,
-            x => `<li>${escapeHtml(shorten(x.url))} <span class="text-neutral-600">${escapeHtml(x.indexability_status || x.indexability || '')}</span></li>`);
+            x => `<li>${escapeHtml(shorten(x.url))} <span class="text-neutral-400">${escapeHtml(x.indexability_status || x.indexability || '')}</span></li>`);
         cards.push(widgetCard({
           id: 'widget-indexability',
           title: 'Indexability blocks',
@@ -404,7 +404,7 @@ const clients = isAdmin ? await getAllClients() : [];
             { count: tc.under_100_count, label: 'under 100 words', severity: tc.under_100_count > 0 ? 'high' : 'ok' },
           ],
           sample_html: renderUrlList(tc.samples,
-            x => `<li>${escapeHtml(shorten(x.url))} <span class="text-neutral-600">${x.word_count} words</span></li>`),
+            x => `<li>${escapeHtml(shorten(x.url))} <span class="text-neutral-400">${x.word_count} words</span></li>`),
         }));
       }
 
@@ -420,7 +420,7 @@ const clients = isAdmin ? await getAllClients() : [];
             { count: rt.over_3000_count, label: 'over 3 seconds', severity: rt.over_3000_count > 0 ? 'high' : 'ok' },
           ],
           sample_html: renderUrlList(rt.samples,
-            x => `<li>${escapeHtml(shorten(x.url))} <span class="text-neutral-600">${x.response_time_ms} ms</span></li>`),
+            x => `<li>${escapeHtml(shorten(x.url))} <span class="text-neutral-400">${x.response_time_ms} ms</span></li>`),
         }));
       }
 
@@ -436,7 +436,7 @@ const clients = isAdmin ? await getAllClients() : [];
             { count: oi.over_500kb_count, label: 'over 500 KB', severity: oi.over_500kb_count > 0 ? 'high' : 'ok' },
           ],
           sample_html: renderUrlList(oi.samples,
-            x => `<li>${escapeHtml(shorten(x.url))} <span class="text-neutral-600">${fmtBytes(x.size_bytes)}${x.dimensions ? ', ' + escapeHtml(x.dimensions) : ''}</span></li>`),
+            x => `<li>${escapeHtml(shorten(x.url))} <span class="text-neutral-400">${fmtBytes(x.size_bytes)}${x.dimensions ? ', ' + escapeHtml(x.dimensions) : ''}</span></li>`),
         }));
       }
 
@@ -445,13 +445,13 @@ const clients = isAdmin ? await getAllClients() : [];
         const rc = data.redirect_chains;
         const parts = [];
         if (rc.sample_loops.length) {
-          parts.push(`<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">Loops</p>` +
-            renderUrlList(rc.sample_loops, x => `<li>${escapeHtml(shorten(x.source_url))} <span class="text-neutral-600">${x.hop_count} hops</span></li>`));
+          parts.push(`<p class="text-[10px] font-mono text-neutral-300 mt-3 uppercase tracking-wide">Loops</p>` +
+            renderUrlList(rc.sample_loops, x => `<li>${escapeHtml(shorten(x.source_url))} <span class="text-neutral-400">${x.hop_count} hops</span></li>`));
         }
         if (rc.sample_multi_hop.length) {
-          parts.push(`<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">Multi-hop</p>` +
+          parts.push(`<p class="text-[10px] font-mono text-neutral-300 mt-3 uppercase tracking-wide">Multi-hop</p>` +
             renderUrlList(rc.sample_multi_hop,
-              x => `<li>${escapeHtml(shorten(x.source_url))} <span class="text-neutral-600">to ${escapeHtml(shorten(x.final_url || '', 40))}, ${x.hop_count} hops</span></li>`));
+              x => `<li>${escapeHtml(shorten(x.source_url))} <span class="text-neutral-400">to ${escapeHtml(shorten(x.final_url || '', 40))}, ${x.hop_count} hops</span></li>`));
         }
         cards.push(widgetCard({
           id: 'widget-redirects',
@@ -476,7 +476,7 @@ const clients = isAdmin ? await getAllClients() : [];
             { count: op.count, label: 'pages with no internal links in', severity: 'medium' },
           ],
           sample_html: renderUrlList(op.samples,
-            x => `<li>${escapeHtml(shorten(x.url))}${x.title ? ` <span class="text-neutral-600">${escapeHtml(shorten(x.title, 30))}</span>` : ''}</li>`),
+            x => `<li>${escapeHtml(shorten(x.url))}${x.title ? ` <span class="text-neutral-400">${escapeHtml(shorten(x.title, 30))}</span>` : ''}</li>`),
         }));
       }
 
@@ -492,16 +492,16 @@ const clients = isAdmin ? await getAllClients() : [];
             { count: dp.over_10_count, label: 'over 10 clicks deep', severity: dp.over_10_count > 0 ? 'high' : 'ok' },
           ],
           sample_html: renderUrlList(dp.samples,
-            x => `<li>${escapeHtml(shorten(x.url))} <span class="text-neutral-600">depth ${x.crawl_depth}</span></li>`),
+            x => `<li>${escapeHtml(shorten(x.url))} <span class="text-neutral-400">depth ${x.crawl_depth}</span></li>`),
         }));
       }
 
       if (cards.length > 0) {
         container.innerHTML = `
           <div class="border-t border-white/5 pt-8">
-            <p class="text-[10px] font-mono text-amber-400/80 tracking-[0.15em] uppercase mb-1">URL deep dive</p>
+            <p class="text-[10px] font-mono text-amber-200 tracking-[0.15em] uppercase mb-1">URL deep dive</p>
             <h2 class="font-serif text-xl text-neutral-100">Per-URL findings</h2>
-            <p class="text-xs text-neutral-500 mt-1 mb-6">Specific URLs that match the patterns above. Sample lists; not exhaustive.</p>
+            <p class="text-xs text-neutral-300 mt-1 mb-6">Specific URLs that match the patterns above. Sample lists; not exhaustive.</p>
           </div>
         ` + cards.join('');
         container.classList.remove('hidden');

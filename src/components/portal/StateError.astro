@@ -10,7 +10,7 @@ const { id = 'error-state', detailId = 'error-detail', retryFn = '' } = Astro.pr
 
 <div id={id} class="hidden text-center py-24">
   <p class="font-serif text-2xl text-neutral-100 mb-3">Something went wrong</p>
-  <p id={detailId} class="text-sm text-neutral-500 mb-8 leading-relaxed"></p>
+  <p id={detailId} class="text-sm text-neutral-300 mb-8 leading-relaxed"></p>
   {retryFn && (
     <button
       onclick={`${retryFn}()`}

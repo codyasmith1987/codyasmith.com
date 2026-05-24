@@ -86,11 +86,11 @@ const linkClass = (href: string) => [
   'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all duration-300',
   currentPath.startsWith(href)
     ? 'bg-amber-500/10 text-amber-400 font-medium'
-    : 'text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.03]',
+    : 'text-neutral-300 hover:text-neutral-100 hover:bg-white/[0.03]',
 ];
 const mobileLinkClass = (href: string) => [
   'block px-4 py-2.5 rounded-lg text-sm transition-colors duration-300',
-  currentPath.startsWith(href) ? 'bg-amber-500/10 text-amber-400' : 'text-neutral-500',
+  currentPath.startsWith(href) ? 'bg-amber-500/10 text-amber-400' : 'text-neutral-300',
 ];
 
 // Unread notification count, rendered as a badge on the Notifications
@@ -134,7 +134,7 @@ const unreadBadge = unreadNotifications > 99 ? '99+' : String(unreadNotification
           >
             Cody Smith
           </a>
-          <p class="text-[10px] text-neutral-600 tracking-[0.15em] uppercase mt-1.5" style="font-family: var(--font-mono);">Client Portal</p>
+          <p class="text-[10px] text-neutral-400 tracking-[0.15em] uppercase mt-1.5" style="font-family: var(--font-mono);">Client Portal</p>
         </div>
 
         <nav class="flex-1 px-4 py-6 space-y-1">
@@ -145,7 +145,7 @@ const unreadBadge = unreadNotifications > 99 ? '99+' : String(unreadNotification
           {workItems.length > 0 && (
             <>
               <div class="pt-6 pb-2">
-                <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Work</p>
+                <p class="px-4 text-[10px] font-mono text-neutral-400 uppercase tracking-[0.15em]">Work</p>
               </div>
               {workItems.map(item => (
                 <a href={item.href} class:list={linkClass(item.href)}>{item.label}</a>
@@ -154,7 +154,7 @@ const unreadBadge = unreadNotifications > 99 ? '99+' : String(unreadNotification
           )}
 
           <div class="pt-6 pb-2">
-            <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Reports</p>
+            <p class="px-4 text-[10px] font-mono text-neutral-400 uppercase tracking-[0.15em]">Reports</p>
           </div>
           {reportItems.map(item => (
             <a href={item.href} class:list={linkClass(item.href)}>{item.label}</a>
@@ -163,7 +163,7 @@ const unreadBadge = unreadNotifications > 99 ? '99+' : String(unreadNotification
           {proposalItems.length > 0 && (
             <>
               <div class="pt-6 pb-2">
-                <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Proposals</p>
+                <p class="px-4 text-[10px] font-mono text-neutral-400 uppercase tracking-[0.15em]">Proposals</p>
               </div>
               {proposalItems.map(item => (
                 <a href={item.href} class:list={linkClass(item.href)}>{item.label}</a>
@@ -174,7 +174,7 @@ const unreadBadge = unreadNotifications > 99 ? '99+' : String(unreadNotification
           {user?.role === 'admin' && (
             <>
               <div class="pt-6 pb-2">
-                <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Admin</p>
+                <p class="px-4 text-[10px] font-mono text-neutral-400 uppercase tracking-[0.15em]">Admin</p>
               </div>
               {adminItems.map(item => (
                 <a href={item.href} class:list={linkClass(item.href)}>{item.label}</a>
@@ -184,7 +184,7 @@ const unreadBadge = unreadNotifications > 99 ? '99+' : String(unreadNotification
         </nav>
 
         <div class="p-4 border-t border-white/5 space-y-3">
-          <a href="/portal/notifications" class:list={['flex items-center gap-2 px-4 py-2 text-xs rounded-lg transition-colors duration-300', currentPath === '/portal/notifications' ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-600 hover:text-amber-400 hover:bg-white/[0.03]']}>
+          <a href="/portal/notifications" class:list={['flex items-center gap-2 px-4 py-2 text-xs rounded-lg transition-colors duration-300', currentPath === '/portal/notifications' ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-300 hover:text-amber-400 hover:bg-white/[0.03]']}>
             <span class="relative inline-flex items-center">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>
               {unreadNotifications > 0 && (
@@ -196,18 +196,18 @@ const unreadBadge = unreadNotifications > 99 ? '99+' : String(unreadNotification
               <span class="ml-auto text-[10px] text-amber-400 font-mono">{unreadBadge} new</span>
             )}
           </a>
-          <a href="/" class="flex items-center gap-2 px-4 py-2 text-xs text-neutral-600 hover:text-amber-400 transition-colors duration-300 rounded-lg hover:bg-white/[0.03]">
+          <a href="/" class="flex items-center gap-2 px-4 py-2 text-xs text-neutral-300 hover:text-amber-400 transition-colors duration-300 rounded-lg hover:bg-white/[0.03]">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
             Back to website
           </a>
           <div class="flex items-center justify-between px-4">
             <div class="min-w-0">
               <p class="text-sm font-medium text-neutral-300 truncate">{user?.name}</p>
-              <p class="text-xs text-neutral-600 truncate">{user?.email}</p>
+              <p class="text-xs text-neutral-400 truncate">{user?.email}</p>
             </div>
             <form method="POST" action="/portal/auth/logout">
               <input type="hidden" name="csrf-token" value={csrfToken} />
-              <button type="submit" class="text-xs text-neutral-600 hover:text-red-400 transition-colors duration-300 whitespace-nowrap ml-3">
+              <button type="submit" class="text-xs text-neutral-300 hover:text-red-400 transition-colors duration-300 whitespace-nowrap ml-3">
                 Log out
               </button>
             </form>
@@ -250,7 +250,7 @@ const unreadBadge = unreadNotifications > 99 ? '99+' : String(unreadNotification
             {workItems.length > 0 && (
               <>
                 <div class="pt-4 pb-1">
-                  <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Work</p>
+                  <p class="px-4 text-[10px] font-mono text-neutral-400 uppercase tracking-[0.15em]">Work</p>
                 </div>
                 {workItems.map(item => (
                   <a href={item.href} class:list={mobileLinkClass(item.href)}>{item.label}</a>
@@ -258,7 +258,7 @@ const unreadBadge = unreadNotifications > 99 ? '99+' : String(unreadNotification
               </>
             )}
             <div class="pt-4 pb-1">
-              <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Reports</p>
+              <p class="px-4 text-[10px] font-mono text-neutral-400 uppercase tracking-[0.15em]">Reports</p>
             </div>
             {reportItems.map(item => (
               <a href={item.href} class:list={mobileLinkClass(item.href)}>{item.label}</a>
@@ -266,7 +266,7 @@ const unreadBadge = unreadNotifications > 99 ? '99+' : String(unreadNotification
             {proposalItems.length > 0 && (
               <>
                 <div class="pt-4 pb-1">
-                  <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Proposals</p>
+                  <p class="px-4 text-[10px] font-mono text-neutral-400 uppercase tracking-[0.15em]">Proposals</p>
                 </div>
                 {proposalItems.map(item => (
                   <a href={item.href} class:list={mobileLinkClass(item.href)}>{item.label}</a>
@@ -276,7 +276,7 @@ const unreadBadge = unreadNotifications > 99 ? '99+' : String(unreadNotification
             {user?.role === 'admin' && (
               <>
                 <div class="pt-4 pb-1">
-                  <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Admin</p>
+                  <p class="px-4 text-[10px] font-mono text-neutral-400 uppercase tracking-[0.15em]">Admin</p>
                 </div>
                 {adminItems.map(item => (
                   <a href={item.href} class:list={mobileLinkClass(item.href)}>{item.label}</a>
@@ -284,11 +284,11 @@ const unreadBadge = unreadNotifications > 99 ? '99+' : String(unreadNotification
               </>
             )}
             <div class="pt-4 mt-2 border-t border-white/5 flex items-center justify-between">
-              <a href="/portal/notifications" class="text-xs text-neutral-600 hover:text-amber-400 transition-colors">Notifications</a>
-              <a href="/" class="text-xs text-neutral-600 hover:text-amber-400 transition-colors">Back to website</a>
+              <a href="/portal/notifications" class="text-xs text-neutral-300 hover:text-amber-400 transition-colors">Notifications</a>
+              <a href="/" class="text-xs text-neutral-300 hover:text-amber-400 transition-colors">Back to website</a>
               <form method="POST" action="/portal/auth/logout">
               <input type="hidden" name="csrf-token" value={csrfToken} />
-                <button type="submit" class="text-xs text-neutral-600 hover:text-red-400 transition-colors">Log out</button>
+                <button type="submit" class="text-xs text-neutral-300 hover:text-red-400 transition-colors">Log out</button>
               </form>
             </div>
           </div>

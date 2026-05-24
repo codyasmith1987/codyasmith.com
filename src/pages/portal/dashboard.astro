@@ -141,7 +141,7 @@ actionItems.sort((a, b) => a.urgency - b.urgency);
 
   <div class="max-w-2xl mx-auto">
     <div class="flex items-center justify-between mb-10">
-      <p id="data-date" class="text-[10px] font-mono text-neutral-700 tracking-[0.15em] uppercase"></p>
+      <p id="data-date" class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase"></p>
       {isAdmin && <ClientSelector clients={clients} />}
     </div>
 
@@ -155,7 +155,7 @@ actionItems.sort((a, b) => a.urgency - b.urgency);
                 <span class="shrink-0 w-9 h-9 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center text-base font-mono group-hover:bg-amber-500/20 transition-colors duration-300">{item.icon}</span>
                 <div class="min-w-0 flex-1">
                   <p class="text-sm font-medium text-neutral-100 mb-1 leading-snug">{item.title}</p>
-                  <p class="text-xs text-neutral-500 leading-relaxed">{item.body}</p>
+                  <p class="text-xs text-neutral-300 leading-relaxed">{item.body}</p>
                 </div>
                 <span class="shrink-0 text-xs font-mono text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300 self-center">{item.label} →</span>
               </a>
@@ -177,20 +177,20 @@ actionItems.sort((a, b) => a.urgency - b.urgency);
             </div>
           </div>
           <h1 id="verdict" class="text-2xl md:text-3xl font-serif text-neutral-100 leading-snug mb-4 max-w-md"></h1>
-          <p id="verdict-sub" class="text-sm text-neutral-500 leading-relaxed max-w-sm"></p>
-          <p id="score-explain" class="text-[10px] text-neutral-700 mt-4 max-w-sm"></p>
+          <p id="verdict-sub" class="text-sm text-neutral-300 leading-relaxed max-w-sm"></p>
+          <p id="score-explain" class="text-[10px] text-neutral-400 mt-4 max-w-sm"></p>
         </div>
       </section>
 
       <!-- ═══════ CHAPTER 2: GOOGLE ═══════ -->
       <section class="story-section mb-20">
-        <p class="text-[11px] text-neutral-600 tracking-widest uppercase mb-8 text-center">How people find you on Google</p>
+        <p class="text-[11px] text-neutral-400 tracking-widest uppercase mb-8 text-center">How people find you on Google</p>
 
         <!-- Simulated search -->
         <div id="search-sim" class="rounded-2xl overflow-hidden mb-8 border border-white/[0.04]">
           <!-- Search bar -->
           <div class="bg-neutral-900/80 px-5 py-4 flex items-center gap-3">
-            <svg class="w-4 h-4 text-neutral-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <svg class="w-4 h-4 text-neutral-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <span id="sim-query" class="text-sm text-neutral-300"></span>
           </div>
           <!-- Results -->
@@ -205,11 +205,11 @@ actionItems.sort((a, b) => a.urgency - b.urgency);
           </div>
           <div class="relative overflow-hidden bg-gradient-to-b from-amber-500/[0.05] to-transparent border border-amber-500/10 rounded-xl p-5 text-center">
             <p id="win-page1" class="text-3xl font-bold text-amber-400 mb-1">0</p>
-            <p class="text-[10px] text-amber-400/50 leading-tight">searches where you<br/>show up on page 1</p>
+            <p class="text-[10px] text-amber-200 leading-tight">searches where you<br/>show up on page 1</p>
           </div>
           <div class="relative overflow-hidden bg-gradient-to-b from-neutral-400/[0.04] to-transparent border border-white/5 rounded-xl p-5 text-center">
             <p id="win-reach" class="text-3xl font-bold text-neutral-200 mb-1">0</p>
-            <p class="text-[10px] text-neutral-500 leading-tight">people searching<br/>for these each month</p>
+            <p class="text-[10px] text-neutral-300 leading-tight">people searching<br/>for these each month</p>
           </div>
         </div>
 
@@ -217,18 +217,18 @@ actionItems.sort((a, b) => a.urgency - b.urgency);
         <div class="space-y-1" id="trophies"></div>
 
         <div class="text-center mt-5">
-          <a href="/portal/keywords" class="text-[11px] text-neutral-600 hover:text-amber-400 transition-colors tracking-wide">ALL KEYWORDS →</a>
+          <a href="/portal/keywords" class="text-[11px] text-neutral-400 hover:text-amber-400 transition-colors tracking-wide">ALL KEYWORDS →</a>
         </div>
       </section>
 
       <!-- ═══════ CHAPTER 3: CHECKUP ═══════ -->
       <section class="story-section mb-16">
-        <p class="text-[11px] text-neutral-600 tracking-widest uppercase mb-8 text-center">Your website checkup</p>
+        <p class="text-[11px] text-neutral-400 tracking-widest uppercase mb-8 text-center">Your website checkup</p>
 
         <div id="checkup" class="grid grid-cols-2 gap-3"></div>
 
         <div class="text-center mt-5">
-          <a href="/portal/health" class="text-[11px] text-neutral-600 hover:text-amber-400 transition-colors tracking-wide">FULL REPORT →</a>
+          <a href="/portal/health" class="text-[11px] text-neutral-400 hover:text-amber-400 transition-colors tracking-wide">FULL REPORT →</a>
         </div>
       </section>
 
@@ -488,10 +488,10 @@ actionItems.sort((a, b) => a.urgency - b.urgency);
           const delay = 1.2 + i * 0.08;
           return `
             <div class="trophy-row flex items-center gap-3 py-2.5 px-4 rounded-lg ${isMedal ? 'bg-emerald-500/[0.04]' : ''}" style="animation-delay:${delay}s">
-              <span class="${isMedal ? 'text-lg' : isPg1 ? 'text-xs text-emerald-500 font-bold' : 'text-xs text-neutral-700'} w-7 text-center shrink-0">${medal}</span>
-              <p class="text-sm ${isPg1 ? 'text-neutral-200' : 'text-neutral-500'} flex-1 truncate">${escapeHtml(k.keyword)}</p>
-              <span class="text-xs font-mono tabular-nums ${isMedal ? 'text-emerald-400' : isPg1 ? 'text-neutral-400' : 'text-neutral-600'} shrink-0">#${k.position}</span>
-              ${k.search_volume ? `<span class="text-[10px] text-neutral-700 w-14 text-right shrink-0">${k.search_volume >= 1000 ? (k.search_volume/1000).toFixed(1)+'k' : k.search_volume}/mo</span>` : ''}
+              <span class="${isMedal ? 'text-lg' : isPg1 ? 'text-xs text-emerald-500 font-bold' : 'text-xs text-neutral-400'} w-7 text-center shrink-0">${medal}</span>
+              <p class="text-sm ${isPg1 ? 'text-neutral-200' : 'text-neutral-300'} flex-1 truncate">${escapeHtml(k.keyword)}</p>
+              <span class="text-xs font-mono tabular-nums ${isMedal ? 'text-emerald-400' : isPg1 ? 'text-neutral-400' : 'text-neutral-400'} shrink-0">#${k.position}</span>
+              ${k.search_volume ? `<span class="text-[10px] text-neutral-400 w-14 text-right shrink-0">${k.search_volume >= 1000 ? (k.search_volume/1000).toFixed(1)+'k' : k.search_volume}/mo</span>` : ''}
             </div>`;
         }).join('');
       }
@@ -539,7 +539,7 @@ actionItems.sort((a, b) => a.urgency - b.urgency);
               </div>
               <p class="text-sm font-medium text-neutral-200 mb-1">${cat.label}</p>
               <p class="text-xs ${statusColor} font-medium mb-3">${status}</p>
-              <p class="text-[11px] text-neutral-600 leading-relaxed">${friendly}</p>
+              <p class="text-[11px] text-neutral-400 leading-relaxed">${friendly}</p>
             </div>`;
         }).join('');
       }

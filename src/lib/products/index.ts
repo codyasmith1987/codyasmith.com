@@ -12,6 +12,7 @@ import { marketingConsultingProduct } from './marketing-consulting';
 import { buildProduct } from './build';
 import { trainingProduct } from './training';
 import { otherSowProduct } from './other-sow';
+import { lookupSnippetOverride } from './narrative-snippets';
 import type {
   ProductDefinition,
   ProductId,
@@ -69,11 +70,24 @@ export function composeProposal(args: ComposeArgs): ProposalConfig {
   // at compose time (the prospect picks tiers on the proposal page).
   // otherProducts is each product's view of the rest of the mix; used
   // for narrative composition.
+  //
+  // Variables are augmented with client_name, industry, and urgency
+  // pulled from compose-level fields so the snippet registry helpers
+  // can read them off the context without a wider type change. Each
+  // value is only added when not already present (real per-product
+  // variables win).
   const engagementStrategy = args.engagement_strategy || null;
+  const narrativeVariables = args.narrative_variables || {};
+  const composeLevelVars: Record<string, string | number | boolean | null> = {
+    client_name: args.client.name,
+  };
+  if (narrativeVariables.industry) composeLevelVars.industry = narrativeVariables.industry;
+  if (narrativeVariables.urgency) composeLevelVars.urgency = narrativeVariables.urgency;
+
   const contexts: Record<ProductId, ProductContext> = {} as any;
   for (const id of orderedProducts) {
     const product = PRODUCT_REGISTRY[id];
-    const variables = args.product_vars[id] || {};
+    const variables = { ...composeLevelVars, ...(args.product_vars[id] || {}) };
     const ecosystemId = product.routeEcosystem(variables);
     const otherProducts = orderedProducts
       .filter(other => other !== id)
@@ -173,12 +187,64 @@ function composeNarrative(args: ComposeNarrativeArgs): {
   sections: NarrativeSection[];
   rollout?: ProposalConfig['narrative']['rollout'];
 } {
-  // Gather each product's contribution.
-  const contributions: Array<{ id: ProductId; set: NarrativeSnippetSet }> = [];
+  // Gather each product's inline default contribution. These get
+  // concatenated for any bucket the registry-level snippet does not
+  // override.
+  const inlineContributions: Array<{ id: ProductId; set: NarrativeSnippetSet }> = [];
   for (const id of args.orderedProducts) {
     const product = PRODUCT_REGISTRY[id];
     const ctx = args.contexts[id];
-    contributions.push({ id, set: product.generateNarrativeSnippets(ctx) });
+    inlineContributions.push({ id, set: product.generateNarrativeSnippets(ctx) });
+  }
+
+  // Look up a combo-level snippet from the registry. The lookup key
+  // is `${product_combo}::${ecosystem}::${urgency}` where ecosystem
+  // is WM's when WM is in scope, else the first product's. The
+  // helper tries six candidate keys most-specific to least-specific.
+  let contributions: Array<{ id: ProductId; set: NarrativeSnippetSet }> = inlineContributions;
+  if (args.orderedProducts.length > 0) {
+    const primary = args.orderedProducts[0];
+    const others = args.orderedProducts.slice(1);
+    let lookupEco: string | null = null;
+    if (args.orderedProducts.includes('web-management')) {
+      lookupEco = args.contexts['web-management'].ecosystemId;
+    } else {
+      lookupEco = args.contexts[primary].ecosystemId;
+    }
+    const override = lookupSnippetOverride({
+      productId: primary,
+      otherProductIds: others,
+      ecosystemId: lookupEco,
+      urgency: args.narrativeVariables.urgency || null,
+    });
+    if (override) {
+      // The snippet runs with the primary product's context (the
+      // helpers in narrative-snippets.ts read client_name, page_count,
+      // industry, urgency from variables that the composer threaded
+      // through). Each bucket present in the snippet REPLACES the
+      // concatenated inline content for that bucket; absent buckets
+      // fall back to the inline contributions.
+      const snippetSet = override(args.contexts[primary]);
+      const merged: NarrativeSnippetSet = {
+        intro_lines: snippetSet.intro_lines !== undefined
+          ? snippetSet.intro_lines
+          : inlineContributions.flatMap(c => c.set.intro_lines || []),
+        what_i_see_paragraphs: snippetSet.what_i_see_paragraphs !== undefined
+          ? snippetSet.what_i_see_paragraphs
+          : inlineContributions.flatMap(c => c.set.what_i_see_paragraphs || []),
+        what_i_recommend_paragraphs: snippetSet.what_i_recommend_paragraphs !== undefined
+          ? snippetSet.what_i_recommend_paragraphs
+          : inlineContributions.flatMap(c => c.set.what_i_recommend_paragraphs || []),
+        rollout_phases: snippetSet.rollout_phases !== undefined
+          ? snippetSet.rollout_phases
+          : inlineContributions.flatMap(c => c.set.rollout_phases || []),
+        rollout_scenarios: snippetSet.rollout_scenarios
+          || inlineContributions.find(c => c.set.rollout_scenarios)?.set.rollout_scenarios,
+        rollout_scenario_step: snippetSet.rollout_scenario_step
+          || inlineContributions.find(c => c.set.rollout_scenario_step)?.set.rollout_scenario_step,
+      };
+      contributions = [{ id: primary, set: merged }];
+    }
   }
 
   // Master intro: one composed paragraph from each product's

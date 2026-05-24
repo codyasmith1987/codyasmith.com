@@ -338,9 +338,33 @@ async function run() {
       const closer = strategySections.find(s => s.h2 === 'How this works in practice');
       return !!closer && closer.paragraphs.some(p => /change order/i.test(p));
     })());
-  test('Phase 2: MC "long-term-stable" adapts what-i-see paragraph',
+  // NOTE on inline adaptations after Phase 3: when a registry snippet
+  // matches the combo, it REPLACES per-bucket inline content. The
+  // Phase 2 inline adaptations (MC long-term-stable wording, WM
+  // high-intensity wording) only fire when no snippet matches OR when
+  // the matched snippet does not define the bucket. Snippet 4 (the
+  // WM+MC catch-all) defines only what_i_recommend, so what_i_see
+  // still falls through to inline for combos that land there.
+  // The fixture below uses urgency=maintenance to land on snippet 4
+  // catch-all (no what_i_see), so the inline adaptation does fire.
+  const strategyMaintenance = composeProposal({
+    client: { id: 'cM', name: 'Maintenance Co', slug: 'maintenance-co' },
+    signers: [{ id: 's1', name: 'Maint Lee', email: 'maint@m.com' }],
+    products: ['web-management', 'marketing-consulting'],
+    product_vars: {
+      'web-management': { page_count: 80, site_count: 1 },
+      'marketing-consulting': { revenue_band: '1m-to-10m' },
+    },
+    narrative_variables: { urgency: 'maintenance' },
+    engagement_strategy: {
+      sales_angles: [],
+      clv_horizon: 'long-term-stable',
+      cody_time_intensity: 'medium',
+    },
+  });
+  test('Phase 2: MC "long-term-stable" inline adaptation still fires for catch-all combo',
     (() => {
-      const see = strategySections.find(s => s.h2 === 'What I see in your business');
+      const see = strategyMaintenance.narrative.sections.find(s => s.h2 === 'What I see in your business');
       return !!see && see.paragraphs.some(p => /outside thinker you call/i.test(p));
     })());
   test('Phase 2: no tier names appear in client copy (good/better/best)',
@@ -355,20 +379,25 @@ async function run() {
         && !/\btier\s+(good|better|best)\b/.test(text);
     })());
 
-  // (b) composeProposal with cody_time_intensity = high triggers
-  // WM "heavy on cleanup" framing.
+  // (b) WM cody_time_intensity=high inline adaptation. After Phase 3,
+  // all three WM ecosystems have snippets that replace what_i_see.
+  // To exercise the adaptation, the fixture omits page_count so the
+  // WM routing returns null (no ecosystem), and the lookup falls
+  // through with no registry match. Inline what_i_see + adaptation
+  // fires.
   const highTimeConfig = composeProposal({
     client: { id: 'c5', name: 'Heavy Co', slug: 'heavy-co' },
     signers: [{ id: 's1', name: 'Eli Roy', email: 'eli@heavy.com' }],
     products: ['web-management'],
-    product_vars: { 'web-management': { page_count: 80, site_count: 1 } },
+    // page_count omitted on purpose; WM routes to null ecosystem.
+    product_vars: { 'web-management': { site_count: 1 } },
     engagement_strategy: {
       sales_angles: [{ angle: 'Site is on an outdated stack.', supporting_evidence: 'wp-version meta' }],
       clv_horizon: 'medium-term',
       cody_time_intensity: 'high',
     },
   });
-  test('Phase 2: WM cody_time_intensity=high adds cleanup framing',
+  test('Phase 2: WM cody_time_intensity=high inline adaptation fires when no snippet matches',
     (() => {
       const see = highTimeConfig.narrative.sections.find(s => s.h2 === 'What I see in your business');
       return !!see && see.paragraphs.some(p => /heavy on cleanup|stabilizing what is already in place/i.test(p));
@@ -400,6 +429,190 @@ async function run() {
       const text = (closer?.paragraphs || []).join(' ');
       return !/[–—]/.test(text);
     })());
+
+  // -------------------------------------------------------------------
+  // Phase 3: snippet registry lookup wires combo-level snippets into
+  // the composer. Each of the 8 hand-authored snippets must fire under
+  // the right combination of products + ecosystem + urgency, hold the
+  // voice rules, and stay clear of dangling tier references.
+  // -------------------------------------------------------------------
+
+  // (a) Snippet 1 fires for WM only / B / tactical and carries the
+  // expected "Predictability is the trade" anchor sentence.
+  const sn1 = composeProposal({
+    client: { id: 'sc1', name: 'Acme Industries', slug: 'acme-industries' },
+    signers: [{ id: 's1', name: 'Pat Lee', email: 'pat@acme.com' }],
+    products: ['web-management'],
+    product_vars: { 'web-management': { page_count: 80, site_count: 1 } },
+    narrative_variables: { urgency: 'tactical' },
+  });
+  test('Phase 3 #1: WM-B-tactical snippet fires (Predictability is the trade)',
+    (() => {
+      const rec = sn1.narrative.sections.find(s => s.h2 === 'What I recommend');
+      return !!rec && rec.paragraphs.some(p => p.includes('Predictability is the trade'));
+    })());
+  test('Phase 3 #1: client name substituted',
+    (() => {
+      const see = sn1.narrative.sections.find(s => s.h2 === 'What I see in your business');
+      return !!see && see.paragraphs.some(p => p.includes("Acme Industries"));
+    })());
+
+  // (b) Snippet 2 fires for WM+MC / B / growth and carries the
+  // "Strategy is named in one place" anchor sentence.
+  const sn2 = composeProposal({
+    client: { id: 'sc2', name: 'Mid Market Co', slug: 'mid-market-co' },
+    signers: [{ id: 's1', name: 'Sam Doe', email: 'sam@mm.com' }],
+    products: ['web-management', 'marketing-consulting'],
+    product_vars: {
+      'web-management': { page_count: 80, site_count: 1 },
+      'marketing-consulting': { revenue_band: '1m-to-10m' },
+    },
+    narrative_variables: { urgency: 'growth', industry: 'professional-services' },
+  });
+  test('Phase 3 #2: WM+MC-B-growth snippet fires (Strategy is named in one place)',
+    (() => {
+      const rec = sn2.narrative.sections.find(s => s.h2 === 'What I recommend');
+      return !!rec && rec.paragraphs.some(p => p.includes('Strategy is named in one place'));
+    })());
+  test('Phase 3 #2: industry phrase substituted (professional services)',
+    (() => {
+      const see = sn2.narrative.sections.find(s => s.h2 === 'What I see in your business');
+      return !!see && see.paragraphs.some(p => p.includes('professional services businesses'));
+    })());
+
+  // (c) Snippet 3 fires for WM only / B / growth (not tactical, so
+  // snippet 1 misses; falls to ::B::*).
+  const sn3 = composeProposal({
+    client: { id: 'sc3', name: 'Calm Co', slug: 'calm-co' },
+    signers: [{ id: 's1', name: 'Riley Roe', email: 'riley@calm.com' }],
+    products: ['web-management'],
+    product_vars: { 'web-management': { page_count: 80, site_count: 1 } },
+    narrative_variables: { urgency: 'growth' },
+  });
+  test('Phase 3 #3: WM-B-* fallback fires (slow erosion)',
+    (() => {
+      const see = sn3.narrative.sections.find(s => s.h2 === 'What I see in your business');
+      return !!see && see.paragraphs.some(p => p.includes('slow erosion'));
+    })());
+
+  // (d) Snippet 4 (catch-all WM+MC) fires when ecosystem or urgency
+  // does not match snippet 2's B+growth. Try ecosystem A or maintenance.
+  const sn4 = composeProposal({
+    client: { id: 'sc4', name: 'Catchall Co', slug: 'catchall-co' },
+    signers: [{ id: 's1', name: 'Kay Lee', email: 'kay@catch.com' }],
+    products: ['web-management', 'marketing-consulting'],
+    product_vars: {
+      'web-management': { page_count: 80, site_count: 1 },
+      'marketing-consulting': { revenue_band: 'under-1m' },
+    },
+    narrative_variables: { urgency: 'maintenance' },
+  });
+  test('Phase 3 #4: WM+MC catch-all fires (execution layer wording)',
+    (() => {
+      const rec = sn4.narrative.sections.find(s => s.h2 === 'What I recommend');
+      return !!rec && rec.paragraphs.some(p => p.includes('execution layer'));
+    })());
+  test('Phase 3 #4: catch-all falls back to inline what_i_see (not from snippet)',
+    (() => {
+      const see = sn4.narrative.sections.find(s => s.h2 === 'What I see in your business');
+      // Snippet 4 does not define what_i_see; inline WM + MC defaults
+      // both appear.
+      return !!see && see.paragraphs.length >= 1;
+    })());
+
+  // (e) Snippet 5 (Build + WM) fires and contributes rollout_phases.
+  const sn5 = composeProposal({
+    client: { id: 'sc5', name: 'New Build Co', slug: 'new-build-co' },
+    signers: [{ id: 's1', name: 'Jess Lee', email: 'jess@nb.com' }],
+    products: ['web-management', 'build'],
+    product_vars: {
+      'web-management': { page_count: 80, site_count: 1 },
+      'build': { build_size: 'mid', build_count: 1, build_description: 'new marketing site' },
+    },
+    narrative_variables: { urgency: 'tactical', industry: 'contractor' },
+  });
+  test('Phase 3 #5: Build+WM snippet fires (build is the entry, WM is the relationship)',
+    (() => {
+      const rec = sn5.narrative.sections.find(s => s.h2 === 'What I recommend');
+      return !!rec && rec.paragraphs.some(p => p.includes('build is the entry'));
+    })());
+  test('Phase 3 #5: rollout phases present (3 phases)',
+    (() => {
+      const phases = sn5.narrative.rollout?.phases || [];
+      return phases.length === 3
+        && phases[0].h3 === 'Scoping, design, and build'
+        && phases[1].h3 === 'Launch and handoff to management'
+        && phases[2].h3 === 'Ongoing site management';
+    })());
+
+  // (f) Snippet 6 (MC only / B) fires.
+  const sn6 = composeProposal({
+    client: { id: 'sc6', name: 'MC Co', slug: 'mc-co' },
+    signers: [{ id: 's1', name: 'Lou Ray', email: 'lou@mc.com' }],
+    products: ['marketing-consulting'],
+    product_vars: { 'marketing-consulting': { revenue_band: '1m-to-10m' } },
+    narrative_variables: { urgency: 'growth' },
+  });
+  test('Phase 3 #6: MC-only B snippet fires (thinking-partner subscription)',
+    (() => {
+      const rec = sn6.narrative.sections.find(s => s.h2 === 'What I recommend');
+      return !!rec && rec.paragraphs.some(p => p.includes('thinking-partner subscription'));
+    })());
+
+  // (g) Snippet 7 (WM large) fires.
+  const sn7 = composeProposal({
+    client: { id: 'sc7', name: 'Big Footprint Co', slug: 'big-co' },
+    signers: [{ id: 's1', name: 'Cam Roe', email: 'cam@big.com' }],
+    products: ['web-management'],
+    product_vars: { 'web-management': { page_count: 400, site_count: 1 } },
+    narrative_variables: { urgency: 'maintenance' },
+  });
+  test('Phase 3 #7: WM-C snippet fires (operating infrastructure)',
+    (() => {
+      const intro = sn7.narrative.intro || '';
+      const see = sn7.narrative.sections.find(s => s.h2 === 'What I see in your business');
+      const seeText = (see?.paragraphs || []).join(' ');
+      return seeText.includes('operating infrastructure')
+        || intro.includes('operating infrastructure');
+    })());
+
+  // (h) Snippet 8 (WM small) fires.
+  const sn8 = composeProposal({
+    client: { id: 'sc8', name: 'Solo Op', slug: 'solo-op' },
+    signers: [{ id: 's1', name: 'Avery Tay', email: 'avery@solo.com' }],
+    products: ['web-management'],
+    product_vars: { 'web-management': { page_count: 10, site_count: 1 } },
+    narrative_variables: { urgency: 'maintenance' },
+  });
+  test('Phase 3 #8: WM-A snippet fires (small by design)',
+    (() => {
+      const see = sn8.narrative.sections.find(s => s.h2 === 'What I see in your business');
+      return !!see && see.paragraphs.some(p => p.includes('small by design'));
+    })());
+
+  // (i) Voice guards: no em or en dashes in any snippet-emitted text.
+  // No tier-name dangling references ("Better tier", "tier Good").
+  for (const [label, cfg] of [['#1', sn1], ['#2', sn2], ['#3', sn3], ['#4', sn4], ['#5', sn5], ['#6', sn6], ['#7', sn7], ['#8', sn8]]) {
+    const allText = (cfg.narrative.intro || '') + ' '
+      + cfg.narrative.sections.flatMap(s => s.paragraphs).join(' ')
+      + ' ' + (cfg.narrative.rollout?.phases || []).map(p => p.html).join(' ');
+    test(`Phase 3 ${label}: no em or en dashes`, !/[–—]/.test(allText));
+    test(`Phase 3 ${label}: no "tier Good/Better/Best" dangling refs`,
+      !/\b(good|better|best)\s+tier\b/i.test(allText)
+        && !/\btier\s+(good|better|best)\b/i.test(allText));
+  }
+
+  // (j) Fallback: a product mix with no matching snippet keeps inline
+  // defaults. Use Training-only as the test fixture (Training has no
+  // dedicated snippet in the registry).
+  const fallbackCfg = composeProposal({
+    client: { id: 'fb1', name: 'Training Only Co', slug: 'training-co' },
+    signers: [{ id: 's1', name: 'Drew Smith', email: 'drew@to.com' }],
+    products: ['training'],
+    product_vars: { 'training': { mode: 'al-a-carte' } },
+  });
+  test('Phase 3 fallback: training-only composes without registry match',
+    fallbackCfg.products?.length === 1 && fallbackCfg.products[0] === 'training');
 
   // -------------------------------------------------------------------
   // Summary

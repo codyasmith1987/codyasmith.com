@@ -10,7 +10,7 @@
 // applied per-field with a click. The prompt tells Gemini to be
 // honest about uncertainty (confidence flags, "unknown" fallback).
 
-export const PROMPT_VERSION = 'client-research-v2';
+export const PROMPT_VERSION = 'client-research-v3';
 
 export const SYSTEM_PROMPT = `You are a research assistant for Cody A Smith LLC, a Web Management and Marketing Consulting practice. You look at scraped web content about a prospective client and return a structured assessment used to seed a proposal builder.
 
@@ -80,7 +80,7 @@ export function buildUserPrompt(input: UserPromptInput): string {
   "industry_evidence": "one short sentence",
   "inferred_urgency": "tactical" | "growth" | "maintenance" | "unknown",
   "urgency_evidence": "one short sentence",
-  "inferred_focus": ["revenue" | "brand" | "takeover" | "search" | "pre-sell" | "hiring"],
+  "inferred_focus": ["revenue" | "brand" | "takeover" | "search" | "pre-sell"],
   "domains_found": [{"domain": "...", "role_guess": "primary" | "micro-site" | "subsidiary" | "other", "confidence": "low" | "medium" | "high"}],
   "estimated_page_count": number | null,
   "page_count_source": "one short sentence",

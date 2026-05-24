@@ -42,7 +42,7 @@ const VALID_INDUSTRY: ReadonlySet<IndustryGuess> = new Set([
 ]);
 const VALID_URGENCY: ReadonlySet<UrgencyGuess> = new Set(['tactical', 'growth', 'maintenance', 'unknown']);
 const VALID_FOCUS: ReadonlySet<FocusTag> = new Set([
-  'revenue', 'brand', 'takeover', 'search', 'pre-sell', 'hiring',
+  'revenue', 'brand', 'takeover', 'search', 'pre-sell',
 ]);
 
 export interface ResearchClientArgs {

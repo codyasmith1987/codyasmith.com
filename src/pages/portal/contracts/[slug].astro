@@ -478,6 +478,15 @@ const printHref = `/portal/contracts/${agreement.slug}/print`;
 
   function saveIntake(triggeredFieldId) {
     var status = triggeredFieldId ? document.getElementById('save-' + triggeredFieldId) : null;
+    // Show "Saving..." synchronously so the indicator is correct while
+    // the request is in flight. Then flip to "Saved" or an error state
+    // after the response. Without this, the indicator only appeared
+    // after the fetch returned, and quick networks looked like nothing
+    // happened.
+    if (status) {
+      status.textContent = 'Saving…';
+      status.classList.add('visible');
+    }
     return fetch('/portal/api/contracts/' + cfg.slug + '/intake', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-csrf-token': csrfToken },
@@ -485,11 +494,25 @@ const printHref = `/portal/contracts/${agreement.slug}/print`;
     }).then(function(r) {
       return r.json().then(function(d) { return { ok: r.ok, data: d }; });
     }).then(function(result) {
-      if (status && result.ok) {
-        status.classList.add('visible');
-        setTimeout(function() { status.classList.remove('visible'); }, 1400);
+      if (status) {
+        if (result.ok) {
+          status.textContent = 'Saved';
+          // Keep the confirmation visible longer than the previous 1.4s
+          // so the user actually catches it on slower screens.
+          setTimeout(function() { status.classList.remove('visible'); }, 2200);
+        } else {
+          status.textContent = 'Save failed';
+          status.classList.add('visible');
+          if (window.__toast) window.__toast('Failed to save. Try again.', 'error');
+        }
       }
       return result;
+    }).catch(function() {
+      if (status) {
+        status.textContent = 'Save failed';
+        status.classList.add('visible');
+      }
+      if (window.__toast) window.__toast('Network error saving. Try again.', 'error');
     });
   }
 

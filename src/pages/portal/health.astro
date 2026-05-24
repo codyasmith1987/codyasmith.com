@@ -48,6 +48,14 @@ const clients = isAdmin ? await getAllClients() : [];
             <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">low priority</p>
           </div>
         </div>
+        <details class="mt-6 group">
+          <summary class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase cursor-pointer hover:text-amber-600 transition-colors duration-300 select-none">Priority guide</summary>
+          <div class="mt-3 p-4 bg-neutral-900/30 border border-white/5 rounded-lg space-y-2 text-sm text-neutral-300">
+            <p><span class="inline-block w-3 h-3 rounded-full bg-red-400 mr-2 align-middle"></span><strong>Critical / High:</strong> Blocks search engines or breaks the user experience. Fix soon. Examples: missing H1, page returning 5xx, broken canonical tag.</p>
+            <p><span class="inline-block w-3 h-3 rounded-full bg-amber-600 mr-2 align-middle"></span><strong>Medium:</strong> Hurts search performance or content quality but does not break the site. Worth addressing this cycle. Examples: thin content, missing alt text, duplicate page titles.</p>
+            <p><span class="inline-block w-3 h-3 rounded-full bg-neutral-500 mr-2 align-middle"></span><strong>Low priority:</strong> Refinements and nice-to-haves. Address when the higher-priority items are clear. Examples: page titles slightly over the recommended length, single-page link issues.</p>
+          </div>
+        </details>
       </div>
     </div>
 

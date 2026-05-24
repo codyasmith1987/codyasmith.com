@@ -48,12 +48,23 @@ const statusColors: Record<string, string> = {
     <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-8">
       <div class="grid grid-cols-1 sm:grid-cols-4 gap-5">
         <div>
-          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Status</label>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" title="draft: not yet sent | sent: emailed to client, awaiting payment | paid: full balance received | partial: payment received but balance remains | overdue: past due date, not paid | cancelled: voided, no payment expected">Status</label>
           <select id="f-status" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
             {['draft', 'sent', 'paid', 'partial', 'overdue', 'cancelled'].map(s => (
               <option value={s} selected={s === invoice.status}>{s}</option>
             ))}
           </select>
+          <details class="mt-2 group">
+            <summary class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase cursor-pointer hover:text-amber-600 transition-colors select-none">What each status means</summary>
+            <div class="mt-2 text-[11px] text-neutral-400 space-y-1">
+              <p><strong class="text-neutral-200">draft:</strong> Not yet sent to client.</p>
+              <p><strong class="text-neutral-200">sent:</strong> Emailed to client, awaiting payment.</p>
+              <p><strong class="text-neutral-200">paid:</strong> Full balance received.</p>
+              <p><strong class="text-neutral-200">partial:</strong> Some payment received, balance remains.</p>
+              <p><strong class="text-neutral-200">overdue:</strong> Past due date, no payment received.</p>
+              <p><strong class="text-neutral-200">cancelled:</strong> Voided. No payment expected.</p>
+            </div>
+          </details>
         </div>
         <div>
           <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Issued date</label>

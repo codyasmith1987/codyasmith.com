@@ -208,13 +208,13 @@ function formatLabel(format: string): string {
 
       progress.classList.remove('hidden');
 
-      // Batch into groups of 10 files per request. Each request
-      // carries multiple files; the server iterates internally. Two
-      // benefits: avoids the burst pattern Cloudflare sees as
-      // brute-force, and reduces total round-trips. The legacy
-      // single-file path on the endpoint still works for direct API
-      // callers.
-      const BATCH_SIZE = 10;
+      // Batch into small groups per request. Smaller batches keep
+      // each request fast (server timeout headroom), keep peak
+      // memory low while parsing 10MB-max files, and keep the
+      // multipart body well under DO/CF size limits. The legacy
+      // single-file path on the endpoint still works for direct
+      // API callers.
+      const BATCH_SIZE = 3;
       const batches: File[][] = [];
       for (let i = 0; i < files.length; i += BATCH_SIZE) {
         batches.push(files.slice(i, i + BATCH_SIZE));

@@ -80,8 +80,19 @@ async function processOne(
 export const POST: APIRoute = async ({ locals, request }) => {
   if (locals.user?.role !== 'admin') return json({ error: 'Forbidden' }, 403);
 
+  let formData: FormData;
   try {
-    const formData = await request.formData();
+    formData = await request.formData();
+  } catch (err: any) {
+    // Multipart parse can throw on malformed bodies, oversized
+    // payloads, or premature client disconnect. Return a clean JSON
+    // 400 so the wizard surfaces a useful message rather than
+    // letting Astro emit an empty 5xx that Cloudflare wraps as 520.
+    logger.error('CSV upload formData parse failed', err);
+    return json({ error: `Could not read upload body: ${err?.message || 'parse failed'}` }, 400);
+  }
+
+  try {
     const clientId = formData.get('client_id') as string;
     const month = formData.get('month') as string;
 

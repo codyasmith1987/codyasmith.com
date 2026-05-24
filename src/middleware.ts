@@ -9,6 +9,23 @@ import { SECURITY_HEADERS } from './lib/security-headers';
 
 let reqCounter = 0;
 
+// Allow-list of origins permitted to make state-mutating POSTs to
+// /portal/api/. Astro's checkOrigin is disabled because the framework
+// uses request.url.host, which behind Cloudflare + DO can be the DO
+// ingress hostname; our own check uses an explicit list so header
+// rewrites cannot turn it into a false positive or false negative.
+const ALLOWED_ORIGINS: Set<string> = new Set([
+  'https://codyasmith.com',
+  'https://www.codyasmith.com',
+]);
+// Dev origins: enabled only when running in non-production mode so a
+// production runtime never accepts a localhost-origin request.
+if (import.meta.env.DEV || process.env.NODE_ENV === 'development') {
+  ALLOWED_ORIGINS.add('http://localhost:4321');
+  ALLOWED_ORIGINS.add('http://localhost:3000');
+  ALLOWED_ORIGINS.add('http://127.0.0.1:4321');
+}
+
 export const onRequest = defineMiddleware(async (context, next) => {
   // Run migrations once at cold start (race-safe, idempotent)
   await runMigrations();
@@ -109,9 +126,26 @@ async function handleRequest(context: Parameters<Parameters<typeof defineMiddlew
     });
   }
 
-  // CSRF validation for all state-mutating requests to portal API routes
+  // Origin check + CSRF validation on all state-mutating requests to
+  // portal API routes. Two independent defenses against cross-site
+  // POSTs that try to ride the user's session cookie.
+  //
+  // Astro's framework-level security.checkOrigin is disabled in
+  // astro.config.mjs because behind Cloudflare + DO App Platform the
+  // host header sometimes resolves to the DO ingress instead of
+  // codyasmith.com, producing false-positive 403s. This middleware
+  // does the same check against an explicit allow-list so it cannot
+  // be confused by header rewrites.
   const mutating = ['POST', 'PUT', 'DELETE', 'PATCH'];
   if (mutating.includes(context.request.method) && context.url.pathname.startsWith('/portal/api/')) {
+    const origin = context.request.headers.get('origin');
+    if (origin && !ALLOWED_ORIGINS.has(origin)) {
+      return new Response(JSON.stringify({ error: 'Origin not allowed' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     const csrfToken = context.request.headers.get('X-CSRF-Token');
     if (!validateCsrfToken(result.session!.id, csrfToken || '')) {
       return new Response(JSON.stringify({ error: 'Invalid or missing CSRF token' }), {

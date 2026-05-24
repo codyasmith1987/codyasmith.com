@@ -172,7 +172,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           <div id="derived-domains-slot" class="hidden mt-3 p-3 bg-neutral-900/40 border border-amber-500/20 rounded-md">
             <p class="text-[10px] font-mono text-amber-400 tracking-wide uppercase mb-2">Detected from your uploaded data</p>
             <div id="derived-domains-list" class="flex flex-wrap gap-2"></div>
-            <p class="text-[11px] text-neutral-500 mt-2">Click one to use it as the primary domain for this client.</p>
+            <p class="text-[11px] text-neutral-500 mt-2">Click an unset chip to make it the primary domain. Click the primary chip again to re-run research.</p>
           </div>
 
           <div id="research-domain-slot" class="hidden mt-3 p-3 bg-neutral-900/40 border border-amber-500/20 rounded-md">
@@ -831,13 +831,20 @@ const todayISO = new Date().toISOString().slice(0, 10);
         // Show the URL count next to the hostname so admin can see how
         // much crawl data backs each derived domain.
         const countSuffix = d.url_count > 1 ? ` (${d.url_count} URLs)` : '';
-        btn.textContent = d.domain + countSuffix + (isPrimary ? ' — primary' : '');
+        btn.textContent = d.domain + countSuffix + (isPrimary ? ' (primary, click to re-research)' : '');
         btn.title = `From ${d.source === 'crawl_urls' ? 'Screaming Frog crawl' : 'rank-tracking upload'}: ${d.url_sample}`;
         btn.addEventListener('click', () => {
-          // If this chip is already the primary domain, do nothing.
-          // Re-triggering save would re-render the panel and wipe
-          // any research results the admin already pulled.
-          if (state.client_domain === d.domain) return;
+          // Chip is the fast path. Two modes:
+          //   - Not yet primary: set this chip's domain as the
+          //     client's primary, trigger save.
+          //   - Already primary: skip the save (which would wipe any
+          //     research panel results) and fire the Research button
+          //     directly so the admin gets immediate feedback on
+          //     click instead of a confusing no-op.
+          if (state.client_domain === d.domain) {
+            researchBtn.click();
+            return;
+          }
           researchDomainInput.value = d.domain;
           researchDomainSlot.classList.remove('hidden');
           researchDomainSave.click();

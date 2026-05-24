@@ -49,6 +49,22 @@ function parseFloat0(raw: string | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+// Batch size for parallel INSERTs. Tuned to keep Turso happy without
+// blowing the per-file ingest budget on a Cloudflare-fronted POST.
+// 50 mirrors the crawl_internal parser, which has shipped fine for
+// 5000+ row SF crawls.
+const INSERT_BATCH = 50;
+
+// Run INSERTs in parallel chunks. One Promise.all per chunk so a
+// single failure rejects fast rather than the for-loop swallowing
+// hundreds of round-trips one at a time.
+async function bulkInsert(sql: string, allArgs: any[][]) {
+  for (let i = 0; i < allArgs.length; i += INSERT_BATCH) {
+    const chunk = allArgs.slice(i, i + INSERT_BATCH);
+    await Promise.all(chunk.map(args => turso.execute({ sql, args })));
+  }
+}
+
 // Dimension files all share the same shape. The first column header
 // tells us the dimension type (Top pages vs Top queries vs Country
 // vs Device vs Search Appearance). Pass the dimension_type in
@@ -62,7 +78,11 @@ async function parseDimensionFile(
   dimensionType: string,
 ): Promise<number> {
   const result = Papa.parse(raw, { header: true, skipEmptyLines: true });
-  let count = 0;
+  const sql = `INSERT INTO gsc_dimensions
+                 (id, client_id, csv_upload_id, month, dimension_type, dimension_value,
+                  clicks, impressions, ctr, position)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  const inserts: any[][] = [];
   for (const row of result.data as any[]) {
     // First column varies by file (Top pages / Top queries / Country
     // / Device / Search Appearance) — grab whichever is present.
@@ -71,22 +91,16 @@ async function parseDimensionFile(
                   || row['Page'] || row['Query']
                   || Object.values(row)[0];
     if (!dimValue) continue;
-    await turso.execute({
-      sql: `INSERT INTO gsc_dimensions
-              (id, client_id, csv_upload_id, month, dimension_type, dimension_value,
-               clicks, impressions, ctr, position)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [
-        nanoid(), clientId, uploadId, month, dimensionType, String(dimValue),
-        parseInt0(row['Clicks']),
-        parseInt0(row['Impressions']),
-        parseCtrPercent(row['CTR']),
-        parseFloat0(row['Position']),
-      ],
-    });
-    count++;
+    inserts.push([
+      nanoid(), clientId, uploadId, month, dimensionType, String(dimValue),
+      parseInt0(row['Clicks']),
+      parseInt0(row['Impressions']),
+      parseCtrPercent(row['CTR']),
+      parseFloat0(row['Position']),
+    ]);
   }
-  return count;
+  await bulkInsert(sql, inserts);
+  return inserts.length;
 }
 
 export async function parseGscPages(raw: string, clientId: string, month: string, uploadId: string): Promise<number> {
@@ -106,29 +120,28 @@ export async function parseGscSearchAppearance(raw: string, clientId: string, mo
 }
 
 // Chart.csv — Date, Clicks, Impressions, CTR, Position. One row per
-// day in the export window.
+// day in the export window. Six months of daily data is ~180 rows;
+// batched insert keeps the whole file under a second.
 export async function parseGscChart(raw: string, clientId: string, month: string, uploadId: string): Promise<number> {
   const result = Papa.parse(raw, { header: true, skipEmptyLines: true });
-  let count = 0;
+  const sql = `INSERT INTO gsc_chart
+                 (id, client_id, csv_upload_id, month, date,
+                  clicks, impressions, ctr, position)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  const inserts: any[][] = [];
   for (const row of result.data as any[]) {
     const date = row['Date']?.toString().trim();
     if (!date) continue;
-    await turso.execute({
-      sql: `INSERT INTO gsc_chart
-              (id, client_id, csv_upload_id, month, date,
-               clicks, impressions, ctr, position)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [
-        nanoid(), clientId, uploadId, month, date,
-        parseInt0(row['Clicks']),
-        parseInt0(row['Impressions']),
-        parseCtrPercent(row['CTR']),
-        parseFloat0(row['Position']),
-      ],
-    });
-    count++;
+    inserts.push([
+      nanoid(), clientId, uploadId, month, date,
+      parseInt0(row['Clicks']),
+      parseInt0(row['Impressions']),
+      parseCtrPercent(row['CTR']),
+      parseFloat0(row['Position']),
+    ]);
   }
-  return count;
+  await bulkInsert(sql, inserts);
+  return inserts.length;
 }
 
 // Filters.csv — Filter, Value. Small metadata table.

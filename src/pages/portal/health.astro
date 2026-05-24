@@ -31,6 +31,9 @@ const clients = isAdmin ? await getAllClients() : [];
           <div>
             <h2 id="health-headline" class="font-serif text-xl text-neutral-100 mb-2"></h2>
             <p id="health-description" class="text-sm text-neutral-400 leading-relaxed"></p>
+            {isAdmin && (
+              <p id="health-admin-diag" class="hidden mt-2 text-[10px] font-mono text-neutral-500 tracking-wide"></p>
+            )}
           </div>
         </div>
         <!-- Issue breakdown bar -->
@@ -165,7 +168,7 @@ const clients = isAdmin ? await getAllClients() : [];
         if (!issuesRes.ok) throw new Error('Failed to load health data');
         const data = await issuesRes.json();
         const issues = data.issues || [];
-        const stats = statsRes && statsRes.ok ? await statsRes.json() : { total_html_pages: 0, distinct_affected_urls: 0 };
+        const stats = statsRes && statsRes.ok ? await statsRes.json() : { navigable_pages: 0, urls_crawled: 0, distinct_affected_urls: 0 };
 
         loadingEl.classList.add('hidden');
 
@@ -189,21 +192,26 @@ const clients = isAdmin ? await getAllClients() : [];
         document.getElementById('health-grade').textContent = grade.icon;
         document.getElementById('health-grade').className = `w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold shrink-0 ${grade.color}`;
 
-        // Honest counts. total_html_pages is the number of REAL pages
-        // on the site (status 200, html content-type). distinct_affected_urls
-        // is the count of those pages with at least one issue. Falls
-        // back to a rolled-up affected_urls sum when the per-issue
-        // URL lists have not been ingested yet.
-        const totalHtmlPages = Number(stats.total_html_pages) || 0;
+        // Counts framed the way clients name pages. navigable_pages is
+        // the number a client would give if asked to list their pages
+        // by hand: status 200, indexable, HTML, with tag archives,
+        // pagination, feeds, attachment URLs, and WordPress utility
+        // endpoints excluded. distinct_affected_urls counts pages (the
+        // same universe) with at least one issue this month. Falls
+        // back to summed affected_urls when the per-issue URL lists
+        // have not been ingested yet — that sum is over-rolled-up,
+        // but better than zero.
+        const navigablePages = Number(stats.navigable_pages) || 0;
+        const urlsCrawled = Number(stats.urls_crawled) || 0;
         let distinctAffectedUrls = Number(stats.distinct_affected_urls) || 0;
         if (distinctAffectedUrls === 0) {
           distinctAffectedUrls = issues.reduce((s, i) => s + (i.affected_urls || 0), 0);
         }
-        // Build the "X of Y" framing only when we actually have a real
-        // page count to anchor against. Otherwise just name the
-        // distinct-affected count without the denominator.
-        const pageFraming = totalHtmlPages > 0
-          ? `${distinctAffectedUrls} of your ${totalHtmlPages} page${totalHtmlPages !== 1 ? 's' : ''}`
+        // Build the "X of Y pages" framing only when we have a page
+        // count to anchor against. Otherwise just name the distinct
+        // affected count without the denominator.
+        const pageFraming = navigablePages > 0
+          ? `${distinctAffectedUrls} of your ${navigablePages} page${navigablePages !== 1 ? 's' : ''}`
           : `${distinctAffectedUrls} page${distinctAffectedUrls !== 1 ? 's' : ''}`;
         let headline = '', desc = '';
 
@@ -220,6 +228,20 @@ const clients = isAdmin ? await getAllClients() : [];
 
         document.getElementById('health-headline').textContent = headline;
         document.getElementById('health-description').textContent = desc;
+
+        // Admin-only diagnostic. Surfaces the gap between crawler
+        // reach and what we count as "your pages" so Cody can sanity
+        // check the utility-URL filter without exposing the inflated
+        // URL count to clients. Hidden unless isAdmin (Astro guard on
+        // the element render) AND we have crawl data.
+        if (isAdmin && urlsCrawled > 0) {
+          const diagEl = document.getElementById('health-admin-diag');
+          if (diagEl) {
+            const filtered = Math.max(0, urlsCrawled - navigablePages);
+            diagEl.textContent = `Admin: crawler saw ${urlsCrawled} URLs; ${filtered} filtered as utility (tag archives, pagination, feeds, attachment, WP system).`;
+            diagEl.classList.remove('hidden');
+          }
+        }
 
         const grouped = ISSUE_CATEGORIES.map(cat => ({
           ...cat,

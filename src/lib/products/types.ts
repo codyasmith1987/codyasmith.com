@@ -205,6 +205,11 @@ export interface ProductContext {
   // picks (used for narrative composition and for training-mode
   // auto-routing when WM/MC is at Best).
   otherProducts: Array<{ id: ProductId; tierId: TierId | null }>;
+  // Managed sites for the client (from client_sites where is_managed
+  // = 1). WM's buildScheduleAContribution renders real domain rows
+  // from this list when present. Empty / undefined falls back to
+  // placeholder rows derived from variables.site_count.
+  managedSites?: Array<{ domain: string; label?: string | null; is_primary?: boolean }>;
 }
 
 export interface ProductDefinition {

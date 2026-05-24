@@ -17,6 +17,7 @@ import {
 } from '../../../../../lib/agreements';
 import { getDraft } from '../../../../../lib/proposal-drafts';
 import { buildScheduleA } from '../../../../../lib/contract-schedule';
+import { listManagedSites } from '../../../../../lib/client-sites';
 import { computePricing } from '../../../../../lib/proposal-pricing';
 import { sendScheduleChangedEmail } from '../../../../../lib/contract-emails';
 import turso from '../../../../../lib/turso';
@@ -87,12 +88,16 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
       const draft = await getDraft(agreement.client_id, pr[1] as string);
       const selections = draft?.selections || {};
       const pricing = computePricing(config?.pricing_formula || '', selections);
+      const managedSites = (await listManagedSites(agreement.client_id)).map(s => ({
+        domain: s.domain, label: s.label, is_primary: s.is_primary,
+      }));
       const newScheduleA = buildScheduleA({
         proposalConfig: config,
         draftSelections: selections,
         pricing,
         clientMetadata: metadata,
         effectiveDate: agreement.schedule_a?.effective_date || new Date().toISOString().slice(0, 10),
+        managedSites,
       });
       await updateAgreementScheduleA(agreement.id, newScheduleA);
       scheduleARebuilt = true;

@@ -19,6 +19,10 @@ export interface ScheduleAContext {
   pricing: PricingLike | null;
   clientMetadata: ClientMetadataInput;
   effectiveDate: string;
+  // Managed sites for the client, read from client_sites where
+  // is_managed = 1. Used by the WM product's buildScheduleAContribution
+  // to render real domain rows on Schedule A instead of placeholders.
+  managedSites?: Array<{ domain: string; label?: string | null; is_primary?: boolean }>;
 }
 
 export interface PricingLike {
@@ -165,6 +169,12 @@ function buildScheduleAForProductDrivenV1(ctx: ScheduleAContext): ScheduleA {
       productVars,
       products,
     });
+    // Inject managedSites so WM (and any future product that cares)
+    // can render real domain rows on Schedule A instead of falling
+    // back to "(primary domain confirmed at signing)" placeholders.
+    if (ctx.managedSites && ctx.managedSites.length > 0) {
+      (productCtx as any).managedSites = ctx.managedSites;
+    }
     const pricing = product.computePricing(productCtx);
     const contribution = product.buildScheduleAContribution(productCtx, pricing);
 

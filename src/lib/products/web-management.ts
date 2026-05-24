@@ -400,14 +400,33 @@ export const webManagementProduct: ProductDefinition = {
     const eco = WM_ECOSYSTEMS[ctx.ecosystemId];
     const tier = eco?.tiers[ctx.tierId];
     if (!tier) return { products_purchased: { web_management: false } };
-    const sites = numberFromVar(ctx.variables.site_count, 1);
-    // Sites are left as placeholders here; the wizard does not collect
-    // per-domain names yet (v2 work). Schedule A admin editor or the
-    // override path can fill them.
-    const siteRows = Array.from({ length: sites }, (_, i) => ({
-      domain: i === 0 ? '(primary domain confirmed at signing)' : `(additional site ${i + 1} domain confirmed at signing)`,
-      description: '',
-    }));
+
+    // Prefer the real managed-sites list when present so Schedule A
+    // shows actual domains. Falls back to placeholder rows derived
+    // from site_count when client_sites has not been populated yet
+    // (legacy clients pre-migration 033, or new clients with no
+    // uploaded data and no manual additions).
+    let siteRows: Array<{ domain: string; description: string }>;
+    let sites: number;
+    if (ctx.managedSites && ctx.managedSites.length > 0) {
+      // Primary first, then everything else in stable order. Real
+      // labels override the domain string when set.
+      const sorted = [...ctx.managedSites].sort((a, b) => {
+        if (!!a.is_primary === !!b.is_primary) return a.domain.localeCompare(b.domain);
+        return a.is_primary ? -1 : 1;
+      });
+      siteRows = sorted.map(s => ({
+        domain: s.label && s.label !== s.domain ? `${s.label} (${s.domain})` : s.domain,
+        description: s.is_primary ? 'primary site' : '',
+      }));
+      sites = sorted.length;
+    } else {
+      sites = numberFromVar(ctx.variables.site_count, 1);
+      siteRows = Array.from({ length: sites }, (_, i) => ({
+        domain: i === 0 ? '(primary domain confirmed at signing)' : `(additional site ${i + 1} domain confirmed at signing)`,
+        description: '',
+      }));
+    }
     return {
       products_purchased: { web_management: true },
       web_management: {

@@ -19,7 +19,6 @@ import Portal from '../../../../layouts/Portal.astro';
 import { getAllClients, getUsersByClientId } from '../../../../lib/auth';
 import turso from '../../../../lib/turso';
 import { PRODUCT_REGISTRY, PRODUCT_ORDER } from '../../../../lib/products';
-import { getClientDomainsFromData } from '../../../../lib/client-domains';
 
 export const prerender = false;
 
@@ -40,22 +39,35 @@ for (const c of clients) {
     .map(u => ({ id: u.id, name: u.name, email: u.email }));
 }
 
-// Derived domains per client: hostnames extracted from already-
-// uploaded Screaming Frog Internal HTML crawls (crawl_urls) and
-// rank-tracking data (keyword_rankings). Empty for clients with
-// neither type of upload; the wizard then falls back to the manual
-// single-domain input.
-const derivedDomainsByClient: Record<string, Array<{ domain: string; source: string; url_sample: string; url_count: number }>> = {};
-for (const c of clients) {
-  const derived = await getClientDomainsFromData(c.id);
-  if (derived.length > 0) {
-    derivedDomainsByClient[c.id] = derived.map(d => ({
-      domain: d.domain,
-      source: d.source,
-      url_sample: d.url_sample,
-      url_count: d.url_count,
-    }));
-  }
+// Existing client_sites per client. The wizard lazy-syncs new
+// detections from uploaded data when a client is picked (POST
+// /portal/api/admin/clients/sites with action=sync); this pre-load
+// is just the already-saved rows so the page paints fast.
+const clientSitesRows = await turso.execute({
+  sql: `SELECT id, client_id, domain, is_primary, is_managed, label, sort_order
+        FROM client_sites
+        ORDER BY is_primary DESC, sort_order ASC, domain ASC`,
+  args: [],
+});
+const clientSitesByClient: Record<string, Array<{
+  id: string;
+  domain: string;
+  is_primary: boolean;
+  is_managed: boolean;
+  label: string | null;
+  sort_order: number;
+}>> = {};
+for (const row of clientSitesRows.rows as any[]) {
+  const cid = row[1] as string;
+  if (!clientSitesByClient[cid]) clientSitesByClient[cid] = [];
+  clientSitesByClient[cid].push({
+    id: row[0] as string,
+    domain: row[2] as string,
+    is_primary: !!(row[3] as number),
+    is_managed: !!(row[4] as number),
+    label: (row[5] as string | null) ?? null,
+    sort_order: (row[6] as number) ?? 0,
+  });
 }
 
 // Latest aggregate total_urls per client so the WM page_count input
@@ -323,7 +335,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
     </form>
   </div>
 
-  <script is:inline define:vars={{ todayLong, productManifest, usersByClient, latestTotalUrls, derivedDomainsByClient }}>
+  <script is:inline define:vars={{ todayLong, productManifest, usersByClient, latestTotalUrls, clientSitesByClient }}>
     // =========================================================================
     // Wizard state
     // =========================================================================
@@ -362,7 +374,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
     const clientSelect = document.getElementById('client_id');
     const prefillNote = document.getElementById('client-prefill-note');
 
-    clientSelect.addEventListener('change', () => {
+    clientSelect.addEventListener('change', async () => {
       const opt = clientSelect.selectedOptions[0];
       if (!opt) return;
       state.client_id = opt.value;
@@ -375,6 +387,14 @@ const todayISO = new Date().toISOString().slice(0, 10);
         // Reset signers from client users.
         state.signers = users.map(u => ({ name: u.name, email: u.email }));
         renderSigners();
+
+        // Lazy-sync client_sites from uploaded data. Picks up newly-
+        // detected hostnames from crawls / rank-tracker uploads
+        // without touching admin overrides on existing rows.
+        await syncClientSites();
+        renderDerivedDomains();
+        syncWmSiteCountFromManaged();
+
         // Pre-fill page_count when WM is in scope and a crawl exists.
         if (state.products.includes('web-management') && latestTotalUrls[state.client_id]) {
           state.product_vars['web-management'] = {
@@ -388,6 +408,8 @@ const todayISO = new Date().toISOString().slice(0, 10);
         hints.push(`Title -> Engagement Proposal for ${state.client_name}`);
         hints.push(`Slug -> ${state.client_slug}`);
         if (latestTotalUrls[state.client_id]) hints.push(`Crawl total_urls -> ${latestTotalUrls[state.client_id]}`);
+        const managedCount = (clientSitesCache[state.client_id] || []).filter(s => s.is_managed).length;
+        if (managedCount > 0) hints.push(`Managed sites -> ${managedCount}`);
         prefillNote.textContent = hints.join('  |  ');
         prefillNote.classList.remove('hidden');
       } else {
@@ -812,49 +834,147 @@ const todayISO = new Date().toISOString().slice(0, 10);
     const derivedDomainsSlot = document.getElementById('derived-domains-slot');
     const derivedDomainsList = document.getElementById('derived-domains-list');
 
+    // client_sites cache, populated server-side and refreshed after
+    // each sites action.
+    let clientSitesCache = clientSitesByClient;
+
+    async function callSitesApi(payload) {
+      const res = await fetch('/portal/api/admin/clients/sites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify(payload),
+      });
+      const rawText = await res.text();
+      let data = null;
+      try { data = rawText ? JSON.parse(rawText) : null; } catch {}
+      if (res.ok && data && data.ok) {
+        if (Array.isArray(data.sites)) {
+          clientSitesCache[state.client_id] = data.sites.map(s => ({
+            id: s.id, domain: s.domain,
+            is_primary: !!s.is_primary, is_managed: !!s.is_managed,
+            label: s.label || null, sort_order: s.sort_order || 0,
+          }));
+        }
+        return { ok: true, data };
+      }
+      const msg = (data && data.error) ? data.error : `HTTP ${res.status}${rawText ? ': ' + rawText.slice(0, 140) : ''}`;
+      return { ok: false, error: msg };
+    }
+
+    async function syncClientSites() {
+      const result = await callSitesApi({ client_id: state.client_id, action: 'sync' });
+      return result.ok;
+    }
+
     function renderDerivedDomains() {
       derivedDomainsList.innerHTML = '';
-      const list = derivedDomainsByClient[state.client_id] || [];
-      if (list.length === 0) {
+      const list = clientSitesCache[state.client_id] || [];
+      const managed = list.filter(s => s.is_managed);
+      if (managed.length === 0) {
         derivedDomainsSlot.classList.add('hidden');
         return;
       }
       derivedDomainsSlot.classList.remove('hidden');
-      for (const d of list) {
+
+      // Keep state.client_domain in sync with the primary site so the
+      // research button and other consumers know what to use.
+      const primary = list.find(s => s.is_primary);
+      if (primary) state.client_domain = primary.domain;
+
+      for (const s of managed) {
+        const wrap = document.createElement('div');
+        wrap.className = 'inline-flex items-center gap-0.5';
+
         const btn = document.createElement('button');
         btn.type = 'button';
-        const isPrimary = state.client_domain === d.domain;
-        btn.className = 'px-3 py-1.5 text-xs rounded-md font-mono transition-colors ' +
+        const isPrimary = s.is_primary;
+        btn.className = 'px-3 py-1.5 text-xs rounded-l-md font-mono transition-colors ' +
           (isPrimary
             ? 'bg-amber-500/20 border border-amber-500/60 text-amber-300'
             : 'bg-neutral-900/60 border border-white/10 text-neutral-300 hover:border-amber-500/40 hover:text-amber-400');
-        // Label is just the domain. The amber active styling already
-        // tells you which one is primary; the URL count and source
-        // move to the tooltip so the visible label stays clean.
-        btn.textContent = d.domain;
-        const countText = d.url_count > 1 ? ` (${d.url_count} URLs)` : '';
-        const sourceLabel = d.source === 'crawl_urls' ? 'Screaming Frog crawl' : 'rank-tracking upload';
+        btn.textContent = s.label || s.domain;
         btn.title = isPrimary
-          ? `Primary domain${countText}. Click to re-run research. From ${sourceLabel}: ${d.url_sample}`
-          : `Click to set as primary${countText}. From ${sourceLabel}: ${d.url_sample}`;
-        btn.addEventListener('click', () => {
-          // Chip is the fast path. Two modes:
-          //   - Not yet primary: set this chip's domain as the
-          //     client's primary, trigger save.
-          //   - Already primary: skip the save (which would wipe any
-          //     research panel results) and fire the Research button
-          //     directly so the admin gets immediate feedback on
-          //     click instead of a confusing no-op.
-          if (state.client_domain === d.domain) {
+          ? `Primary research target. Click to re-run research.`
+          : `Click to make ${s.domain} the primary research target.`;
+        btn.addEventListener('click', async () => {
+          if (s.is_primary) {
             researchBtn.click();
             return;
           }
-          researchDomainInput.value = d.domain;
-          researchDomainSlot.classList.remove('hidden');
-          researchDomainSave.click();
+          const result = await callSitesApi({ client_id: state.client_id, action: 'set_primary', site_id: s.id });
+          if (result.ok) {
+            state.client_domain = s.domain;
+            const opt = clientSelect.selectedOptions[0];
+            if (opt) opt.dataset.domain = s.domain;
+            renderDerivedDomains();
+            refreshResearchPanel();
+          } else {
+            alert(`Could not set primary: ${result.error}`);
+          }
         });
-        derivedDomainsList.appendChild(btn);
+        wrap.appendChild(btn);
+
+        // Small x button to unmanage (cannot remove the primary; user
+        // must promote another first).
+        if (!isPrimary) {
+          const xBtn = document.createElement('button');
+          xBtn.type = 'button';
+          xBtn.className = 'px-2 py-1.5 text-xs rounded-r-md border border-l-0 ' +
+            'bg-neutral-900/60 border-white/10 text-neutral-500 hover:bg-red-500/10 hover:border-red-500/40 hover:text-red-400 transition-colors';
+          xBtn.textContent = 'x';
+          xBtn.title = `Remove ${s.domain} from managed sites for this client`;
+          xBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!confirm(`Remove ${s.domain} from managed sites?`)) return;
+            const result = await callSitesApi({ client_id: state.client_id, action: 'toggle_managed', site_id: s.id, is_managed: false });
+            if (result.ok) {
+              renderDerivedDomains();
+              // Site count downstream: update WM site_count variable
+              // based on managed count.
+              syncWmSiteCountFromManaged();
+            } else {
+              alert(`Could not remove: ${result.error}`);
+            }
+          });
+          wrap.appendChild(xBtn);
+        }
+
+        derivedDomainsList.appendChild(wrap);
       }
+
+      // "Add site" inline at the end of the chip row.
+      const addWrap = document.createElement('div');
+      addWrap.className = 'inline-flex items-center gap-1';
+      const addInput = document.createElement('input');
+      addInput.type = 'text';
+      addInput.placeholder = '+ add site (example.com)';
+      addInput.className = 'px-2 py-1 text-xs bg-neutral-900/40 border border-dashed border-white/10 rounded-md text-neutral-400 font-mono w-44 focus:outline-none focus:border-amber-500/40';
+      addInput.addEventListener('keydown', async (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const domain = addInput.value.trim();
+        if (!domain) return;
+        const result = await callSitesApi({ client_id: state.client_id, action: 'add', domain });
+        if (result.ok) {
+          addInput.value = '';
+          renderDerivedDomains();
+          syncWmSiteCountFromManaged();
+        } else {
+          alert(`Could not add: ${result.error}`);
+        }
+      });
+      addWrap.appendChild(addInput);
+      derivedDomainsList.appendChild(addWrap);
+    }
+
+    function syncWmSiteCountFromManaged() {
+      const list = clientSitesCache[state.client_id] || [];
+      const managedCount = list.filter(s => s.is_managed).length;
+      if (managedCount === 0) return;
+      if (!state.product_vars['web-management']) state.product_vars['web-management'] = {};
+      state.product_vars['web-management'].site_count = managedCount;
+      // If WM is currently in scope, re-render variables to reflect.
+      if (state.products.includes('web-management')) renderVars();
     }
 
     function refreshResearchPanel() {

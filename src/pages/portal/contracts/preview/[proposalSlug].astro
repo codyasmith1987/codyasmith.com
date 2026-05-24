@@ -15,6 +15,7 @@ import { getDraft } from '../../../../lib/proposal-drafts';
 import { getClientMetadata } from '../../../../lib/agreements';
 import { getLatestContractTemplate } from '../../../../lib/contract-templates';
 import { buildScheduleA } from '../../../../lib/contract-schedule';
+import { listManagedSites } from '../../../../lib/client-sites';
 import { renderTemplate, renderScheduleA, PRACTICE } from '../../../../lib/contract-render';
 import { computePricing } from '../../../../lib/proposal-pricing';
 import ContractRenderer from '../../../../components/portal/ContractRenderer.astro';
@@ -69,6 +70,15 @@ const selections = draft?.selections || {};
 // Compute pricing (returns null if selections incomplete).
 const pricing = computePricing(proposalRow.config?.pricing_formula || '', selections);
 
+// Managed sites from client_sites table feed Schedule A's WM site
+// rows. Empty list falls back to placeholder rows derived from
+// site_count.
+const managedSites = (await listManagedSites(proposalRow.client_id)).map(s => ({
+  domain: s.domain,
+  label: s.label,
+  is_primary: s.is_primary,
+}));
+
 // Build Schedule A from whatever's currently selected.
 const effectiveDate = new Date().toISOString().slice(0, 10);
 const scheduleA = buildScheduleA({
@@ -77,6 +87,7 @@ const scheduleA = buildScheduleA({
   pricing,
   clientMetadata: clientMetadata || {},
   effectiveDate,
+  managedSites,
 });
 
 // Load template (latest standard).

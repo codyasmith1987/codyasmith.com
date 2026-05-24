@@ -1,0 +1,208 @@
+// CRUD + auto-sync helpers for the client_sites table.
+//
+// client_sites holds one row per managed domain per client. The
+// wizard chips read from it, Schedule A WM site rows iterate it,
+// the proposal builder reads is_managed=1 for the WM site_count
+// variable, and the research endpoint uses is_primary=1 to scope
+// Serper queries.
+//
+// syncDetectedDomains() is the auto-population entry point: given
+// the hostnames extracted from a client's uploaded data (crawl_urls,
+// keyword_rankings), it inserts new rows for hostnames not yet
+// tracked, leaves existing rows alone (so admin edits like
+// is_managed=0 and label overrides persist across re-uploads).
+
+import { nanoid } from 'nanoid';
+import turso from './turso';
+import { getClientDomainsFromData } from './client-domains';
+
+export interface ClientSite {
+  id: string;
+  client_id: string;
+  domain: string;
+  is_primary: boolean;
+  is_managed: boolean;
+  label: string | null;
+  sort_order: number;
+  notes: string | null;
+}
+
+function rowToSite(row: any): ClientSite {
+  return {
+    id: row[0] as string,
+    client_id: row[1] as string,
+    domain: row[2] as string,
+    is_primary: !!(row[3] as number),
+    is_managed: !!(row[4] as number),
+    label: (row[5] as string | null) ?? null,
+    sort_order: (row[6] as number) ?? 0,
+    notes: (row[7] as string | null) ?? null,
+  };
+}
+
+const SELECT_COLS = 'id, client_id, domain, is_primary, is_managed, label, sort_order, notes';
+
+export async function listClientSites(clientId: string): Promise<ClientSite[]> {
+  const result = await turso.execute({
+    sql: `SELECT ${SELECT_COLS} FROM client_sites
+          WHERE client_id = ?
+          ORDER BY is_primary DESC, sort_order ASC, domain ASC`,
+    args: [clientId],
+  });
+  return (result.rows as any[]).map(rowToSite);
+}
+
+export async function listManagedSites(clientId: string): Promise<ClientSite[]> {
+  const all = await listClientSites(clientId);
+  return all.filter(s => s.is_managed);
+}
+
+export async function getPrimarySite(clientId: string): Promise<ClientSite | null> {
+  const result = await turso.execute({
+    sql: `SELECT ${SELECT_COLS} FROM client_sites
+          WHERE client_id = ? AND is_primary = 1
+          LIMIT 1`,
+    args: [clientId],
+  });
+  if (result.rows.length === 0) return null;
+  return rowToSite(result.rows[0] as any);
+}
+
+// Auto-sync: for each detected hostname, INSERT OR IGNORE so existing
+// admin edits (is_managed=0 toggles, custom labels) persist across
+// re-uploads. Newly-detected hostnames land as is_managed=1 by
+// default because their presence in uploaded data implies the admin
+// is tracking them.
+//
+// Returns the number of new rows actually inserted.
+export async function syncDetectedDomains(clientId: string): Promise<number> {
+  const derived = await getClientDomainsFromData(clientId);
+  if (derived.length === 0) return 0;
+
+  // Check what already exists so we know which inserts will be new.
+  const existing = await listClientSites(clientId);
+  const existingDomains = new Set(existing.map(s => s.domain));
+
+  // If there's no primary yet AND no existing rows, the first
+  // detected domain (highest URL count from crawl_urls) becomes the
+  // primary. If existing rows are present and one is already
+  // primary, leave that alone.
+  const hasExistingPrimary = existing.some(s => s.is_primary);
+
+  let inserted = 0;
+  let isFirstNew = true;
+  for (const d of derived) {
+    if (existingDomains.has(d.domain)) continue;
+    const isPrimary = !hasExistingPrimary && isFirstNew ? 1 : 0;
+    if (isPrimary) isFirstNew = false;
+    try {
+      await turso.execute({
+        sql: `INSERT OR IGNORE INTO client_sites
+              (id, client_id, domain, is_primary, is_managed, label, sort_order)
+              VALUES (?, ?, ?, ?, 1, ?, ?)`,
+        args: [nanoid(), clientId, d.domain, isPrimary, d.domain, inserted],
+      });
+      inserted++;
+    } catch {
+      // Race or duplicate: just skip.
+    }
+  }
+
+  // If we just promoted a new primary AND clients.domain is empty,
+  // sync the cache.
+  if (!hasExistingPrimary && inserted > 0) {
+    const newPrimary = await getPrimarySite(clientId);
+    if (newPrimary) {
+      await turso.execute({
+        sql: 'UPDATE clients SET domain = ? WHERE id = ? AND (domain IS NULL OR domain = "")',
+        args: [newPrimary.domain, clientId],
+      });
+    }
+  }
+
+  return inserted;
+}
+
+// Set a site as primary. Clears is_primary on all other sites for
+// the same client. Keeps clients.domain in sync as a cache of the
+// primary domain.
+export async function setPrimarySite(clientId: string, siteId: string): Promise<{ domain: string | null }> {
+  // Look up the requested row to confirm it belongs to the client.
+  const target = await turso.execute({
+    sql: `SELECT ${SELECT_COLS} FROM client_sites
+          WHERE id = ? AND client_id = ?
+          LIMIT 1`,
+    args: [siteId, clientId],
+  });
+  if (target.rows.length === 0) return { domain: null };
+  const targetSite = rowToSite(target.rows[0] as any);
+
+  await turso.batch([
+    {
+      sql: 'UPDATE client_sites SET is_primary = 0 WHERE client_id = ?',
+      args: [clientId],
+    },
+    {
+      sql: 'UPDATE client_sites SET is_primary = 1 WHERE id = ? AND client_id = ?',
+      args: [siteId, clientId],
+    },
+    {
+      sql: 'UPDATE clients SET domain = ? WHERE id = ?',
+      args: [targetSite.domain, clientId],
+    },
+  ], 'write');
+  return { domain: targetSite.domain };
+}
+
+export async function setSiteManaged(clientId: string, siteId: string, isManaged: boolean): Promise<void> {
+  await turso.execute({
+    sql: 'UPDATE client_sites SET is_managed = ? WHERE id = ? AND client_id = ?',
+    args: [isManaged ? 1 : 0, siteId, clientId],
+  });
+}
+
+export async function addManualSite(clientId: string, domain: string, opts: { label?: string; isManaged?: boolean } = {}): Promise<string | null> {
+  const d = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '');
+  if (!/^[a-z0-9.-]+\.[a-z]{2,}$/.test(d)) return null;
+  const id = nanoid();
+  const label = (opts.label || d).slice(0, 200);
+  const isManaged = opts.isManaged === false ? 0 : 1;
+  try {
+    await turso.execute({
+      sql: `INSERT INTO client_sites
+            (id, client_id, domain, is_primary, is_managed, label, sort_order)
+            VALUES (?, ?, ?, 0, ?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM client_sites WHERE client_id = ?))`,
+      args: [id, clientId, d, isManaged, label, clientId],
+    });
+    return id;
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteClientSite(clientId: string, siteId: string): Promise<boolean> {
+  // Look up first to confirm it's not the only primary.
+  const all = await listClientSites(clientId);
+  const target = all.find(s => s.id === siteId);
+  if (!target) return false;
+
+  await turso.execute({
+    sql: 'DELETE FROM client_sites WHERE id = ? AND client_id = ?',
+    args: [siteId, clientId],
+  });
+
+  // If we just deleted the primary, promote the next site (if any)
+  // and update clients.domain.
+  if (target.is_primary) {
+    const next = (await listClientSites(clientId))[0];
+    if (next) {
+      await setPrimarySite(clientId, next.id);
+    } else {
+      await turso.execute({
+        sql: 'UPDATE clients SET domain = NULL WHERE id = ?',
+        args: [clientId],
+      });
+    }
+  }
+  return true;
+}

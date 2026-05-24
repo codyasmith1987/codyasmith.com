@@ -14,6 +14,7 @@ import {
 } from '../../../../../lib/agreements';
 import { getLatestContractTemplate } from '../../../../../lib/contract-templates';
 import { buildScheduleA } from '../../../../../lib/contract-schedule';
+import { listManagedSites } from '../../../../../lib/client-sites';
 import { computePricing } from '../../../../../lib/proposal-pricing';
 import { getDraft } from '../../../../../lib/proposal-drafts';
 import turso from '../../../../../lib/turso';
@@ -119,12 +120,16 @@ export const POST: APIRoute = async ({ locals, request }) => {
       const draft = await getDraft(proposalClientId, proposalSlug);
       const selections = draft?.selections || {};
       const pricing = computePricing(config?.pricing_formula || '', selections);
+      const managedSites = (await listManagedSites(clientId)).map(s => ({
+        domain: s.domain, label: s.label, is_primary: s.is_primary,
+      }));
       scheduleA = buildScheduleA({
         proposalConfig: config,
         draftSelections: selections,
         pricing,
         clientMetadata: {},
         effectiveDate: new Date().toISOString().slice(0, 10),
+        managedSites,
       });
     }
   }

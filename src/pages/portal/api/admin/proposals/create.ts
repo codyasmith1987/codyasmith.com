@@ -26,6 +26,7 @@ import turso from '../../../../../lib/turso';
 import { logActivity } from '../../../../../lib/activity';
 import { logger } from '../../../../../lib/logger';
 import { composeProposal } from '../../../../../lib/products';
+import { listManagedSites } from '../../../../../lib/client-sites';
 
 export const prerender = false;
 
@@ -141,6 +142,26 @@ export const POST: APIRoute = async ({ locals, request }) => {
       };
     }
 
+    // Pull managed sites with their per-site page counts so the
+    // composer can route each site to its own ecosystem at the
+    // engagement tier (2026-05-24 locked formula). The proposal-page
+    // tier cards and Schedule A both use this data; without it the
+    // composer falls back to single-ecosystem pricing.
+    let managedSites: Array<{
+      domain: string; label: string | null; is_primary: boolean;
+      page_count: number | null;
+    }> = [];
+    try {
+      managedSites = (await listManagedSites(client_id)).map(s => ({
+        domain: s.domain,
+        label: s.label,
+        is_primary: s.is_primary,
+        page_count: s.page_count,
+      }));
+    } catch (err) {
+      logger.warn('Failed to load managed sites for compose; proceeding with single-ecosystem fallback', err);
+    }
+
     try {
       config = composeProposal({
         client: { id: client_id, name: clientName, slug: clientSlug, discount_rate: clientDiscount },
@@ -150,6 +171,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
         narrative_variables,
         overrides,
         engagement_strategy,
+        managedSites,
       });
     } catch (err) {
       logger.error('composeProposal failed', err);

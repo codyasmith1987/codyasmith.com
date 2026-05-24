@@ -336,10 +336,54 @@ function buildTierOption(args: {
   ecosystem: Ecosystem;
   sites: number;
   aiRecommendedTier?: TierId | null;
+  // Optional managed sites array. When present and >= 2 sites, the
+  // tier card pricing reflects per-site ecosystem routing instead of
+  // priming everything off the primary's ecosystem. The features list
+  // also gains a per-site breakdown line so the buyer sees how the
+  // total is built. Per the 2026-05-24 locked formula.
+  managedSites?: Array<{
+    domain: string; label?: string | null; is_primary?: boolean;
+    page_count?: number | null;
+  }>;
 }): ProposalStepOption {
   const tier = args.ecosystem.tiers[args.tierId];
-  const monthly = computeMultiSiteMonthly(tier.monthly || 0, args.sites);
-  const onb = computeMultiSiteOnboarding(tier.onb || 0, args.sites);
+
+  // Path A: per-site ecosystem when managedSites with page_count data
+  // is present. Path B: legacy single-eco fallback otherwise.
+  let monthly: number;
+  let onb: number;
+  let perSiteBreakdown: string | null = null;
+  const hasPerSiteData = Array.isArray(args.managedSites)
+    && args.managedSites.length > 0
+    && args.managedSites.some(s => s.page_count != null);
+  if (hasPerSiteData) {
+    const { monthlyBases, onboardingBases } = buildPerSiteBases({
+      managedSites: args.managedSites!,
+      tierId: args.tierId,
+      primaryEcosystemId: args.ecosystem.id,
+    });
+    monthly = computeMultiSiteSum(monthlyBases);
+    onb = computeMultiSiteSum(onboardingBases);
+    // Build the per-site breakdown line for the features list.
+    // Primary's contribution + each additional site's discounted
+    // contribution, all summed.
+    const sortedSites = [...args.managedSites!].sort((a, b) => {
+      if (!!a.is_primary === !!b.is_primary) return 0;
+      return a.is_primary ? -1 : 1;
+    });
+    const breakdownParts = sortedSites.map((s, i) => {
+      const label = s.label && s.label !== s.domain ? s.label : s.domain;
+      const base = monthlyBases[i];
+      const factor = i === 0 ? 1 : MULTI_SITE_DISCOUNT;
+      const contribution = Math.round(base * factor * 100) / 100;
+      return `${formatMoney(contribution)} (${label})`;
+    });
+    perSiteBreakdown = `Per-site monthly: ${breakdownParts.join(' + ')} = ${formatMoney(monthly)}.`;
+  } else {
+    monthly = computeMultiSiteMonthly(tier.monthly || 0, args.sites);
+    onb = computeMultiSiteOnboarding(tier.onb || 0, args.sites);
+  }
+
   // AI's per-prospect tier recommendation overrides the static product
   // default. When AI didn't recommend a tier (or its recommendation is
   // not a valid tier id for this ecosystem), fall back to the tier
@@ -347,6 +391,12 @@ function buildTierOption(args: {
   const recommended = args.aiRecommendedTier
     ? args.aiRecommendedTier === args.tierId
     : !!tier.recommended;
+
+  const features = tier.features ? [...tier.features] : [];
+  if (perSiteBreakdown) {
+    features.push(perSiteBreakdown);
+  }
+
   return {
     id: args.tierId,
     name: tier.name,
@@ -355,9 +405,9 @@ function buildTierOption(args: {
     price_label: formatMoney(monthly),
     price_suffix: '/ month',
     price_subline: args.sites > 1
-      ? `${formatMoney(onb)} onboarding, ${args.sites} sites at ${args.ecosystem.label}`
+      ? `${formatMoney(onb)} onboarding total, ${args.sites} sites${hasPerSiteData ? ' (per-site routed)' : ` at ${args.ecosystem.label}`}`
       : `${formatMoney(onb)} onboarding, ${args.ecosystem.label}`,
-    features: tier.features ? [...tier.features] : [],
+    features,
   };
 }
 
@@ -450,15 +500,18 @@ export const webManagementProduct: ProductDefinition = {
     const aiRecommendedTier = aiTier === 'good' || aiTier === 'better' || aiTier === 'best'
       ? aiTier as TierId
       : null;
+    // Thread managedSites into buildTierOption so per-site monthly
+    // and the per-site breakdown line render correctly when multi-site.
+    const managedSites = ctx.managedSites;
     const step: ProposalStep = {
       id: 'wm_tier',
       type: 'tier_picker',
       h2: 'Pick a Web Management level',
       prompt: `Good, Better, or Best for Web Management. The level sets how often I update your sites, how fast I respond when something breaks, and how many hands-on hours per month sit in your pool.`,
       options: [
-        buildTierOption({ tierId: 'good', ecosystem: eco, sites, aiRecommendedTier }),
-        buildTierOption({ tierId: 'better', ecosystem: eco, sites, aiRecommendedTier }),
-        buildTierOption({ tierId: 'best', ecosystem: eco, sites, aiRecommendedTier }),
+        buildTierOption({ tierId: 'good', ecosystem: eco, sites, aiRecommendedTier, managedSites }),
+        buildTierOption({ tierId: 'better', ecosystem: eco, sites, aiRecommendedTier, managedSites }),
+        buildTierOption({ tierId: 'best', ecosystem: eco, sites, aiRecommendedTier, managedSites }),
       ],
     };
     return [step];
@@ -528,31 +581,66 @@ export const webManagementProduct: ProductDefinition = {
     const tier = eco?.tiers[ctx.tierId];
     if (!tier) return { products_purchased: { web_management: false } };
 
-    // Prefer the real managed-sites list when present so Schedule A
-    // shows actual domains. Falls back to placeholder rows derived
-    // from site_count when client_sites has not been populated yet
-    // (legacy clients pre-migration 033, or new clients with no
-    // uploaded data and no manual additions).
-    let siteRows: Array<{ domain: string; description: string }>;
+    // Per the 2026-05-24 locked multi-site formula, each site routes
+    // to its OWN ecosystem and gets its OWN per-site contribution.
+    // Schedule A surfaces these per-site rows so the buyer sees how
+    // the total breaks down. When ctx.managedSites is empty/legacy,
+    // fall back to placeholder rows priced off the primary's ecosystem.
+    type SiteRow = {
+      domain: string;
+      description: string;
+      ecosystem?: string;
+      monthly_contribution?: number;
+      onboarding_contribution?: number;
+      is_primary?: boolean;
+    };
+    let siteRows: SiteRow[];
     let sites: number;
     if (ctx.managedSites && ctx.managedSites.length > 0) {
-      // Primary first, then everything else in stable order. Real
-      // labels override the domain string when set.
       const sorted = [...ctx.managedSites].sort((a, b) => {
         if (!!a.is_primary === !!b.is_primary) return a.domain.localeCompare(b.domain);
         return a.is_primary ? -1 : 1;
       });
-      siteRows = sorted.map(s => ({
-        domain: s.label && s.label !== s.domain ? `${s.label} (${s.domain})` : s.domain,
-        description: s.is_primary ? 'primary site' : '',
-      }));
+      // Compute per-site monthly + onboarding contributions using the
+      // locked formula. First site (primary) at full base; each
+      // additional at base * 0.80, with base routed from that site's
+      // own page_count (or primary's ecosystem if null).
+      siteRows = sorted.map((s, idx) => {
+        const siteEco = s.page_count != null
+          ? (routeWebManagementEcosystem(s.page_count) || ctx.ecosystemId!)
+          : ctx.ecosystemId!;
+        const siteEcoObj = WM_ECOSYSTEMS[siteEco];
+        const siteTier = siteEcoObj?.tiers[ctx.tierId!];
+        const monthlyBase = siteTier?.monthly || 0;
+        const onbBase = siteTier?.onb || 0;
+        // Primary at full base; additional at 0.80x.
+        const factor = idx === 0 ? 1 : MULTI_SITE_DISCOUNT;
+        return {
+          domain: s.label && s.label !== s.domain ? `${s.label} (${s.domain})` : s.domain,
+          description: s.is_primary ? 'primary site' : '',
+          ecosystem: siteEco,
+          monthly_contribution: Math.round(monthlyBase * factor * 100) / 100,
+          onboarding_contribution: Math.round(onbBase * factor * 100) / 100,
+          is_primary: !!s.is_primary,
+        };
+      });
       sites = sorted.length;
     } else {
       sites = numberFromVar(ctx.variables.site_count, 1);
-      siteRows = Array.from({ length: sites }, (_, i) => ({
-        domain: i === 0 ? '(primary domain confirmed at signing)' : `(additional site ${i + 1} domain confirmed at signing)`,
-        description: '',
-      }));
+      // No per-site data; placeholder rows at primary's ecosystem.
+      const baseMonthly = tier.monthly || 0;
+      const baseOnb = tier.onb || 0;
+      siteRows = Array.from({ length: sites }, (_, i) => {
+        const factor = i === 0 ? 1 : MULTI_SITE_DISCOUNT;
+        return {
+          domain: i === 0 ? '(primary domain confirmed at signing)' : `(additional site ${i + 1} domain confirmed at signing)`,
+          description: '',
+          ecosystem: ctx.ecosystemId!,
+          monthly_contribution: Math.round(baseMonthly * factor * 100) / 100,
+          onboarding_contribution: Math.round(baseOnb * factor * 100) / 100,
+          is_primary: i === 0,
+        };
+      });
     }
     return {
       products_purchased: { web_management: true },
@@ -563,7 +651,8 @@ export const webManagementProduct: ProductDefinition = {
         monthly_base: tier.monthly || 0,
         monthly_total: Math.round(pricing.monthly),
         included_hours: tier.hours || 0,
-        onboarding_fee: tier.onb || 0, // base, not the multi-site total
+        onboarding_fee: tier.onb || 0,
+        onboarding_total: Math.round(pricing.oneTime),
         update_cadence: tier.update_cadence || 'monthly',
         response_time: tier.response_time || 'standard tier response window',
         quarterly_training_sessions: tier.training_sessions ?? null,

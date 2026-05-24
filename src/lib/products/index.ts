@@ -98,6 +98,7 @@ export function composeProposal(args: ComposeArgs): ProposalConfig {
       variables,
       otherProducts,
       engagementStrategy,
+      managedSites: args.managedSites,
     };
   }
 

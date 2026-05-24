@@ -430,6 +430,16 @@ export interface ComposeArgs {
   // adapts per-product narrative wording. Absent for legacy/manual
   // composer calls.
   engagement_strategy?: EngagementStrategy | null;
+  // Managed sites with per-site page_count. Drives per-site ecosystem
+  // routing in the multi-site pricing pipeline (2026-05-24 locked
+  // formula). Empty / undefined falls back to single-ecosystem
+  // pricing using the primary's ecosystem for all sites.
+  managedSites?: Array<{
+    domain: string;
+    label?: string | null;
+    is_primary?: boolean;
+    page_count?: number | null;
+  }>;
 }
 
 // Re-export downstream types so consumers can import everything from

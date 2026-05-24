@@ -463,6 +463,9 @@ function validateTimeIntensity(raw: unknown): CodyTimeIntensitySignal {
 
 function validateSalesAngles(raw: unknown): SalesAngle[] {
   if (!Array.isArray(raw)) return [];
+  const VALID_IMPL = new Set([
+    'web_management', 'marketing_consulting', 'build', 'training', 'none',
+  ]);
   const out: SalesAngle[] = [];
   for (const item of raw) {
     if (!item || typeof item !== 'object') continue;
@@ -471,7 +474,10 @@ function validateSalesAngles(raw: unknown): SalesAngle[] {
     const evidence = typeof o.supporting_evidence === 'string' ? o.supporting_evidence.trim() : '';
     // Drop angles without evidence per the no-fabrication rule.
     if (!angle || !evidence) continue;
-    out.push({ angle, supporting_evidence: evidence });
+    const impl = typeof o.product_implication === 'string' && VALID_IMPL.has(o.product_implication)
+      ? (o.product_implication as SalesAngle['product_implication'])
+      : undefined;
+    out.push({ angle, supporting_evidence: evidence, product_implication: impl });
   }
   return out;
 }

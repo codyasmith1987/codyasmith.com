@@ -179,20 +179,43 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
     parts.push(`<h3>A.4 Web Management specifics</h3>`);
     parts.push('<ul>');
     parts.push(`<li>Tier: <strong>${escapeHtml(wm.tier_name || '')}</strong></li>`);
+    // Per-site breakdown table. Each site shows its routed ecosystem
+    // and its own monthly + onboarding contributions under the locked
+    // 2026-05-24 multi-site formula (primary at full base; each
+    // additional at 0.80 of its own ecosystem base).
     if (Array.isArray(wm.sites) && wm.sites.length > 0) {
-      parts.push(`<li>Sites managed:<ul>`);
-      for (const s of wm.sites) {
-        const desc = s.description ? ` &mdash; ${escapeHtml(s.description)}` : '';
-        parts.push(`<li>${escapeHtml(s.domain || s.name || '')}${desc}</li>`);
+      const hasContributions = wm.sites.some(s => typeof s.monthly_contribution === 'number');
+      if (hasContributions && wm.sites.length > 1) {
+        parts.push(`<li>Sites managed and per-site breakdown:`);
+        parts.push(`<table style="margin-top:0.5em; border-collapse:collapse; width:100%; font-size:0.95em">`);
+        parts.push(`<thead><tr><th style="text-align:left; padding:4px 8px; border-bottom:1px solid #ccc">Site</th><th style="text-align:left; padding:4px 8px; border-bottom:1px solid #ccc">Ecosystem</th><th style="text-align:right; padding:4px 8px; border-bottom:1px solid #ccc">Monthly</th><th style="text-align:right; padding:4px 8px; border-bottom:1px solid #ccc">Onboarding</th></tr></thead>`);
+        parts.push(`<tbody>`);
+        for (const s of wm.sites) {
+          const ecoLabel = s.ecosystem ? `Eco ${escapeHtml(s.ecosystem)}` : '';
+          const desc = s.is_primary ? ' <em>(primary)</em>' : '';
+          parts.push(`<tr>`);
+          parts.push(`<td style="padding:4px 8px">${escapeHtml(s.domain || '')}${desc}</td>`);
+          parts.push(`<td style="padding:4px 8px">${ecoLabel}</td>`);
+          parts.push(`<td style="padding:4px 8px; text-align:right">${typeof s.monthly_contribution === 'number' ? fmtMoney(s.monthly_contribution) : ''}</td>`);
+          parts.push(`<td style="padding:4px 8px; text-align:right">${typeof s.onboarding_contribution === 'number' ? fmtMoney(s.onboarding_contribution) : ''}</td>`);
+          parts.push(`</tr>`);
+        }
+        parts.push(`</tbody></table></li>`);
+      } else {
+        parts.push(`<li>Sites managed:<ul>`);
+        for (const s of wm.sites) {
+          const desc = s.description ? ` (${escapeHtml(s.description)})` : '';
+          parts.push(`<li>${escapeHtml(s.domain || '')}${desc}</li>`);
+        }
+        parts.push(`</ul></li>`);
       }
-      parts.push(`</ul></li>`);
     }
-    if (wm.site_count) parts.push(`<li>Per-site count: ${wm.site_count}</li>`);
-    if (wm.monthly_base) parts.push(`<li>Monthly fee (single-site base): ${fmtMoney(wm.monthly_base)}</li>`);
-    if (wm.monthly_total) parts.push(`<li>Monthly fee total (with multi-site formula): ${fmtMoney(wm.monthly_total)}</li>`);
+    if (wm.site_count) parts.push(`<li>Site count: ${wm.site_count}</li>`);
+    if (wm.monthly_total) parts.push(`<li>Monthly fee total: <strong>${fmtMoney(wm.monthly_total)}</strong></li>`);
     if (wm.included_hours) parts.push(`<li>Included hours per month (total across sites): ${wm.included_hours}</li>`);
     parts.push(`<li>Pre-approved overage buffer (per section 5.4): 2 hours per month</li>`);
-    if (wm.onboarding_fee) parts.push(`<li>Onboarding fee: ${fmtMoney(wm.onboarding_fee)}</li>`);
+    if (wm.onboarding_total) parts.push(`<li>Onboarding total: <strong>${fmtMoney(wm.onboarding_total)}</strong></li>`);
+    else if (wm.onboarding_fee) parts.push(`<li>Onboarding fee: ${fmtMoney(wm.onboarding_fee)}</li>`);
     if (wm.update_cadence) parts.push(`<li>Update cadence: ${escapeHtml(wm.update_cadence)}</li>`);
     if (wm.response_time) parts.push(`<li>Response time: ${escapeHtml(wm.response_time)}</li>`);
     if (wm.quarterly_training_sessions != null) parts.push(`<li>Quarterly staff training: ${wm.quarterly_training_sessions ? `${wm.quarterly_training_sessions} sessions` : 'not included'}</li>`);

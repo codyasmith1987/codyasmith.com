@@ -37,15 +37,19 @@ export interface ProposalCacheClient {
 
 export type RevenueBand = 'under-1m' | '1m-to-10m' | 'over-10m' | 'unknown';
 export type ConfidenceLevel = 'low' | 'medium' | 'high';
-// Industry buckets calibrated to Cody's actual ICP. "ecommerce" was
-// removed because he does not sell to ecommerce as a primary motion;
-// "manufacturing" added to cover clients like MCM Engineering II.
-// "contractor" covers general construction and skilled trades both.
+// Industry buckets calibrated to Cody's actual ICP per
+// 04-CONSOLIDATED-LESSONS-MASTER + 05-BUSINESS-RULES-AND-STRUCTURE:
+// modular/prefab construction (ZipKit, MVP), construction-adjacent
+// trades (Builders under Raised Bar), professional services, family
+// of companies (Raised Bar's group structure). "ecommerce" stays
+// removed (no ecommerce in his book). "manufacturing" was a stretch
+// for a single test fixture (MCM, switchgear); the real ICP is not
+// heavy industrial manufacturing, so the bucket is removed too.
+// Construction / trades fit under "contractor."
 export type IndustryGuess =
   | 'solo'
   | 'professional-services'
   | 'contractor'
-  | 'manufacturing'
   | 'family-of-companies'
   | 'nonprofit'
   | 'other'

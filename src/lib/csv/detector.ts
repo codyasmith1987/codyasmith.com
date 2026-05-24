@@ -25,6 +25,18 @@ export type CsvFormat =
   | 'ga4_pages'
   | 'ga4_tech'
   | 'ga4_geography'
+  // GSC CSV exports — extracted from the GSC Performance ZIP. One
+  // filename pattern per kind; all share the same column shape
+  // for the five dimension exports (Pages, Queries, Countries,
+  // Devices, Search appearance) with a unique time-series Chart
+  // and metadata Filters file alongside.
+  | 'gsc_pages'
+  | 'gsc_queries'
+  | 'gsc_countries'
+  | 'gsc_devices'
+  | 'gsc_search_appearance'
+  | 'gsc_chart'
+  | 'gsc_filters'
   // 'unknown' is still emitted by detectFormat for files that don't
   // match a signature; the ingest pipeline routes those to the raw
   // fallback and updates the upload row to 'unknown_stored' so
@@ -135,6 +147,21 @@ export function detectFormat(raw: string, filename: string): { format: CsvFormat
   }
   if (normalizedName.includes('demographic_details_country')) {
     return { format: 'ga4_geography', headers: [] };
+  }
+
+  // GSC CSVs — extracted from the Performance ZIP. The seven
+  // filenames are stable: Pages.csv, Queries.csv, Countries.csv,
+  // Devices.csv, Search appearance.csv, Chart.csv, Filters.csv.
+  // Match on exact filename (path-stripped, lowercased) because the
+  // names are short enough that substring matches would false-positive.
+  switch (normalizedName) {
+    case 'pages.csv':              return { format: 'gsc_pages', headers: [] };
+    case 'queries.csv':            return { format: 'gsc_queries', headers: [] };
+    case 'countries.csv':          return { format: 'gsc_countries', headers: [] };
+    case 'devices.csv':            return { format: 'gsc_devices', headers: [] };
+    case 'search appearance.csv':  return { format: 'gsc_search_appearance', headers: [] };
+    case 'chart.csv':              return { format: 'gsc_chart', headers: [] };
+    case 'filters.csv':            return { format: 'gsc_filters', headers: [] };
   }
 
   // Per-issue URL exports from Screaming Frog. The filename matches a

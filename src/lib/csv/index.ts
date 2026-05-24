@@ -19,6 +19,7 @@ import { parse as parseAccessibility } from './parsers/accessibility';
 import { parse as parseIssueUrls } from './parsers/issue-urls';
 import { parse as parseRawCsv } from './parsers/raw-csv';
 import { parseGa4 } from './parsers/ga4';
+import { parseGsc } from './parsers/gsc';
 
 // Maps CSV formats to the source tags they write, so we can clear old data before re-importing
 const FORMAT_SOURCES: Record<string, { tables: string[]; source: string }> = {
@@ -46,6 +47,17 @@ const FORMAT_SOURCES: Record<string, { tables: string[]; source: string }> = {
   ga4_pages: { tables: ['ga4_pages'], source: 'ga4_pages' },
   ga4_tech: { tables: ['ga4_tech'], source: 'ga4_tech' },
   ga4_geography: { tables: ['ga4_geography'], source: 'ga4_geography' },
+  // GSC exports. The dimension kinds all hit gsc_dimensions but
+  // listing them individually keeps the supersede sweep matched on
+  // each kind separately (re-uploading Queries.csv should NOT wipe
+  // Pages.csv rows).
+  gsc_pages: { tables: ['gsc_dimensions'], source: 'gsc_pages' },
+  gsc_queries: { tables: ['gsc_dimensions'], source: 'gsc_queries' },
+  gsc_countries: { tables: ['gsc_dimensions'], source: 'gsc_countries' },
+  gsc_devices: { tables: ['gsc_dimensions'], source: 'gsc_devices' },
+  gsc_search_appearance: { tables: ['gsc_dimensions'], source: 'gsc_search_appearance' },
+  gsc_chart: { tables: ['gsc_chart'], source: 'gsc_chart' },
+  gsc_filters: { tables: ['gsc_filters'], source: 'gsc_filters' },
   // Stored-but-not-yet-typed CSVs. Cleared on re-upload like every
   // other format so the same filename doesn't accumulate raw copies.
   unknown_stored: { tables: ['raw_csv_data'], source: 'unknown_stored' },
@@ -198,6 +210,15 @@ export async function ingestCSV(
       case 'ga4_tech':
       case 'ga4_geography':
         rowCount = await parseGa4(raw, clientId, month, uploadId, format);
+        break;
+      case 'gsc_pages':
+      case 'gsc_queries':
+      case 'gsc_countries':
+      case 'gsc_devices':
+      case 'gsc_search_appearance':
+      case 'gsc_chart':
+      case 'gsc_filters':
+        rowCount = await parseGsc(raw, clientId, month, uploadId, format);
         break;
     }
 

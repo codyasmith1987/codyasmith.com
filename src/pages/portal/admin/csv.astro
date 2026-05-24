@@ -66,10 +66,10 @@ function formatLabel(format: string): string {
             class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-300 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300" />
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">CSV files</label>
-          <input type="file" id="csv-files" accept=".csv" multiple required
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">CSV or ZIP files</label>
+          <input type="file" id="csv-files" accept=".csv,.zip" multiple required
             class="w-full text-sm text-neutral-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-amber-500 file:text-neutral-950 hover:file:bg-amber-400 file:cursor-pointer file:transition-colors file:duration-300" />
-          <p class="text-[10px] text-neutral-400 mt-1.5">Or <button type="button" id="pick-folder-btn" class="text-amber-600 hover:text-amber-600 underline">pick a folder</button> to upload every CSV in it. Unknown formats are reported but don't block the rest.</p>
+          <p class="text-[10px] text-neutral-400 mt-1.5">Or <button type="button" id="pick-folder-btn" class="text-amber-600 hover:text-amber-600 underline">pick a folder</button> to upload every CSV in it. ZIPs (GSC Performance exports, Ubersuggest site audits) get unpacked server-side. Unknown formats land in raw storage and surface as "Stored, not yet visualized."</p>
           <input type="file" id="csv-folder" webkitdirectory="" multiple class="hidden" />
         </div>
       </div>
@@ -176,7 +176,8 @@ function formatLabel(format: string): string {
     folderInput.addEventListener('change', () => {
       const dt = new DataTransfer();
       for (const f of Array.from(folderInput.files || [])) {
-        if (f.name.toLowerCase().endsWith('.csv')) dt.items.add(f);
+        const n = f.name.toLowerCase();
+        if (n.endsWith('.csv') || n.endsWith('.zip')) dt.items.add(f);
       }
       filesInput.files = dt.files;
       // Visual cue: show the count next to the picker. Prefix "Queued:"

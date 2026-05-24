@@ -111,7 +111,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
 <Portal title="New Proposal">
   <div class="max-w-4xl mx-auto">
     <div class="mb-10">
-      <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin / Proposals</p>
+      <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin / Proposals</p>
       <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">New proposal</h1>
       <p class="text-neutral-500 text-sm mt-3">
         Pick the client and the products in scope. The system composes the rest from product definitions.
@@ -122,7 +122,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
 
       <!-- 1. CLIENT -->
       <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
-        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">1. Client</p>
+        <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-5">1. Client</p>
 
         <div class="flex items-center gap-3">
           <select
@@ -136,13 +136,13 @@ const todayISO = new Date().toISOString().slice(0, 10);
               <option value={c.id} data-slug={c.slug} data-name={c.name} data-domain={c.domain || ''}>{c.name}</option>
             ))}
           </select>
-          <button type="button" id="add-client-btn" class="px-4 py-3 bg-neutral-800 border border-white/10 text-neutral-300 text-sm rounded-lg hover:border-amber-500/40 hover:text-amber-400 transition-colors">
+          <button type="button" id="add-client-btn" class="px-4 py-3 bg-neutral-800 border border-white/10 text-neutral-300 text-sm rounded-lg hover:border-amber-500/40 hover:text-amber-600 transition-colors">
             Add new
           </button>
         </div>
 
         <div id="add-client-slot" class="hidden mt-3 p-4 bg-neutral-900/40 border border-amber-500/20 rounded-lg space-y-3">
-          <p class="text-[10px] font-mono text-amber-400 tracking-wide uppercase">Create new client</p>
+          <p class="text-[10px] font-mono text-amber-600 tracking-wide uppercase">Create new client</p>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input type="text" id="new_client_name" placeholder="Business name"
               class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
@@ -160,7 +160,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           </div>
         </div>
 
-        <p id="client-prefill-note" class="hidden mt-3 text-[11px] text-amber-400 font-mono leading-relaxed"></p>
+        <p id="client-prefill-note" class="hidden mt-3 text-[11px] text-amber-600 font-mono leading-relaxed"></p>
 
         <!-- Research panel: appears after a client is picked. Domain
              is required for research; if missing, an inline input lets
@@ -168,11 +168,11 @@ const todayISO = new Date().toISOString().slice(0, 10);
         <div id="research-panel" class="hidden mt-5 pt-5 border-t border-white/5">
           <div class="flex items-center justify-between gap-3 flex-wrap">
             <div>
-              <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase">AI client research</p>
+              <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">AI client research</p>
               <p class="text-[11px] text-neutral-500 mt-1">Pulls public info to seed revenue band, industry, urgency, focus, domains, and page count. You apply each suggestion.</p>
             </div>
             <button type="button" id="research-btn"
-              class="px-4 py-2 bg-amber-500/10 border border-amber-500/40 text-amber-300 text-xs rounded-md hover:bg-amber-500/20 transition-colors">
+              class="px-4 py-2 bg-amber-500/10 border border-amber-500/40 text-amber-600 text-xs rounded-md hover:bg-amber-500/20 transition-colors">
               Research this client
             </button>
           </div>
@@ -182,13 +182,13 @@ const todayISO = new Date().toISOString().slice(0, 10);
                Shows when at least one is found; otherwise hidden and
                the manual input below is the only path. -->
           <div id="derived-domains-slot" class="hidden mt-3 p-3 bg-neutral-900/40 border border-amber-500/20 rounded-md">
-            <p class="text-[10px] font-mono text-amber-400 tracking-wide uppercase mb-2">Detected from your uploaded data</p>
+            <p class="text-[10px] font-mono text-amber-600 tracking-wide uppercase mb-2">Detected from your uploaded data</p>
             <div id="derived-domains-list" class="flex flex-wrap gap-2"></div>
             <p class="text-[11px] text-neutral-500 mt-2">Highlighted chip is the primary domain. Click any chip to set as primary, or click the primary again to re-research.</p>
           </div>
 
           <div id="research-domain-slot" class="hidden mt-3 p-3 bg-neutral-900/40 border border-amber-500/20 rounded-md">
-            <p class="text-[10px] font-mono text-amber-400 tracking-wide uppercase mb-2">Set primary domain first</p>
+            <p class="text-[10px] font-mono text-amber-600 tracking-wide uppercase mb-2">Set primary domain first</p>
             <div class="flex items-center gap-2">
               <input type="text" id="research-domain-input" placeholder="example.com (no protocol)"
                 class="flex-1 px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
@@ -211,7 +211,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
             routing is fully built). This is a briefing for me.
           -->
           <div id="research-strategy" class="hidden mt-6 pt-6 border-t border-white/5">
-            <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-1">Engagement strategy</p>
+            <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-1">Engagement strategy</p>
             <p class="text-[11px] text-neutral-500 mb-4">Synthesis briefing. Admin-only; not for client copy.</p>
             <div id="research-strategy-body" class="space-y-4"></div>
           </div>
@@ -220,7 +220,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
 
       <!-- 2. PRODUCTS IN SCOPE -->
       <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
-        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">2. Products in scope</p>
+        <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-5">2. Products in scope</p>
         <p class="text-[11px] text-neutral-500 mb-5">Pick one or more. Each contributes its own narrative, steps, pricing, and Schedule A.</p>
 
         <div id="products-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -238,7 +238,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
 
       <!-- 3. PER-PRODUCT VARIABLES -->
       <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8" id="vars-section" hidden>
-        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">3. Per-product variables</p>
+        <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-5">3. Per-product variables</p>
         <p class="text-[11px] text-neutral-500 mb-5">Routing variables for each in-scope product. Defaults pre-fill from client data when available.</p>
 
         <div id="vars-container" class="space-y-6"></div>
@@ -246,12 +246,12 @@ const todayISO = new Date().toISOString().slice(0, 10);
 
       <!-- 4. NARRATIVE VARIABLES -->
       <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
-        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">4. Narrative variables</p>
+        <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-5">4. Narrative variables</p>
         <p class="text-[11px] text-neutral-500 mb-5">These drive snippet selection in the composed narrative.</p>
 
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
           <div>
-            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2" for="narr_industry">Industry</label>
+            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" for="narr_industry">Industry</label>
             <select id="narr_industry" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
               <option value="">Select</option>
               <option value="solo">Solo professional</option>
@@ -263,7 +263,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
             </select>
           </div>
           <div>
-            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2" for="narr_urgency">Urgency</label>
+            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" for="narr_urgency">Urgency</label>
             <select id="narr_urgency" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
               <option value="">Select</option>
               <option value="tactical">Tactical (fix what is broken)</option>
@@ -272,26 +272,26 @@ const todayISO = new Date().toISOString().slice(0, 10);
             </select>
           </div>
           <div>
-            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2" for="narr_focus">Focus</label>
+            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" for="narr_focus">Focus</label>
             <select id="narr_focus" multiple size="4" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
               <option value="brand">Brand</option>
               <option value="takeover">Takeover</option>
               <option value="search">Search</option>
               <option value="pre-sell">Pre-sell</option>
             </select>
-            <p class="text-[10px] text-neutral-600 mt-1">Hold Ctrl or Cmd to pick more than one.</p>
+            <p class="text-[10px] text-neutral-400 mt-1">Hold Ctrl or Cmd to pick more than one.</p>
           </div>
         </div>
       </section>
 
       <!-- 5. SIGNERS -->
       <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
-        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">5. Signers</p>
+        <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-5">5. Signers</p>
         <p class="text-[11px] text-neutral-500 mb-4">Pre-filled from existing portal users on the client. Add rows for new signers.</p>
 
         <div id="signers-container" class="space-y-3"></div>
 
-        <button type="button" id="add-signer-btn" class="mt-4 text-xs text-amber-400 hover:text-amber-300 transition-colors">
+        <button type="button" id="add-signer-btn" class="mt-4 text-xs text-amber-600 hover:text-amber-600 transition-colors">
           + Add signer
         </button>
       </section>
@@ -300,28 +300,28 @@ const todayISO = new Date().toISOString().slice(0, 10);
       <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
         <details>
           <summary class="cursor-pointer">
-            <span class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase">6. Header overrides</span>
+            <span class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase">6. Header overrides</span>
             <span class="text-[11px] text-neutral-500 ml-3">(optional; auto-derived from client)</span>
           </summary>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-5">
             <div class="sm:col-span-2">
-              <label for="title" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Title</label>
+              <label for="title" class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Title</label>
               <input type="text" id="title" placeholder="Auto: Engagement Proposal for {client}"
                 class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
             </div>
             <div>
-              <label for="slug" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Slug</label>
+              <label for="slug" class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Slug</label>
               <input type="text" id="slug" placeholder="Auto: client-slug" pattern="[a-z0-9\-]+"
                 class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
             </div>
             <div>
-              <label for="prepared_on" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Prepared on</label>
+              <label for="prepared_on" class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Prepared on</label>
               <input type="date" id="prepared_on" value={todayISO}
                 class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
             </div>
             <div class="sm:col-span-2">
-              <label for="prepared_for" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Prepared for</label>
+              <label for="prepared_for" class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Prepared for</label>
               <input type="text" id="prepared_for" placeholder="Auto: composed from signer names"
                 class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
             </div>
@@ -332,7 +332,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
       <!-- ACTIONS -->
       <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
         <button type="button" id="save-draft-btn"
-          class="flex-1 px-6 py-3 bg-neutral-800 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/40 hover:text-amber-400 transition-colors">
+          class="flex-1 px-6 py-3 bg-neutral-800 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/40 hover:text-amber-600 transition-colors">
           Save as draft
         </button>
         <button type="button" id="publish-btn"
@@ -606,7 +606,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           const wrap = document.createElement('div');
           wrap.className = 'mb-3';
           const label = document.createElement('label');
-          label.className = 'block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-1';
+          label.className = 'block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1';
           label.textContent = field.label;
           wrap.appendChild(label);
 
@@ -666,7 +666,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
             aiRow.className = 'mt-2 flex items-center gap-3';
             const aiBtn = document.createElement('button');
             aiBtn.type = 'button';
-            aiBtn.className = 'px-3 py-1.5 text-[11px] rounded-md bg-amber-500/10 border border-amber-500/40 text-amber-300 hover:bg-amber-500/20 transition-colors';
+            aiBtn.className = 'px-3 py-1.5 text-[11px] rounded-md bg-amber-500/10 border border-amber-500/40 text-amber-600 hover:bg-amber-500/20 transition-colors';
             aiBtn.textContent = 'AI draft this';
             const aiMsg = document.createElement('span');
             aiMsg.className = 'text-[11px] text-neutral-500 hidden';
@@ -737,7 +737,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
 
         // Live ecosystem routing display
         const ecoNote = document.createElement('p');
-        ecoNote.className = 'text-[11px] text-amber-400/80 mt-2 font-mono';
+        ecoNote.className = 'text-[11px] text-amber-600 mt-2 font-mono';
         ecoNote.dataset.ecoNote = id;
         ecoNote.textContent = computeRoutingNote(id);
         block.appendChild(ecoNote);
@@ -1046,8 +1046,8 @@ const todayISO = new Date().toISOString().slice(0, 10);
         const isPrimary = s.is_primary;
         btn.className = 'px-3 py-1.5 text-xs rounded-l-md font-mono transition-colors ' +
           (isPrimary
-            ? 'bg-amber-500/20 border border-amber-500/60 text-amber-300'
-            : 'bg-neutral-900/60 border border-white/10 text-neutral-300 hover:border-amber-500/40 hover:text-amber-400');
+            ? 'bg-amber-500/20 border border-amber-500/60 text-amber-600'
+            : 'bg-neutral-900/60 border border-white/10 text-neutral-300 hover:border-amber-500/40 hover:text-amber-600');
         btn.textContent = s.label || s.domain;
         btn.title = isPrimary
           ? `Primary research target. Click to re-run research.`
@@ -1369,11 +1369,11 @@ const todayISO = new Date().toISOString().slice(0, 10);
         const meta = document.createElement('div');
         meta.className = 'flex-1 min-w-0';
         // Confidence chip: solid pill matching portal active-nav pattern
-        // (bg-amber-500/10 border border-amber-500/40 text-amber-400).
+        // (bg-amber-500/10 border border-amber-500/40 text-amber-600).
         // Saturated amber at full opacity gives sun radiance against
         // the dark background; the border + bg block gives mountain weight.
         const confPill = b.confidence
-          ? `<span class="text-[9px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-400">${escapeHtml(b.confidence)}</span>`
+          ? `<span class="text-[9px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-600">${escapeHtml(b.confidence)}</span>`
           : '';
         // Target-product pill: only on findings that drive product variables
         // (Revenue band -> MC, Page count -> WM). Shows the admin which
@@ -1384,7 +1384,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           const wizardId = SYNTH_TO_WIZARD_ID[b.target_product_synth_id];
           const label = wizardId ? PRODUCT_SHORT_LABELS[wizardId] : b.target_product_synth_id;
           targetPill = slot.recommended
-            ? `<span class="text-[9px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-400">${escapeHtml(label)}: pitch</span>`
+            ? `<span class="text-[9px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-600">${escapeHtml(label)}: pitch</span>`
             : `<span class="text-[9px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded bg-neutral-900 border border-white/10 text-neutral-400">${escapeHtml(label)}: skip</span>`;
         }
         meta.innerHTML = `
@@ -1400,7 +1400,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
         btn.type = 'button';
         btn.className = 'px-3 py-2 text-xs rounded-md transition-colors ' + (b.disabled
           ? 'bg-neutral-900 border border-white/5 text-neutral-600 cursor-not-allowed'
-          : 'bg-amber-500/10 border border-amber-500/40 text-amber-300 hover:bg-amber-500/20');
+          : 'bg-amber-500/10 border border-amber-500/40 text-amber-600 hover:bg-amber-500/20');
         btn.textContent = 'Apply';
         btn.disabled = !!b.disabled;
         btn.addEventListener('click', b.apply);
@@ -1411,10 +1411,11 @@ const todayISO = new Date().toISOString().slice(0, 10);
       if (r.notes) {
         const notes = document.createElement('p');
         // Notes are a genuine callout (AI's parenthetical observations).
-        // Use saturated amber-400 at full opacity (sun) inside a faint
-        // amber-tinted block (mountain weight; signals this is content,
-        // not chrome).
-        notes.className = 'text-[11px] text-amber-400 mt-3 leading-relaxed bg-amber-500/5 border border-amber-500/20 rounded p-2.5';
+        // In the portal-editorial cream theme, amber-600 reads as darker
+        // terracotta (#a86749) - the right "sun" on cream paper. The
+        // amber-500/10 background + amber-500/30 border give it weight
+        // as a callout block (mountain) without overwhelming.
+        notes.className = 'text-[11px] text-amber-600 mt-3 leading-relaxed bg-amber-500/10 border border-amber-500/30 rounded p-2.5';
         notes.textContent = 'Notes: ' + r.notes;
         researchResults.appendChild(notes);
       }
@@ -1446,7 +1447,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
     //   sun     -> saturated amber-400/500 accents at full opacity, never
     //              pale amber-200 on dark. Matches the portal's active-nav
     //              pattern: bg-amber-500/10 border border-amber-500/40
-    //              text-amber-400.
+    //              text-amber-600.
     //   mountain-> visible weight differences between primary (text-neutral-100)
     //              and secondary (text-neutral-400 rationale) and tertiary
     //              (text-neutral-500 evidence). Action buttons use solid
@@ -1507,9 +1508,9 @@ const todayISO = new Date().toISOString().slice(0, 10);
           // ONE pill per row (clouds). Pill carries the verdict. Tier
           // hint and confidence move below as text, not stacked pills.
           const pill = inScope
-            ? `<span class="text-[10px] font-mono uppercase tracking-wide px-2 py-1 rounded bg-amber-500/10 border border-amber-500/40 text-amber-400">In scope</span>`
+            ? `<span class="text-[10px] font-mono uppercase tracking-wide px-2 py-1 rounded bg-amber-500/10 border border-amber-500/40 text-amber-600">In scope</span>`
             : isPitch
-              ? `<span class="text-[10px] font-mono uppercase tracking-wide px-2 py-1 rounded bg-amber-500/10 border border-amber-500/40 text-amber-400">Pitch</span>`
+              ? `<span class="text-[10px] font-mono uppercase tracking-wide px-2 py-1 rounded bg-amber-500/10 border border-amber-500/40 text-amber-600">Pitch</span>`
               : `<span class="text-[10px] font-mono uppercase tracking-wide px-2 py-1 rounded bg-neutral-900 border border-white/10 text-neutral-400">Skip</span>`;
           nameAndStatus.innerHTML = `
             <p class="text-base text-neutral-100 font-medium">${escapeHtml(PRODUCT_LABELS[synthId] || synthId)}</p>
@@ -1552,7 +1553,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           } else {
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = 'text-xs px-3 py-1.5 rounded text-neutral-400 hover:text-amber-400 transition-colors';
+            btn.className = 'text-xs px-3 py-1.5 rounded text-neutral-400 hover:text-amber-600 transition-colors';
             btn.textContent = 'Pitch anyway';
             btn.addEventListener('click', () => {
               const seeds = seedsForProductFromResearch(wizardId, r);
@@ -1583,7 +1584,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           }
           if (tier) {
             const p = document.createElement('p');
-            p.className = 'text-xs text-amber-400 mt-2 leading-relaxed';
+            p.className = 'text-xs text-amber-600 mt-2 leading-relaxed';
             p.textContent = `Tier hint: ${tier.tier}${tier.rationale ? '. ' + tier.rationale : ''}`;
             row.appendChild(p);
           }
@@ -1642,7 +1643,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
         card.className = 'p-4 bg-neutral-900/40 border border-white/5 rounded-md';
         const sevPill = (sev) => {
           if (sev === 'high') return 'bg-red-500/10 border border-red-500/40 text-red-400';
-          if (sev === 'medium') return 'bg-amber-500/10 border border-amber-500/40 text-amber-400';
+          if (sev === 'medium') return 'bg-amber-500/10 border border-amber-500/40 text-amber-600';
           return 'bg-neutral-900 border border-white/10 text-neutral-400';
         };
         const items = risks.map(rs => `

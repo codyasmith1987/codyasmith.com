@@ -20,15 +20,15 @@ const statusColors: Record<string, string> = {
   draft: 'bg-neutral-700/30 text-neutral-400',
   sent: 'bg-blue-500/10 text-blue-400',
   active: 'bg-emerald-500/10 text-emerald-400',
-  completed: 'bg-amber-500/10 text-amber-400',
+  completed: 'bg-amber-500/10 text-amber-600',
   cancelled: 'bg-red-500/10 text-red-400',
   not_started: 'bg-neutral-700/30 text-neutral-400',
   in_progress: 'bg-blue-500/10 text-blue-400',
-  on_hold: 'bg-amber-500/10 text-amber-400',
-  pending: 'bg-amber-500/10 text-amber-400',
+  on_hold: 'bg-amber-500/10 text-amber-600',
+  pending: 'bg-amber-500/10 text-amber-600',
   approved: 'bg-emerald-500/10 text-emerald-400',
   rejected: 'bg-red-500/10 text-red-400',
-  partial: 'bg-amber-500/10 text-amber-400',
+  partial: 'bg-amber-500/10 text-amber-600',
   paid: 'bg-emerald-500/10 text-emerald-400',
   overdue: 'bg-red-500/10 text-red-400',
 };
@@ -38,20 +38,20 @@ const statusColors: Record<string, string> = {
   <div class="max-w-4xl mx-auto">
     <!-- Breadcrumb -->
     <div class="mb-6">
-      <a href="/portal/admin/contracts" class="text-xs text-neutral-600 hover:text-amber-400 transition-colors">&larr; Contracts</a>
+      <a href="/portal/admin/contracts" class="text-xs text-neutral-400 hover:text-amber-600 transition-colors">&larr; Contracts</a>
     </div>
 
     <!-- Header -->
     <div class="flex items-start justify-between mb-8">
       <div>
-        <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-2">{client?.name}</p>
+        <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-2">{client?.name}</p>
         <h1 id="contract-title" class="font-serif text-3xl text-neutral-100">{contract.title}</h1>
       </div>
       <div class="flex items-center gap-3">
         <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[contract.status] || ''}`}>
           {contract.status}
         </span>
-        <button id="delete-contract" class="text-xs text-neutral-600 hover:text-red-400 transition-colors">Delete</button>
+        <button id="delete-contract" class="text-xs text-neutral-400 hover:text-red-400 transition-colors">Delete</button>
       </div>
     </div>
 
@@ -59,7 +59,7 @@ const statusColors: Record<string, string> = {
     <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-8">
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Status</label>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Status</label>
           <select id="f-status" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
             {['draft', 'sent', 'active', 'completed', 'cancelled'].map(s => (
               <option value={s} selected={s === contract.status}>{s}</option>
@@ -67,7 +67,7 @@ const statusColors: Record<string, string> = {
           </select>
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Type</label>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Type</label>
           <select id="f-type" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
             {['fixed', 'retainer', 'hourly'].map(t => (
               <option value={t} selected={t === contract.type}>{t}</option>
@@ -75,25 +75,25 @@ const statusColors: Record<string, string> = {
           </select>
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Total value</label>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Total value</label>
           <input type="number" id="f-value" step="0.01" value={contract.total_value ?? ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Start date</label>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Start date</label>
           <input type="date" id="f-start" value={contract.start_date || ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">End date</label>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">End date</label>
           <input type="date" id="f-end" value={contract.end_date || ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
         </div>
       </div>
 
       <!-- Billing rules -->
       <div class="mt-6 pt-6 border-t border-white/5">
-        <p class="text-[10px] font-mono text-neutral-700 tracking-[0.15em] uppercase mb-5">Billing rules</p>
+        <p class="text-[10px] font-mono text-neutral-500 tracking-[0.15em] uppercase mb-5">Billing rules</p>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           <div>
-            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Billing cadence</label>
+            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Billing cadence</label>
             <select id="f-cadence" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
               <option value="" selected={!contract.billing_cadence}>None</option>
               {['monthly', 'milestone', 'one-time'].map(c => (
@@ -102,30 +102,30 @@ const statusColors: Record<string, string> = {
             </select>
           </div>
           <div>
-            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Billing day (1-28)</label>
+            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Billing day (1-28)</label>
             <input type="number" id="f-billing-day" min="1" max="28" value={contract.billing_day ?? ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
           </div>
           <div>
-            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Recurring amount</label>
+            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Recurring amount</label>
             <input type="number" id="f-recurring" step="0.01" value={contract.recurring_amount ?? ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
           </div>
           <div>
-            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Included hours</label>
+            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Included hours</label>
             <input type="number" id="f-hours" step="0.5" value={contract.included_hours ?? ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
           </div>
           <div>
-            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Overage rate ($/hr)</label>
+            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Overage rate ($/hr)</label>
             <input type="number" id="f-overage" step="0.01" value={contract.overage_rate ?? ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
           </div>
           <div>
-            <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Payment terms (days)</label>
+            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Payment terms (days)</label>
             <input type="number" id="f-terms" value={contract.payment_terms_days ?? 30} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
           </div>
         </div>
       </div>
 
       <div class="mt-5">
-        <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Description</label>
+        <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Description</label>
         <textarea id="f-desc" rows="3" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">{contract.description || ''}</textarea>
       </div>
       <button id="save-contract" class="mt-6 px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300">Save changes</button>
@@ -134,8 +134,8 @@ const statusColors: Record<string, string> = {
     <!-- Projects section -->
     <div class="mb-8">
       <div class="flex items-center justify-between mb-4">
-        <p class="text-[10px] font-mono text-neutral-700 tracking-[0.15em] uppercase">Projects ({projects.length})</p>
-        <button id="show-add-project" class="text-xs text-amber-400 hover:text-amber-300 transition-colors">+ Add project</button>
+        <p class="text-[10px] font-mono text-neutral-500 tracking-[0.15em] uppercase">Projects ({projects.length})</p>
+        <button id="show-add-project" class="text-xs text-amber-600 hover:text-amber-600 transition-colors">+ Add project</button>
       </div>
 
       <form id="add-project-form" class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 mb-4 hidden">
@@ -153,22 +153,22 @@ const statusColors: Record<string, string> = {
           {projects.map(p => (
             <a href={`/portal/admin/projects/${p.id}`} class="block bg-neutral-900/30 border border-white/5 rounded-xl p-4 hover:border-white/10 transition-all group">
               <div class="flex items-center justify-between">
-                <p class="text-sm text-neutral-200 group-hover:text-amber-400 transition-colors">{p.title}</p>
+                <p class="text-sm text-neutral-200 group-hover:text-amber-600 transition-colors">{p.title}</p>
                 <span class={`text-[10px] font-mono tracking-wide uppercase px-2 py-0.5 rounded-full ${statusColors[p.status] || ''}`}>{p.status}</span>
               </div>
             </a>
           ))}
         </div>
       ) : (
-        <p class="text-sm text-neutral-600 py-4">No projects yet. Add one to start tracking deliverables.</p>
+        <p class="text-sm text-neutral-400 py-4">No projects yet. Add one to start tracking deliverables.</p>
       )}
     </div>
 
     <!-- Invoices section -->
     <div class="mb-8">
       <div class="flex items-center justify-between mb-4">
-        <p class="text-[10px] font-mono text-neutral-700 tracking-[0.15em] uppercase">Invoices ({invoices.length})</p>
-        <button id="create-invoice-btn" class="text-xs text-amber-400 hover:text-amber-300 transition-colors">+ New invoice</button>
+        <p class="text-[10px] font-mono text-neutral-500 tracking-[0.15em] uppercase">Invoices ({invoices.length})</p>
+        <button id="create-invoice-btn" class="text-xs text-amber-600 hover:text-amber-600 transition-colors">+ New invoice</button>
       </div>
       {invoices.length > 0 ? (
         <div class="space-y-2">
@@ -176,8 +176,8 @@ const statusColors: Record<string, string> = {
             <a href={`/portal/admin/invoices/${inv.id}`} class="block bg-neutral-900/30 border border-white/5 rounded-xl p-4 hover:border-white/10 transition-all group">
               <div class="flex items-center justify-between">
                 <div>
-                  <p class="text-sm text-neutral-200 group-hover:text-amber-400 transition-colors font-mono">{inv.invoice_number}</p>
-                  <p class="text-xs text-neutral-600 mt-0.5">${inv.total.toFixed(2)}{inv.amount_paid > 0 ? ` (paid: $${inv.amount_paid.toFixed(2)})` : ''}</p>
+                  <p class="text-sm text-neutral-200 group-hover:text-amber-600 transition-colors font-mono">{inv.invoice_number}</p>
+                  <p class="text-xs text-neutral-400 mt-0.5">${inv.total.toFixed(2)}{inv.amount_paid > 0 ? ` (paid: $${inv.amount_paid.toFixed(2)})` : ''}</p>
                 </div>
                 <span class={`text-[10px] font-mono tracking-wide uppercase px-2 py-0.5 rounded-full ${statusColors[inv.status] || ''}`}>{inv.status}</span>
               </div>
@@ -185,14 +185,14 @@ const statusColors: Record<string, string> = {
           ))}
         </div>
       ) : (
-        <p class="text-sm text-neutral-600 py-4">No invoices yet.</p>
+        <p class="text-sm text-neutral-400 py-4">No invoices yet.</p>
       )}
     </div>
 
     <!-- Approvals section -->
     {approvals.length > 0 && (
       <div class="mb-8">
-        <p class="text-[10px] font-mono text-neutral-700 tracking-[0.15em] uppercase mb-4">Approvals ({approvals.length})</p>
+        <p class="text-[10px] font-mono text-neutral-500 tracking-[0.15em] uppercase mb-4">Approvals ({approvals.length})</p>
         <div class="space-y-2">
           {approvals.map(a => (
             <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-4">
@@ -210,14 +210,14 @@ const statusColors: Record<string, string> = {
     <!-- Change Orders section -->
     {changeOrders.length > 0 && (
       <div class="mb-8">
-        <p class="text-[10px] font-mono text-neutral-700 tracking-[0.15em] uppercase mb-4">Change Orders ({changeOrders.length})</p>
+        <p class="text-[10px] font-mono text-neutral-500 tracking-[0.15em] uppercase mb-4">Change Orders ({changeOrders.length})</p>
         <div class="space-y-2">
           {changeOrders.map(co => (
             <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-4">
               <div class="flex items-center justify-between">
                 <div>
                   <p class="text-sm text-neutral-200">{co.title}</p>
-                  <p class="text-xs text-neutral-600 mt-0.5">Cost: ${co.cost_impact.toFixed(2)} | Time: +{co.time_impact_days}d</p>
+                  <p class="text-xs text-neutral-400 mt-0.5">Cost: ${co.cost_impact.toFixed(2)} | Time: +{co.time_impact_days}d</p>
                 </div>
                 <span class={`text-[10px] font-mono tracking-wide uppercase px-2 py-0.5 rounded-full ${statusColors[co.status] || ''}`}>{co.status}</span>
               </div>

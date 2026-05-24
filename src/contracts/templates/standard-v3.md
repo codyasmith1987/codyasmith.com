@@ -22,7 +22,10 @@ The relationship runs like a gym membership. The Client pays an agreed monthly f
 
 Web Management keeps an existing website running, secure, monitored, updated, and backed up for a fixed monthly fee. It is sold per site. Each tier includes hosting, daily backups, security monitoring, uptime monitoring, software updates at the cadence stated in the tier, and a pool of hands-on hours. Specific tier, included hours, response time, and per-site count are set in Schedule A.
 
-When the Client has more than one site under Web Management, additional sites are priced using the multi-site formula stated in this section and applied in Schedule A: each additional site is priced at eighty percent (80%) of the base monthly for the tier (the per-site floor), and onboarding for each additional site is priced at twenty-five percent (25%) of the base onboarding. Pooled hours scale proportionally with each additional site.
+When the Client has more than one site under Web Management, each managed site is routed to its own ecosystem (A, B, or C) by its own page count, and the engagement's chosen tier (Good, Better, or Best) is applied to every site. The primary site is priced at the full base monthly and full base onboarding for its routed ecosystem at the chosen tier. Each additional managed site is priced at eighty percent (80%) of the base monthly **for that site's own ecosystem at the chosen tier**, and at eighty percent (80%) of the base onboarding **for that site's own ecosystem at the chosen tier**. The multi-site discount applies linearly across sites; it does not compound. Pooled hours scale proportionally with each additional site. The specific tier, the per-site ecosystem assignment, and the resulting monthly and onboarding amounts for each managed site are listed individually in Schedule A.
+
+<!-- Revised 2026-05-24 per docs/audits/proposal-chain-audit-2026-05-24.md finding 1. Replaces prior wording that priced additional-site onboarding at 25% of the base and used primary-sets-ecosystem routing. -->
+
 
 Web Management does not include marketing strategy, content production at scale, paid media management, advertising creative, hardware purchases, or anything else carved out in Schedule A's exclusions.
 

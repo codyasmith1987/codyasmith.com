@@ -328,7 +328,7 @@ function buildWebManagementNarrative(ctx: ProductContext): NarrativeSnippetSet {
     what_i_recommend_paragraphs: [
       sites === 1
         ? `<strong>Web Management</strong> for the site. The fee covers hosting, daily backups, security and uptime monitoring, software updates at the contracted cadence, and a pool of hands-on hours for site work. Unused hours do not roll over; that is the trade for a predictable monthly.`
-        : `<strong>Web Management</strong> for all ${sites} sites under one engagement. The multi-site formula applies to monthly fees (additional sites at 80 percent of the base); takeover onboarding is per-site at the full ecosystem base, because each site is its own audit.`,
+        : `<strong>Web Management</strong> for all ${sites} sites under one engagement. Each site is sized to its own ecosystem by its own page count, at the engagement tier you pick. The primary site pays the full base monthly and full base onboarding for its ecosystem at that tier; each additional site pays 80 percent of its own ecosystem's base monthly and 80 percent of its own ecosystem's base onboarding at the same tier. Linear, no compounding. Pooled hours scale across all sites.`,
     ],
   };
 }

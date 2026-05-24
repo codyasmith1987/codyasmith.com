@@ -42,6 +42,8 @@ import type {
   TimeIntensityLevel,
   CodyTimeIntensitySignal,
   SalesAngle,
+  InternalGap,
+  InternalGapSeverity,
   RiskSeverity,
   RiskSignal,
 } from '../types';
@@ -379,6 +381,7 @@ export function validateClientResearch(raw: unknown): ClientResearchResult {
     clv_horizon: validateClvHorizon(o.clv_horizon),
     cody_time_intensity: validateTimeIntensity(o.cody_time_intensity),
     sales_angles: validateSalesAngles(o.sales_angles),
+    internal_gaps: validateInternalGaps(o.internal_gaps),
     risk_signals: validateRiskSignals(o.risk_signals),
 
     notes: strField(o.notes, 'notes'),
@@ -469,6 +472,31 @@ function validateSalesAngles(raw: unknown): SalesAngle[] {
     // Drop angles without evidence per the no-fabrication rule.
     if (!angle || !evidence) continue;
     out.push({ angle, supporting_evidence: evidence });
+  }
+  return out;
+}
+
+function validateInternalGaps(raw: unknown): InternalGap[] {
+  if (!Array.isArray(raw)) return [];
+  const VALID_GAP_IMPL = new Set([
+    'web_management', 'marketing_consulting', 'build', 'training', 'none',
+  ]);
+  const VALID_GAP_SEV: ReadonlySet<InternalGapSeverity> = new Set(['low', 'medium', 'high']);
+  const out: InternalGap[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const o = item as Record<string, unknown>;
+    const gap = typeof o.gap === 'string' ? o.gap.trim() : '';
+    const evidence = typeof o.evidence === 'string' ? o.evidence.trim() : '';
+    // No-fabrication rule: drop gaps without evidence.
+    if (!gap || !evidence) continue;
+    const severity = typeof o.severity === 'string' && VALID_GAP_SEV.has(o.severity as InternalGapSeverity)
+      ? (o.severity as InternalGapSeverity)
+      : 'medium';
+    const impl = typeof o.product_implication === 'string' && VALID_GAP_IMPL.has(o.product_implication)
+      ? (o.product_implication as InternalGap['product_implication'])
+      : undefined;
+    out.push({ gap, evidence, severity, product_implication: impl });
   }
   return out;
 }

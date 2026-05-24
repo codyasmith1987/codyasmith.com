@@ -141,6 +141,22 @@ export interface SalesAngle {
   supporting_evidence: string;             // quote or paraphrase from scraped content
 }
 
+// Concrete things broken or under-served on the prospect's site or
+// in their stated story. Drives the strategy panel's product-mix
+// recommendation (these are what Cody can FIX) and the onboarding
+// month-one focus. Distinct from sales_angles (which is what the
+// prospect tells THEIR customers); internal_gaps is what they
+// haven't said out loud but the data reveals.
+//
+// Per audit finding 2 (docs/audits/proposal-chain-audit-2026-05-24.md).
+export type InternalGapSeverity = 'low' | 'medium' | 'high';
+export interface InternalGap {
+  gap: string;                            // one short phrase, e.g., "Site title still 2022 copyright"
+  evidence: string;                       // scraped-content quote or paraphrase
+  severity: InternalGapSeverity;
+  product_implication?: 'web_management' | 'marketing_consulting' | 'build' | 'training' | 'none';
+}
+
 export type RiskSeverity = 'low' | 'medium' | 'high';
 
 export interface RiskSignal {
@@ -193,7 +209,17 @@ export interface ClientResearchResult {
   cody_time_intensity: CodyTimeIntensitySignal;
 
   // Three to five sales angles, each backed by scraped-content evidence.
+  // These are what the prospect tells their customers (their pitch).
+  // Used in the proposal opener to echo their language back.
   sales_angles: SalesAngle[];
+
+  // Two to five internal gaps -- things broken or under-served that
+  // Cody can fix. Distinct from sales_angles. Each is concrete:
+  // "site title still says 2022," "no analytics installed," "magazine
+  // feature buried in the file directory." Each has a product_implication
+  // tying it to one of Cody's products so the admin sees which gap maps
+  // to which product. Per finding 2.
+  internal_gaps: InternalGap[];
 
   // Sponsor-style risks, organizational gaps, decision-velocity warnings.
   risk_signals: RiskSignal[];

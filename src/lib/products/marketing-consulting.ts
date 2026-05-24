@@ -234,13 +234,20 @@ export function routeMarketingConsultingEcosystem(revenueBand: string | null): E
 // Step generation
 // =========================================================================
 
-function buildTierOption(tierId: TierId, ecosystem: Ecosystem): ProposalStepOption {
+function buildTierOption(tierId: TierId, ecosystem: Ecosystem, aiRecommendedTier?: TierId | null): ProposalStepOption {
   const tier = ecosystem.tiers[tierId];
+  // AI's per-prospect tier recommendation overrides the static product
+  // default (Better is recommended at every ecosystem). When no AI rec
+  // exists, fall back to the product's own `recommended` flag. Per
+  // finding 3.
+  const recommended = aiRecommendedTier
+    ? aiRecommendedTier === tierId
+    : !!tier.recommended;
   return {
     id: tierId,
     name: tier.name,
     tagline: tier.tagline,
-    recommended: !!tier.recommended,
+    recommended,
     price_label: formatMoney(tier.monthly || 0),
     price_suffix: '/ month',
     price_subline: `${formatMoney(tier.audit || 0)} audit at signing, ${ecosystem.label}`,
@@ -315,6 +322,14 @@ export const marketingConsultingProduct: ProductDefinition = {
     const eco = MC_ECOSYSTEMS[ctx.ecosystemId];
     if (!eco) return [];
 
+    // AI's per-prospect tier recommendation, if any, overrides the
+    // static "Better is recommended for everyone" default in the
+    // tier definition. Per finding 3.
+    const aiTier = ctx.engagementStrategy?.recommended_tier_per_product?.marketing_consulting?.tier;
+    const aiRecommendedTier = aiTier === 'good' || aiTier === 'better' || aiTier === 'best'
+      ? aiTier as TierId
+      : null;
+
     // If MC is the only product in scope, present a single tier_picker.
     // If other products are also in scope, present a yes/no first
     // (binary_picker) followed by a gated tier_picker. The yes/no
@@ -330,9 +345,9 @@ export const marketingConsultingProduct: ProductDefinition = {
           h2: 'Pick a Marketing Consulting level',
           prompt: `Good, Better, or Best for Marketing Consulting. The level sets the cadence and depth of the strategic cycle.`,
           options: [
-            buildTierOption('good', eco),
-            buildTierOption('better', eco),
-            buildTierOption('best', eco),
+            buildTierOption('good', eco, aiRecommendedTier),
+            buildTierOption('better', eco, aiRecommendedTier),
+            buildTierOption('best', eco, aiRecommendedTier),
           ],
         },
       ];
@@ -365,9 +380,9 @@ export const marketingConsultingProduct: ProductDefinition = {
         depends_on: 'mc_yes_no',
         show_when: { mc_yes_no: 'yes' },
         options: [
-          buildTierOption('good', eco),
-          buildTierOption('better', eco),
-          buildTierOption('best', eco),
+          buildTierOption('good', eco, aiRecommendedTier),
+          buildTierOption('better', eco, aiRecommendedTier),
+          buildTierOption('best', eco, aiRecommendedTier),
         ],
       },
     ];

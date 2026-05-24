@@ -27,7 +27,7 @@ import {
   routeMarketingConsultingEcosystem,
   marketingConsultingProduct,
 } from '../src/lib/products/marketing-consulting.ts';
-import { computeBuildTotal } from '../src/lib/products/build.ts';
+import { computeBuildTotal, buildProduct } from '../src/lib/products/build.ts';
 import { composeProposal } from '../src/lib/products/index.ts';
 import { computePricing } from '../src/lib/proposal-pricing.ts';
 import { buildScheduleA } from '../src/lib/contract-schedule.ts';
@@ -351,6 +351,236 @@ async function run() {
     buildPricing.oneTime === 11875, `got ${buildPricing?.oneTime}`);
   test('Build mid x1 dispatcher: monthly = 0',
     buildPricing.monthly === 0, `got ${buildPricing?.monthly}`);
+
+  // -------------------------------------------------------------------
+  // Build multi-option (Raised Bar pattern) — finding 7.
+  // When build_options has 2+ entries, the product emits a picker
+  // step + rollout_scenarios keyed by option id, applies pricing
+  // deltas from the picked option, and surfaces the option name in
+  // Schedule A's build SOW reference.
+  // -------------------------------------------------------------------
+  const sampleBuildOptions = [
+    {
+      id: 'unified',
+      name: 'Option 1: Unified site',
+      pitch: 'One site with a focused section for the pre-sell.',
+      pricing_delta: 0,
+      rollout_phases: [
+        { phase_num: 'Phase 1', h3: 'Build the unified site', html: 'Sections inside.' },
+      ],
+      schedule_a_note: 'Single site build covering both the brand and the pre-sell section.',
+    },
+    {
+      id: 'split',
+      name: 'Option 2: Split setup',
+      pitch: 'A standalone pre-sell micro-site plus a separate brand site.',
+      pricing_delta: 4500,
+      rollout_phases: [
+        { phase_num: 'Phase 1', h3: 'Micro-site first', html: 'Launch the pre-sell.' },
+        { phase_num: 'Phase 2', h3: 'Brand site after', html: 'Once the pre-sell is live.' },
+      ],
+      schedule_a_note: 'Two separate Build SOWs: one for the micro-site, one for the brand site.',
+    },
+  ];
+
+  // Step generation
+  const buildStepsCtx = {
+    ecosystemId: 'mid',
+    tierId: null,
+    variables: { build_size: 'mid', build_count: 1, build_options: sampleBuildOptions },
+    otherProducts: [],
+  };
+  const buildSteps = buildProduct.generateSteps(buildStepsCtx);
+  test('Build options: emits binary_picker step when 2 options present',
+    buildSteps.length === 1 && buildSteps[0].id === 'build_options' && buildSteps[0].type === 'binary_picker',
+    JSON.stringify(buildSteps.map(s => ({ id: s.id, type: s.type }))));
+  test('Build options: step options match input options by id',
+    buildSteps[0].options.length === 2
+      && buildSteps[0].options[0].id === 'unified'
+      && buildSteps[0].options[1].id === 'split');
+  test('Build options: first option marked recommended (default)',
+    buildSteps[0].options[0].recommended === true && buildSteps[0].options[1].recommended === false);
+  test('Build options: pricing_delta surfaces as price_subline',
+    buildSteps[0].options[1].price_subline === '+$4,500 vs default',
+    `got ${buildSteps[0].options[1].price_subline}`);
+
+  // Single option = no picker emitted
+  const buildSingleOptCtx = {
+    ecosystemId: 'mid',
+    tierId: null,
+    variables: { build_size: 'mid', build_count: 1, build_options: [sampleBuildOptions[0]] },
+    otherProducts: [],
+  };
+  test('Build options: single option = no picker (skipped, needs 2+)',
+    buildProduct.generateSteps(buildSingleOptCtx).length === 0);
+
+  // Narrative scenarios
+  const buildSnippets = buildProduct.generateNarrativeSnippets(buildStepsCtx);
+  test('Build options: emits rollout_scenarios keyed by option id',
+    buildSnippets.rollout_scenarios !== undefined
+      && 'unified' in buildSnippets.rollout_scenarios
+      && 'split' in buildSnippets.rollout_scenarios);
+  test('Build options: rollout_scenario_step = build_options',
+    buildSnippets.rollout_scenario_step === 'build_options');
+  test('Build options: scenario phases carry through from BuildOption',
+    buildSnippets.rollout_scenarios.split.phases.length === 2
+      && buildSnippets.rollout_scenarios.split.phases[0].phase_num === 'Phase 1');
+
+  // Pricing delta applied when an option is picked
+  const buildPickedUnified = buildProduct.computePricing({
+    ...buildStepsCtx,
+    selections: { build_options: 'unified' },
+  });
+  test('Build options: picking unified (delta 0) keeps base total',
+    buildPickedUnified.oneTime === 11875,
+    `got ${buildPickedUnified.oneTime}`);
+
+  const buildPickedSplit = buildProduct.computePricing({
+    ...buildStepsCtx,
+    selections: { build_options: 'split' },
+  });
+  test('Build options: picking split (+$4,500) bumps total to 16375',
+    buildPickedSplit.oneTime === 16375,
+    `got ${buildPickedSplit.oneTime}`);
+  test('Build options: split adjustment surfaces as breakdown line',
+    buildPickedSplit.breakdown.some(b => b.label.includes('Option 2: Split setup') && b.amount === 4500),
+    JSON.stringify(buildPickedSplit.breakdown));
+
+  // Nothing picked yet (default proposal-render state)
+  const buildPickedNone = buildProduct.computePricing(buildStepsCtx);
+  test('Build options: no selection = base total only (no delta applied)',
+    buildPickedNone.oneTime === 11875,
+    `got ${buildPickedNone.oneTime}`);
+
+  // Schedule A note reflects the picked option
+  const buildScheduleSplit = buildProduct.buildScheduleAContribution({
+    ...buildStepsCtx,
+    selections: { build_options: 'split' },
+  }, buildPickedSplit);
+  test('Build options: Schedule A build_sow_ref includes picked option name',
+    buildScheduleSplit.build_sow_ref && buildScheduleSplit.build_sow_ref.includes('Option 2: Split setup'),
+    String(buildScheduleSplit.build_sow_ref).slice(0, 200));
+  test('Build options: Schedule A build_sow_ref includes schedule_a_note',
+    buildScheduleSplit.build_sow_ref && buildScheduleSplit.build_sow_ref.includes('Two separate Build SOWs'),
+    String(buildScheduleSplit.build_sow_ref).slice(0, 200));
+
+  // -------------------------------------------------------------------
+  // Finding 3: AI per-prospect tier recommendation reaches the
+  // prospect's tier picker. Replaces the static "Better is recommended"
+  // default with whichever tier AI picked for THIS prospect.
+  // -------------------------------------------------------------------
+
+  // No AI tier rec: WM tier_picker has Better marked recommended (product default)
+  const wmStepsNoAI = webManagementProduct.generateSteps({
+    ecosystemId: 'B',
+    tierId: null,
+    variables: { page_count: 80, site_count: 1 },
+    otherProducts: [],
+  });
+  test('AI tier rec absent: WM Better still recommended (product default)',
+    wmStepsNoAI[0].options.find(o => o.id === 'better').recommended === true);
+  test('AI tier rec absent: WM Best not recommended',
+    wmStepsNoAI[0].options.find(o => o.id === 'best').recommended === false);
+
+  // AI recommends Best for WM
+  const wmStepsAIBest = webManagementProduct.generateSteps({
+    ecosystemId: 'B',
+    tierId: null,
+    variables: { page_count: 80, site_count: 1 },
+    otherProducts: [],
+    engagementStrategy: {
+      sales_angles: [],
+      recommended_tier_per_product: {
+        web_management: { tier: 'best', rationale: 'high-touch, high time intensity' },
+      },
+    },
+  });
+  test('AI rec Best for WM: Best marked recommended',
+    wmStepsAIBest[0].options.find(o => o.id === 'best').recommended === true);
+  test('AI rec Best for WM: Better NO LONGER recommended (override)',
+    wmStepsAIBest[0].options.find(o => o.id === 'better').recommended === false);
+
+  // AI recommends Good for MC; MC standalone (no other products)
+  const mcStepsAIGood = marketingConsultingProduct.generateSteps({
+    ecosystemId: 'B',
+    tierId: null,
+    variables: { revenue_band: '1m-to-10m' },
+    otherProducts: [],
+    engagementStrategy: {
+      sales_angles: [],
+      recommended_tier_per_product: {
+        marketing_consulting: { tier: 'good', rationale: 'low intensity, door-opener fit' },
+      },
+    },
+  });
+  test('AI rec Good for MC standalone: Good marked recommended',
+    mcStepsAIGood[0].options.find(o => o.id === 'good').recommended === true);
+  test('AI rec Good for MC standalone: Better NO LONGER recommended',
+    mcStepsAIGood[0].options.find(o => o.id === 'better').recommended === false);
+
+  // AI rec for WM doesn't bleed into MC's own picker (when both in scope)
+  const mcStepsCombined = marketingConsultingProduct.generateSteps({
+    ecosystemId: 'B',
+    tierId: null,
+    variables: { revenue_band: '1m-to-10m' },
+    otherProducts: [{ id: 'web-management', tierId: null }],
+    engagementStrategy: {
+      sales_angles: [],
+      recommended_tier_per_product: {
+        web_management: { tier: 'best' },
+        // MC has no rec; should fall back to product default (Better)
+      },
+    },
+  });
+  // The gated tier_picker is the second step (index 1).
+  const mcTierStep = mcStepsCombined.find(s => s.id === 'mc_tier');
+  test('AI rec for WM does not affect MC: MC Better still recommended',
+    mcTierStep.options.find(o => o.id === 'better').recommended === true);
+
+  // Invalid AI tier value: silently falls back to product default
+  const wmStepsBadAI = webManagementProduct.generateSteps({
+    ecosystemId: 'B',
+    tierId: null,
+    variables: { page_count: 80, site_count: 1 },
+    otherProducts: [],
+    engagementStrategy: {
+      sales_angles: [],
+      recommended_tier_per_product: {
+        web_management: { tier: 'platinum' /* not a valid tier */ },
+      },
+    },
+  });
+  test('AI invalid tier: WM falls back to product default (Better)',
+    wmStepsBadAI[0].options.find(o => o.id === 'better').recommended === true);
+
+  // -------------------------------------------------------------------
+  // Finding 4: closer tie-back. The "How this works in practice"
+  // closer accepts an optional final paragraph from the matched
+  // snippet's closer_tie_back field. Composer appends only when
+  // present. When absent, closer reads complete without it.
+  // -------------------------------------------------------------------
+  // Stage a registry override that contributes a closer_tie_back.
+  // (Inline test mock; the real registry lives in narrative-snippets.ts.)
+  // We test the composer's append behavior indirectly via composeProposal
+  // by passing a known engagement_strategy + checking the closer's tail.
+
+  // Default (no tie-back snippet): closer has 3 paragraphs.
+  const closerNoTieBack = composeProposal({
+    client: { id: 'ctb1', name: 'Plain Co', slug: 'plain-co' },
+    signers: [{ id: 's1', name: 'Pat Doe', email: 'pat@plain.com' }],
+    products: ['web-management'],
+    product_vars: { 'web-management': { page_count: 80, site_count: 1 } },
+  });
+  const closerNoTieBackSection = closerNoTieBack.narrative.sections.find(s => s.h2 === 'How this works in practice');
+  test('Finding 4: closer has 3 paragraphs when no tie-back snippet matches',
+    closerNoTieBackSection && closerNoTieBackSection.paragraphs.length === 3,
+    `got ${closerNoTieBackSection?.paragraphs.length}`);
+
+  // Verify the closer paragraphs match expected content (sanity check).
+  test('Finding 4: closer paragraph 1 mentions month one onboarding',
+    closerNoTieBackSection.paragraphs[0].includes('Month one is onboarding'));
+  test('Finding 4: closer last paragraph is change-order language',
+    closerNoTieBackSection.paragraphs[2].includes('change order'));
 
   // -------------------------------------------------------------------
   // Phase 2: engagement-strategy synthesis flows to the composer.

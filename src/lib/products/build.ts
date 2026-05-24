@@ -21,6 +21,9 @@ import type {
   ProductScheduleAContribution,
   NarrativeSnippetSet,
   VariableSchemaField,
+  BuildOption,
+  ProposalStep,
+  NarrativeScenario,
 } from './types';
 
 // =========================================================================
@@ -164,8 +167,35 @@ function buildNarrative(ctx: ProductContext): NarrativeSnippetSet {
 function numberFromVar(v: ProductVariables[string] | undefined, dflt: number): number {
   if (v === null || v === undefined) return dflt;
   if (typeof v === 'number') return v;
+  if (Array.isArray(v)) return dflt;
   const n = Number(v);
   return Number.isFinite(n) ? n : dflt;
+}
+
+// Read the BuildOption array off ctx.variables.build_options.
+// Returns the array only when at least two options are present
+// (single-option Build means no picker; no point in a 1-card chooser).
+// Tolerates the field being absent, null, or not an array.
+function getBuildOptions(ctx: ProductContext): BuildOption[] {
+  const raw = ctx.variables.build_options;
+  if (!Array.isArray(raw)) return [];
+  const valid = raw.filter((o): o is BuildOption =>
+    !!o && typeof o === 'object'
+    && typeof (o as any).id === 'string' && (o as any).id.length > 0
+    && typeof (o as any).name === 'string'
+  );
+  return valid.length >= 2 ? valid : [];
+}
+
+// Resolve the prospect's picked option from ctx.selections. Step id
+// for the picker is the Build product's own step id `build_options`.
+// Returns the matching BuildOption or null when nothing is picked yet.
+function getSelectedBuildOption(ctx: ProductContext): BuildOption | null {
+  const options = getBuildOptions(ctx);
+  if (options.length === 0) return null;
+  const picked = ctx.selections?.['build_options'];
+  if (!picked) return null;
+  return options.find(o => o.id === picked) || null;
 }
 
 // =========================================================================
@@ -185,23 +215,67 @@ export const buildProduct: ProductDefinition = {
     return routeBuildSize(variables);
   },
 
-  generateSteps(_ctx) {
+  generateSteps(ctx) {
     // Default builds generate no interactive step. The fee is fixed
-    // once size is picked; the prospect does not choose between
-    // tiers. Multi-config builds (Raised Bar style) are added via the
-    // wizard's preview-override step as an explicit admin extension.
-    return [];
+    // once size is picked; the prospect does not choose between tiers.
+    //
+    // Multi-option builds (Raised Bar pattern) emit a binary or
+    // multi-option picker when ctx.variables.build_options has 2+
+    // entries. Each option becomes a card with name + pitch HTML;
+    // the picker step id is `build_options`. See finding 7 in
+    // docs/audits/proposal-chain-audit-2026-05-24.md.
+    const options = getBuildOptions(ctx);
+    if (options.length === 0) return [];
+
+    const step: ProposalStep = {
+      id: 'build_options',
+      type: options.length === 2 ? 'binary_picker' : 'tier_picker',
+      h2: 'Pick a build approach',
+      prompt: 'The build can ship in more than one shape. Pick the option that fits; the rollout, the pricing, and Schedule A will reflect your pick.',
+      options: options.map((opt, i) => ({
+        id: opt.id,
+        name: opt.name,
+        html: opt.pitch,
+        recommended: i === 0, // first option is the default recommendation
+        // Pricing delta surfaces as a small detail line per card.
+        price_subline: opt.pricing_delta !== undefined && opt.pricing_delta !== 0
+          ? (opt.pricing_delta > 0
+            ? `+${formatMoney(opt.pricing_delta)} vs default`
+            : `${formatMoney(opt.pricing_delta)} vs default`)
+          : undefined,
+      })),
+    };
+    return [step];
   },
 
   generateNarrativeSnippets(ctx) {
-    return buildNarrative(ctx);
+    const base = buildNarrative(ctx);
+    const options = getBuildOptions(ctx);
+    if (options.length === 0) return base;
+
+    // Emit rollout_scenarios keyed by the build_options step's option
+    // id. The proposal renderer swaps the rollout content based on
+    // the prospect's pick on the picker step.
+    const scenarios: Record<string, NarrativeScenario> = {};
+    for (const opt of options) {
+      scenarios[opt.id] = {
+        intro_html: opt.rollout_intro_html,
+        phases: opt.rollout_phases || [],
+        outro_html: opt.rollout_outro_html,
+      };
+    }
+    return {
+      ...base,
+      rollout_scenarios: scenarios,
+      rollout_scenario_step: 'build_options',
+    };
   },
 
   computePricing(ctx) {
     const size = routeBuildSize(ctx.variables);
     const count = numberFromVar(ctx.variables.build_count, 1);
-    const total = computeBuildTotal(size, count);
-    if (total === 0) {
+    const baseTotal = computeBuildTotal(size, count);
+    if (baseTotal === 0) {
       return { monthly: 0, oneTime: 0, breakdown: [], displaySummary: {} };
     }
     const desc = typeof ctx.variables.build_description === 'string' && ctx.variables.build_description
@@ -212,11 +286,25 @@ export const buildProduct: ProductDefinition = {
       : size === 'large' ? 'large'
       : 'unspecified size';
     const breakdown = count === 1
-      ? [{ label: `Build, ${sizeLabel}${desc}`, amount: total }]
+      ? [{ label: `Build, ${sizeLabel}${desc}`, amount: baseTotal }]
       : [
           { label: `Build, ${sizeLabel}${desc} (build 1)`, amount: BUILD_FEES[size!] },
-          { label: `Builds 2-${count}, ${sizeLabel}, 20% off each`, amount: total - BUILD_FEES[size!] },
+          { label: `Builds 2-${count}, ${sizeLabel}, 20% off each`, amount: baseTotal - BUILD_FEES[size!] },
         ];
+
+    // Apply pricing delta from picked Build option, if any. Negative
+    // deltas reduce the total; positive deltas add. Surfaces as a
+    // separate breakdown line so the prospect sees the math.
+    let total = baseTotal;
+    const picked = getSelectedBuildOption(ctx);
+    if (picked && picked.pricing_delta) {
+      total = Math.round((total + picked.pricing_delta) * 100) / 100;
+      breakdown.push({
+        label: `${picked.name} adjustment`,
+        amount: picked.pricing_delta,
+      });
+    }
+
     return {
       monthly: 0,
       oneTime: total,
@@ -224,6 +312,7 @@ export const buildProduct: ProductDefinition = {
       displaySummary: {
         size_label: sizeLabel,
         count: String(count),
+        picked_option_id: picked?.id || '',
       },
     };
   },
@@ -238,9 +327,26 @@ export const buildProduct: ProductDefinition = {
     const itemsClause = count === 1
       ? `Build in scope: one ${size} build${desc ? ` (${desc})` : ''}.`
       : `Builds in scope: ${count} ${size} builds${desc ? ` (${desc})` : ''}.`;
+
+    // Picked option's schedule_a_note appends to the SOW reference so
+    // the contract reflects which deployment shape was chosen.
+    const picked = getSelectedBuildOption(ctx);
+    const optionClause = picked && picked.schedule_a_note
+      ? ` ${picked.name}: ${picked.schedule_a_note}`
+      : picked
+        ? ` Selected option: ${picked.name}.`
+        : '';
+
     return {
       products_purchased: { build: true },
-      build_sow_ref: `${itemsClause} Each is detailed in a separate Build Statement of Work to be signed alongside this agreement.`,
+      build_sow_ref: `${itemsClause}${optionClause} Each is detailed in a separate Build Statement of Work to be signed alongside this agreement.`,
     };
   },
 };
+
+// Helper used by generateSteps for the per-card pricing-delta subline.
+function formatMoney(n: number): string {
+  const abs = Math.abs(Math.round(n));
+  const sign = n < 0 ? '-' : '';
+  return `${sign}$${abs.toLocaleString('en-US')}`;
+}

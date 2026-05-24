@@ -275,8 +275,18 @@ function composeNarrative(args: ComposeNarrativeArgs): {
   // Echoes 07 §5.4 (hours do not roll over), §6.4 (decision velocity),
   // §7.5 (no chase work), §8 (change-order). Client agreeing to this
   // language up front sets the expectation the contract then enforces.
+  //
+  // When the matched snippet provides a `closer_tie_back` paragraph
+  // (Cody-authored prose that ties the engagement to the prospect's
+  // first stated value prop), it gets appended as the closer's final
+  // paragraph. Per audit finding 4. The composer below threads the
+  // tie-back through.
+  const closerTieBack = contributions
+    .map(c => c.set.closer_tie_back)
+    .find(p => typeof p === 'string' && p.trim().length > 0);
   const closerParagraphs = composeHowItWorksCloser({
     orderedProducts: args.orderedProducts,
+    tieBack: closerTieBack,
   });
 
   const sections: NarrativeSection[] = [];
@@ -391,6 +401,7 @@ function composeSituationOpener(args: {
 // constant.
 function composeHowItWorksCloser(args: {
   orderedProducts: ProductId[];
+  tieBack?: string;
 }): string[] {
   if (args.orderedProducts.length === 0) return [];
   const hasWM = args.orderedProducts.includes('web-management');
@@ -446,6 +457,13 @@ function composeHowItWorksCloser(args: {
     changeOrderParts.push(`Subsequent builds in this engagement carry a 20 percent discount off the first.`);
   }
   paragraphs.push(changeOrderParts.join(' '));
+
+  // Optional tie-back paragraph keyed to the prospect's first sales
+  // angle. Snippet-authored; appended only when present so the closer
+  // reads complete without it.
+  if (args.tieBack && args.tieBack.trim().length > 0) {
+    paragraphs.push(args.tieBack.trim());
+  }
 
   return paragraphs;
 }
@@ -605,7 +623,7 @@ function buildContextForProduct(args: {
       return { id: p, tierId: otherTier };
     });
 
-  return { ecosystemId, tierId, variables, otherProducts };
+  return { ecosystemId, tierId, variables, otherProducts, selections: args.selections };
 }
 
 // Exported for use in contract-schedule.ts product_driven_v1 branch.

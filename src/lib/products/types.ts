@@ -75,10 +75,35 @@ export interface Ecosystem<E extends EcosystemId = EcosystemId> {
 // Variables: what the wizard collects per product
 // =========================================================================
 
+// A multi-option deployment shape for the Build product (per the
+// Raised Bar pattern; see docs/audits/proposal-chain-audit-2026-05-24.md
+// finding 7). Each option is one way the same Build could ship: a
+// unified-vs-split site setup, a sub-brand-vs-microsite split, etc.
+// When a Build has 2+ options, the proposal page renders them as
+// interactive cards via the binary_picker step; the prospect picks
+// one; the rollout phases swap based on the pick; the Schedule A
+// reflects the pick.
+//
+// Authored in the wizard (Phase 4 UI). Composer reads them and emits
+// the corresponding step + rollout scenarios. computePricing applies
+// the option's pricing_delta to the build fee when an option is picked.
+export interface BuildOption {
+  id: string;                   // 'o1', 'o2', etc. Must be unique within the Build.
+  name: string;                 // "Option 1: Single unified site"
+  pitch: string;                // HTML body shown on the option card on the proposal page.
+  pricing_delta?: number;       // Added to the one-time build total when this option is picked (negative for discount).
+  rollout_phases?: NarrativePhase[]; // Phases shown under "How it rolls out" when picked.
+  rollout_intro_html?: string;  // Shown above the phases.
+  rollout_outro_html?: string;  // Shown below the phases.
+  schedule_a_note?: string;     // Free-text note added to Schedule A's build_sow_ref when picked.
+}
+
 // Each product declares its variable schema; the wizard renders inputs
 // for it and the routing function returns the matching ecosystem.
+// Values are primitives OR structured arrays for products that need
+// multi-row inputs (Build's `build_options` is the only current case).
 export interface ProductVariables {
-  [key: string]: string | number | boolean | null;
+  [key: string]: string | number | boolean | null | BuildOption[];
 }
 
 export interface VariableSchemaField {
@@ -150,6 +175,13 @@ export interface NarrativeSnippetSet {
   rollout_scenarios?: Record<string, NarrativeScenario>; // keyed by scenario step value
   rollout_scenario_step?: string;        // which step drives scenario picking
   rollout_phases?: NarrativePhase[];     // single-scenario rollout (no scenario_step)
+  // Optional final paragraph appended to the "How this works in
+  // practice" closer that ties the engagement to the prospect's
+  // first stated value prop (sales_angles[0]). Per audit finding 4
+  // (docs/audits/proposal-chain-audit-2026-05-24.md). Snippet authors
+  // write the tie-back in Cody voice per-snippet; the composer
+  // appends it after the boundary-setting paragraphs.
+  closer_tie_back?: string;
 }
 
 // =========================================================================
@@ -213,10 +245,26 @@ export interface EngagementStrategySalesAngle {
   angle: string;
   supporting_evidence: string;
 }
+// AI's per-prospect tier recommendation per product. Keys are the
+// synthesis product ids (underscored: web_management,
+// marketing_consulting, build, training); each entry carries the
+// recommended tier + rationale string. When present, overrides the
+// product definition's default `recommended: true` on the matching
+// tier card so the prospect sees the AI-driven recommendation, not
+// the static default. Per finding 3 in
+// docs/audits/proposal-chain-audit-2026-05-24.md.
+export type EngagementStrategySynthProductId =
+  | 'web_management' | 'marketing_consulting' | 'build' | 'training';
+export interface EngagementStrategyTierRec {
+  tier: 'good' | 'better' | 'best';
+  rationale?: string;
+}
+
 export interface EngagementStrategy {
   sales_angles: EngagementStrategySalesAngle[];
   clv_horizon?: 'long-term-stable' | 'medium-term' | 'churn-risk' | 'unknown' | null;
   cody_time_intensity?: 'low' | 'medium' | 'high' | null;
+  recommended_tier_per_product?: Partial<Record<EngagementStrategySynthProductId, EngagementStrategyTierRec>>;
 }
 
 export interface ProductContext {
@@ -245,6 +293,14 @@ export interface ProductContext {
     is_primary?: boolean;
     page_count?: number | null;
   }>;
+  // Prospect's interactive selections, keyed by step id. Lets a
+  // product introspect picks it doesn't own (e.g., Build reads its
+  // own `build_options` step's value to decide which option's
+  // pricing_delta to apply). WM and MC tier picks still resolve into
+  // ctx.tierId; this is a sibling escape hatch for products that
+  // emit their own non-tier steps (the Raised Bar pattern via
+  // BuildOption[]).
+  selections?: Record<string, string | null>;
   // Engagement-strategy synthesis from the research call, when present.
   // Optional so legacy composer calls without research still work.
   engagementStrategy?: EngagementStrategy | null;

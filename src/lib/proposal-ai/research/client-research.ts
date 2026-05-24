@@ -92,43 +92,81 @@ export async function researchClient(
     }
   }
 
-  // Step 1: Serper queries. Domain-anchored so the actual entity at
-  // the site drives the search even when the client name in the DB
-  // does not match (test fixtures, holding-company / DBA names,
-  // freshly-created clients that have not been renamed yet, etc.).
+  // Step 1: brand discovery. Domain-anchored queries alone miss
+  // entities whose Google footprint is indexed against the brand
+  // name (e.g., site at mcmeng2.com, brand "MCM Engineering II", real
+  // revenue records on RocketReach / ZoomInfo / PitchBook). The fix
+  // is a two-phase Serper run:
   //
-  // The site: operator forces results from the actual domain (and
-  // gives Gemini the site's own about / company / services pages
-  // for ground-truth brand extraction). The "${domain}" + revenue
-  // anchor surfaces press releases or LinkedIn/Crunchbase pages that
-  // reference the domain alongside revenue or employee counts. We
-  // still include one name-based query so engagement-name mentions
-  // get picked up too.
+  //   Phase 1: site:${domain} returns Google's title for the site,
+  //            which almost always contains the brand. Extract brand
+  //            candidates from those titles.
+  //   Phase 2: brand-anchored queries ("BRAND" revenue, "BRAND"
+  //            industry). These are where the real public-record
+  //            data actually lives.
+  //
+  // Domain-anchored queries remain as a fallback so weakly-known
+  // brands still have a chance.
   const searchFn = deps.serperSearch ?? defaultSerperSearch(deps.serperApiKey);
-  const queries: Array<{ q: string; tag: string }> = [
-    { q: `site:${args.domain}`, tag: 'site' },
-    { q: `"${args.domain}" revenue OR employees OR annual sales OR funding`, tag: 'revenue' },
-    { q: `"${args.domain}" industry OR services OR team OR about`, tag: 'industry' },
-  ];
-  // Keep a name-anchored fallback only when the client name looks
-  // like a real entity (not a test fixture). Heuristic: name has
-  // more than one word and is not literally a test placeholder.
+  const searchHits: Array<{ url: string; query_type: string; snippet: string }> = [];
+  const brandCandidates: string[] = [];
+
+  // Phase 1: site: query for brand discovery.
+  try {
+    const siteHits = await searchFn(`site:${args.domain}`, 5);
+    for (const h of siteHits) {
+      searchHits.push({ url: h.url, query_type: 'site', snippet: h.snippet });
+      const brand = extractBrandFromTitle(h.title || '', args.domain);
+      if (brand && !brandCandidates.includes(brand)) brandCandidates.push(brand);
+    }
+  } catch (err) {
+    logger.warn('proposal-ai research site: query failed', err);
+  }
+
+  // Add the database client name as a brand candidate when it looks
+  // like a real entity (not a test placeholder).
   const looksLikeRealName = args.clientName
     && !/^(test|cody[\s_-]?test|sample|fixture|demo)/i.test(args.clientName.trim())
     && args.clientName.trim().length > 4;
-  if (looksLikeRealName) {
-    queries.push({ q: `"${args.clientName}" revenue OR employees`, tag: 'name' });
+  if (looksLikeRealName && !brandCandidates.includes(args.clientName.trim())) {
+    brandCandidates.push(args.clientName.trim());
   }
 
-  const searchHits: Array<{ url: string; query_type: string; snippet: string }> = [];
-  for (const { q, tag } of queries) {
+  // Phase 2: brand-anchored queries for each candidate (cap at 2 to
+  // keep the Serper budget reasonable).
+  const brandsToQuery = brandCandidates.slice(0, 2);
+  for (const brand of brandsToQuery) {
+    const escaped = brand.replace(/"/g, '');
+    const brandQueries: Array<{ q: string; tag: string }> = [
+      { q: `"${escaped}" revenue OR employees OR annual sales OR funding`, tag: 'revenue' },
+      { q: `"${escaped}" industry OR services OR team OR about`, tag: 'industry' },
+    ];
+    for (const { q, tag } of brandQueries) {
+      try {
+        const hits = await searchFn(q, 5);
+        for (const h of hits) {
+          searchHits.push({ url: h.url, query_type: tag, snippet: h.snippet });
+        }
+      } catch (err) {
+        logger.warn(`proposal-ai research brand query failed: ${q}`, err);
+      }
+    }
+  }
+
+  // Domain-anchored fallback. Runs in addition to brand queries
+  // because some brand-anchored searches return nothing for newer
+  // or smaller entities.
+  const domainFallback: Array<{ q: string; tag: string }> = [
+    { q: `"${args.domain}" revenue OR employees OR annual sales OR funding`, tag: 'revenue-domain' },
+  ];
+  for (const { q, tag } of domainFallback) {
     try {
       const hits = await searchFn(q, 5);
       for (const h of hits) {
         searchHits.push({ url: h.url, query_type: tag, snippet: h.snippet });
       }
     } catch (err) {
-      logger.warn(`proposal-ai research Serper query failed: ${q}`, err);
+      logger.warn(`proposal-ai research domain query failed: ${q}`, err);
     }
   }
 
@@ -171,6 +209,7 @@ export async function researchClient(
     sitemap_url_count: sitemap.url_count,
     sitemap_source: sitemap.source,
     scraped_excerpts: scraped.map(s => ({ url: s.url, text: s.full_text || s.snippet || '' })),
+    brand_candidates: brandsToQuery,
   };
   const userPrompt = buildUserPrompt(promptInput);
 
@@ -193,6 +232,37 @@ export async function researchClient(
   }
 
   return validated;
+}
+
+// =========================================================================
+// Brand discovery
+// =========================================================================
+
+// Extract a brand candidate from a Serper result title. Google's title
+// for a site: query is the homepage title from the actual site, which
+// almost always contains the business name. Common separators are
+// pipe, dash, en-dash, em-dash, colon. Reject generic page names and
+// the bare domain. Prefer the longest non-generic candidate.
+export function extractBrandFromTitle(title: string, domain: string): string | null {
+  if (!title) return null;
+  const parts = title.split(/\s*[|\-–—:]+\s*/);
+  const candidates: string[] = [];
+  for (const raw of parts) {
+    const part = raw.trim();
+    if (!part) continue;
+    if (part.length < 3 || part.length > 80) continue;
+    const lower = part.toLowerCase();
+    const domainLower = domain.toLowerCase();
+    // Reject only the exact-match domain. Stem matches ("Acme" vs
+    // "acme.com") would over-reject real brands that happen to share
+    // the domain stem; let those through.
+    if (lower === domainLower) continue;
+    if (/^(home|about|contact|services|products|welcome|page|home page|index|landing|main)$/i.test(part)) continue;
+    const stripped = part.replace(/^welcome\s+to\s+/i, '').trim();
+    if (stripped.length >= 3) candidates.push(stripped);
+  }
+  candidates.sort((a, b) => b.length - a.length);
+  return candidates[0] || null;
 }
 
 // =========================================================================

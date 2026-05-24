@@ -244,9 +244,17 @@ actionItems.sort((a, b) => a.urgency - b.urgency);
     />
   </div>
 
+  <!-- Chart.js 4.4.8 via jsdelivr. The integrity hash MUST match the
+       actual file or the browser silently refuses to execute the
+       script and `Chart` is never defined; the dashboard's score
+       chart then errors with "Chart is not defined" and the rest of
+       the page renders fine because the catch in renderChart drops
+       to the "Retry" fallback. The hash was wrong before this fix.
+       If you ever bump the version, regenerate the hash with:
+         curl -sL <url> | openssl dgst -sha384 -binary | openssl base64 -A -->
   <script
     src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"
-    integrity="sha384-Ut+UvgalcfgCJBKbcgwsHvUaT5e2K5fXg4HpkbsAFCunfivnZxulnXX5oRTeIaq8"
+    integrity="sha384-T/4KgSWuZEPozpPz7rnnp/5lDSnpY1VPJCojf1S81uTHS1E38qgLfMgVsAeRCWc4"
     crossorigin="anonymous"
   ></script>
   <script define:vars={{ clientId: user.client_id, isAdmin, firstClientId: clients[0]?.id || '' }}>

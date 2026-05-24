@@ -38,4 +38,8 @@ export const CSV_CHILD_TABLES: string[] = [
   'ga4_tech',
   'ga4_geography',
   'ga4_campaigns',
+  // GSC tables — per Slice C of the data-ingestion overhaul.
+  'gsc_dimensions',
+  'gsc_chart',
+  'gsc_filters',
 ];

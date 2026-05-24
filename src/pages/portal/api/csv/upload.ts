@@ -1,17 +1,21 @@
 // Admin CSV upload endpoint.
 //
-// Accepts either a single 'file' (legacy) OR multiple files via 'files'
-// in the same formData (batch). The batch path lets the client send N
-// files in ONE request instead of N separate ones; this avoids
-// tripping Cloudflare's burst-detection / WAF when uploading a full
-// Screaming Frog export folder (100+ files in a few seconds looks
-// indistinguishable from a brute-force attack).
+// Accepts:
+//   - a single 'file' (legacy) OR multiple 'files' in the same
+//     formData (batch). The batch path lets the client send N files
+//     in ONE request instead of N separate ones; avoids tripping
+//     Cloudflare's burst-detection / WAF on a full Screaming Frog
+//     export folder (100+ files in a few seconds).
+//   - .zip archives: server unzips and processes each CSV inside as
+//     its own upload row. Per the data-ingestion overhaul: GSC
+//     Performance exports and Ubersuggest site audits ship as ZIPs.
 //
 // Per-file result is returned in an array so the UI can render
 // success/error chips for each. Errors on one file do not stop the
-// rest.
+// rest. A ZIP that contains N CSVs returns N result rows.
 
 import type { APIRoute } from 'astro';
+import JSZip from 'jszip';
 import { ingestCSV } from '../../../../lib/csv/index';
 import { logger } from '../../../../lib/logger';
 import { logActivity } from '../../../../lib/activity';
@@ -24,6 +28,8 @@ const json = (data: any, status = 200) =>
 const MAX_BYTES_PER_FILE = 10 * 1024 * 1024;
 const MAX_ROWS_PER_FILE = 50000;
 const MAX_FILES_PER_BATCH = 50;
+const MAX_BYTES_PER_ZIP = 25 * 1024 * 1024;
+const MAX_CSVS_PER_ZIP = 100;
 
 interface PerFileResult {
   filename: string;
@@ -34,37 +40,37 @@ interface PerFileResult {
   headers?: string[];
 }
 
-async function processOne(
-  file: File,
+// Ingest one raw CSV string. Shared between the direct .csv path and
+// the unzip path so the size + row checks + activity log + result
+// shape are identical for both.
+async function ingestOneCsv(
+  filename: string,
+  raw: string,
+  sizeBytes: number,
   clientId: string,
   month: string,
   userId: string,
   userName: string,
 ): Promise<PerFileResult> {
-  if (!file.name.toLowerCase().endsWith('.csv')) {
-    return { filename: file.name, error: 'Only CSV files are accepted' };
+  if (sizeBytes > MAX_BYTES_PER_FILE) {
+    return { filename, error: 'CSV file must be under 10MB' };
   }
-  if (file.size > MAX_BYTES_PER_FILE) {
-    return { filename: file.name, error: 'CSV file must be under 10MB' };
-  }
-  const raw = await file.text();
   const lineCount = (raw.match(/\n/g) || []).length + 1;
   if (lineCount > MAX_ROWS_PER_FILE) {
-    return { filename: file.name, error: `CSV exceeds ${MAX_ROWS_PER_FILE} row maximum (${lineCount} rows submitted)` };
+    return { filename, error: `CSV exceeds ${MAX_ROWS_PER_FILE} row maximum (${lineCount} rows submitted)` };
   }
-
   try {
-    const result = await ingestCSV(raw, clientId, month, file.name, userId);
+    const result = await ingestCSV(raw, clientId, month, filename, userId);
     await logActivity({
       clientId,
       userId,
       action: 'uploaded',
       entityType: 'csv_upload',
       entityId: result.uploadId,
-      summary: `${userName} uploaded CSV "${file.name}" (${result.format}${result.error ? ', failed' : `, ${result.rowCount} rows`})`,
+      summary: `${userName} uploaded CSV "${filename}" (${result.format}${result.error ? ', failed' : `, ${result.rowCount} rows`})`,
     });
     return {
-      filename: file.name,
+      filename,
       upload_id: result.uploadId,
       format: result.format,
       row_count: result.rowCount,
@@ -73,8 +79,64 @@ async function processOne(
     };
   } catch (err: any) {
     logger.error('CSV upload error', err);
-    return { filename: file.name, error: err?.message || 'Upload failed' };
+    return { filename, error: err?.message || 'Upload failed' };
   }
+}
+
+async function processOne(
+  file: File,
+  clientId: string,
+  month: string,
+  userId: string,
+  userName: string,
+): Promise<PerFileResult | PerFileResult[]> {
+  const lowerName = file.name.toLowerCase();
+
+  // ZIP path. GSC Performance exports and Ubersuggest site audits
+  // ship as ZIPs; unpack server-side and process each CSV inside as
+  // its own upload row. Return an array of results so the UI shows
+  // one chip per CSV instead of one chip for the ZIP.
+  if (lowerName.endsWith('.zip')) {
+    if (file.size > MAX_BYTES_PER_ZIP) {
+      return { filename: file.name, error: `ZIP must be under ${MAX_BYTES_PER_ZIP / (1024 * 1024)}MB` };
+    }
+    const buf = Buffer.from(await file.arrayBuffer());
+    let zip: JSZip;
+    try {
+      zip = await JSZip.loadAsync(buf);
+    } catch (err: any) {
+      return { filename: file.name, error: `ZIP could not be opened: ${err?.message || 'invalid archive'}` };
+    }
+
+    const csvEntries = Object.values(zip.files).filter(entry =>
+      !entry.dir && entry.name.toLowerCase().endsWith('.csv')
+    );
+    if (csvEntries.length === 0) {
+      return { filename: file.name, error: 'ZIP contains no CSV files' };
+    }
+    if (csvEntries.length > MAX_CSVS_PER_ZIP) {
+      return { filename: file.name, error: `ZIP contains ${csvEntries.length} CSVs; limit is ${MAX_CSVS_PER_ZIP}` };
+    }
+
+    const results: PerFileResult[] = [];
+    for (const entry of csvEntries) {
+      const raw = await entry.async('string');
+      // Strip any path inside the ZIP — the filename downstream is
+      // just the basename so the detector's filename-based routing
+      // works the same as if the file had been uploaded standalone.
+      const baseName = entry.name.replace(/^.*[\\/]/, '');
+      const sizeBytes = raw.length; // approximate; rows still bounded
+      results.push(await ingestOneCsv(`${file.name}:${baseName}`, raw, sizeBytes, clientId, month, userId, userName));
+    }
+    return results;
+  }
+
+  // CSV path.
+  if (!lowerName.endsWith('.csv')) {
+    return { filename: file.name, error: 'Only CSV or ZIP files are accepted' };
+  }
+  const raw = await file.text();
+  return ingestOneCsv(file.name, raw, file.size, clientId, month, userId, userName);
 }
 
 export const POST: APIRoute = async ({ locals, request }) => {
@@ -119,10 +181,14 @@ export const POST: APIRoute = async ({ locals, request }) => {
     const userName = locals.user!.name;
 
     // Process sequentially. Parallel would hammer Turso and complicate
-    // the clearPreviousData / supersede logic.
+    // the clearPreviousData / supersede logic. processOne can return
+    // a single result OR an array (for ZIPs that fan out to multiple
+    // CSV uploads); flatten so the UI gets one chip per ingested CSV.
     const results: PerFileResult[] = [];
     for (const file of files) {
-      results.push(await processOne(file, clientId, month, userId, userName));
+      const r = await processOne(file, clientId, month, userId, userName);
+      if (Array.isArray(r)) results.push(...r);
+      else results.push(r);
     }
 
     // Backward compat: when only one file was sent via legacy 'file'

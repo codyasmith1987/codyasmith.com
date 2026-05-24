@@ -101,6 +101,18 @@ async function run() {
   test('detector: crawl_overview.csv as crawl_overview',
     detectFormat(crawlOverviewCsv, 'crawl_overview.csv').format === 'crawl_overview');
 
+  const contentCsv = '"Address","Word Count","Sentence Count","Average Words Per Sentence","Flesch Reading Ease Score","Readability"\n"https://a.com/","100","12","8.3","65","Standard"\n';
+  test('detector: content_all.csv as content_urls',
+    detectFormat(contentCsv, 'content_all.csv').format === 'content_urls');
+
+  const securityCsv = '"Address","Content Type","Status Code","Status","HTTP Version","Indexability"\n"https://a.com/","text/html","200","OK","1.1","Indexable"\n';
+  test('detector: security_all.csv as security_urls',
+    detectFormat(securityCsv, 'security_all.csv').format === 'security_urls');
+
+  const structuredCsv = '"Address","Errors","Warnings","Rich Result Errors","Rich Result Warnings","Total Types","Unique Types"\n"https://a.com/","0","1","0","0","2","2"\n';
+  test('detector: structured_data_all.csv as structured_data_urls',
+    detectFormat(structuredCsv, 'structured_data_all.csv').format === 'structured_data_urls');
+
   // ---------- Summary ----------
   const passed = results.filter(r => r.pass).length;
   const failed = results.filter(r => !r.pass);

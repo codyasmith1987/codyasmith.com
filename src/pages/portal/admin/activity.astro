@@ -54,7 +54,7 @@ function actionColor(action: string): string {
   if (action === 'deleted' || action === 'revoked') return 'text-red-400 bg-red-500/10';
   if (action === 'created' || action === 'uploaded') return 'text-emerald-400 bg-emerald-500/10';
   if (action === 'logged_in' || action === 'logged_out') return 'text-blue-400 bg-blue-500/10';
-  return 'text-amber-400 bg-amber-500/10';
+  return 'text-amber-600 bg-amber-500/10';
 }
 ---
 
@@ -62,7 +62,7 @@ function actionColor(action: string): string {
   <div class="max-w-4xl mx-auto">
     <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
       <div>
-        <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin</p>
+        <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin</p>
         <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Activity Log</h1>
       </div>
       <form method="GET" class="flex items-center gap-3">
@@ -72,7 +72,7 @@ function actionColor(action: string): string {
             <option value={c.id} selected={c.id === clientFilter}>{c.name}</option>
           ))}
         </select>
-        <button type="submit" class="px-4 py-2 text-xs font-medium text-amber-400 border border-amber-500/20 rounded-lg hover:bg-amber-500/10 transition-all duration-300">
+        <button type="submit" class="px-4 py-2 text-xs font-medium text-amber-600 border border-amber-500/20 rounded-lg hover:bg-amber-500/10 transition-all duration-300">
           Filter
         </button>
       </form>
@@ -91,10 +91,10 @@ function actionColor(action: string): string {
             <div class="flex-1 min-w-0">
               <p class="text-sm text-neutral-200">{entry.summary}</p>
               <div class="flex items-center gap-3 mt-1">
-                <span class="text-[10px] font-mono text-neutral-700">{entry.entity_type}</span>
-                <span class="text-[10px] text-neutral-700">{timeAgo(entry.created_at)}</span>
+                <span class="text-[10px] font-mono text-neutral-500">{entry.entity_type}</span>
+                <span class="text-[10px] text-neutral-500">{timeAgo(entry.created_at)}</span>
                 {entry.user_name && (
-                  <span class="text-[10px] text-neutral-700">{entry.user_name}</span>
+                  <span class="text-[10px] text-neutral-500">{entry.user_name}</span>
                 )}
               </div>
             </div>
@@ -115,18 +115,18 @@ function actionColor(action: string): string {
         {page > 1 && (
           <a
             href={`?page=${page - 1}${clientFilter ? `&client=${encodeURIComponent(clientFilter)}` : ''}`}
-            class="px-4 py-2 text-xs text-neutral-400 border border-white/5 rounded-lg hover:border-amber-500/20 hover:text-amber-400 transition-all duration-300"
+            class="px-4 py-2 text-xs text-neutral-400 border border-white/5 rounded-lg hover:border-amber-500/20 hover:text-amber-600 transition-all duration-300"
           >
             Previous
           </a>
         )}
-        <span class="text-[10px] font-mono text-neutral-700">
+        <span class="text-[10px] font-mono text-neutral-500">
           Page {page} of {totalPages}
         </span>
         {page < totalPages && (
           <a
             href={`?page=${page + 1}${clientFilter ? `&client=${encodeURIComponent(clientFilter)}` : ''}`}
-            class="px-4 py-2 text-xs text-neutral-400 border border-white/5 rounded-lg hover:border-amber-500/20 hover:text-amber-400 transition-all duration-300"
+            class="px-4 py-2 text-xs text-neutral-400 border border-white/5 rounded-lg hover:border-amber-500/20 hover:text-amber-600 transition-all duration-300"
           >
             Next
           </a>
@@ -134,7 +134,7 @@ function actionColor(action: string): string {
       </div>
     )}
 
-    <p class="text-center text-[10px] font-mono text-neutral-700 mt-6">
+    <p class="text-center text-[10px] font-mono text-neutral-500 mt-6">
       {total} total event{total !== 1 ? 's' : ''}
     </p>
   </div>

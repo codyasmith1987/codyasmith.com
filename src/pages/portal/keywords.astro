@@ -17,7 +17,7 @@ const clients = isAdmin ? await getAllClients() : [];
   <div class="max-w-4xl mx-auto">
     <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
       <div>
-        <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Search Visibility</p>
+        <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Search Visibility</p>
         <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Keyword Rankings</h1>
       </div>
       <div class="flex items-center gap-3">
@@ -36,19 +36,19 @@ const clients = isAdmin ? await getAllClients() : [];
         <div class="grid grid-cols-4 gap-6 mb-8">
           <div class="text-center">
             <p id="kw-total" class="text-3xl font-bold text-neutral-100 mb-1">—</p>
-            <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase">tracked</p>
+            <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">tracked</p>
           </div>
           <div class="text-center">
             <p id="kw-top3" class="text-3xl font-bold text-emerald-400 mb-1">—</p>
-            <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase">top 3</p>
+            <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">top 3</p>
           </div>
           <div class="text-center">
-            <p id="kw-page1" class="text-3xl font-bold text-amber-400 mb-1">—</p>
-            <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase">page 1</p>
+            <p id="kw-page1" class="text-3xl font-bold text-amber-600 mb-1">—</p>
+            <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">page 1</p>
           </div>
           <div class="text-center">
-            <p id="kw-buried" class="text-3xl font-bold text-neutral-600 mb-1">—</p>
-            <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase">page 2+</p>
+            <p id="kw-buried" class="text-3xl font-bold text-neutral-400 mb-1">—</p>
+            <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">page 2+</p>
           </div>
         </div>
         <!-- Position distribution bar -->
@@ -58,8 +58,8 @@ const clients = isAdmin ? await getAllClients() : [];
           <div id="bar-page2" class="bg-neutral-600 transition-all duration-700 ease-out"></div>
         </div>
         <div class="flex justify-between mt-2.5">
-          <span class="text-[10px] text-neutral-700">Position 1</span>
-          <span class="text-[10px] text-neutral-700">Position 100+</span>
+          <span class="text-[10px] text-neutral-500">Position 1</span>
+          <span class="text-[10px] text-neutral-500">Position 100+</span>
         </div>
         <p id="kw-narrative" class="text-sm text-neutral-400 mt-6 leading-relaxed"></p>
       </div>
@@ -77,11 +77,11 @@ const clients = isAdmin ? await getAllClients() : [];
     <!-- Keyword list -->
     <div id="kw-list" class="space-y-1"></div>
     <div id="kw-load-more" class="hidden text-center mt-6">
-      <button onclick="showMore()" class="px-6 py-3 border border-white/5 text-neutral-400 text-sm rounded-lg hover:border-amber-500/20 hover:text-amber-400 transition-all duration-300">
+      <button onclick="showMore()" class="px-6 py-3 border border-white/5 text-neutral-400 text-sm rounded-lg hover:border-amber-500/20 hover:text-amber-600 transition-all duration-300">
         Show more
       </button>
     </div>
-    <p id="kw-count" class="mt-6 text-[10px] font-mono text-neutral-700 tracking-wide uppercase"></p>
+    <p id="kw-count" class="mt-6 text-[10px] font-mono text-neutral-500 tracking-wide uppercase"></p>
 
     <StateEmpty
       id="kw-empty"
@@ -206,7 +206,7 @@ const clients = isAdmin ? await getAllClients() : [];
       const count = document.getElementById('kw-count');
 
       if (filtered.length === 0) {
-        list.innerHTML = '<p class="text-sm text-neutral-600 py-8 text-center">No matches</p>';
+        list.innerHTML = '<p class="text-sm text-neutral-400 py-8 text-center">No matches</p>';
         count.textContent = '';
         return;
       }
@@ -217,10 +217,10 @@ const clients = isAdmin ? await getAllClients() : [];
 
       list.innerHTML = showing.map((k, i) => {
         const pos = k.position;
-        let posColor = 'text-neutral-600';
+        let posColor = 'text-neutral-400';
         let posBg = 'bg-neutral-800/50';
         if (pos && pos <= 3) { posColor = 'text-emerald-400'; posBg = 'bg-emerald-500/10'; }
-        else if (pos && pos <= 10) { posColor = 'text-amber-400'; posBg = 'bg-amber-500/10'; }
+        else if (pos && pos <= 10) { posColor = 'text-amber-600'; posBg = 'bg-amber-500/10'; }
         else if (pos && pos <= 20) { posColor = 'text-neutral-400'; posBg = 'bg-neutral-800'; }
         const delay = Math.min(i * 0.03, 1.5);
 
@@ -233,11 +233,11 @@ const clients = isAdmin ? await getAllClients() : [];
               </span>
               <div class="min-w-0">
                 <span class="text-sm text-neutral-200 block truncate">${escapeHtml(k.keyword)}</span>
-                ${k.url ? `<span class="text-[10px] text-neutral-700 block truncate mt-0.5">${escapeHtml(urlDisplay)}</span>` : ''}
+                ${k.url ? `<span class="text-[10px] text-neutral-500 block truncate mt-0.5">${escapeHtml(urlDisplay)}</span>` : ''}
               </div>
             </div>
             <div class="flex items-center gap-5 shrink-0 ml-4">
-              ${k.search_volume ? `<span class="text-xs font-mono text-neutral-600">${Number(k.search_volume).toLocaleString()}/mo</span>` : ''}
+              ${k.search_volume ? `<span class="text-xs font-mono text-neutral-400">${Number(k.search_volume).toLocaleString()}/mo</span>` : ''}
               ${k.seo_difficulty != null ? `<span class="text-xs font-mono ${k.seo_difficulty <= 30 ? 'text-emerald-600' : k.seo_difficulty <= 60 ? 'text-amber-600' : 'text-red-600'}">${Number(k.seo_difficulty)} SD</span>` : ''}
               ${k.change ? `<span class="text-xs font-mono ${k.change < 0 ? 'text-emerald-400' : 'text-red-400'}">${k.change < 0 ? '↑' : '↓'}${Math.abs(Number(k.change))}</span>` : ''}
             </div>

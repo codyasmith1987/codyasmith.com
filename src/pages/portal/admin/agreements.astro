@@ -67,9 +67,9 @@ function fmtDate(s: string | null): string {
 const statusBadge: Record<string, string> = {
   draft: 'bg-neutral-700/30 text-neutral-400',
   issued: 'bg-blue-500/10 text-blue-400',
-  partially_signed: 'bg-amber-500/10 text-amber-400',
+  partially_signed: 'bg-amber-500/10 text-amber-600',
   executed: 'bg-emerald-500/10 text-emerald-400',
-  revoked: 'bg-amber-500/10 text-amber-400',
+  revoked: 'bg-amber-500/10 text-amber-600',
   voided: 'bg-red-500/10 text-red-400',
 };
 
@@ -87,7 +87,7 @@ const statusLabel: Record<string, string> = {
   <div class="max-w-4xl mx-auto">
     <div class="mb-10 flex items-start justify-between gap-6">
       <div>
-        <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin</p>
+        <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin</p>
         <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Agreements</h1>
         <p class="text-sm text-neutral-500 mt-2">Client services agreements: drafted, issued, partial, executed.</p>
       </div>
@@ -124,7 +124,7 @@ const statusLabel: Record<string, string> = {
               <div class="min-w-0 flex-1">
                 <div class="flex items-baseline gap-3 flex-wrap">
                   <p class="text-sm font-medium text-neutral-200">{clientById[a.client_id] || 'Unknown client'}</p>
-                  <a href={`/portal/contracts/${a.slug}`} target="_blank" rel="noopener" class="text-[10px] font-mono text-neutral-600 hover:text-amber-400 transition-colors">/{a.slug}</a>
+                  <a href={`/portal/contracts/${a.slug}`} target="_blank" rel="noopener" class="text-[10px] font-mono text-neutral-400 hover:text-amber-600 transition-colors">/{a.slug}</a>
                   <span class={`px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded ${statusBadge[a.status] || statusBadge.draft}`}>{statusLabel[a.status] || a.status}</span>
                 </div>
                 <p class="text-xs text-neutral-500 mt-1">{a.title}</p>
@@ -133,14 +133,14 @@ const statusLabel: Record<string, string> = {
                   <div class="flex items-center gap-4 mt-3 text-xs">
                     {a.signers.map(s => (
                       <span class="flex items-center gap-1.5">
-                        {s.signed ? <span class="text-emerald-400">✓</span> : <span class="text-neutral-600">○</span>}
-                        <span class:list={[s.signed ? 'text-neutral-300' : 'text-neutral-600']}>{s.name}</span>
+                        {s.signed ? <span class="text-emerald-400">✓</span> : <span class="text-neutral-400">○</span>}
+                        <span class:list={[s.signed ? 'text-neutral-300' : 'text-neutral-400']}>{s.name}</span>
                       </span>
                     ))}
                   </div>
                 )}
 
-                <div class="flex items-center gap-4 mt-3 text-[10px] font-mono text-neutral-700">
+                <div class="flex items-center gap-4 mt-3 text-[10px] font-mono text-neutral-500">
                   {a.created_at && <span>Created {fmtDate(a.created_at)}</span>}
                   {a.issued_at && <span>Issued {fmtDate(a.issued_at)}</span>}
                   {a.finalized_at && <span>Executed {fmtDate(a.finalized_at)}</span>}
@@ -160,7 +160,7 @@ const statusLabel: Record<string, string> = {
     ) : (
       <div class="text-center py-16">
         <p class="text-sm text-neutral-500">No agreements yet.</p>
-        <p class="text-xs text-neutral-600 mt-2">Issue one from a finalized proposal above, or start a new blank agreement.</p>
+        <p class="text-xs text-neutral-400 mt-2">Issue one from a finalized proposal above, or start a new blank agreement.</p>
       </div>
     )}
   </div>

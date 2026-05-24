@@ -38,12 +38,12 @@ for (const approval of allPending) {
             <div class="mb-4">
               <h2 class="text-lg font-medium text-neutral-100">{approval.title}</h2>
               {approval.description && <p class="text-sm text-neutral-400 mt-2 leading-relaxed">{approval.description}</p>}
-              <p class="text-[10px] text-neutral-700 font-mono mt-3">Requested {new Date(approval.requested_at).toLocaleDateString()}</p>
+              <p class="text-[10px] text-neutral-500 font-mono mt-3">Requested {new Date(approval.requested_at).toLocaleDateString()}</p>
             </div>
 
             <div class="border-t border-white/5 pt-5">
               <div class="mb-4">
-                <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Your response (optional note)</label>
+                <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Your response (optional note)</label>
                 <textarea data-note={approval.id} rows="2" placeholder="Any comments or feedback..." class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30"></textarea>
               </div>
               <div class="flex items-center gap-3">

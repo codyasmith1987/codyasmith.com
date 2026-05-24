@@ -32,7 +32,7 @@ const statusColors: Record<string, string> = {
   draft: 'bg-neutral-700/30 text-neutral-400',
   sent: 'bg-blue-500/10 text-blue-400',
   paid: 'bg-emerald-500/10 text-emerald-400',
-  partial: 'bg-amber-500/10 text-amber-400',
+  partial: 'bg-amber-500/10 text-amber-600',
   overdue: 'bg-red-500/10 text-red-400',
   cancelled: 'bg-neutral-700/30 text-neutral-500',
 };
@@ -54,13 +54,13 @@ const statusColors: Record<string, string> = {
               <div class="flex items-start justify-between mb-4">
                 <div>
                   <p class="font-mono text-sm text-neutral-200">{inv.invoice_number}</p>
-                  <div class="flex items-center gap-4 mt-1 text-xs text-neutral-600">
+                  <div class="flex items-center gap-4 mt-1 text-xs text-neutral-400">
                     {inv.issued_date && <span>Issued: {inv.issued_date}</span>}
                     {inv.due_date && <span>Due: {inv.due_date}</span>}
                   </div>
                 </div>
                 <div class="flex items-center gap-3">
-                  <a href={`/portal/api/client/invoices/${inv.id}/pdf`} class="text-xs text-amber-400 hover:text-amber-300 transition-colors">PDF</a>
+                  <a href={`/portal/api/client/invoices/${inv.id}/pdf`} class="text-xs text-amber-600 hover:text-amber-600 transition-colors">PDF</a>
                   <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[inv.status] || ''}`}>
                     {statusLabels[inv.status] || inv.status}
                   </span>
@@ -71,7 +71,7 @@ const statusColors: Record<string, string> = {
               {inv.total > 0 && (
                 <div class="mb-4">
                   <div class="flex items-center justify-between mb-1.5">
-                    <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-wide">
+                    <p class="text-[10px] font-mono text-neutral-400 uppercase tracking-wide">
                       {inv.status === 'paid' ? 'Paid in full' : `$${inv.amount_paid.toFixed(2)} of $${inv.total.toFixed(2)}`}
                     </p>
                     <p class="text-lg font-mono font-semibold text-neutral-100">${inv.total.toFixed(2)}</p>
@@ -107,7 +107,7 @@ const statusColors: Record<string, string> = {
             {/* Payments */}
             {inv.payments.length > 0 && (
               <div class="border-t border-white/5 px-8 py-4">
-                <p class="text-[10px] font-mono text-neutral-700 uppercase tracking-wide mb-2">Payments</p>
+                <p class="text-[10px] font-mono text-neutral-500 uppercase tracking-wide mb-2">Payments</p>
                 {inv.payments.map(p => (
                   <div class="flex items-center justify-between py-1.5">
                     <span class="text-xs text-neutral-500">{p.paid_at.split('T')[0]} {p.payment_method ? `via ${p.payment_method}` : ''}</span>

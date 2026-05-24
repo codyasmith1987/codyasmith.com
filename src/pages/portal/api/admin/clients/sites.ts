@@ -15,6 +15,7 @@ import {
   syncDetectedDomains,
   setPrimarySite,
   setSiteManaged,
+  setSitePageCount,
   addManualSite,
   deleteClientSite,
 } from '../../../../../lib/client-sites';
@@ -102,6 +103,35 @@ export const POST: APIRoute = async ({ locals, request }) => {
       });
       const sites = await listClientSites(clientId);
       return json({ ok: true, site_id: id, sites });
+    }
+
+    if (action === 'set_page_count') {
+      // Set or clear per-site page count. Drives the multi-site
+      // pricing pipeline (each site routes to its own ecosystem by
+      // its own page count). null/empty value clears so the pricing
+      // pipeline falls back to the primary's ecosystem.
+      const siteId = (body?.site_id || '').toString().trim();
+      if (!siteId) return json({ error: 'site_id is required' }, 400);
+      const raw = body?.page_count;
+      const pageCount = raw === null || raw === undefined || raw === ''
+        ? null
+        : Number(raw);
+      if (pageCount !== null && (!Number.isFinite(pageCount) || pageCount < 0)) {
+        return json({ error: 'page_count must be a non-negative number or null' }, 400);
+      }
+      const sites = await listClientSites(clientId);
+      const target = sites.find(s => s.id === siteId);
+      if (!target) return json({ error: 'Site not found' }, 404);
+      await setSitePageCount(clientId, siteId, pageCount);
+      await logActivity({
+        clientId, userId: locals.user!.id, action: 'updated',
+        entityType: 'client', entityId: clientId,
+        summary: pageCount === null
+          ? `${locals.user!.name} cleared page count for ${target.domain}`
+          : `${locals.user!.name} set ${target.domain} page count to ${pageCount}`,
+      });
+      const next = await listClientSites(clientId);
+      return json({ ok: true, sites: next });
     }
 
     if (action === 'delete') {

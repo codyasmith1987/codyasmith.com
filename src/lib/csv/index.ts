@@ -7,6 +7,10 @@ import { parse as parseCrawlOverview } from './parsers/crawl-overview';
 import { parse as parseCrawlInternal } from './parsers/crawl-internal';
 import { parse as parseRedirects } from './parsers/redirects';
 import { parse as parseImages } from './parsers/images';
+import { parse as parseContentUrls } from './parsers/content-urls';
+import { parse as parseSecurityUrls } from './parsers/security-urls';
+import { parse as parseStructuredDataUrls } from './parsers/structured-data-urls';
+import { parse as parseAccessibilityUrls } from './parsers/accessibility-urls';
 import { parse as parseImageOptimization } from './parsers/image-optimization';
 import { parse as parseKeywordResearch } from './parsers/keyword-research';
 import { parse as parseKeywordSuggestions } from './parsers/keyword-suggestions';
@@ -23,9 +27,12 @@ const FORMAT_SOURCES: Record<string, { tables: string[]; source: string }> = {
   crawl_internal: { tables: ['crawl_urls'], source: 'crawl_internal' },
   redirects: { tables: ['redirect_chains'], source: 'redirects' },
   images: { tables: ['image_urls'], source: 'images' },
+  content_urls: { tables: ['content_urls'], source: 'content_urls' },
+  security_urls: { tables: ['security_urls'], source: 'security_urls' },
+  structured_data_urls: { tables: ['structured_data_urls'], source: 'structured_data_urls' },
   image_optimization: { tables: ['metrics'], source: 'image_optimization' },
   site_audit: { tables: ['site_issues'], source: 'site_audit' },
-  accessibility: { tables: ['metrics'], source: 'accessibility' },
+  accessibility: { tables: ['metrics', 'accessibility_urls'], source: 'accessibility' },
 };
 
 async function clearPreviousData(clientId: string, month: string, format: string, currentUploadId: string): Promise<string | null> {
@@ -120,6 +127,15 @@ export async function ingestCSV(
       case 'images':
         rowCount = await parseImages(raw, clientId, month, uploadId);
         break;
+      case 'content_urls':
+        rowCount = await parseContentUrls(raw, clientId, month, uploadId);
+        break;
+      case 'security_urls':
+        rowCount = await parseSecurityUrls(raw, clientId, month, uploadId);
+        break;
+      case 'structured_data_urls':
+        rowCount = await parseStructuredDataUrls(raw, clientId, month, uploadId);
+        break;
       case 'image_optimization':
         rowCount = await parseImageOptimization(raw, clientId, month, uploadId);
         break;
@@ -132,9 +148,16 @@ export async function ingestCSV(
       case 'site_audit':
         rowCount = await parseSiteAudit(raw, clientId, month, uploadId, filename);
         break;
-      case 'accessibility':
-        rowCount = await parseAccessibility(raw, clientId, month, uploadId);
+      case 'accessibility': {
+        // Two parsers on the same file: the legacy one writes 5
+        // aggregate metric rows; the new one writes per-URL rows to
+        // accessibility_urls so the portal can drill into which page
+        // has which WCAG violation. rowCount reports the per-URL
+        // count which is the more useful signal for the upload UI.
+        await parseAccessibility(raw, clientId, month, uploadId);
+        rowCount = await parseAccessibilityUrls(raw, clientId, month, uploadId);
         break;
+      }
     }
 
     await turso.execute({

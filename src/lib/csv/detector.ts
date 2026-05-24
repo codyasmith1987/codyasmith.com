@@ -12,6 +12,9 @@ export type CsvFormat =
   | 'keyword_suggestions'
   | 'site_audit'
   | 'accessibility'
+  | 'content_urls'
+  | 'security_urls'
+  | 'structured_data_urls'
   | 'unknown';
 
 interface FormatSignature {
@@ -66,6 +69,27 @@ const SIGNATURES: FormatSignature[] = [
     // + Size (Bytes) + IMG Inlinks + Dimensions.
     format: 'images',
     requiredColumns: ['address', 'content type', 'size (bytes)', 'img inlinks', 'dimensions'],
+  },
+  {
+    // Screaming Frog content_all.csv. Per-URL readability data.
+    // The flesch + word/sentence count combination is unique to this
+    // export among the per-URL SF reports we parse.
+    format: 'content_urls',
+    requiredColumns: ['address', 'word count', 'sentence count', 'flesch reading ease score'],
+  },
+  {
+    // Screaming Frog security_all.csv. Per-URL HTTP + security
+    // posture. HTTP Version is unique to this report among the
+    // address-headed SF exports.
+    format: 'security_urls',
+    requiredColumns: ['address', 'content type', 'status code', 'http version', 'indexability'],
+  },
+  {
+    // Screaming Frog structured_data_all.csv. Per-URL schema markup
+    // quality. Rich Result Errors + Total Types is the unique
+    // fingerprint.
+    format: 'structured_data_urls',
+    requiredColumns: ['address', 'errors', 'warnings', 'rich result errors', 'total types'],
   },
 ];
 

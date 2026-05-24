@@ -10,7 +10,7 @@
 // applied per-field with a click. The prompt tells Gemini to be
 // honest about uncertainty (confidence flags, "unknown" fallback).
 
-export const PROMPT_VERSION = 'client-research-v6';
+export const PROMPT_VERSION = 'client-research-v7';
 
 export const SYSTEM_PROMPT = `You are a research assistant for Cody A Smith LLC, a Web Management and Marketing Consulting practice. You look at scraped web content about a prospective client and return a structured assessment used to seed a proposal builder.
 
@@ -36,6 +36,57 @@ Honesty rules.
 - domains_found must include ONLY domains the primary site explicitly identifies as its own (parent corp, subsidiary, alternate brand, micro-site under the same ownership). Do NOT include social profiles (facebook.com, linkedin.com, instagram.com, vimeo.com, etc.), third-party platforms (zendesk subdomains, silkroad job boards, etc.), or arbitrary external links the site mentions but does not own. Each entry's role_guess must be primary, micro-site, subsidiary, alternate-brand, or other (with confidence "low" forcing other).
 - revenue_evidence must cite a SPECIFIC source from the scraped content that mentions revenue, employee count, or funding. "The website does not mention revenue" is not evidence; it is grounds for returning "unknown" with low confidence.
 - inferred_industry must come from what the business actually does, not from keyword matches against the client name string.
+
+Engagement-strategy synthesis. The proposal is a sales tool. Beyond raw research signals, you must synthesize the inputs into an engagement-strategy briefing for Cody, the practice owner. This briefing is admin-facing only; do not write it in a tone meant for the client.
+
+The practice sells three products plus separately-scoped Build work:
+
+  - Web Management (WM): per-site recurring fee, keeps an existing site running, secure, monitored, updated, backed up. Includes a pool of hands-on hours for site work. Sold per site; multi-site formula applies (additional sites at 80% of base monthly).
+  - Marketing Consulting (MC): per-business recurring fee, advisory only, broader-advisory scope (marketing, search and content strategy, brand positioning, operations, hiring guidance, vendor selection, organizational design, growth planning). Constraint is FORMAT (advise, never execute), not subject. Tier sets call frequency and deep-advisory cadence.
+  - Training: per-business recurring fee, sold on its own; bundled free with Best-tier WM or MC.
+  - Build: separately-scoped fixed-fee project. Not part of WM or MC. Build replaces onboarding for the site it produces; the site moves onto WM at launch.
+
+Each product has Good / Better / Best tiers within three size-routed ecosystems (A small, B mid, C large). Pricing is canonical and not your job to compute; your job is the recommendation, not the price.
+
+Product mix recommendation logic:
+
+  - WM is recommended when the prospect has a live site that is messy, unmanaged, or under-maintained, AND they appear to lack the in-house capacity to keep it running themselves. Signal sources: stale plugins, broken patterns in scraped content, generic-vendor builder signatures, multi-site footprint with inconsistent posture.
+  - MC is recommended when the prospect shows growth signals (job postings, press, expansion announcements, acquisition activity) OR has visible advisory needs they cannot answer themselves (vendor selection, marketing direction, operations, hiring, org design). Sven-style sponsors who lose track of decisions are a strong MC fit because they need outside thinking.
+  - Build is recommended when the existing site is on a stale or deprecated stack, fundamentally wrong for the business, or absent entirely. Build is NOT recommended for a fixable site already on a managed-WP stack; that is WM scope.
+  - Training is recommended when Best-tier WM or MC is in the mix (bundled), OR when staff knowledge gaps are visible (a small team running their own site without the skills to do it well).
+
+Tier recommendation logic:
+
+  - Ecosystem routes by size: revenue for MC (under-1m → A, 1m-to-10m → B, over-10m → C), page count for WM (under-30 → A, 30-150 → B, 150+ → C). Ecosystem placement is mechanical; do not freelance.
+  - Tier within ecosystem reflects engagement intensity: Best when the client needs the highest-cadence cycle, same-day priority response, weekly updates, the largest pooled-hours allocation. Better when standard cadence (bi-weekly updates, standard response) fits. Good when the client clearly wants minimum-touch and is comfortable with monthly cadence only.
+  - Bias toward Better as the default unless the client's signals clearly demand Best or Good.
+
+CLV horizon signal logic:
+
+  - long-term-stable: business is mature, ownership is stable (no recent acquisition turbulence), site has been live for years, prospect language signals continuity (we have been doing X for N years).
+  - churn-risk: business is in flux, recently acquired, actively rebranding, or pursuing changes that change the engagement basis (e.g., site being replaced by a parent company's system).
+  - medium-term: anything in between or unclear.
+  - unknown: insufficient signal.
+
+Time-intensity signal logic:
+
+  - high: site needs heavy cleanup AND multi-site footprint AND low decision velocity (Sven-style sponsor). Each ingredient is a multiplier on Cody's hands-on time.
+  - low: site is in decent shape AND single domain AND responsive client AND clear scope.
+  - medium: anything else; default when uncertain.
+
+Sales-angles logic:
+
+  - Each angle is one short phrase that names the client's perceived problem in language THEY would recognize. Backed by a quote or paraphrase from the actual scraped content. Three to five entries.
+  - Lead with what the client cannot see about their own situation (see 04 Section 4 Sven dynamic). The reason they need Cody is exactly because their internal view is blind to the gap.
+  - Do NOT promise outcomes (no "to drive conversions," "to grow revenue"). Frame angles around what is observable or recommended, not what is promised.
+
+Risk-signals logic:
+
+  - Sven-style sponsor: responsive in short bursts but slow on decisions; loses track of what has been delivered. Severity: high if the only decision maker visible.
+  - No project manager / no internal owner: everything routes to one principal. Severity: medium to high.
+  - Undocumented vendor dependencies: legacy plugins, accounts in unknown places, outside IT vendor with overlapping control. Severity: medium.
+  - Aggressive timeline or rush conditions on first engagement: severity: medium.
+  - Recent acquisition / restructuring: severity: medium (touches CLV horizon too).
 
 Output is a single JSON object with exactly the schema specified. No prose around it. No markdown fences.`;
 
@@ -98,6 +149,27 @@ export function buildUserPrompt(input: UserPromptInput): string {
   "domains_found": [{"domain": "...", "role_guess": "primary" | "micro-site" | "subsidiary" | "other", "confidence": "low" | "medium" | "high"}],
   "estimated_page_count": number | null,
   "page_count_source": "one short sentence",
+  "recommended_product_mix": {
+    "web_management":      { "recommended": true | false, "rationale": "one short sentence", "confidence": "low" | "medium" | "high" },
+    "marketing_consulting": { "recommended": true | false, "rationale": "one short sentence", "confidence": "low" | "medium" | "high" },
+    "build":               { "recommended": true | false, "rationale": "one short sentence", "confidence": "low" | "medium" | "high" },
+    "training":            { "recommended": true | false, "rationale": "one short sentence", "confidence": "low" | "medium" | "high" }
+  },
+  "recommended_tier_per_product": {
+    "web_management":      { "tier": "good" | "better" | "best", "rationale": "one short sentence" },
+    "marketing_consulting": { "tier": "good" | "better" | "best", "rationale": "one short sentence" }
+    // Include only the products the mix recommended. Omit others.
+  },
+  "clv_horizon": { "signal": "long-term-stable" | "medium-term" | "churn-risk" | "unknown", "rationale": "one short sentence" },
+  "cody_time_intensity": { "level": "low" | "medium" | "high", "rationale": "one short sentence" },
+  "sales_angles": [
+    { "angle": "one short phrase in the client's own language", "supporting_evidence": "quote or paraphrase from scraped content" }
+    // 3 to 5 entries
+  ],
+  "risk_signals": [
+    { "risk": "one short phrase", "severity": "low" | "medium" | "high" }
+    // 0 to 5 entries; empty array is fine when no signals
+  ],
   "notes": "anything Cody should read first"
 }
 
@@ -146,6 +218,89 @@ export const RESPONSE_SCHEMA: any = {
     },
     estimated_page_count: { type: 'NUMBER', nullable: true },
     page_count_source: { type: 'STRING' },
+    recommended_product_mix: {
+      type: 'OBJECT',
+      properties: {
+        web_management: {
+          type: 'OBJECT',
+          properties: {
+            recommended: { type: 'BOOLEAN' },
+            rationale: { type: 'STRING' },
+            confidence: { type: 'STRING' },
+          },
+          required: ['recommended', 'rationale', 'confidence'],
+        },
+        marketing_consulting: {
+          type: 'OBJECT',
+          properties: {
+            recommended: { type: 'BOOLEAN' },
+            rationale: { type: 'STRING' },
+            confidence: { type: 'STRING' },
+          },
+          required: ['recommended', 'rationale', 'confidence'],
+        },
+        build: {
+          type: 'OBJECT',
+          properties: {
+            recommended: { type: 'BOOLEAN' },
+            rationale: { type: 'STRING' },
+            confidence: { type: 'STRING' },
+          },
+          required: ['recommended', 'rationale', 'confidence'],
+        },
+        training: {
+          type: 'OBJECT',
+          properties: {
+            recommended: { type: 'BOOLEAN' },
+            rationale: { type: 'STRING' },
+            confidence: { type: 'STRING' },
+          },
+          required: ['recommended', 'rationale', 'confidence'],
+        },
+      },
+      required: ['web_management', 'marketing_consulting', 'build', 'training'],
+    },
+    recommended_tier_per_product: {
+      type: 'OBJECT',
+      properties: {
+        web_management: {
+          type: 'OBJECT',
+          properties: { tier: { type: 'STRING' }, rationale: { type: 'STRING' } },
+          required: ['tier', 'rationale'],
+        },
+        marketing_consulting: {
+          type: 'OBJECT',
+          properties: { tier: { type: 'STRING' }, rationale: { type: 'STRING' } },
+          required: ['tier', 'rationale'],
+        },
+      },
+    },
+    clv_horizon: {
+      type: 'OBJECT',
+      properties: { signal: { type: 'STRING' }, rationale: { type: 'STRING' } },
+      required: ['signal', 'rationale'],
+    },
+    cody_time_intensity: {
+      type: 'OBJECT',
+      properties: { level: { type: 'STRING' }, rationale: { type: 'STRING' } },
+      required: ['level', 'rationale'],
+    },
+    sales_angles: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: { angle: { type: 'STRING' }, supporting_evidence: { type: 'STRING' } },
+        required: ['angle', 'supporting_evidence'],
+      },
+    },
+    risk_signals: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: { risk: { type: 'STRING' }, severity: { type: 'STRING' } },
+        required: ['risk', 'severity'],
+      },
+    },
     notes: { type: 'STRING' },
   },
   required: [
@@ -162,6 +317,12 @@ export const RESPONSE_SCHEMA: any = {
     'domains_found',
     'estimated_page_count',
     'page_count_source',
+    'recommended_product_mix',
+    'recommended_tier_per_product',
+    'clv_horizon',
+    'cody_time_intensity',
+    'sales_angles',
+    'risk_signals',
     'notes',
   ],
 };

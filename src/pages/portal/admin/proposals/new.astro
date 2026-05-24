@@ -590,6 +590,82 @@ const todayISO = new Date().toISOString().slice(0, 10);
             help.textContent = field.help;
             wrap.appendChild(help);
           }
+
+          // Slice 3: AI-draft button next to Build's build_description
+          // input. Calls /portal/api/admin/proposals/ai/build-description
+          // with the client + build size + narrative variables and
+          // fills the input with the returned sentence.
+          if (id === 'build' && field.id === 'build_description') {
+            const aiRow = document.createElement('div');
+            aiRow.className = 'mt-2 flex items-center gap-3';
+            const aiBtn = document.createElement('button');
+            aiBtn.type = 'button';
+            aiBtn.className = 'px-3 py-1.5 text-[11px] rounded-md bg-amber-500/10 border border-amber-500/40 text-amber-300 hover:bg-amber-500/20 transition-colors';
+            aiBtn.textContent = 'AI draft this';
+            const aiMsg = document.createElement('span');
+            aiMsg.className = 'text-[11px] text-neutral-500 hidden';
+            aiBtn.addEventListener('click', async () => {
+              const buildSize = state.product_vars['build']?.build_size;
+              if (!buildSize) {
+                aiMsg.textContent = 'Pick a build size first.';
+                aiMsg.className = 'text-[11px] text-red-400';
+                aiMsg.classList.remove('hidden');
+                return;
+              }
+              if (!state.client_id || !state.client_domain) {
+                aiMsg.textContent = 'Pick a client and confirm domain first.';
+                aiMsg.className = 'text-[11px] text-red-400';
+                aiMsg.classList.remove('hidden');
+                return;
+              }
+              aiBtn.disabled = true;
+              aiMsg.textContent = 'Drafting...';
+              aiMsg.className = 'text-[11px] text-neutral-400';
+              aiMsg.classList.remove('hidden');
+              let res;
+              try {
+                res = await fetch('/portal/api/admin/proposals/ai/build-description', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                  body: JSON.stringify({
+                    client_id: state.client_id,
+                    build_size: buildSize,
+                    admin_hint: input.value || null,
+                    inferred_industry: state.narrative_variables.industry || null,
+                    inferred_urgency: state.narrative_variables.urgency || null,
+                  }),
+                });
+              } catch (err) {
+                aiMsg.textContent = `Network error: ${err && err.message ? err.message : 'fetch failed'}`;
+                aiMsg.className = 'text-[11px] text-red-400';
+                aiBtn.disabled = false;
+                return;
+              }
+              const rawText = await res.text();
+              let data = null;
+              try { data = rawText ? JSON.parse(rawText) : null; } catch {}
+              if (res.ok && data && data.ok && data.sentence) {
+                input.value = data.sentence;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                const violationNote = (data.voice_violations && data.voice_violations.length)
+                  ? ` (voice warnings: ${data.voice_violations.map(v => v.rule).join(', ')})`
+                  : '';
+                aiMsg.textContent = `Drafted${violationNote}. Edit as needed before publishing.`;
+                aiMsg.className = 'text-[11px] text-emerald-400/80';
+              } else {
+                const errMsg = (data && data.error)
+                  ? data.error
+                  : `HTTP ${res.status}${rawText ? ': ' + rawText.slice(0, 140) : ''}`;
+                aiMsg.textContent = errMsg;
+                aiMsg.className = 'text-[11px] text-red-400';
+              }
+              aiBtn.disabled = false;
+            });
+            aiRow.appendChild(aiBtn);
+            aiRow.appendChild(aiMsg);
+            wrap.appendChild(aiRow);
+          }
+
           block.appendChild(wrap);
         }
 

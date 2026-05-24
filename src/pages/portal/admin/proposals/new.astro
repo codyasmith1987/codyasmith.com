@@ -160,7 +160,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           </div>
         </div>
 
-        <p id="client-prefill-note" class="hidden mt-3 text-[11px] text-amber-400/80"></p>
+        <p id="client-prefill-note" class="hidden mt-3 text-[11px] text-amber-400 font-mono leading-relaxed"></p>
 
         <!-- Research panel: appears after a client is picked. Domain
              is required for research; if missing, an inline input lets
@@ -515,6 +515,62 @@ const todayISO = new Date().toISOString().slice(0, 10);
         renderVars();
       });
     });
+
+    // Programmatic product-scope helpers used by the engagement strategy
+    // panel and by the research-panel Apply buttons. pitchProduct ticks
+    // the product checkbox and optionally seeds its variables; unpitch
+    // unticks. Both fire the same change event so state stays in sync.
+    function pitchProduct(productId, extraVars) {
+      const box = Array.from(productPicks).find(b => b.value === productId);
+      if (!box) return;
+      if (!box.checked) {
+        box.checked = true;
+        box.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      if (extraVars && Object.keys(extraVars).length > 0) {
+        state.product_vars[productId] = {
+          ...(state.product_vars[productId] || {}),
+          ...extraVars,
+        };
+        renderVars();
+      }
+    }
+    function unpitchProduct(productId) {
+      const box = Array.from(productPicks).find(b => b.value === productId);
+      if (!box || !box.checked) return;
+      box.checked = false;
+      box.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    const PRODUCT_SHORT_LABELS = {
+      'web-management': 'Web Management',
+      'marketing-consulting': 'Marketing Consulting',
+      'build': 'Build',
+      'training': 'Training',
+      'other-sow': 'Other SOW',
+    };
+    const SYNTH_TO_WIZARD_ID = {
+      web_management: 'web-management',
+      marketing_consulting: 'marketing-consulting',
+      build: 'build',
+      training: 'training',
+    };
+    function seedsForProductFromResearch(productId, r) {
+      const vars = {};
+      if (!r) return vars;
+      if (productId === 'web-management') {
+        if (typeof r.estimated_page_count === 'number' && r.estimated_page_count > 0) {
+          vars.page_count = r.estimated_page_count;
+        }
+        const managedCount = (clientSitesCache[state.client_id] || []).filter(s => s.is_managed).length;
+        if (managedCount > 0) vars.site_count = managedCount;
+      }
+      if (productId === 'marketing-consulting') {
+        if (typeof r.estimated_revenue_band === 'string' && r.estimated_revenue_band !== 'unknown') {
+          vars.revenue_band = r.estimated_revenue_band;
+        }
+      }
+      return vars;
+    }
 
     // =========================================================================
     // Per-product variables
@@ -1197,19 +1253,18 @@ const todayISO = new Date().toISOString().slice(0, 10);
           value: r.estimated_revenue_band,
           evidence: r.revenue_evidence,
           confidence: r.revenue_confidence,
+          target_product_synth_id: 'marketing_consulting',
           apply: () => {
-            // Inject into MC product_vars if MC is in scope.
-            if (!state.products.includes('marketing-consulting')) {
-              if (!state.products.includes('marketing-consulting')) {
-                showResearchApplyMsg('Marketing Consulting is not in scope; pick it first.', 'error');
-                return;
-              }
-            }
-            state.product_vars['marketing-consulting'] = {
-              ...(state.product_vars['marketing-consulting'] || {}),
-              revenue_band: r.estimated_revenue_band === 'unknown' ? null : r.estimated_revenue_band,
-            };
-            renderVars();
+            if (r.estimated_revenue_band === 'unknown') return;
+            const beforeInScope = state.products.includes('marketing-consulting');
+            pitchProduct('marketing-consulting', { revenue_band: r.estimated_revenue_band });
+            showResearchApplyMsg(
+              beforeInScope
+                ? 'Revenue band applied to Marketing Consulting.'
+                : 'Marketing Consulting added to scope. Revenue band applied.',
+              'ok'
+            );
+            renderEngagementStrategy(r);
           },
           disabled: r.estimated_revenue_band === 'unknown',
         },
@@ -1273,16 +1328,18 @@ const todayISO = new Date().toISOString().slice(0, 10);
           value: r.estimated_page_count == null ? '(unknown)' : String(r.estimated_page_count),
           evidence: r.page_count_source,
           confidence: 'medium',
+          target_product_synth_id: 'web_management',
           apply: () => {
-            if (!state.products.includes('web-management')) {
-              showResearchApplyMsg('Web Management is not in scope; pick it first.', 'error');
-              return;
-            }
-            state.product_vars['web-management'] = {
-              ...(state.product_vars['web-management'] || {}),
-              page_count: r.estimated_page_count,
-            };
-            renderVars();
+            if (r.estimated_page_count == null) return;
+            const beforeInScope = state.products.includes('web-management');
+            pitchProduct('web-management', seedsForProductFromResearch('web-management', r));
+            showResearchApplyMsg(
+              beforeInScope
+                ? 'Page count applied to Web Management.'
+                : 'Web Management added to scope. Page count applied.',
+              'ok'
+            );
+            renderEngagementStrategy(r);
           },
           disabled: r.estimated_page_count == null,
         },
@@ -1310,11 +1367,34 @@ const todayISO = new Date().toISOString().slice(0, 10);
         const row = document.createElement('div');
         row.className = 'p-3 bg-neutral-900/40 border border-white/5 rounded-md flex items-start justify-between gap-3';
         const meta = document.createElement('div');
-        meta.className = 'flex-1';
+        meta.className = 'flex-1 min-w-0';
+        // Confidence chip: solid pill matching portal active-nav pattern
+        // (bg-amber-500/10 border border-amber-500/40 text-amber-400).
+        // Saturated amber at full opacity gives sun radiance against
+        // the dark background; the border + bg block gives mountain weight.
+        const confPill = b.confidence
+          ? `<span class="text-[9px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-400">${escapeHtml(b.confidence)}</span>`
+          : '';
+        // Target-product pill: only on findings that drive product variables
+        // (Revenue band -> MC, Page count -> WM). Shows the admin which
+        // product this finding will steer, and whether AI recommends it.
+        let targetPill = '';
+        if (b.target_product_synth_id && r.recommended_product_mix && r.recommended_product_mix[b.target_product_synth_id]) {
+          const slot = r.recommended_product_mix[b.target_product_synth_id];
+          const wizardId = SYNTH_TO_WIZARD_ID[b.target_product_synth_id];
+          const label = wizardId ? PRODUCT_SHORT_LABELS[wizardId] : b.target_product_synth_id;
+          targetPill = slot.recommended
+            ? `<span class="text-[9px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-400">${escapeHtml(label)}: pitch</span>`
+            : `<span class="text-[9px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded bg-neutral-900 border border-white/10 text-neutral-400">${escapeHtml(label)}: skip</span>`;
+        }
         meta.innerHTML = `
-          <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase">${escapeHtml(b.label)} <span class="text-amber-400/60">${escapeHtml(b.confidence || '')}</span></p>
-          <p class="text-sm text-neutral-200 mt-1">${escapeHtml(String(b.value))}</p>
-          ${b.evidence ? `<p class="text-[11px] text-neutral-500 mt-1">${escapeHtml(b.evidence)}</p>` : ''}
+          <div class="flex items-center gap-2 flex-wrap">
+            <p class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase">${escapeHtml(b.label)}</p>
+            ${confPill}
+            ${targetPill}
+          </div>
+          <p class="text-sm text-neutral-100 mt-1.5">${escapeHtml(String(b.value))}</p>
+          ${b.evidence ? `<p class="text-[11px] text-neutral-400 mt-1 leading-relaxed">${escapeHtml(b.evidence)}</p>` : ''}
         `;
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -1330,7 +1410,11 @@ const todayISO = new Date().toISOString().slice(0, 10);
       }
       if (r.notes) {
         const notes = document.createElement('p');
-        notes.className = 'text-[11px] text-amber-400/80 mt-2';
+        // Notes are a genuine callout (AI's parenthetical observations).
+        // Use saturated amber-400 at full opacity (sun) inside a faint
+        // amber-tinted block (mountain weight; signals this is content,
+        // not chrome).
+        notes.className = 'text-[11px] text-amber-400 mt-3 leading-relaxed bg-amber-500/5 border border-amber-500/20 rounded p-2.5';
         notes.textContent = 'Notes: ' + r.notes;
         researchResults.appendChild(notes);
       }
@@ -1356,6 +1440,22 @@ const todayISO = new Date().toISOString().slice(0, 10);
       build: 'Build',
       training: 'Training',
     };
+    // Engagement-strategy panel render.
+    //
+    // Design decisions, tied to Cody's persona quiz picks:
+    //   sun     -> saturated amber-400/500 accents at full opacity, never
+    //              pale amber-200 on dark. Matches the portal's active-nav
+    //              pattern: bg-amber-500/10 border border-amber-500/40
+    //              text-amber-400.
+    //   mountain-> visible weight differences between primary (text-neutral-100)
+    //              and secondary (text-neutral-400 rationale) and tertiary
+    //              (text-neutral-500 evidence). Action buttons use solid
+    //              amber-500 (the portal's primary-button pattern) for
+    //              real visual weight.
+    //   spring  -> generous row padding (py-4), gap-y between cards (space-y-5),
+    //              white space inside each card (p-4).
+    //   clouds  -> one signal per row: one pitch/skip pill, one action button,
+    //              no stacked confidence + scope + tier pills.
     function renderEngagementStrategy(r) {
       researchStrategyBody.innerHTML = '';
       const mix = r && r.recommended_product_mix;
@@ -1370,92 +1470,202 @@ const todayISO = new Date().toISOString().slice(0, 10);
         return;
       }
       researchStrategy.classList.remove('hidden');
+      researchStrategyBody.className = 'space-y-5';
 
-      // Product-mix grid.
+      // -------------------------------------------------------------
+      // Recommended product mix. Each product is a row with ONE action
+      // button. Pitch in scope = "In scope" (no action). Pitch not in
+      // scope = "Pitch X" primary button. Skip not in scope = no button
+      // (matches AI). Skip in scope = "Remove" subtle button.
+      // -------------------------------------------------------------
       if (mix) {
         const card = document.createElement('div');
-        card.className = 'p-3 bg-neutral-900/40 border border-white/5 rounded-md';
-        const ids = ['web_management', 'marketing_consulting', 'build', 'training'];
-        const rows = ids.map(id => {
-          const slot = mix[id];
-          if (!slot) return '';
-          const recColor = slot.recommended ? 'text-emerald-400' : 'text-neutral-500';
-          const recLabel = slot.recommended ? 'pitch' : 'skip';
-          const tier = tiers[id];
-          const tierLine = tier ? `<p class="text-[11px] text-amber-300/80 mt-1">Tier: ${escapeHtml(tier.tier)}${tier.rationale ? '. ' + escapeHtml(tier.rationale) : ''}</p>` : '';
-          return `
-            <div class="py-2 border-b border-white/5 last:border-0">
-              <div class="flex items-baseline justify-between gap-3">
-                <p class="text-sm text-neutral-200">${escapeHtml(PRODUCT_LABELS[id] || id)}</p>
-                <p class="text-[11px] font-mono ${recColor}">${recLabel} <span class="text-neutral-600">${escapeHtml(slot.confidence || '')}</span></p>
-              </div>
-              ${slot.rationale ? `<p class="text-[11px] text-neutral-500 mt-1">${escapeHtml(slot.rationale)}</p>` : ''}
-              ${tierLine}
-            </div>`;
-        }).join('');
-        card.innerHTML = `
-          <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Recommended product mix</p>
-          ${rows}
-        `;
+        card.className = 'p-4 bg-neutral-900/40 border border-white/5 rounded-md';
+
+        const header = document.createElement('p');
+        header.className = 'text-[10px] font-mono text-neutral-500 tracking-wide uppercase mb-4';
+        header.textContent = 'Recommended product mix';
+        card.appendChild(header);
+
+        const synthIds = ['web_management', 'marketing_consulting', 'build', 'training'];
+        for (const synthId of synthIds) {
+          const slot = mix[synthId];
+          if (!slot) continue;
+          const wizardId = SYNTH_TO_WIZARD_ID[synthId];
+          const tier = tiers[synthId];
+          const inScope = state.products.includes(wizardId);
+          const isPitch = !!slot.recommended;
+
+          const row = document.createElement('div');
+          row.className = 'py-4 border-b border-white/5 last:border-0 last:pb-0 first:pt-0';
+
+          const topRow = document.createElement('div');
+          topRow.className = 'flex items-center justify-between gap-4';
+
+          const nameAndStatus = document.createElement('div');
+          nameAndStatus.className = 'flex items-baseline gap-3 min-w-0';
+          // ONE pill per row (clouds). Pill carries the verdict. Tier
+          // hint and confidence move below as text, not stacked pills.
+          const pill = inScope
+            ? `<span class="text-[10px] font-mono uppercase tracking-wide px-2 py-1 rounded bg-amber-500/10 border border-amber-500/40 text-amber-400">In scope</span>`
+            : isPitch
+              ? `<span class="text-[10px] font-mono uppercase tracking-wide px-2 py-1 rounded bg-amber-500/10 border border-amber-500/40 text-amber-400">Pitch</span>`
+              : `<span class="text-[10px] font-mono uppercase tracking-wide px-2 py-1 rounded bg-neutral-900 border border-white/10 text-neutral-400">Skip</span>`;
+          nameAndStatus.innerHTML = `
+            <p class="text-base text-neutral-100 font-medium">${escapeHtml(PRODUCT_LABELS[synthId] || synthId)}</p>
+            ${pill}
+          `;
+          topRow.appendChild(nameAndStatus);
+
+          // ONE action button (clouds simplicity). Primary uses the
+          // portal's solid amber-500 button pattern (sun).
+          const actionWrap = document.createElement('div');
+          actionWrap.className = 'shrink-0';
+          if (inScope && isPitch) {
+            actionWrap.innerHTML = `<span class="text-xs text-neutral-500">already in scope</span>`;
+          } else if (inScope && !isPitch) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'text-xs px-3 py-1.5 rounded text-neutral-400 hover:text-red-400 transition-colors';
+            btn.textContent = 'Remove';
+            btn.addEventListener('click', () => {
+              unpitchProduct(wizardId);
+              showResearchApplyMsg(`${PRODUCT_SHORT_LABELS[wizardId]} removed from scope.`, 'ok');
+              renderEngagementStrategy(r);
+            });
+            actionWrap.appendChild(btn);
+          } else if (isPitch) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'text-xs px-4 py-2 rounded-lg bg-amber-500 text-neutral-950 font-semibold hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.2)]';
+            btn.textContent = `Pitch ${PRODUCT_SHORT_LABELS[wizardId]}`;
+            btn.addEventListener('click', () => {
+              const seeds = seedsForProductFromResearch(wizardId, r);
+              pitchProduct(wizardId, seeds);
+              const seedNote = Object.keys(seeds).length > 0
+                ? `, variables filled from research (${Object.keys(seeds).join(', ')})`
+                : '';
+              showResearchApplyMsg(`${PRODUCT_SHORT_LABELS[wizardId]} added to scope${seedNote}.`, 'ok');
+              renderEngagementStrategy(r);
+            });
+            actionWrap.appendChild(btn);
+          } else {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'text-xs px-3 py-1.5 rounded text-neutral-400 hover:text-amber-400 transition-colors';
+            btn.textContent = 'Pitch anyway';
+            btn.addEventListener('click', () => {
+              const seeds = seedsForProductFromResearch(wizardId, r);
+              pitchProduct(wizardId, seeds);
+              showResearchApplyMsg(`${PRODUCT_SHORT_LABELS[wizardId]} added to scope (overriding AI skip).`, 'ok');
+              renderEngagementStrategy(r);
+            });
+            actionWrap.appendChild(btn);
+          }
+          topRow.appendChild(actionWrap);
+          row.appendChild(topRow);
+
+          // Rationale + tier hint as text (no stacked pills). Mountain
+          // hierarchy: primary heading above is bright (neutral-100);
+          // rationale here is mid-tone (neutral-400); tier hint amber-400
+          // saturated.
+          if (slot.rationale) {
+            const p = document.createElement('p');
+            p.className = 'text-xs text-neutral-400 mt-2 leading-relaxed';
+            p.textContent = slot.rationale;
+            row.appendChild(p);
+          }
+          if (slot.confidence) {
+            const p = document.createElement('p');
+            p.className = 'text-[10px] font-mono text-neutral-500 mt-1 uppercase tracking-wide';
+            p.textContent = `Confidence: ${slot.confidence}`;
+            row.appendChild(p);
+          }
+          if (tier) {
+            const p = document.createElement('p');
+            p.className = 'text-xs text-amber-400 mt-2 leading-relaxed';
+            p.textContent = `Tier hint: ${tier.tier}${tier.rationale ? '. ' + tier.rationale : ''}`;
+            row.appendChild(p);
+          }
+
+          card.appendChild(row);
+        }
         researchStrategyBody.appendChild(card);
       }
 
+      // -------------------------------------------------------------
       // CLV + time-intensity row.
+      // -------------------------------------------------------------
       if (clv || intensity) {
         const card = document.createElement('div');
-        card.className = 'p-3 bg-neutral-900/40 border border-white/5 rounded-md grid grid-cols-1 sm:grid-cols-2 gap-3';
+        card.className = 'p-4 bg-neutral-900/40 border border-white/5 rounded-md grid grid-cols-1 sm:grid-cols-2 gap-5';
         const clvBlock = clv ? `
           <div>
-            <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase">CLV horizon</p>
-            <p class="text-sm text-neutral-200 mt-1">${escapeHtml(clv.signal)}</p>
-            ${clv.rationale ? `<p class="text-[11px] text-neutral-500 mt-1">${escapeHtml(clv.rationale)}</p>` : ''}
+            <p class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase mb-2">CLV horizon</p>
+            <p class="text-base text-neutral-100">${escapeHtml(clv.signal)}</p>
+            ${clv.rationale ? `<p class="text-xs text-neutral-400 mt-2 leading-relaxed">${escapeHtml(clv.rationale)}</p>` : ''}
           </div>` : '<div></div>';
         const intBlock = intensity ? `
           <div>
-            <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase">Cody time intensity</p>
-            <p class="text-sm text-neutral-200 mt-1">${escapeHtml(intensity.level)}</p>
-            ${intensity.rationale ? `<p class="text-[11px] text-neutral-500 mt-1">${escapeHtml(intensity.rationale)}</p>` : ''}
+            <p class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase mb-2">Cody time intensity</p>
+            <p class="text-base text-neutral-100">${escapeHtml(intensity.level)}</p>
+            ${intensity.rationale ? `<p class="text-xs text-neutral-400 mt-2 leading-relaxed">${escapeHtml(intensity.rationale)}</p>` : ''}
           </div>` : '<div></div>';
         card.innerHTML = clvBlock + intBlock;
         researchStrategyBody.appendChild(card);
       }
 
-      // Sales angles.
+      // -------------------------------------------------------------
+      // Sales angles. List of observations, each with evidence. Clouds:
+      // simple list, no decoration.
+      // -------------------------------------------------------------
       if (angles.length) {
         const card = document.createElement('div');
-        card.className = 'p-3 bg-neutral-900/40 border border-white/5 rounded-md';
+        card.className = 'p-4 bg-neutral-900/40 border border-white/5 rounded-md';
         const items = angles.map(a => `
-          <div class="py-1.5 border-b border-white/5 last:border-0">
-            <p class="text-sm text-neutral-200">${escapeHtml(a.angle)}</p>
-            ${a.supporting_evidence ? `<p class="text-[11px] text-neutral-500 mt-0.5">${escapeHtml(a.supporting_evidence)}</p>` : ''}
+          <div class="py-3 border-b border-white/5 last:border-0 last:pb-0 first:pt-0">
+            <p class="text-sm text-neutral-100 leading-relaxed">${escapeHtml(a.angle)}</p>
+            ${a.supporting_evidence ? `<p class="text-[11px] text-neutral-500 mt-1 leading-relaxed">${escapeHtml(a.supporting_evidence)}</p>` : ''}
           </div>`).join('');
         card.innerHTML = `
-          <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Sales angles to lead with</p>
+          <p class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase mb-3">Sales angles to lead with</p>
           ${items}
         `;
         researchStrategyBody.appendChild(card);
       }
 
-      // Risk signals.
+      // -------------------------------------------------------------
+      // Risk signals. Severity uses saturated colors at full opacity.
+      // -------------------------------------------------------------
       if (risks.length) {
         const card = document.createElement('div');
-        card.className = 'p-3 bg-neutral-900/40 border border-white/5 rounded-md';
-        const sevColor = { low: 'text-neutral-500', medium: 'text-amber-400', high: 'text-red-400' };
-        const items = risks.map(rs => {
-          const color = sevColor[rs.severity] || 'text-neutral-500';
-          return `
-            <div class="py-1.5 border-b border-white/5 last:border-0 flex items-baseline justify-between gap-3">
-              <p class="text-sm text-neutral-200">${escapeHtml(rs.risk)}</p>
-              <p class="text-[11px] font-mono ${color}">${escapeHtml(rs.severity)}</p>
-            </div>`;
-        }).join('');
+        card.className = 'p-4 bg-neutral-900/40 border border-white/5 rounded-md';
+        const sevPill = (sev) => {
+          if (sev === 'high') return 'bg-red-500/10 border border-red-500/40 text-red-400';
+          if (sev === 'medium') return 'bg-amber-500/10 border border-amber-500/40 text-amber-400';
+          return 'bg-neutral-900 border border-white/10 text-neutral-400';
+        };
+        const items = risks.map(rs => `
+          <div class="py-3 border-b border-white/5 last:border-0 last:pb-0 first:pt-0 flex items-center justify-between gap-4">
+            <p class="text-sm text-neutral-100 leading-relaxed">${escapeHtml(rs.risk)}</p>
+            <span class="text-[10px] font-mono uppercase tracking-wide px-2 py-1 rounded ${sevPill(rs.severity)} shrink-0">${escapeHtml(rs.severity)}</span>
+          </div>`).join('');
         card.innerHTML = `
-          <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Risk signals</p>
+          <p class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase mb-3">Risk signals</p>
           ${items}
         `;
         researchStrategyBody.appendChild(card);
       }
     }
+
+    // Re-render the strategy panel when product picks change anywhere
+    // (checkbox toggle, pitch button, remove button, research apply).
+    // Keeps the action-button state in sync with state.products.
+    productPicks.forEach(box => {
+      box.addEventListener('change', () => {
+        if (state.research_result) renderEngagementStrategy(state.research_result);
+      });
+    });
 
     function showResearchApplyMsg(text, type) {
       researchStatus.textContent = text;

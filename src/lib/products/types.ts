@@ -195,6 +195,30 @@ export interface ProductScheduleAContribution {
 // The product definition itself
 // =========================================================================
 
+// Engagement-strategy synthesis subset that flows from the AI research
+// call to the narrative composer. Mirrors a subset of
+// `ClientResearchResult` in src/lib/proposal-ai/types.ts but is defined
+// locally to keep products/ independent of proposal-ai/. The wizard
+// adapts research_result -> EngagementStrategy before calling the
+// composer; both shapes share field names verbatim for that reason.
+//
+// Used by:
+//   - composer (opener composition from sales_angles)
+//   - per-product narrative generators (light copy adaptation)
+//
+// The synthesis is NEVER named directly in client-facing copy
+// (no-dangling-tier-references rule). It steers wording; it does not
+// appear as a label.
+export interface EngagementStrategySalesAngle {
+  angle: string;
+  supporting_evidence: string;
+}
+export interface EngagementStrategy {
+  sales_angles: EngagementStrategySalesAngle[];
+  clv_horizon?: 'long-term-stable' | 'medium-term' | 'churn-risk' | 'unknown' | null;
+  cody_time_intensity?: 'low' | 'medium' | 'high' | null;
+}
+
 export interface ProductContext {
   // Everything a product needs to do its work. Passed in by the
   // composer; products do not reach for global state.
@@ -210,6 +234,9 @@ export interface ProductContext {
   // from this list when present. Empty / undefined falls back to
   // placeholder rows derived from variables.site_count.
   managedSites?: Array<{ domain: string; label?: string | null; is_primary?: boolean }>;
+  // Engagement-strategy synthesis from the research call, when present.
+  // Optional so legacy composer calls without research still work.
+  engagementStrategy?: EngagementStrategy | null;
 }
 
 export interface ProductDefinition {
@@ -331,6 +358,11 @@ export interface ComposeArgs {
   overrides?: ProposalOverrides;
   // Optional explicit pricing_formula (defaults to 'product_driven_v1').
   pricing_formula?: string;
+  // Optional engagement-strategy synthesis from the AI research call.
+  // When present, drives the proposal's opener (The Situation) and
+  // adapts per-product narrative wording. Absent for legacy/manual
+  // composer calls.
+  engagement_strategy?: EngagementStrategy | null;
 }
 
 // Re-export downstream types so consumers can import everything from

@@ -266,13 +266,28 @@ function buildMarketingConsultingNarrative(ctx: ProductContext): NarrativeSnippe
     ? `<strong>Marketing Consulting</strong> on top of Web Management. The consulting product is strategy and recommendation applied to the whole business, not the sites. I cover marketing, search and content strategy, brand positioning, and adjacent advisory like operations or hiring guidance when you want outside thinking. It is advice only; execution routes through Web Management hours or a separate statement of work.`
     : `<strong>Marketing Consulting</strong> as a standalone engagement. Strategy and recommendation applied to the whole business: marketing, search and content strategy, brand positioning, plus adjacent advisory like operations, hiring guidance, or vendor selection. It is advice only; if you want me to execute on a recommendation, that gets scoped separately.`;
 
+  // Engagement-strategy adaptation. One optional sentence appended
+  // when the synthesis points to a clear consulting shape. Does NOT
+  // name tiers; steers the framing.
+  const what_i_see_paragraphs: string[] = [
+    `Your business sits in ${eco?.label || 'the consulting ecosystem'}${ecoBand ? ` (${ecoBand})` : ''}. The tier you pick sets the depth of the cycle: how often we meet, how many deep advisories per cycle, and whether monthly performance reporting is in scope.`,
+  ];
+  const strategy = ctx.engagementStrategy;
+  if (strategy?.clv_horizon === 'long-term-stable') {
+    what_i_see_paragraphs.push(
+      `The shape that fits a steady business is the outside thinker you call when a decision needs sharper context than the room can produce. The cycle is built around that pattern.`
+    );
+  } else if (strategy?.cody_time_intensity === 'low' && strategy?.clv_horizon !== 'churn-risk') {
+    what_i_see_paragraphs.push(
+      `Consulting works best when the decision needs thinking, not hands. You ask, I research and recommend, you decide. The fee buys attention and research, not unlimited production.`
+    );
+  }
+
   return {
     intro_lines: [
       `Marketing Consulting is strategic advisory applied to your business${ecoBand ? `, priced for the ${ecoBand} band` : ''}.`,
     ],
-    what_i_see_paragraphs: [
-      `Your business sits in ${eco?.label || 'the consulting ecosystem'}${ecoBand ? ` (${ecoBand})` : ''}. The tier you pick sets the depth of the cycle: how often we meet, how many deep advisories per cycle, and whether monthly performance reporting is in scope.`,
-    ],
+    what_i_see_paragraphs,
     what_i_recommend_paragraphs: [recommendation],
   };
 }

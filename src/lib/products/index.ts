@@ -24,6 +24,7 @@ import type {
   TierId,
   NarrativeSnippetSet,
   NarrativePhase,
+  EngagementStrategy,
 } from './types';
 
 // =========================================================================
@@ -68,6 +69,7 @@ export function composeProposal(args: ComposeArgs): ProposalConfig {
   // at compose time (the prospect picks tiers on the proposal page).
   // otherProducts is each product's view of the rest of the mix; used
   // for narrative composition.
+  const engagementStrategy = args.engagement_strategy || null;
   const contexts: Record<ProductId, ProductContext> = {} as any;
   for (const id of orderedProducts) {
     const product = PRODUCT_REGISTRY[id];
@@ -81,6 +83,7 @@ export function composeProposal(args: ComposeArgs): ProposalConfig {
       tierId: null,
       variables,
       otherProducts,
+      engagementStrategy,
     };
   }
 
@@ -94,12 +97,15 @@ export function composeProposal(args: ComposeArgs): ProposalConfig {
   }
 
   // Narrative: merge per-product NarrativeSnippetSets into the
-  // ProposalConfig.narrative shape.
+  // ProposalConfig.narrative shape. The strategy drives the opener
+  // (The Situation) and informs per-product paragraphs through
+  // ctx.engagementStrategy.
   const narrative = composeNarrative({
     orderedProducts,
     contexts,
     clientName: args.client.name,
     narrativeVariables: args.narrative_variables || {},
+    engagementStrategy,
   });
 
   // Signers
@@ -159,6 +165,7 @@ interface ComposeNarrativeArgs {
   contexts: Record<ProductId, ProductContext>;
   clientName: string;
   narrativeVariables: { industry?: string; urgency?: string; focus?: string[] };
+  engagementStrategy?: EngagementStrategy | null;
 }
 
 function composeNarrative(args: ComposeNarrativeArgs): {
@@ -183,17 +190,41 @@ function composeNarrative(args: ComposeNarrativeArgs): {
     urgency: args.narrativeVariables.urgency,
   });
 
+  // Opener: "The Situation" from the synthesis sales_angles. Names the
+  // client's perceived problem in their language. Pattern lifted from
+  // the ZipKit proposal's working opener. Omitted when no angles are
+  // present (legacy or non-AI-driven composes).
+  const openerParagraphs = composeSituationOpener({
+    clientName: args.clientName,
+    engagementStrategy: args.engagementStrategy,
+  });
+
   // "What I see in your business" h2 with paragraphs.
   const seeParagraphs = contributions.flatMap(c => c.set.what_i_see_paragraphs || []);
   // "What I recommend" h2 with paragraphs.
   const recommendParagraphs = contributions.flatMap(c => c.set.what_i_recommend_paragraphs || []);
 
+  // Closer: "How this works in practice." Constant boundary-setting
+  // language that adapts to the product mix (not the strategy fields).
+  // Echoes 07 §5.4 (hours do not roll over), §6.4 (decision velocity),
+  // §7.5 (no chase work), §8 (change-order). Client agreeing to this
+  // language up front sets the expectation the contract then enforces.
+  const closerParagraphs = composeHowItWorksCloser({
+    orderedProducts: args.orderedProducts,
+  });
+
   const sections: NarrativeSection[] = [];
+  if (openerParagraphs.length > 0) {
+    sections.push({ h2: 'The Situation', paragraphs: openerParagraphs });
+  }
   if (seeParagraphs.length > 0) {
     sections.push({ h2: 'What I see in your business', paragraphs: seeParagraphs });
   }
   if (recommendParagraphs.length > 0) {
     sections.push({ h2: 'What I recommend', paragraphs: recommendParagraphs });
+  }
+  if (closerParagraphs.length > 0) {
+    sections.push({ h2: 'How this works in practice', paragraphs: closerParagraphs });
   }
 
   // Rollout: if any product contributes scenarios, use the first
@@ -236,6 +267,121 @@ function composeIntro(args: {
   const productSentences = args.productIntroLines.join(' ');
 
   return [opener, productList, productSentences].filter(Boolean).join(' ');
+}
+
+// =========================================================================
+// Opener: "The Situation" composed from sales_angles
+// =========================================================================
+//
+// Renders up to three sales angles from the synthesis as the proposal's
+// opening section. Each angle is the AI's one-sentence observation about
+// the client's perceived problem, backed by scraped-content evidence
+// (the validator drops angles without evidence per no-fabrication).
+//
+// The opener uses angles VERBATIM. No re-paraphrasing, no template
+// chaining. If the AI returned a clean sentence, it stays clean; if
+// the AI returned an awkward one, the admin reviews the panel and
+// either re-runs research or overrides the section in the wizard.
+function composeSituationOpener(args: {
+  clientName: string;
+  engagementStrategy?: EngagementStrategy | null;
+}): string[] {
+  const strategy = args.engagementStrategy;
+  if (!strategy || !Array.isArray(strategy.sales_angles) || strategy.sales_angles.length === 0) {
+    return [];
+  }
+
+  // Take up to 3 angles, normalize end punctuation, drop empties.
+  const angles = strategy.sales_angles
+    .slice(0, 3)
+    .map(a => (a && typeof a.angle === 'string' ? a.angle.trim() : ''))
+    .filter(Boolean)
+    .map(s => (s.endsWith('.') || s.endsWith('!') || s.endsWith('?')) ? s : s + '.');
+  if (angles.length === 0) return [];
+
+  // One paragraph. Leads with what stood out, then each angle as its
+  // own sentence. Plain language, no AI-template framing.
+  const leadIn = angles.length === 1
+    ? `One thing stood out looking at ${args.clientName}.`
+    : `A few things stood out looking at ${args.clientName}.`;
+  return [`${leadIn} ${angles.join(' ')}`];
+}
+
+// =========================================================================
+// Closer: "How this works in practice"
+// =========================================================================
+//
+// Constant boundary-setting language adapted to the product mix in
+// scope. Echoes the standard contract:
+//   - 07 §5.4: "Unused included hours do not roll over"
+//   - 07 §6.4: client decision-velocity (5 business days)
+//   - 07 §7.5: Cody does not chase work the client ignores
+//   - 07 §8:   new work outside scope is a change order
+//
+// Adapts wording per product (WM mentions hours pool; MC mentions
+// strategy call; Build mentions transition to WM at launch). Does NOT
+// reference tier names (no-dangling-tier-references rule). Never
+// driven by engagement strategy synthesis fields; this is a Cody-
+// constant.
+function composeHowItWorksCloser(args: {
+  orderedProducts: ProductId[];
+}): string[] {
+  if (args.orderedProducts.length === 0) return [];
+  const hasWM = args.orderedProducts.includes('web-management');
+  const hasMC = args.orderedProducts.includes('marketing-consulting');
+  const hasBuild = args.orderedProducts.includes('build');
+  const hasTraining = args.orderedProducts.includes('training');
+
+  const paragraphs: string[] = [];
+
+  // Paragraph 1: month one. Onboarding so the client sees what is
+  // changing fast (04 §4: anxiety highest in the first week).
+  const monthOneParts: string[] = [
+    `<strong>Month one is onboarding.</strong> The work in the first weeks is concentrated so you can see what is changing.`,
+  ];
+  if (hasBuild) {
+    monthOneParts.push(`If a build is in scope, scoping conversations and the first design pass happen here.`);
+  }
+  if (hasWM) {
+    monthOneParts.push(`If a site is moving onto management, the takeover audit, baseline health work, and access transfer happen in this window.`);
+  }
+  if (hasMC && !hasBuild && !hasWM) {
+    monthOneParts.push(`If consulting is in scope on its own, the initial audit and the first strategy cycle land in this window.`);
+  } else if (hasMC) {
+    monthOneParts.push(`If consulting is in scope, the initial audit lands in this window too.`);
+  }
+  paragraphs.push(monthOneParts.join(' '));
+
+  // Paragraph 2: steady state. The cadence agreed to in writing.
+  // Hours capped per cycle, do not roll over. Decisions in writing
+  // turn around in five business days.
+  const steadyParts: string[] = [
+    `<strong>After month one is the steady cadence we agree to in writing.</strong>`,
+  ];
+  if (hasWM) {
+    steadyParts.push(`Web Management runs on a pool of hours per cycle. Unused hours do not roll over to the next cycle; that is the trade for a predictable monthly fee.`);
+  }
+  if (hasMC) {
+    steadyParts.push(`Marketing Consulting runs on the strategy-call cadence and advisory schedule in your level. Consulting is advice; execution routes through Web Management hours or a separate statement of work.`);
+  }
+  if (hasTraining && !hasMC && !hasWM) {
+    steadyParts.push(`Training runs on the session cadence in your level.`);
+  }
+  steadyParts.push(`Decisions I send in writing turn around in five business days; that is what keeps the cycle moving.`);
+  paragraphs.push(steadyParts.join(' '));
+
+  // Paragraph 3: change orders for anything outside scope. Easy to
+  // add; gets papered separately. (07 §8.)
+  const changeOrderParts: string[] = [
+    `<strong>New work that falls outside the agreed scope is a change order.</strong>`,
+    `Easy to add and quick to paper. It keeps every party clear on what was bought and what is new.`,
+  ];
+  if (hasBuild) {
+    changeOrderParts.push(`Subsequent builds in this engagement carry a 20 percent discount off the first.`);
+  }
+  paragraphs.push(changeOrderParts.join(' '));
+
+  return paragraphs;
 }
 
 function joinList(items: string[]): string {

@@ -405,34 +405,42 @@ const todayISO = new Date().toISOString().slice(0, 10);
       newClientMsg.textContent = 'Creating...';
       newClientMsg.className = 'text-xs text-neutral-400';
       newClientMsg.classList.remove('hidden');
+      // Two-stage error reporting (same pattern as the research call).
+      let res;
       try {
-        const res = await fetch('/portal/api/admin/create-client', {
+        res = await fetch('/portal/api/admin/create-client', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
           body: JSON.stringify({ name, slug, domain: domain || undefined }),
         });
-        const data = await res.json();
-        if (res.ok) {
-          const opt = document.createElement('option');
-          opt.value = data.id;
-          opt.dataset.slug = slug;
-          opt.dataset.name = name;
-          opt.dataset.domain = domain || '';
-          opt.textContent = name;
-          opt.selected = true;
-          clientSelect.appendChild(opt);
-          clientSelect.dispatchEvent(new Event('change'));
-          addClientSlot.classList.add('hidden');
-          newClientName.value = '';
-          newClientSlug.value = '';
-          if (newClientDomain) newClientDomain.value = '';
-          newClientMsg.classList.add('hidden');
-        } else {
-          newClientMsg.textContent = data.error || 'Failed to create client';
-          newClientMsg.className = 'text-xs text-red-400';
-        }
-      } catch {
-        newClientMsg.textContent = 'Connection error';
+      } catch (err) {
+        newClientMsg.textContent = `Network error: ${err && err.message ? err.message : 'fetch failed'}`;
+        newClientMsg.className = 'text-xs text-red-400';
+        return;
+      }
+      const _rawText = await res.text();
+      let data = null;
+      try { data = _rawText ? JSON.parse(_rawText) : null; } catch {}
+      if (res.ok && data && data.id) {
+        const opt = document.createElement('option');
+        opt.value = data.id;
+        opt.dataset.slug = slug;
+        opt.dataset.name = name;
+        opt.dataset.domain = domain || '';
+        opt.textContent = name;
+        opt.selected = true;
+        clientSelect.appendChild(opt);
+        clientSelect.dispatchEvent(new Event('change'));
+        addClientSlot.classList.add('hidden');
+        newClientName.value = '';
+        newClientSlug.value = '';
+        if (newClientDomain) newClientDomain.value = '';
+        newClientMsg.classList.add('hidden');
+      } else {
+        const msg = (data && data.error)
+          ? data.error
+          : `HTTP ${res.status}${_rawText ? ': ' + _rawText.slice(0, 140) : ''}`;
+        newClientMsg.textContent = msg;
         newClientMsg.className = 'text-xs text-red-400';
       }
     });
@@ -729,23 +737,31 @@ const todayISO = new Date().toISOString().slice(0, 10);
         },
       };
 
+      // Two-stage error reporting (same pattern as the research call).
+      let res;
       try {
-        const res = await fetch('/portal/api/admin/proposals/create', {
+        res = await fetch('/portal/api/admin/proposals/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
           body: JSON.stringify(payload),
         });
-        const data = await res.json();
-        if (res.ok) {
-          showMsg(`Created proposal. Redirecting...`, 'ok');
-          setTimeout(() => { window.location.href = '/portal/admin/proposals'; }, 800);
-        } else {
-          showMsg(data.error || 'Failed to create proposal', 'error');
-          draftBtn.disabled = false;
-          pubBtn.disabled = false;
-        }
-      } catch {
-        showMsg('Connection error', 'error');
+      } catch (err) {
+        showMsg(`Network error: ${err && err.message ? err.message : 'fetch failed'}`, 'error');
+        draftBtn.disabled = false;
+        pubBtn.disabled = false;
+        return;
+      }
+      const rawText = await res.text();
+      let data = null;
+      try { data = rawText ? JSON.parse(rawText) : null; } catch {}
+      if (res.ok && data && data.ok) {
+        showMsg(`Created proposal. Redirecting...`, 'ok');
+        setTimeout(() => { window.location.href = '/portal/admin/proposals'; }, 800);
+      } else {
+        const msg = (data && data.error)
+          ? data.error
+          : `HTTP ${res.status}${rawText ? ': ' + rawText.slice(0, 140) : ''}`;
+        showMsg(msg, 'error');
         draftBtn.disabled = false;
         pubBtn.disabled = false;
       }
@@ -797,27 +813,35 @@ const todayISO = new Date().toISOString().slice(0, 10);
       const raw = researchDomainInput.value.trim();
       if (!raw) { showResearchDomainMsg('Enter a domain', 'error'); return; }
       researchDomainSave.disabled = true;
+      // Two-stage error reporting (same pattern as the research call).
+      let res;
       try {
-        const res = await fetch('/portal/api/admin/clients/set-domain', {
+        res = await fetch('/portal/api/admin/clients/set-domain', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
           body: JSON.stringify({ client_id: state.client_id, domain: raw }),
         });
-        const data = await res.json();
-        if (res.ok) {
-          state.client_domain = data.domain || raw.toLowerCase();
-          const opt = clientSelect.selectedOptions[0];
-          if (opt) opt.dataset.domain = state.client_domain;
-          showResearchDomainMsg('Saved', 'ok');
-          setTimeout(refreshResearchPanel, 400);
-        } else {
-          showResearchDomainMsg(data.error || 'Failed to save', 'error');
-        }
-      } catch {
-        showResearchDomainMsg('Connection error', 'error');
-      } finally {
+      } catch (err) {
+        showResearchDomainMsg(`Network error: ${err && err.message ? err.message : 'fetch failed'}`, 'error');
         researchDomainSave.disabled = false;
+        return;
       }
+      const rawText = await res.text();
+      let data = null;
+      try { data = rawText ? JSON.parse(rawText) : null; } catch {}
+      if (res.ok && data && data.ok) {
+        state.client_domain = data.domain || raw.toLowerCase();
+        const opt = clientSelect.selectedOptions[0];
+        if (opt) opt.dataset.domain = state.client_domain;
+        showResearchDomainMsg('Saved', 'ok');
+        setTimeout(refreshResearchPanel, 400);
+      } else {
+        const msg = (data && data.error)
+          ? data.error
+          : `HTTP ${res.status}${rawText ? ': ' + rawText.slice(0, 140) : ''}`;
+        showResearchDomainMsg(msg, 'error');
+      }
+      researchDomainSave.disabled = false;
     });
 
     researchBtn.addEventListener('click', async () => {
@@ -827,25 +851,43 @@ const todayISO = new Date().toISOString().slice(0, 10);
       researchStatus.classList.remove('hidden');
       researchResults.classList.add('hidden');
       researchResults.innerHTML = '';
+
+      // Two-stage error reporting: the fetch itself can throw (network),
+      // and the response body may not be JSON (Cloudflare swaps 5xx
+      // bodies for HTML error pages). Surface the actual HTTP status
+      // and a short body snippet so failures are debuggable instead of
+      // collapsing to a generic "Connection error."
+      let res;
       try {
-        const res = await fetch('/portal/api/admin/proposals/ai/research', {
+        res = await fetch('/portal/api/admin/proposals/ai/research', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
           body: JSON.stringify({ client_id: state.client_id }),
         });
-        const data = await res.json();
-        if (res.ok) {
-          state.research_result = data.result;
-          researchStatus.classList.add('hidden');
-          renderResearchResults(data.result);
-        } else {
-          researchStatus.textContent = data.error || 'Lookup failed. Fill manually.';
-        }
-      } catch {
-        researchStatus.textContent = 'Connection error. Fill manually.';
-      } finally {
+      } catch (err) {
+        researchStatus.textContent = `Network error: ${err && err.message ? err.message : 'fetch failed'}. Fill manually.`;
         researchBtn.disabled = false;
+        return;
       }
+      const rawText = await res.text();
+      let data = null;
+      try { data = rawText ? JSON.parse(rawText) : null; } catch { /* leave as null */ }
+
+      if (res.ok && data && data.ok) {
+        state.research_result = data.result;
+        researchStatus.classList.add('hidden');
+        renderResearchResults(data.result);
+      } else {
+        // Prefer the structured error message when present; fall back
+        // to status + truncated body so the wizard surfaces what
+        // actually happened (e.g., "503 Gemini is not configured" or
+        // "504 upstream timeout").
+        const msg = (data && data.error)
+          ? data.error
+          : `HTTP ${res.status}${rawText ? ': ' + rawText.slice(0, 140) : ''}`;
+        researchStatus.textContent = `${msg} (you can fill manually).`;
+      }
+      researchBtn.disabled = false;
     });
 
     function renderResearchResults(r) {

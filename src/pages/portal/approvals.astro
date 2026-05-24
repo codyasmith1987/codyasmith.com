@@ -28,7 +28,7 @@ for (const approval of allPending) {
   <div class="max-w-3xl mx-auto">
     <div class="mb-10">
       <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Approvals</h1>
-      <p class="text-sm text-neutral-500 mt-2">Items waiting for your review and sign-off.</p>
+      <p class="text-sm text-neutral-300 mt-2">Items waiting for your review and sign-off.</p>
     </div>
 
     {clientApprovals.length > 0 ? (
@@ -38,12 +38,12 @@ for (const approval of allPending) {
             <div class="mb-4">
               <h2 class="text-lg font-medium text-neutral-100">{approval.title}</h2>
               {approval.description && <p class="text-sm text-neutral-400 mt-2 leading-relaxed">{approval.description}</p>}
-              <p class="text-[10px] text-neutral-700 font-mono mt-3">Requested {new Date(approval.requested_at).toLocaleDateString()}</p>
+              <p class="text-[10px] text-neutral-400 font-mono mt-3">Requested {new Date(approval.requested_at).toLocaleDateString()}</p>
             </div>
 
             <div class="border-t border-white/5 pt-5">
               <div class="mb-4">
-                <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Your response (optional note)</label>
+                <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Your response (optional note)</label>
                 <textarea data-note={approval.id} rows="2" placeholder="Any comments or feedback..." class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30"></textarea>
               </div>
               <div class="flex items-center gap-3">
@@ -58,7 +58,7 @@ for (const approval of allPending) {
     ) : (
       <div class="text-center py-16">
         <p class="font-serif text-xl text-neutral-100 mb-2">Nothing waiting on you</p>
-        <p class="text-sm text-neutral-500">When we need your sign-off on something, it will appear here.</p>
+        <p class="text-sm text-neutral-300">When we need your sign-off on something, it will appear here.</p>
       </div>
     )}
   </div>

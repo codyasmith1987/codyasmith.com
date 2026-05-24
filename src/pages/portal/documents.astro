@@ -66,7 +66,7 @@ const empty = agreements.length === 0 && proposals.length === 0;
     <div class="mb-10">
       <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Deliverables</p>
       <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Documents</h1>
-      <p class="text-sm text-neutral-500 mt-2">Your agreements, proposals, and reports.</p>
+      <p class="text-sm text-neutral-300 mt-2">Your agreements, proposals, and reports.</p>
     </div>
 
     {!clientId && (
@@ -77,8 +77,8 @@ const empty = agreements.length === 0 && proposals.length === 0;
 
     {clientId && empty && (
       <div class="text-center py-16">
-        <p class="text-sm text-neutral-500">No documents yet.</p>
-        <p class="text-xs text-neutral-600 mt-2">Your agreements, proposals, and reports will appear here as they're issued.</p>
+        <p class="text-sm text-neutral-300">No documents yet.</p>
+        <p class="text-xs text-neutral-400 mt-2">Your agreements, proposals, and reports will appear here as they're issued.</p>
       </div>
     )}
 
@@ -94,7 +94,7 @@ const empty = agreements.length === 0 && proposals.length === 0;
                     <p class="text-sm font-medium text-neutral-200">{a.title}</p>
                     <span class={`px-2 py-0.5 text-[10px] font-mono uppercase rounded ${statusBadge[a.status] || statusBadge.draft}`}>{a.status === 'executed' ? 'Fully executed' : a.status}</span>
                   </div>
-                  <div class="flex items-center gap-4 mt-2 text-[10px] font-mono text-neutral-700">
+                  <div class="flex items-center gap-4 mt-2 text-[10px] font-mono text-neutral-400">
                     {a.finalized_at && <span>Executed {fmtDate(a.finalized_at)}</span>}
                     {!a.finalized_at && a.issued_at && <span>Issued {fmtDate(a.issued_at)}</span>}
                     {!a.finalized_at && !a.issued_at && <span>Created {fmtDate(a.created_at)}</span>}
@@ -125,7 +125,7 @@ const empty = agreements.length === 0 && proposals.length === 0;
                     <p class="text-sm font-medium text-neutral-200">{p.title}</p>
                     <span class={`px-2 py-0.5 text-[10px] font-mono uppercase rounded ${statusBadge[p.status] || statusBadge.draft}`}>{p.status}</span>
                   </div>
-                  <div class="flex items-center gap-4 mt-2 text-[10px] font-mono text-neutral-700">
+                  <div class="flex items-center gap-4 mt-2 text-[10px] font-mono text-neutral-400">
                     {p.finalized_at && <span>Accepted {fmtDate(p.finalized_at)}</span>}
                   </div>
                 </div>

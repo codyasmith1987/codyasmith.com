@@ -91,10 +91,10 @@ function actionColor(action: string): string {
             <div class="flex-1 min-w-0">
               <p class="text-sm text-neutral-200">{entry.summary}</p>
               <div class="flex items-center gap-3 mt-1">
-                <span class="text-[10px] font-mono text-neutral-700">{entry.entity_type}</span>
-                <span class="text-[10px] text-neutral-700">{timeAgo(entry.created_at)}</span>
+                <span class="text-[10px] font-mono text-neutral-400">{entry.entity_type}</span>
+                <span class="text-[10px] text-neutral-400">{timeAgo(entry.created_at)}</span>
                 {entry.user_name && (
-                  <span class="text-[10px] text-neutral-700">{entry.user_name}</span>
+                  <span class="text-[10px] text-neutral-400">{entry.user_name}</span>
                 )}
               </div>
             </div>
@@ -104,7 +104,7 @@ function actionColor(action: string): string {
     ) : (
       <div class="text-center py-24">
         <p class="font-serif text-2xl text-neutral-100 mb-3">No activity yet</p>
-        <p class="text-sm text-neutral-500 leading-relaxed max-w-xs mx-auto">
+        <p class="text-sm text-neutral-300 leading-relaxed max-w-xs mx-auto">
           Activity will appear here as actions are taken in the portal.
         </p>
       </div>
@@ -120,7 +120,7 @@ function actionColor(action: string): string {
             Previous
           </a>
         )}
-        <span class="text-[10px] font-mono text-neutral-700">
+        <span class="text-[10px] font-mono text-neutral-400">
           Page {page} of {totalPages}
         </span>
         {page < totalPages && (
@@ -134,7 +134,7 @@ function actionColor(action: string): string {
       </div>
     )}
 
-    <p class="text-center text-[10px] font-mono text-neutral-700 mt-6">
+    <p class="text-center text-[10px] font-mono text-neutral-400 mt-6">
       {total} total event{total !== 1 ? 's' : ''}
     </p>
   </div>

@@ -43,8 +43,8 @@ const statusColors: Record<string, string> = {
     </div>
 
     <div class="flex items-center gap-3 mb-8">
-      <a href="/portal/admin/approvals" class:list={['px-3 py-1.5 rounded-lg text-xs transition-colors', !contractId && !showAll ? 'bg-amber-500/10 text-amber-400' : 'text-neutral-500 hover:text-neutral-300']}>Pending</a>
-      <a href="/portal/admin/approvals?all=true" class:list={['px-3 py-1.5 rounded-lg text-xs transition-colors', showAll ? 'bg-amber-500/10 text-amber-400' : 'text-neutral-500 hover:text-neutral-300']}>All</a>
+      <a href="/portal/admin/approvals" class:list={['px-3 py-1.5 rounded-lg text-xs transition-colors', !contractId && !showAll ? 'bg-amber-500/10 text-amber-400' : 'text-neutral-300 hover:text-neutral-300']}>Pending</a>
+      <a href="/portal/admin/approvals?all=true" class:list={['px-3 py-1.5 rounded-lg text-xs transition-colors', showAll ? 'bg-amber-500/10 text-amber-400' : 'text-neutral-300 hover:text-neutral-300']}>All</a>
     </div>
 
     {approvals.length > 0 ? (
@@ -57,15 +57,15 @@ const statusColors: Record<string, string> = {
               <div class="flex items-start justify-between">
                 <div>
                   <p class="text-sm font-medium text-neutral-200">{a.title}</p>
-                  <p class="text-xs text-neutral-600 mt-1">{contractTitle}</p>
-                  {a.description && <p class="text-xs text-neutral-500 mt-2">{a.description}</p>}
+                  <p class="text-xs text-neutral-400 mt-1">{contractTitle}</p>
+                  {a.description && <p class="text-xs text-neutral-300 mt-2">{a.description}</p>}
                   {a.response_note && (
                     <p class="text-xs text-neutral-400 mt-2 border-l-2 border-white/10 pl-3 italic">{a.response_note}</p>
                   )}
                 </div>
                 <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full shrink-0 ${statusColors[a.status] || ''}`}>{a.status.replace(/_/g, ' ')}</span>
               </div>
-              <div class="flex items-center gap-3 mt-3 text-[10px] text-neutral-700">
+              <div class="flex items-center gap-3 mt-3 text-[10px] text-neutral-400">
                 <span>Requested: {new Date(a.requested_at).toLocaleDateString()}</span>
                 {a.responded_at && <span>Responded: {new Date(a.responded_at).toLocaleDateString()}</span>}
               </div>
@@ -76,7 +76,7 @@ const statusColors: Record<string, string> = {
     ) : (
       <div class="text-center py-16">
         <p class="font-serif text-xl text-neutral-100 mb-2">{contractId || showAll ? 'No approvals found' : 'No pending approvals'}</p>
-        <p class="text-sm text-neutral-500">Create approvals from a contract's detail page.</p>
+        <p class="text-sm text-neutral-300">Create approvals from a contract's detail page.</p>
       </div>
     )}
   </div>

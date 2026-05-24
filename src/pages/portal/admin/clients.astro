@@ -15,10 +15,10 @@ const clients = await getAllClients();
 
     <!-- Create client form -->
     <form id="create-client-form" class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-10">
-      <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-5">Add new client</p>
+      <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">Add new client</p>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div>
-          <label for="client-name" class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Business name</label>
+          <label for="client-name" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Business name</label>
           <input
             type="text"
             id="client-name"
@@ -29,7 +29,7 @@ const clients = await getAllClients();
           />
         </div>
         <div>
-          <label for="client-slug" class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Slug (URL-safe)</label>
+          <label for="client-slug" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Slug (URL-safe)</label>
           <input
             type="text"
             id="client-slug"
@@ -55,16 +55,16 @@ const clients = await getAllClients();
             <div class="flex items-center justify-between">
               <div class="flex-1">
                 <p class="text-sm font-medium text-neutral-200" data-client-name-display={client.id}>{client.name}</p>
-                <p class="text-xs font-mono text-neutral-400 mt-0.5">
+                <p class="text-xs font-mono text-neutral-600 mt-0.5">
                   <span>{client.slug}</span>
-                  {client.domain && <span class="ml-2 text-neutral-300">| {client.domain}</span>}
+                  {client.domain && <span class="ml-2 text-neutral-500">| {client.domain}</span>}
                   {client.discount_rate > 0 && (
                     <span class="ml-2 text-amber-400" data-client-discount-display={client.id}>
                       | {(client.discount_rate * 100).toFixed(client.discount_rate * 100 % 1 === 0 ? 0 : 1)}% off
                     </span>
                   )}
                   {client.discount_rate === 0 && (
-                    <span class="ml-2 text-neutral-400 hidden" data-client-discount-display={client.id}></span>
+                    <span class="ml-2 text-neutral-600 hidden" data-client-discount-display={client.id}></span>
                   )}
                 </p>
               </div>
@@ -73,21 +73,21 @@ const clients = await getAllClients();
                   data-client-badge={client.id}
                   class:list={[
                     'text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full',
-                    client.active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-neutral-800 text-neutral-300',
+                    client.active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-neutral-800 text-neutral-500',
                   ]}
                 >
                   {client.active ? 'Active' : 'Inactive'}
                 </span>
                 <button
                   data-edit-client={client.id}
-                  class="text-xs text-neutral-400 hover:text-amber-400 transition-colors duration-300 opacity-0 group-hover:opacity-100"
+                  class="text-xs text-neutral-600 hover:text-amber-400 transition-colors duration-300 opacity-0 group-hover:opacity-100"
                 >
                   Edit
                 </button>
                 <button
                   data-toggle-client={client.id}
                   data-client-active={client.active ? '1' : '0'}
-                  class="text-xs text-neutral-400 hover:text-amber-400 transition-colors duration-300 opacity-0 group-hover:opacity-100"
+                  class="text-xs text-neutral-600 hover:text-amber-400 transition-colors duration-300 opacity-0 group-hover:opacity-100"
                 >
                   {client.active ? 'Deactivate' : 'Activate'}
                 </button>
@@ -98,17 +98,17 @@ const clients = await getAllClients();
             <div data-edit-slot={client.id} class="hidden mt-4 pt-4 border-t border-white/5">
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Name</label>
+                  <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-1">Name</label>
                   <input type="text" data-edit-name={client.id} value={client.name}
                     class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
                 </div>
                 <div>
-                  <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Domain</label>
+                  <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-1">Domain</label>
                   <input type="text" data-edit-domain={client.id} value={client.domain || ''} placeholder="example.com"
                     class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
                 </div>
                 <div>
-                  <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Discount %</label>
+                  <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-1">Discount %</label>
                   <input type="number" step="0.01" min="0" max="100" data-edit-discount={client.id}
                     value={(client.discount_rate * 100).toString()}
                     placeholder="0"
@@ -121,7 +121,7 @@ const clients = await getAllClients();
                   Save
                 </button>
                 <button type="button" data-cancel-edit={client.id}
-                  class="text-xs text-neutral-300 hover:text-neutral-300 transition-colors">
+                  class="text-xs text-neutral-500 hover:text-neutral-300 transition-colors">
                   Cancel
                 </button>
                 <p data-edit-msg={client.id} class="text-[11px] hidden"></p>
@@ -133,7 +133,7 @@ const clients = await getAllClients();
     ) : (
       <div class="text-center py-16">
         <p class="font-serif text-xl text-neutral-100 mb-2">No clients yet</p>
-        <p class="text-sm text-neutral-300">Create your first client above to get started.</p>
+        <p class="text-sm text-neutral-500">Create your first client above to get started.</p>
       </div>
     )}
   </div>
@@ -167,7 +167,7 @@ const clients = await getAllClients();
           const data = await res.json();
           const badge = document.querySelector(`[data-client-badge="${clientId}"]`)!;
           badge.textContent = data.active ? 'Active' : 'Inactive';
-          badge.className = `text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${data.active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-neutral-800 text-neutral-300'}`;
+          badge.className = `text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${data.active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-neutral-800 text-neutral-500'}`;
           (btn as HTMLElement).textContent = data.active ? 'Deactivate' : 'Activate';
           (btn as HTMLElement).dataset.clientActive = data.active ? '1' : '0';
         }

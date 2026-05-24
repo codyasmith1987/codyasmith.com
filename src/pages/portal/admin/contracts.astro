@@ -50,23 +50,23 @@ const statusColors: Record<string, string> = {
     <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-10">
       <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-4">
         <p class="text-2xl font-semibold text-neutral-100">{draftContracts.length}</p>
-        <p class="text-[10px] font-mono text-neutral-400 uppercase tracking-wide mt-1">Draft</p>
+        <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-wide mt-1">Draft</p>
       </div>
       <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-4">
         <p class="text-2xl font-semibold text-emerald-400">{activeContracts.length}</p>
-        <p class="text-[10px] font-mono text-neutral-400 uppercase tracking-wide mt-1">Active</p>
+        <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-wide mt-1">Active</p>
       </div>
       <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-4">
         <p class="text-2xl font-semibold text-amber-400">{pendingApprovals.length}</p>
-        <p class="text-[10px] font-mono text-neutral-400 uppercase tracking-wide mt-1">Pending Approvals</p>
+        <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-wide mt-1">Pending Approvals</p>
       </div>
       <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-4">
         <p class="text-2xl font-semibold text-neutral-400">{draftInvoices.length}</p>
-        <p class="text-[10px] font-mono text-neutral-400 uppercase tracking-wide mt-1">Draft Invoices</p>
+        <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-wide mt-1">Draft Invoices</p>
       </div>
       <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-4">
         <p class="text-2xl font-semibold text-red-400">{overdueInvoices.length}</p>
-        <p class="text-[10px] font-mono text-neutral-400 uppercase tracking-wide mt-1">Overdue</p>
+        <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-wide mt-1">Overdue</p>
       </div>
     </div>
 
@@ -92,21 +92,21 @@ const statusColors: Record<string, string> = {
 
     <!-- Create form (hidden by default) -->
     <form id="create-contract-form" class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-8 hidden">
-      <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-5">New contract</p>
+      <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">New contract</p>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         <div>
-          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Client</label>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Client</label>
           <select id="cc-client" required class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
             <option value="">Select client...</option>
             {clients.map(c => <option value={c.id}>{c.name}</option>)}
           </select>
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Title</label>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Title</label>
           <input type="text" id="cc-title" required class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="ZKH Web Management" />
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Type</label>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Type</label>
           <select id="cc-type" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
             <option value="fixed">Fixed price</option>
             <option value="retainer">Retainer</option>
@@ -114,7 +114,7 @@ const statusColors: Record<string, string> = {
           </select>
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Billing cadence</label>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Billing cadence</label>
           <select id="cc-cadence" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
             <option value="">None</option>
             <option value="monthly">Monthly</option>
@@ -123,45 +123,45 @@ const statusColors: Record<string, string> = {
           </select>
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Billing day (1-28)</label>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Billing day (1-28)</label>
           <input type="number" id="cc-billing-day" min="1" max="28" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="9" />
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Recurring amount</label>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Recurring amount</label>
           <input type="number" id="cc-recurring" step="0.01" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="500.00" />
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Included hours</label>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Included hours</label>
           <input type="number" id="cc-hours" step="0.5" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="5" />
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Overage rate ($/hr)</label>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Overage rate ($/hr)</label>
           <input type="number" id="cc-overage" step="0.01" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="100.00" />
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Payment terms (days)</label>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Payment terms (days)</label>
           <input type="number" id="cc-terms" value="30" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Total value</label>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Total value</label>
           <input type="number" id="cc-value" step="0.01" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="5000.00" />
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Start date</label>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Start date</label>
           <input type="date" id="cc-start" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">End date</label>
+          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">End date</label>
           <input type="date" id="cc-end" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
         </div>
       </div>
       <div class="mt-5">
-        <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Description</label>
+        <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Description</label>
         <textarea id="cc-desc" rows="3" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" placeholder="Scope summary..."></textarea>
       </div>
       <div class="flex items-center gap-3 mt-6">
         <button type="submit" class="px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300">Create contract</button>
-        <button type="button" id="cancel-create" class="px-6 py-3 text-neutral-300 text-sm hover:text-neutral-300 transition-colors">Cancel</button>
+        <button type="button" id="cancel-create" class="px-6 py-3 text-neutral-500 text-sm hover:text-neutral-300 transition-colors">Cancel</button>
       </div>
     </form>
 
@@ -175,19 +175,19 @@ const statusColors: Record<string, string> = {
               <div class="flex items-start justify-between">
                 <div class="min-w-0 flex-1">
                   <p class="text-sm font-medium text-neutral-200 group-hover:text-amber-400 transition-colors">{contract.title}</p>
-                  <p class="text-xs text-neutral-400 mt-1">{client?.name || 'Unknown client'}</p>
-                  {contract.description && <p class="text-xs text-neutral-300 mt-2 line-clamp-1">{contract.description}</p>}
+                  <p class="text-xs text-neutral-600 mt-1">{client?.name || 'Unknown client'}</p>
+                  {contract.description && <p class="text-xs text-neutral-500 mt-2 line-clamp-1">{contract.description}</p>}
                 </div>
                 <div class="flex items-center gap-3 ml-4 shrink-0">
                   {contract.total_value != null && (
-                    <span class="text-xs font-mono text-neutral-300">${contract.total_value.toLocaleString()}</span>
+                    <span class="text-xs font-mono text-neutral-500">${contract.total_value.toLocaleString()}</span>
                   )}
                   <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[contract.status] || statusColors.draft}`}>
                     {contract.status}
                   </span>
                 </div>
               </div>
-              <div class="flex items-center gap-4 mt-3 text-[10px] text-neutral-400">
+              <div class="flex items-center gap-4 mt-3 text-[10px] text-neutral-700">
                 <span>{contract.type}</span>
                 {contract.start_date && <span>Start: {contract.start_date}</span>}
                 {contract.end_date && <span>End: {contract.end_date}</span>}
@@ -199,19 +199,19 @@ const statusColors: Record<string, string> = {
     ) : (
       <div class="text-center py-16">
         <p class="font-serif text-xl text-neutral-100 mb-2">No contracts yet</p>
-        <p class="text-sm text-neutral-300">Create your first contract to start tracking work.</p>
+        <p class="text-sm text-neutral-500">Create your first contract to start tracking work.</p>
       </div>
     )}
 
     <!-- Recent activity -->
     {recentActivity.entries.length > 0 && (
       <div class="mt-12">
-        <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-4">Recent activity</p>
+        <p class="text-[10px] font-mono text-neutral-700 tracking-[0.15em] uppercase mb-4">Recent activity</p>
         <div class="space-y-2">
           {recentActivity.entries.map(entry => (
             <div class="flex items-baseline gap-3 text-xs">
-              <span class="text-neutral-400 font-mono shrink-0">{new Date(entry.created_at).toLocaleDateString()}</span>
-              <span class="text-neutral-300">{entry.summary}</span>
+              <span class="text-neutral-700 font-mono shrink-0">{new Date(entry.created_at).toLocaleDateString()}</span>
+              <span class="text-neutral-500">{entry.summary}</span>
             </div>
           ))}
         </div>

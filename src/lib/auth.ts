@@ -359,6 +359,54 @@ export async function updateClientDomain(clientId: string, domain: string | null
   });
 }
 
+export async function updateClient(clientId: string, fields: {
+  name?: string;
+  domain?: string | null;
+  discount_rate?: number;
+}): Promise<void> {
+  const sets: string[] = [];
+  const args: any[] = [];
+  if (typeof fields.name === 'string') {
+    sets.push('name = ?');
+    args.push(fields.name);
+  }
+  if (fields.domain !== undefined) {
+    sets.push('domain = ?');
+    args.push(fields.domain);
+  }
+  if (typeof fields.discount_rate === 'number' && Number.isFinite(fields.discount_rate)) {
+    // Clamp to [0, 1]. A 100% discount is the upper bound; anything
+    // beyond is admin error and should not flip totals negative.
+    const clamped = Math.max(0, Math.min(1, fields.discount_rate));
+    sets.push('discount_rate = ?');
+    args.push(clamped);
+  }
+  if (sets.length === 0) return;
+  args.push(clientId);
+  await turso.execute({
+    sql: `UPDATE clients SET ${sets.join(', ')} WHERE id = ?`,
+    args,
+  });
+}
+
+export async function getClientById(clientId: string) {
+  const result = await turso.execute({
+    sql: 'SELECT id, name, slug, active, created_at, domain, discount_rate FROM clients WHERE id = ?',
+    args: [clientId],
+  });
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0] as any;
+  return {
+    id: row[0] as string,
+    name: row[1] as string,
+    slug: row[2] as string,
+    active: !!(row[3] as number),
+    created_at: row[4] as string,
+    domain: (row[5] ?? null) as string | null,
+    discount_rate: (row[6] ?? 0) as number,
+  };
+}
+
 export async function createUser(email: string, name: string, role: 'admin' | 'client', clientId: string | null): Promise<string> {
   const id = nanoid();
   await turso.execute({
@@ -369,7 +417,7 @@ export async function createUser(email: string, name: string, role: 'admin' | 'c
 }
 
 export async function getAllClients() {
-  const result = await turso.execute('SELECT id, name, slug, active, created_at, domain FROM clients ORDER BY name');
+  const result = await turso.execute('SELECT id, name, slug, active, created_at, domain, discount_rate FROM clients ORDER BY name');
   return result.rows.map(row => ({
     id: row[0] as string,
     name: row[1] as string,
@@ -377,6 +425,7 @@ export async function getAllClients() {
     active: row[3] as number,
     domain: (row[5] ?? null) as string | null,
     created_at: row[4] as string,
+    discount_rate: (row[6] ?? 0) as number,
   }));
 }
 

@@ -257,6 +257,10 @@ export interface ProposalConfig {
   prepared_for: string;
   prepared_on: string;
   title: string;
+  // Per-client discount, snapshotted at proposal-compose time so the
+  // buyer's pricing does not silently change if the client record
+  // is edited later. Decimal: 0.10 = 10% off.
+  discount_rate?: number;
   narrative: {
     intro: string;
     sections: NarrativeSection[];
@@ -313,6 +317,7 @@ export interface ComposeArgs {
     id: string;
     name: string;
     slug: string;
+    discount_rate?: number;
   };
   signers: Array<{ id: string; email: string; name: string }>;
   products: ProductId[];                 // which products are in scope

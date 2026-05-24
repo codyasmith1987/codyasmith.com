@@ -1244,6 +1244,21 @@ const todayISO = new Date().toISOString().slice(0, 10);
       researchBtn.disabled = false;
     });
 
+    // Track which research findings the admin has applied. Set is keyed
+    // by block label. Persists across re-renders of the research panel
+    // so the visual "applied" state survives strategy-panel updates and
+    // research-result refreshes.
+    const appliedFindings = new Set();
+
+    // Map a numeric/string confidence value to clearer admin-facing text.
+    // The AI uses high / medium / low which is opaque without context.
+    function evidenceLabel(conf) {
+      if (conf === 'high') return 'strong evidence';
+      if (conf === 'medium') return 'some evidence';
+      if (conf === 'low') return 'weak signal';
+      return conf || '';
+    }
+
     function renderResearchResults(r) {
       researchResults.innerHTML = '';
       researchResults.classList.remove('hidden');
@@ -1254,8 +1269,9 @@ const todayISO = new Date().toISOString().slice(0, 10);
           evidence: r.revenue_evidence,
           confidence: r.revenue_confidence,
           target_product_synth_id: 'marketing_consulting',
+          destination: 'Sets Marketing Consulting revenue band, routes its ecosystem',
           apply: () => {
-            if (r.estimated_revenue_band === 'unknown') return;
+            if (r.estimated_revenue_band === 'unknown') return false;
             const beforeInScope = state.products.includes('marketing-consulting');
             pitchProduct('marketing-consulting', { revenue_band: r.estimated_revenue_band });
             showResearchApplyMsg(
@@ -1265,6 +1281,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
               'ok'
             );
             renderEngagementStrategy(r);
+            return true;
           },
           disabled: r.estimated_revenue_band === 'unknown',
         },
@@ -1273,12 +1290,17 @@ const todayISO = new Date().toISOString().slice(0, 10);
           value: r.inferred_industry,
           evidence: r.industry_evidence,
           confidence: 'high',
+          destination: 'Sets narrative tone (industry)',
           apply: () => {
             const sel = document.getElementById('narr_industry');
             if (sel && r.inferred_industry !== 'unknown') {
               sel.value = r.inferred_industry;
+              sel.dispatchEvent(new Event('change', { bubbles: true }));
               state.narrative_variables.industry = r.inferred_industry;
+              showResearchApplyMsg(`Industry set to ${r.inferred_industry}.`, 'ok');
+              return true;
             }
+            return false;
           },
           disabled: r.inferred_industry === 'unknown',
         },
@@ -1287,12 +1309,17 @@ const todayISO = new Date().toISOString().slice(0, 10);
           value: r.inferred_urgency,
           evidence: r.urgency_evidence,
           confidence: 'high',
+          destination: 'Sets narrative cadence (urgency)',
           apply: () => {
             const sel = document.getElementById('narr_urgency');
             if (sel && r.inferred_urgency !== 'unknown') {
               sel.value = r.inferred_urgency;
+              sel.dispatchEvent(new Event('change', { bubbles: true }));
               state.narrative_variables.urgency = r.inferred_urgency;
+              showResearchApplyMsg(`Urgency set to ${r.inferred_urgency}.`, 'ok');
+              return true;
             }
+            return false;
           },
           disabled: r.inferred_urgency === 'unknown',
         },
@@ -1301,12 +1328,17 @@ const todayISO = new Date().toISOString().slice(0, 10);
           value: (r.inferred_focus || []).join(', ') || '(none)',
           evidence: '',
           confidence: 'medium',
+          destination: 'Sets narrative focus tags (brand / takeover / search / pre-sell)',
           apply: () => {
             const sel = document.getElementById('narr_focus');
-            if (sel && Array.isArray(r.inferred_focus)) {
+            if (sel && Array.isArray(r.inferred_focus) && r.inferred_focus.length > 0) {
               Array.from(sel.options).forEach(o => { o.selected = r.inferred_focus.includes(o.value); });
+              sel.dispatchEvent(new Event('change', { bubbles: true }));
               state.narrative_variables.focus = r.inferred_focus.length ? r.inferred_focus : undefined;
+              showResearchApplyMsg(`Focus tags set: ${r.inferred_focus.join(', ')}.`, 'ok');
+              return true;
             }
+            return false;
           },
           disabled: !r.inferred_focus || r.inferred_focus.length === 0,
         },
@@ -1315,11 +1347,10 @@ const todayISO = new Date().toISOString().slice(0, 10);
           value: r.detected_cms || 'unknown',
           evidence: r.cms_evidence || '',
           confidence: r.detected_cms && r.detected_cms !== 'unknown' ? 'high' : 'low',
-          // Informational. No Apply target (the CMS is not a
-          // wizard variable today). Future PR can route this into a
-          // Build product recommendation or migration framing.
+          destination: 'Informational only (no wizard mapping yet)',
           apply: () => {
-            showResearchApplyMsg(`CMS noted as ${r.detected_cms}. No variable to apply this to yet.`, 'ok');
+            showResearchApplyMsg(`CMS noted as ${r.detected_cms}. Informational, no wizard variable to update.`, 'ok');
+            return true;
           },
           disabled: !r.detected_cms || r.detected_cms === 'unknown',
         },
@@ -1329,8 +1360,9 @@ const todayISO = new Date().toISOString().slice(0, 10);
           evidence: r.page_count_source,
           confidence: 'medium',
           target_product_synth_id: 'web_management',
+          destination: 'Sets Web Management page count, routes its ecosystem',
           apply: () => {
-            if (r.estimated_page_count == null) return;
+            if (r.estimated_page_count == null) return false;
             const beforeInScope = state.products.includes('web-management');
             pitchProduct('web-management', seedsForProductFromResearch('web-management', r));
             showResearchApplyMsg(
@@ -1340,6 +1372,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
               'ok'
             );
             renderEngagementStrategy(r);
+            return true;
           },
           disabled: r.estimated_page_count == null,
         },
@@ -1348,36 +1381,45 @@ const todayISO = new Date().toISOString().slice(0, 10);
           value: (r.domains_found || []).map(d => `${d.domain} (${d.role_guess})`).join(', ') || '(none)',
           evidence: '',
           confidence: 'medium',
+          destination: 'Sets the client’s primary domain (if one is marked primary)',
           apply: () => {
-            // No direct field today; surface the count instead and
-            // let admin set the primary if it differs. v2 hook for
-            // multi-site Schedule A.
             const primary = (r.domains_found || []).find(d => d.role_guess === 'primary');
-            if (primary && primary.domain && primary.domain !== state.client_domain) {
-              if (confirm(`Set client domain to ${primary.domain}?`)) {
-                researchDomainInput.value = primary.domain;
-                researchDomainSave.click();
-              }
+            if (!primary || !primary.domain) {
+              showResearchApplyMsg('No primary domain in the result to apply.', 'error');
+              return false;
             }
+            if (primary.domain === state.client_domain) {
+              showResearchApplyMsg(`Primary domain already set to ${primary.domain}.`, 'ok');
+              return true;
+            }
+            if (confirm(`Set client domain to ${primary.domain}?`)) {
+              researchDomainInput.value = primary.domain;
+              researchDomainSave.click();
+              showResearchApplyMsg(`Primary domain set to ${primary.domain}.`, 'ok');
+              return true;
+            }
+            return false;
           },
           disabled: !r.domains_found || r.domains_found.length === 0,
         },
       ];
       for (const b of blocks) {
+        const isApplied = appliedFindings.has(b.label);
         const row = document.createElement('div');
-        row.className = 'p-3 bg-neutral-900/40 border border-white/5 rounded-md flex items-start justify-between gap-3';
+        // Applied row gets a left amber border accent + a subtle amber-tinted
+        // background to make the applied state unmistakable on first glance.
+        row.className = isApplied
+          ? 'p-3 bg-amber-500/5 border border-amber-500/30 border-l-4 border-l-amber-600 rounded-md flex items-start justify-between gap-3'
+          : 'p-3 bg-neutral-900/40 border border-white/5 rounded-md flex items-start justify-between gap-3';
         const meta = document.createElement('div');
         meta.className = 'flex-1 min-w-0';
-        // Confidence chip: solid pill matching portal active-nav pattern
-        // (bg-amber-500/10 border border-amber-500/40 text-amber-600).
-        // Saturated amber at full opacity gives sun radiance against
-        // the dark background; the border + bg block gives mountain weight.
-        const confPill = b.confidence
-          ? `<span class="text-[9px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-600">${escapeHtml(b.confidence)}</span>`
+        // Evidence-strength chip in plain language. "strong / some / weak"
+        // is admin-readable; raw high/medium/low needs translation.
+        const confText = evidenceLabel(b.confidence);
+        const confPill = confText
+          ? `<span class="text-[9px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded bg-neutral-900/60 border border-white/10 text-neutral-500">${escapeHtml(confText)}</span>`
           : '';
-        // Target-product pill: only on findings that drive product variables
-        // (Revenue band -> MC, Page count -> WM). Shows the admin which
-        // product this finding will steer, and whether AI recommends it.
+        // Target-product pill: only on findings that drive product variables.
         let targetPill = '';
         if (b.target_product_synth_id && r.recommended_product_mix && r.recommended_product_mix[b.target_product_synth_id]) {
           const slot = r.recommended_product_mix[b.target_product_synth_id];
@@ -1387,23 +1429,43 @@ const todayISO = new Date().toISOString().slice(0, 10);
             ? `<span class="text-[9px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-600">${escapeHtml(label)}: pitch</span>`
             : `<span class="text-[9px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded bg-neutral-900 border border-white/10 text-neutral-400">${escapeHtml(label)}: skip</span>`;
         }
+        const appliedBadge = isApplied
+          ? `<span class="text-[9px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/50 text-amber-600">✓ applied</span>`
+          : '';
         meta.innerHTML = `
           <div class="flex items-center gap-2 flex-wrap">
             <p class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase">${escapeHtml(b.label)}</p>
             ${confPill}
             ${targetPill}
+            ${appliedBadge}
           </div>
           <p class="text-sm text-neutral-100 mt-1.5">${escapeHtml(String(b.value))}</p>
           ${b.evidence ? `<p class="text-[11px] text-neutral-400 mt-1 leading-relaxed">${escapeHtml(b.evidence)}</p>` : ''}
+          ${b.destination ? `<p class="text-[11px] text-neutral-500 mt-2 leading-relaxed">↳ ${escapeHtml(b.destination)}</p>` : ''}
         `;
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'px-3 py-2 text-xs rounded-md transition-colors ' + (b.disabled
-          ? 'bg-neutral-900 border border-white/5 text-neutral-600 cursor-not-allowed'
-          : 'bg-amber-500/10 border border-amber-500/40 text-amber-600 hover:bg-amber-500/20');
-        btn.textContent = 'Apply';
-        btn.disabled = !!b.disabled;
-        btn.addEventListener('click', b.apply);
+        // Button state: disabled, applied (muted with checkmark), or
+        // ready-to-apply (primary amber action). Re-clicking an applied
+        // button re-applies (idempotent for re-runs).
+        if (b.disabled) {
+          btn.className = 'px-3 py-2 text-xs rounded-md bg-neutral-900 border border-white/5 text-neutral-600 cursor-not-allowed';
+          btn.textContent = 'Apply';
+          btn.disabled = true;
+        } else if (isApplied) {
+          btn.className = 'px-3 py-2 text-xs rounded-md bg-amber-500/15 border border-amber-500/40 text-amber-600 hover:bg-amber-500/25 transition-colors';
+          btn.innerHTML = '✓ Applied';
+        } else {
+          btn.className = 'px-3 py-2 text-xs rounded-md bg-amber-500 text-neutral-950 font-semibold hover:bg-amber-400 transition-colors';
+          btn.textContent = 'Apply';
+        }
+        btn.addEventListener('click', () => {
+          const ok = b.apply();
+          if (ok !== false) {
+            appliedFindings.add(b.label);
+            renderResearchResults(r); // re-render so the row shows applied state
+          }
+        });
         row.appendChild(meta);
         row.appendChild(btn);
         researchResults.appendChild(row);
@@ -1668,11 +1730,41 @@ const todayISO = new Date().toISOString().slice(0, 10);
       });
     });
 
+    // Floating toast container, created once and reused. Lives at the
+    // bottom-right of the viewport so the admin sees confirmation no
+    // matter where they're scrolled. The inline research-status text
+    // also still updates so the message lands in the panel for accessibility.
+    let researchToastEl = null;
+    let researchToastTimer = null;
+    function ensureResearchToast() {
+      if (researchToastEl) return researchToastEl;
+      researchToastEl = document.createElement('div');
+      researchToastEl.id = 'research-apply-toast';
+      researchToastEl.className = 'hidden fixed bottom-6 right-6 z-50 max-w-sm px-4 py-3 rounded-lg shadow-lg text-sm font-medium';
+      researchToastEl.setAttribute('role', 'status');
+      researchToastEl.setAttribute('aria-live', 'polite');
+      document.body.appendChild(researchToastEl);
+      return researchToastEl;
+    }
     function showResearchApplyMsg(text, type) {
+      // Inline (in-panel) status, for context near the research button.
       researchStatus.textContent = text;
-      researchStatus.className = 'mt-3 text-[11px] ' + (type === 'ok' ? 'text-emerald-400' : 'text-red-400');
+      researchStatus.className = 'mt-3 text-[11px] ' + (type === 'ok' ? 'text-emerald-700' : 'text-red-700');
       researchStatus.classList.remove('hidden');
-      setTimeout(() => researchStatus.classList.add('hidden'), 4000);
+      // Floating toast, viewport-anchored. Visible regardless of scroll.
+      const toast = ensureResearchToast();
+      toast.textContent = text;
+      toast.className = 'fixed bottom-6 right-6 z-50 max-w-sm px-4 py-3 rounded-lg shadow-lg text-sm font-medium ' + (
+        type === 'ok'
+          ? 'bg-emerald-500/15 border border-emerald-500/40 text-emerald-800'
+          : 'bg-red-500/15 border border-red-500/40 text-red-800'
+      );
+      toast.classList.remove('hidden');
+      if (researchToastTimer) clearTimeout(researchToastTimer);
+      researchToastTimer = setTimeout(() => {
+        researchStatus.classList.add('hidden');
+        toast.classList.add('hidden');
+      }, 4000);
     }
   </script>
 </Portal>

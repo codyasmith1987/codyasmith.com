@@ -10,7 +10,7 @@
 // applied per-field with a click. The prompt tells Gemini to be
 // honest about uncertainty (confidence flags, "unknown" fallback).
 
-export const PROMPT_VERSION = 'client-research-v7';
+export const PROMPT_VERSION = 'client-research-v8';
 
 export const SYSTEM_PROMPT = `You are a research assistant for Cody A Smith LLC, a Web Management and Marketing Consulting practice. You look at scraped web content about a prospective client and return a structured assessment used to seed a proposal builder.
 
@@ -76,9 +76,24 @@ Time-intensity signal logic:
 
 Sales-angles logic:
 
-  - Each angle is one short phrase that names the client's perceived problem in language THEY would recognize. Backed by a quote or paraphrase from the actual scraped content. Three to five entries.
-  - Lead with what the client cannot see about their own situation (see 04 Section 4 Sven dynamic). The reason they need Cody is exactly because their internal view is blind to the gap.
-  - Do NOT promise outcomes (no "to drive conversions," "to grow revenue"). Frame angles around what is observable or recommended, not what is promised.
+  - Each angle is what the PROSPECT TELLS THEIR CUSTOMERS about themselves: their value proposition, their pitch language, what they brag about, what they say differentiates them. Pulled VERBATIM or near-verbatim from their site's marketing copy.
+  - Three to five entries. Each backed by a quote or paraphrase from the actual scraped content (supporting_evidence field).
+  - These are used in the proposal opener to echo the prospect's language back to them. They feel understood. They are NOT internal problems; they are external pitches.
+  - Examples: "Quality is Priority #1" (from MCM's own copy), "Direct access to engineering without bureaucracy" (paraphrased from MCM's pitch), "Built faster than the industry average" (from their site).
+
+Internal-gaps logic:
+
+  - DISTINCT from sales_angles. Each internal_gap is one concrete thing BROKEN or UNDER-SERVED on the prospect's site or in their stated story. These are things the prospect has NOT said out loud but the scrape data reveals.
+  - Two to five entries. Each backed by an evidence quote or paraphrase from scraped content. No fabrication: if you can't cite specific scraped evidence, omit the gap.
+  - Severity ranks fixing urgency: HIGH = visible to every visitor and degrading the brand (broken styling, prominent 404, dead contact form, copyright year 3+ years old, key claim like "award-winning since 2018" with no proof on the site). MEDIUM = degrades search or experience for some visitors (missing meta descriptions, stale content, weak H1, buried CTA). LOW = a polish item only an expert notices (minor accessibility tags, redundant content, suboptimal image sizes).
+  - Product implication maps each gap to one of Cody's products:
+      web_management for ongoing-maintenance problems (broken links, stale plugins, outdated copyright, missing favicon, dead form, broken styling)
+      marketing_consulting for story/strategy problems (buried differentiator, weak positioning, audience confusion, conflicting messages, no calls to action that actually work)
+      build for structural problems requiring rebuild (deprecated stack, wrong shape entirely, no information architecture, site predates the current business model)
+      training for visible staff-knowledge problems (half-built sections from DIY attempts, broken edits that suggest someone tried and gave up)
+      none for visible-but-not-actionable problems (e.g., the business model itself, or things outside Cody's products)
+  - Examples for MCM if the data supported them: "Site copyright still shows 2022" (HIGH, web_management), "Magazine feature mentioned in About text but no link to it" (HIGH, marketing_consulting), "Three product lines share one contact form with no routing" (MEDIUM, marketing_consulting), "Site is on WPEngine with the wp-engine-powered subdomain still indexed" (LOW, web_management).
+  - The admin uses these to scope onboarding ("month one focus") and to map each gap to the product that fixes it.
 
 Risk-signals logic:
 
@@ -164,7 +179,28 @@ export function buildUserPrompt(input: UserPromptInput): string {
   "cody_time_intensity": { "level": "low" | "medium" | "high", "rationale": "one short sentence" },
   "sales_angles": [
     { "angle": "one short phrase in the client's own language", "supporting_evidence": "quote or paraphrase from scraped content" }
-    // 3 to 5 entries
+    // 3 to 5 entries. These are what the PROSPECT tells THEIR customers
+    // (their pitch to their audience). Used in the proposal opener to
+    // echo their language back. Pulled verbatim from scraped marketing copy.
+  ],
+  "internal_gaps": [
+    {
+      "gap": "one short phrase naming a concrete thing broken or under-served",
+      "evidence": "quote or paraphrase from scraped content",
+      "severity": "low" | "medium" | "high",
+      "product_implication": "web_management" | "marketing_consulting" | "build" | "training" | "none"
+    }
+    // 2 to 5 entries. Distinct from sales_angles. These are things the
+    // prospect has NOT said out loud but the data reveals: stale copyright
+    // year, missing analytics, broken styling, content not updated in years,
+    // CTA buried below the fold, magazine feature lost in the file directory.
+    // Each gap maps to a Cody product that could fix it:
+    //   web_management  -> ongoing-maintenance problems (broken links, stale plugins, outdated copyright)
+    //   marketing_consulting -> story/strategy problems (buried differentiators, weak positioning, audience confusion)
+    //   build           -> structural problems requiring rebuild (deprecated stack, wrong shape entirely)
+    //   training        -> visible staff-knowledge problems (broken DIY edits, abandoned half-built sections)
+    //   none            -> visible but not actionable by any product (e.g., business model issues)
+    // Severity ranks the URGENCY of fixing: high = visible to every visitor and degrading the brand; medium = degrades search or experience for some visitors; low = a polish item only an expert would notice.
   ],
   "risk_signals": [
     { "risk": "one short phrase", "severity": "low" | "medium" | "high" }
@@ -293,6 +329,19 @@ export const RESPONSE_SCHEMA: any = {
         required: ['angle', 'supporting_evidence'],
       },
     },
+    internal_gaps: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          gap: { type: 'STRING' },
+          evidence: { type: 'STRING' },
+          severity: { type: 'STRING' },
+          product_implication: { type: 'STRING' },
+        },
+        required: ['gap', 'evidence', 'severity'],
+      },
+    },
     risk_signals: {
       type: 'ARRAY',
       items: {
@@ -322,6 +371,7 @@ export const RESPONSE_SCHEMA: any = {
     'clv_horizon',
     'cody_time_intensity',
     'sales_angles',
+    'internal_gaps',
     'risk_signals',
     'notes',
   ],

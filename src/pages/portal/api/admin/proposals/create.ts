@@ -114,10 +114,30 @@ export const POST: APIRoute = async ({ locals, request }) => {
         : [];
       const clvSet = new Set(['long-term-stable', 'medium-term', 'churn-risk', 'unknown']);
       const intSet = new Set(['low', 'medium', 'high']);
+      const tierSet = new Set(['good', 'better', 'best']);
+      const synthProductSet = new Set(['web_management', 'marketing_consulting', 'build', 'training']);
+      // Per-prospect tier recommendation: validate the shape, drop
+      // unrecognized product ids and unrecognized tier values. Empty
+      // object stays null so downstream falls back to product defaults.
+      let recommended_tier_per_product: any = null;
+      if (es.recommended_tier_per_product && typeof es.recommended_tier_per_product === 'object') {
+        const cleaned: Record<string, any> = {};
+        for (const [k, v] of Object.entries(es.recommended_tier_per_product as Record<string, any>)) {
+          if (!synthProductSet.has(k)) continue;
+          if (!v || typeof v !== 'object') continue;
+          if (!tierSet.has(v.tier)) continue;
+          cleaned[k] = {
+            tier: v.tier,
+            rationale: typeof v.rationale === 'string' ? v.rationale : undefined,
+          };
+        }
+        if (Object.keys(cleaned).length > 0) recommended_tier_per_product = cleaned;
+      }
       engagement_strategy = {
         sales_angles,
         clv_horizon: typeof es.clv_horizon === 'string' && clvSet.has(es.clv_horizon) ? es.clv_horizon : null,
         cody_time_intensity: typeof es.cody_time_intensity === 'string' && intSet.has(es.cody_time_intensity) ? es.cody_time_intensity : null,
+        recommended_tier_per_product,
       };
     }
 

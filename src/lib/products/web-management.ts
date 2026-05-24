@@ -335,15 +335,23 @@ function buildTierOption(args: {
   tierId: TierId;
   ecosystem: Ecosystem;
   sites: number;
+  aiRecommendedTier?: TierId | null;
 }): ProposalStepOption {
   const tier = args.ecosystem.tiers[args.tierId];
   const monthly = computeMultiSiteMonthly(tier.monthly || 0, args.sites);
   const onb = computeMultiSiteOnboarding(tier.onb || 0, args.sites);
+  // AI's per-prospect tier recommendation overrides the static product
+  // default. When AI didn't recommend a tier (or its recommendation is
+  // not a valid tier id for this ecosystem), fall back to the tier
+  // definition's own `recommended` flag. Per finding 3.
+  const recommended = args.aiRecommendedTier
+    ? args.aiRecommendedTier === args.tierId
+    : !!tier.recommended;
   return {
     id: args.tierId,
     name: tier.name,
     tagline: tier.tagline,
-    recommended: !!tier.recommended,
+    recommended,
     price_label: formatMoney(monthly),
     price_suffix: '/ month',
     price_subline: args.sites > 1
@@ -435,15 +443,22 @@ export const webManagementProduct: ProductDefinition = {
     const eco = WM_ECOSYSTEMS[ctx.ecosystemId];
     if (!eco) return [];
     const sites = numberFromVar(ctx.variables.site_count, 1);
+    // AI's per-prospect tier recommendation, when present, overrides
+    // the static "Better is recommended for everyone" default. Per
+    // finding 3 in docs/audits/proposal-chain-audit-2026-05-24.md.
+    const aiTier = ctx.engagementStrategy?.recommended_tier_per_product?.web_management?.tier;
+    const aiRecommendedTier = aiTier === 'good' || aiTier === 'better' || aiTier === 'best'
+      ? aiTier as TierId
+      : null;
     const step: ProposalStep = {
       id: 'wm_tier',
       type: 'tier_picker',
       h2: 'Pick a Web Management level',
       prompt: `Good, Better, or Best for Web Management. The level sets how often I update your sites, how fast I respond when something breaks, and how many hands-on hours per month sit in your pool.`,
       options: [
-        buildTierOption({ tierId: 'good', ecosystem: eco, sites }),
-        buildTierOption({ tierId: 'better', ecosystem: eco, sites }),
-        buildTierOption({ tierId: 'best', ecosystem: eco, sites }),
+        buildTierOption({ tierId: 'good', ecosystem: eco, sites, aiRecommendedTier }),
+        buildTierOption({ tierId: 'better', ecosystem: eco, sites, aiRecommendedTier }),
+        buildTierOption({ tierId: 'best', ecosystem: eco, sites, aiRecommendedTier }),
       ],
     };
     return [step];

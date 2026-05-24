@@ -175,6 +175,13 @@ export interface NarrativeSnippetSet {
   rollout_scenarios?: Record<string, NarrativeScenario>; // keyed by scenario step value
   rollout_scenario_step?: string;        // which step drives scenario picking
   rollout_phases?: NarrativePhase[];     // single-scenario rollout (no scenario_step)
+  // Optional final paragraph appended to the "How this works in
+  // practice" closer that ties the engagement to the prospect's
+  // first stated value prop (sales_angles[0]). Per audit finding 4
+  // (docs/audits/proposal-chain-audit-2026-05-24.md). Snippet authors
+  // write the tie-back in Cody voice per-snippet; the composer
+  // appends it after the boundary-setting paragraphs.
+  closer_tie_back?: string;
 }
 
 // =========================================================================
@@ -238,10 +245,26 @@ export interface EngagementStrategySalesAngle {
   angle: string;
   supporting_evidence: string;
 }
+// AI's per-prospect tier recommendation per product. Keys are the
+// synthesis product ids (underscored: web_management,
+// marketing_consulting, build, training); each entry carries the
+// recommended tier + rationale string. When present, overrides the
+// product definition's default `recommended: true` on the matching
+// tier card so the prospect sees the AI-driven recommendation, not
+// the static default. Per finding 3 in
+// docs/audits/proposal-chain-audit-2026-05-24.md.
+export type EngagementStrategySynthProductId =
+  | 'web_management' | 'marketing_consulting' | 'build' | 'training';
+export interface EngagementStrategyTierRec {
+  tier: 'good' | 'better' | 'best';
+  rationale?: string;
+}
+
 export interface EngagementStrategy {
   sales_angles: EngagementStrategySalesAngle[];
   clv_horizon?: 'long-term-stable' | 'medium-term' | 'churn-risk' | 'unknown' | null;
   cody_time_intensity?: 'low' | 'medium' | 'high' | null;
+  recommended_tier_per_product?: Partial<Record<EngagementStrategySynthProductId, EngagementStrategyTierRec>>;
 }
 
 export interface ProductContext {

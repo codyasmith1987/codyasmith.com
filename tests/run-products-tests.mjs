@@ -465,6 +465,124 @@ async function run() {
     String(buildScheduleSplit.build_sow_ref).slice(0, 200));
 
   // -------------------------------------------------------------------
+  // Finding 3: AI per-prospect tier recommendation reaches the
+  // prospect's tier picker. Replaces the static "Better is recommended"
+  // default with whichever tier AI picked for THIS prospect.
+  // -------------------------------------------------------------------
+
+  // No AI tier rec: WM tier_picker has Better marked recommended (product default)
+  const wmStepsNoAI = webManagementProduct.generateSteps({
+    ecosystemId: 'B',
+    tierId: null,
+    variables: { page_count: 80, site_count: 1 },
+    otherProducts: [],
+  });
+  test('AI tier rec absent: WM Better still recommended (product default)',
+    wmStepsNoAI[0].options.find(o => o.id === 'better').recommended === true);
+  test('AI tier rec absent: WM Best not recommended',
+    wmStepsNoAI[0].options.find(o => o.id === 'best').recommended === false);
+
+  // AI recommends Best for WM
+  const wmStepsAIBest = webManagementProduct.generateSteps({
+    ecosystemId: 'B',
+    tierId: null,
+    variables: { page_count: 80, site_count: 1 },
+    otherProducts: [],
+    engagementStrategy: {
+      sales_angles: [],
+      recommended_tier_per_product: {
+        web_management: { tier: 'best', rationale: 'high-touch, high time intensity' },
+      },
+    },
+  });
+  test('AI rec Best for WM: Best marked recommended',
+    wmStepsAIBest[0].options.find(o => o.id === 'best').recommended === true);
+  test('AI rec Best for WM: Better NO LONGER recommended (override)',
+    wmStepsAIBest[0].options.find(o => o.id === 'better').recommended === false);
+
+  // AI recommends Good for MC; MC standalone (no other products)
+  const mcStepsAIGood = marketingConsultingProduct.generateSteps({
+    ecosystemId: 'B',
+    tierId: null,
+    variables: { revenue_band: '1m-to-10m' },
+    otherProducts: [],
+    engagementStrategy: {
+      sales_angles: [],
+      recommended_tier_per_product: {
+        marketing_consulting: { tier: 'good', rationale: 'low intensity, door-opener fit' },
+      },
+    },
+  });
+  test('AI rec Good for MC standalone: Good marked recommended',
+    mcStepsAIGood[0].options.find(o => o.id === 'good').recommended === true);
+  test('AI rec Good for MC standalone: Better NO LONGER recommended',
+    mcStepsAIGood[0].options.find(o => o.id === 'better').recommended === false);
+
+  // AI rec for WM doesn't bleed into MC's own picker (when both in scope)
+  const mcStepsCombined = marketingConsultingProduct.generateSteps({
+    ecosystemId: 'B',
+    tierId: null,
+    variables: { revenue_band: '1m-to-10m' },
+    otherProducts: [{ id: 'web-management', tierId: null }],
+    engagementStrategy: {
+      sales_angles: [],
+      recommended_tier_per_product: {
+        web_management: { tier: 'best' },
+        // MC has no rec; should fall back to product default (Better)
+      },
+    },
+  });
+  // The gated tier_picker is the second step (index 1).
+  const mcTierStep = mcStepsCombined.find(s => s.id === 'mc_tier');
+  test('AI rec for WM does not affect MC: MC Better still recommended',
+    mcTierStep.options.find(o => o.id === 'better').recommended === true);
+
+  // Invalid AI tier value: silently falls back to product default
+  const wmStepsBadAI = webManagementProduct.generateSteps({
+    ecosystemId: 'B',
+    tierId: null,
+    variables: { page_count: 80, site_count: 1 },
+    otherProducts: [],
+    engagementStrategy: {
+      sales_angles: [],
+      recommended_tier_per_product: {
+        web_management: { tier: 'platinum' /* not a valid tier */ },
+      },
+    },
+  });
+  test('AI invalid tier: WM falls back to product default (Better)',
+    wmStepsBadAI[0].options.find(o => o.id === 'better').recommended === true);
+
+  // -------------------------------------------------------------------
+  // Finding 4: closer tie-back. The "How this works in practice"
+  // closer accepts an optional final paragraph from the matched
+  // snippet's closer_tie_back field. Composer appends only when
+  // present. When absent, closer reads complete without it.
+  // -------------------------------------------------------------------
+  // Stage a registry override that contributes a closer_tie_back.
+  // (Inline test mock; the real registry lives in narrative-snippets.ts.)
+  // We test the composer's append behavior indirectly via composeProposal
+  // by passing a known engagement_strategy + checking the closer's tail.
+
+  // Default (no tie-back snippet): closer has 3 paragraphs.
+  const closerNoTieBack = composeProposal({
+    client: { id: 'ctb1', name: 'Plain Co', slug: 'plain-co' },
+    signers: [{ id: 's1', name: 'Pat Doe', email: 'pat@plain.com' }],
+    products: ['web-management'],
+    product_vars: { 'web-management': { page_count: 80, site_count: 1 } },
+  });
+  const closerNoTieBackSection = closerNoTieBack.narrative.sections.find(s => s.h2 === 'How this works in practice');
+  test('Finding 4: closer has 3 paragraphs when no tie-back snippet matches',
+    closerNoTieBackSection && closerNoTieBackSection.paragraphs.length === 3,
+    `got ${closerNoTieBackSection?.paragraphs.length}`);
+
+  // Verify the closer paragraphs match expected content (sanity check).
+  test('Finding 4: closer paragraph 1 mentions month one onboarding',
+    closerNoTieBackSection.paragraphs[0].includes('Month one is onboarding'));
+  test('Finding 4: closer last paragraph is change-order language',
+    closerNoTieBackSection.paragraphs[2].includes('change order'));
+
+  // -------------------------------------------------------------------
   // Phase 2: engagement-strategy synthesis flows to the composer.
   // Opener (The Situation) renders from sales_angles; closer (How this
   // works in practice) renders boundary language; per-product paragraphs

@@ -926,6 +926,11 @@ const todayISO = new Date().toISOString().slice(0, 10);
         sales_angles: Array.isArray(r.sales_angles) ? r.sales_angles : [],
         clv_horizon: r.clv_horizon && typeof r.clv_horizon === 'object' ? r.clv_horizon.signal : null,
         cody_time_intensity: r.cody_time_intensity && typeof r.cody_time_intensity === 'object' ? r.cody_time_intensity.level : null,
+        // AI's per-prospect tier recommendation; surfaces on the
+        // prospect's tier picker as the recommended card. Per finding 3.
+        recommended_tier_per_product: r.recommended_tier_per_product && typeof r.recommended_tier_per_product === 'object'
+          ? r.recommended_tier_per_product
+          : null,
       } : null;
 
       const payload = {

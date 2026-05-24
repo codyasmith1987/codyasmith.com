@@ -112,10 +112,15 @@ function formatLabel(format: string): string {
     <!-- Recent uploads -->
     {uploads.length > 0 && (
       <div>
-        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-4">Recent uploads</p>
-        <div class="space-y-2">
+        <div class="flex items-center justify-between mb-4">
+          <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase">Recent uploads</p>
+          <button type="button" id="clear-failed-btn" class="text-[11px] text-red-400/80 hover:text-red-300 transition-colors">
+            Clear failed (0-row) uploads
+          </button>
+        </div>
+        <div class="space-y-2" id="uploads-list">
           {uploads.map(u => (
-            <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 flex items-center justify-between hover:border-white/10 transition-all duration-300">
+            <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 flex items-center justify-between hover:border-white/10 transition-all duration-300" data-upload-row data-upload-id={u.id}>
               <div>
                 <p class="text-sm font-medium text-neutral-200">{u.original_name}</p>
                 <div class="flex items-center gap-3 mt-1">
@@ -129,7 +134,12 @@ function formatLabel(format: string): string {
                   </span>
                 </div>
               </div>
-              <span class="text-xs font-mono text-neutral-700">{u.row_count} rows</span>
+              <div class="flex items-center gap-4">
+                <span class="text-xs font-mono text-neutral-700">{u.row_count} rows</span>
+                <button type="button" data-delete-upload={u.id} class="text-[11px] text-neutral-600 hover:text-red-400 transition-colors">
+                  Delete
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -161,68 +171,162 @@ function formatLabel(format: string): string {
       progress.classList.remove('hidden');
     });
 
+    // Defensive HTML escape for any value that flows into innerHTML
+    // (filenames, parser error strings, format names).
+    const escAll = (s: any) => String(s ?? '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+    function renderResultCard(filename: string, data: any, idx: number) {
+      const card = document.createElement('div');
+      card.className = `csv-result bg-neutral-900/30 border rounded-xl p-5 ${data.error ? 'border-red-500/15' : 'border-emerald-500/15'}`;
+      card.style.animationDelay = `${idx * 0.05}s`;
+      card.innerHTML = `
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-neutral-200">${escAll(filename)}</p>
+            <p class="text-xs text-neutral-600 mt-1">
+              ${data.format && data.format !== 'unknown' ? `Detected: <span class="text-emerald-400">${escAll(String(data.format).replace(/_/g, ' '))}</span>` : ''}
+              ${data.row_count ? `, ${escAll(data.row_count)} rows processed` : ''}
+            </p>
+          </div>
+          ${data.error ? `<span class="text-xs text-red-400">${escAll(data.error)}</span>` : '<span class="text-[10px] font-mono text-emerald-400 tracking-wide uppercase">Done</span>'}
+        </div>
+      `;
+      resultsDiv.appendChild(card);
+    }
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       btn.disabled = true;
       resultsDiv.innerHTML = '';
       resultsDiv.classList.remove('hidden');
 
-      const files = filesInput.files!;
+      const files = Array.from(filesInput.files || []);
       const clientId = (document.getElementById('csv-client') as HTMLSelectElement).value;
       const month = (document.getElementById('csv-month') as HTMLInputElement).value;
 
       progress.classList.remove('hidden');
 
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        progress.textContent = `Processing ${i + 1}/${files.length}: ${file.name}...`;
+      // Batch into groups of 10 files per request. Each request
+      // carries multiple files; the server iterates internally. Two
+      // benefits: avoids the burst pattern Cloudflare sees as
+      // brute-force, and reduces total round-trips. The legacy
+      // single-file path on the endpoint still works for direct API
+      // callers.
+      const BATCH_SIZE = 10;
+      const batches: File[][] = [];
+      for (let i = 0; i < files.length; i += BATCH_SIZE) {
+        batches.push(files.slice(i, i + BATCH_SIZE));
+      }
+
+      let cardIdx = 0;
+      for (let bi = 0; bi < batches.length; bi++) {
+        const batch = batches[bi];
+        progress.textContent = `Processing batch ${bi + 1}/${batches.length} (${batch.length} file(s))...`;
 
         const formData = new FormData();
-        formData.append('file', file);
         formData.append('client_id', clientId);
         formData.append('month', month);
+        for (const f of batch) formData.append('files', f);
 
+        // Two-stage error parsing: surface real HTTP status + body
+        // snippet when the body is HTML (CF block, 5xx error page)
+        // instead of collapsing to a generic JSON-parse error.
+        let res;
         try {
-          const res = await fetch('/portal/api/csv/upload', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken }, body: formData });
-          const data = await res.json();
-
-          const card = document.createElement('div');
-          card.className = `csv-result bg-neutral-900/30 border rounded-xl p-5 ${data.error ? 'border-red-500/15' : 'border-emerald-500/15'}`;
-          card.style.animationDelay = `${i * 0.1}s`;
-          // Defensively escape every interpolation. data.error in particular
-          // can carry user-controlled bytes from CSV parser exceptions, and
-          // data.format / row_count / file.name pass through innerHTML.
-          // See security-audit-2026-05-12 round 4 SEC4-008.
-          const esc = (s: any) => String(s ?? '')
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-          card.innerHTML = `
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-sm font-medium text-neutral-200">${esc(file.name)}</p>
-                <p class="text-xs text-neutral-600 mt-1">
-                  ${data.format !== 'unknown' ? `Detected: <span class="text-emerald-400">${esc(String(data.format).replace(/_/g, ' '))}</span>` : ''}
-                  ${data.row_count ? `, ${esc(data.row_count)} rows processed` : ''}
-                </p>
-              </div>
-              ${data.error ? `<span class="text-xs text-red-400">${esc(data.error)}</span>` : '<span class="text-[10px] font-mono text-emerald-400 tracking-wide uppercase">Done</span>'}
-            </div>
-          `;
-          resultsDiv.appendChild(card);
+          res = await fetch('/portal/api/csv/upload', {
+            method: 'POST',
+            headers: { 'X-CSRF-Token': csrfToken },
+            body: formData,
+          });
         } catch (err: any) {
-          const card = document.createElement('div');
-          card.className = 'csv-result bg-neutral-900/30 border border-red-500/15 rounded-xl p-5';
-          card.style.animationDelay = `${i * 0.1}s`;
-          const escErr = (s: any) => String(s ?? '')
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-          card.innerHTML = `<p class="text-sm text-red-400">${escErr(file.name)}: ${escErr(err.message)}</p>`;
-          resultsDiv.appendChild(card);
+          for (const f of batch) {
+            renderResultCard(f.name, { error: `Network error: ${err?.message || 'fetch failed'}` }, cardIdx++);
+          }
+          continue;
+        }
+        const rawText = await res.text();
+        let payload: any = null;
+        try { payload = rawText ? JSON.parse(rawText) : null; } catch { /* leave null */ }
+
+        if (!res.ok || !payload) {
+          const errMsg = (payload && payload.error)
+            ? payload.error
+            : `HTTP ${res.status}${rawText ? ': ' + rawText.slice(0, 140) : ''}`;
+          for (const f of batch) {
+            renderResultCard(f.name, { error: errMsg }, cardIdx++);
+          }
+          continue;
+        }
+
+        // Server may return either { results: [...] } (batch) or the
+        // legacy single-result shape. Normalize.
+        const results = Array.isArray(payload.results) ? payload.results
+          : [{ filename: batch[0]?.name, ...payload }];
+
+        for (const r of results) {
+          renderResultCard(r.filename || '(file)', r, cardIdx++);
         }
       }
 
-      progress.textContent = `Done. ${files.length} file(s) processed.`;
+      progress.textContent = `Done. ${files.length} file(s) processed across ${batches.length} batch(es).`;
       btn.disabled = false;
+    });
+
+    // ---- Per-row delete + bulk clear-failed ----
+    async function deleteUpload(uploadId: string, row: HTMLElement) {
+      if (!confirm('Delete this upload and any data tied to it?')) return;
+      try {
+        const res = await fetch('/portal/api/admin/csv/delete-upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ upload_id: uploadId }),
+        });
+        const text = await res.text();
+        let data: any = null;
+        try { data = text ? JSON.parse(text) : null; } catch {}
+        if (res.ok && data && data.ok) {
+          row.remove();
+        } else {
+          const msg = (data && data.error) ? data.error : `HTTP ${res.status}${text ? ': ' + text.slice(0, 140) : ''}`;
+          alert(`Delete failed: ${msg}`);
+        }
+      } catch (err: any) {
+        alert(`Delete failed: ${err?.message || 'network error'}`);
+      }
+    }
+
+    document.querySelectorAll('[data-delete-upload]').forEach(btn => {
+      btn.addEventListener('click', (ev) => {
+        const target = ev.currentTarget as HTMLElement;
+        const uploadId = target.getAttribute('data-delete-upload') || '';
+        const row = target.closest('[data-upload-row]') as HTMLElement | null;
+        if (uploadId && row) deleteUpload(uploadId, row);
+      });
+    });
+
+    document.getElementById('clear-failed-btn')?.addEventListener('click', async () => {
+      if (!confirm('Clear ALL failed (0-row or error) uploads across every client? This is not reversible.')) return;
+      try {
+        const res = await fetch('/portal/api/admin/csv/clear-failed', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({}),
+        });
+        const text = await res.text();
+        let data: any = null;
+        try { data = text ? JSON.parse(text) : null; } catch {}
+        if (res.ok && data && data.ok) {
+          alert(`Cleared ${data.deleted} failed upload(s). Reloading...`);
+          window.location.reload();
+        } else {
+          const msg = (data && data.error) ? data.error : `HTTP ${res.status}${text ? ': ' + text.slice(0, 140) : ''}`;
+          alert(`Clear failed: ${msg}`);
+        }
+      } catch (err: any) {
+        alert(`Clear failed: ${err?.message || 'network error'}`);
+      }
     });
 
     // Manual metric form

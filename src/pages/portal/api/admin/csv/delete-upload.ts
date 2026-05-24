@@ -11,20 +11,12 @@ import type { APIRoute } from 'astro';
 import turso from '../../../../../lib/turso';
 import { logger } from '../../../../../lib/logger';
 import { logActivity } from '../../../../../lib/activity';
+import { CSV_CHILD_TABLES as CHILD_TABLES } from '../../../../../lib/csv-child-tables';
 
 export const prerender = false;
 
 const json = (data: any, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
-
-const CHILD_TABLES = [
-  'metrics',
-  'site_issues',
-  'keyword_rankings',
-  'crawl_urls',
-  'redirect_chains',
-  'image_urls',
-];
 
 export const POST: APIRoute = async ({ locals, request }) => {
   if (locals.user?.role !== 'admin') return json({ error: 'Forbidden' }, 403);

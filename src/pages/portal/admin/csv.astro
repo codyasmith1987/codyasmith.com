@@ -114,9 +114,14 @@ function formatLabel(format: string): string {
       <div>
         <div class="flex items-center justify-between mb-4">
           <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase">Recent uploads</p>
-          <button type="button" id="clear-failed-btn" class="text-[11px] text-red-400/80 hover:text-red-300 transition-colors">
-            Clear failed (0-row) uploads
-          </button>
+          <div class="flex items-center gap-4">
+            <button type="button" id="clear-failed-btn" class="text-[11px] text-red-400/80 hover:text-red-300 transition-colors">
+              Clear failed (0-row) uploads
+            </button>
+            <button type="button" id="wipe-client-btn" class="text-[11px] text-red-400/80 hover:text-red-300 transition-colors">
+              Wipe ALL uploads for picked client
+            </button>
+          </div>
         </div>
         <div class="space-y-2" id="uploads-list">
           {uploads.map(u => (
@@ -304,6 +309,39 @@ function formatLabel(format: string): string {
         const row = target.closest('[data-upload-row]') as HTMLElement | null;
         if (uploadId && row) deleteUpload(uploadId, row);
       });
+    });
+
+    document.getElementById('wipe-client-btn')?.addEventListener('click', async () => {
+      const clientSelect = document.getElementById('csv-client') as HTMLSelectElement;
+      const clientId = clientSelect?.value;
+      const clientLabel = clientSelect?.selectedOptions[0]?.text || '(picked client)';
+      if (!clientId) {
+        alert('Pick a client at the top first.');
+        return;
+      }
+      const typed = prompt(
+        `Type WIPE to delete EVERY upload + all derived data (metrics, crawl_urls, site_issues, etc.) for "${clientLabel}". This is not reversible.`
+      );
+      if (typed !== 'WIPE') return;
+      try {
+        const res = await fetch('/portal/api/admin/csv/clear-all-for-client', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ client_id: clientId, confirm: 'WIPE' }),
+        });
+        const text = await res.text();
+        let data: any = null;
+        try { data = text ? JSON.parse(text) : null; } catch {}
+        if (res.ok && data && data.ok) {
+          alert(`Wiped ${data.uploads_removed} upload(s) and ${data.child_rows_removed} child row(s) for ${clientLabel}. Reloading...`);
+          window.location.reload();
+        } else {
+          const msg = (data && data.error) ? data.error : `HTTP ${res.status}${text ? ': ' + text.slice(0, 140) : ''}`;
+          alert(`Wipe failed: ${msg}`);
+        }
+      } catch (err: any) {
+        alert(`Wipe failed: ${err?.message || 'network error'}`);
+      }
     });
 
     document.getElementById('clear-failed-btn')?.addEventListener('click', async () => {

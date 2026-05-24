@@ -37,3 +37,6 @@ tmp-build.db
 
 # Temporary screencaps for visual debugging
 .tmp-screencaps/
+
+# One-shot docx editing scripts
+.tmp-docx-scripts/

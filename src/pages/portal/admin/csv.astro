@@ -240,21 +240,30 @@ function formatLabel(format: string): string {
       progress.classList.remove('hidden');
 
       // Batch into small groups per request. Smaller batches keep
-      // each request fast (server timeout headroom), keep peak
-      // memory low while parsing 10MB-max files, and keep the
+      // each request fast (server timeout headroom — the GSC/GA4
+      // parsers are bulk-insert now but a slow Turso writer or a
+      // 500-row CSV can still chew through the 100s Cloudflare edge
+      // timeout if too many are bundled together). Also keeps peak
+      // memory low while parsing 10MB-max files, and keeps the
       // multipart body well under DO/CF size limits. The legacy
       // single-file path on the endpoint still works for direct
       // API callers.
-      const BATCH_SIZE = 3;
+      const BATCH_SIZE = 2;
       const batches: File[][] = [];
       for (let i = 0; i < files.length; i += BATCH_SIZE) {
         batches.push(files.slice(i, i + BATCH_SIZE));
       }
 
+      const totalFiles = files.length;
+      let completedFiles = 0;
       let cardIdx = 0;
       for (let bi = 0; bi < batches.length; bi++) {
         const batch = batches[bi];
-        progress.textContent = `Processing batch ${bi + 1}/${batches.length} (${batch.length} file(s))...`;
+        // Show which files are in flight right now so the user can
+        // tell something is happening rather than seeing a generic
+        // "batch N of M" tick by.
+        const namesLine = batch.map(f => f.name).join(', ');
+        progress.textContent = `Uploading (${completedFiles}/${totalFiles}): ${namesLine}`;
 
         const formData = new FormData();
         formData.append('client_id', clientId);
@@ -298,6 +307,13 @@ function formatLabel(format: string): string {
 
         for (const r of results) {
           renderResultCard(r.filename || '(file)', r, cardIdx++);
+        }
+        completedFiles += batch.length;
+        // Refresh the progress line so the visible "X/N" actually
+        // moves between batches — otherwise the only signal was new
+        // result cards appearing, easy to miss while scrolling.
+        if (bi < batches.length - 1) {
+          progress.textContent = `Uploaded ${completedFiles}/${totalFiles}, continuing...`;
         }
       }
 

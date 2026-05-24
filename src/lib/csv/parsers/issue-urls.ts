@@ -189,6 +189,14 @@ export function issueNameForFilename(filename: string): string | null {
   return ISSUE_CSV_FILENAME_MAP[normalized] || null;
 }
 
+// Parallel-insert batch size. Tuned to match the rest of the
+// ingestion pipeline (GSC, GA4, crawl_internal); 50 keeps Turso
+// responsive without throttling. The previous row-by-row loop
+// timed out on files with 400+ URLs (e.g.,
+// security_missing_contentsecuritypolicy_header.csv on a typical
+// SF crawl).
+const INSERT_BATCH = 50;
+
 export async function parse(
   raw: string,
   clientId: string,
@@ -200,7 +208,6 @@ export async function parse(
   if (!issueName) return 0;
 
   const result = Papa.parse(raw, { header: true, skipEmptyLines: true });
-  let count = 0;
 
   // Wipe any previous rows for this (client, month, issue) so re-uploads
   // do not double-insert. The same upload can supply many per-issue
@@ -211,6 +218,8 @@ export async function parse(
     args: [clientId, month, issueName],
   });
 
+  // Collect args first, then batch-insert in parallel chunks.
+  const inserts: any[][] = [];
   for (const row of result.data as any[]) {
     const url = (row['Address'] || row['URL'] || row['url'])?.toString().trim();
     if (!url) continue;
@@ -224,21 +233,19 @@ export async function parse(
       extras[k] = v;
     }
 
-    await turso.execute({
-      sql: `INSERT INTO site_issue_urls (id, client_id, csv_upload_id, month, issue_name, url, extras)
-            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      args: [
-        nanoid(),
-        clientId,
-        uploadId,
-        month,
-        issueName,
-        url,
-        Object.keys(extras).length > 0 ? JSON.stringify(extras) : null,
-      ],
-    });
-    count++;
+    inserts.push([
+      nanoid(), clientId, uploadId, month, issueName, url,
+      Object.keys(extras).length > 0 ? JSON.stringify(extras) : null,
+    ]);
   }
 
-  return count;
+  const sql = `INSERT INTO site_issue_urls
+                 (id, client_id, csv_upload_id, month, issue_name, url, extras)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`;
+  for (let i = 0; i < inserts.length; i += INSERT_BATCH) {
+    const chunk = inserts.slice(i, i + INSERT_BATCH);
+    await Promise.all(chunk.map(args => turso.execute({ sql, args })));
+  }
+
+  return inserts.length;
 }

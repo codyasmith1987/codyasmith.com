@@ -38,6 +38,20 @@ interface Block {
   rows: string[][];
 }
 
+// Batch size for parallel INSERTs. Tuned to keep Turso responsive
+// without blowing the per-file ingest budget on a Cloudflare-fronted
+// POST (100s edge timeout). The pre-batch implementation timed out
+// at ~300 row-by-row INSERTs; 50 in parallel chunks finishes in
+// well under 10 seconds for 1000+ rows.
+const INSERT_BATCH = 50;
+
+async function bulkInsert(sql: string, allArgs: any[][]) {
+  for (let i = 0; i < allArgs.length; i += INSERT_BATCH) {
+    const chunk = allArgs.slice(i, i + INSERT_BATCH);
+    await Promise.all(chunk.map(args => turso.execute({ sql, args })));
+  }
+}
+
 // AI referral source patterns — used by the dashboard endpoint, kept
 // here so the regex stays next to the data it's derived from.
 export const AI_REFERRAL_PATTERNS = [
@@ -159,7 +173,9 @@ export async function parseReportsSnapshot(
   uploadId: string,
 ): Promise<number> {
   const blocks = splitIntoBlocks(raw);
-  let rowCount = 0;
+  const toplineInserts: any[][] = [];
+  const sourceMediumInserts: any[][] = [];
+  const campaignInserts: any[][] = [];
 
   for (const block of blocks) {
     const h = block.headers.map(s => s.toLowerCase());
@@ -171,19 +187,12 @@ export async function parseReportsSnapshot(
       const iAvgTime = block.headers.findIndex(s => s.toLowerCase().startsWith('average engagement time per active user'));
       const iSessions = headerIndex(block.headers, 'Sessions');
       for (const row of block.rows) {
-        await turso.execute({
-          sql: `INSERT INTO ga4_topline
-                  (id, client_id, csv_upload_id, month, start_date, end_date,
-                   active_users, new_users, sessions, avg_engagement_time_per_active_user)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          args: [
-            nanoid(), clientId, uploadId, month,
-            block.startDate, block.endDate,
-            intCell(row, iActive), intCell(row, iNew), intCell(row, iSessions),
-            floatCell(row, iAvgTime),
-          ],
-        });
-        rowCount++;
+        toplineInserts.push([
+          nanoid(), clientId, uploadId, month,
+          block.startDate, block.endDate,
+          intCell(row, iActive), intCell(row, iNew), intCell(row, iSessions),
+          floatCell(row, iAvgTime),
+        ]);
       }
       continue;
     }
@@ -197,17 +206,10 @@ export async function parseReportsSnapshot(
       for (const row of block.rows) {
         const sm = textCell(row, iSm);
         if (!sm) continue;
-        await turso.execute({
-          sql: `INSERT INTO ga4_source_medium
-                  (id, client_id, csv_upload_id, month, kind, source_medium,
-                   sessions, key_events, total_revenue)
-                VALUES (?, ?, ?, ?, 'session', ?, ?, ?, ?)`,
-          args: [
-            nanoid(), clientId, uploadId, month,
-            sm, intCell(row, iSessions), intCell(row, iKeyEvents), floatCell(row, iRev),
-          ],
-        });
-        rowCount++;
+        sourceMediumInserts.push([
+          nanoid(), clientId, uploadId, month, 'session', sm,
+          intCell(row, iSessions), null, intCell(row, iKeyEvents), floatCell(row, iRev),
+        ]);
       }
       continue;
     }
@@ -219,13 +221,10 @@ export async function parseReportsSnapshot(
       for (const row of block.rows) {
         const sm = textCell(row, iSm);
         if (!sm) continue;
-        await turso.execute({
-          sql: `INSERT INTO ga4_source_medium
-                  (id, client_id, csv_upload_id, month, kind, source_medium, active_users)
-                VALUES (?, ?, ?, ?, 'first_user', ?, ?)`,
-          args: [nanoid(), clientId, uploadId, month, sm, intCell(row, iActive)],
-        });
-        rowCount++;
+        sourceMediumInserts.push([
+          nanoid(), clientId, uploadId, month, 'first_user', sm,
+          null, intCell(row, iActive), null, null,
+        ]);
       }
       continue;
     }
@@ -237,13 +236,9 @@ export async function parseReportsSnapshot(
       for (const row of block.rows) {
         const camp = textCell(row, iCamp);
         if (!camp) continue;
-        await turso.execute({
-          sql: `INSERT INTO ga4_campaigns
-                  (id, client_id, csv_upload_id, month, campaign_name, sessions)
-                VALUES (?, ?, ?, ?, ?, ?)`,
-          args: [nanoid(), clientId, uploadId, month, camp, intCell(row, iSessions)],
-        });
-        rowCount++;
+        campaignInserts.push([
+          nanoid(), clientId, uploadId, month, camp, intCell(row, iSessions),
+        ]);
       }
       continue;
     }
@@ -252,7 +247,30 @@ export async function parseReportsSnapshot(
     // avoid duplicating block 2's rows with less data.
   }
 
-  return rowCount;
+  // Three different target tables this time, but each batch is small
+  // enough that running them sequentially is fine.
+  await bulkInsert(
+    `INSERT INTO ga4_topline
+       (id, client_id, csv_upload_id, month, start_date, end_date,
+        active_users, new_users, sessions, avg_engagement_time_per_active_user)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    toplineInserts,
+  );
+  await bulkInsert(
+    `INSERT INTO ga4_source_medium
+       (id, client_id, csv_upload_id, month, kind, source_medium,
+        sessions, active_users, key_events, total_revenue)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sourceMediumInserts,
+  );
+  await bulkInsert(
+    `INSERT INTO ga4_campaigns
+       (id, client_id, csv_upload_id, month, campaign_name, sessions)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    campaignInserts,
+  );
+
+  return toplineInserts.length + sourceMediumInserts.length + campaignInserts.length;
 }
 
 // --------- Traffic acquisition ---------
@@ -267,7 +285,7 @@ export async function parseTrafficAcquisition(
   uploadId: string,
 ): Promise<number> {
   const blocks = splitIntoBlocks(raw);
-  let rowCount = 0;
+  const inserts: any[][] = [];
   for (const block of blocks) {
     if (block.headers.length < 2) continue;
     const iChannel = 0;
@@ -284,25 +302,25 @@ export async function parseTrafficAcquisition(
     for (const row of block.rows) {
       const channel = textCell(row, iChannel);
       if (!channel) continue;
-      await turso.execute({
-        sql: `INSERT INTO ga4_channels
-                (id, client_id, csv_upload_id, month, channel,
-                 sessions, engaged_sessions, engagement_rate,
-                 avg_engagement_time_per_session, events_per_session,
-                 event_count, key_events, session_key_event_rate, total_revenue)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [
-          nanoid(), clientId, uploadId, month, channel,
-          intCell(row, iSessions), intCell(row, iEngaged), floatCell(row, iEngRate),
-          floatCell(row, iAvgTime), floatCell(row, iEventsPerSession),
-          intCell(row, iEventCount), intCell(row, iKeyEvents),
-          floatCell(row, iKeyEventRate), floatCell(row, iRev),
-        ],
-      });
-      rowCount++;
+      inserts.push([
+        nanoid(), clientId, uploadId, month, channel,
+        intCell(row, iSessions), intCell(row, iEngaged), floatCell(row, iEngRate),
+        floatCell(row, iAvgTime), floatCell(row, iEventsPerSession),
+        intCell(row, iEventCount), intCell(row, iKeyEvents),
+        floatCell(row, iKeyEventRate), floatCell(row, iRev),
+      ]);
     }
   }
-  return rowCount;
+  await bulkInsert(
+    `INSERT INTO ga4_channels
+       (id, client_id, csv_upload_id, month, channel,
+        sessions, engaged_sessions, engagement_rate,
+        avg_engagement_time_per_session, events_per_session,
+        event_count, key_events, session_key_event_rate, total_revenue)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    inserts,
+  );
+  return inserts.length;
 }
 
 // --------- Pages and screens (or Landing page) ---------
@@ -318,7 +336,7 @@ export async function parsePages(
   uploadId: string,
 ): Promise<number> {
   const blocks = splitIntoBlocks(raw);
-  let rowCount = 0;
+  const inserts: any[][] = [];
   for (const block of blocks) {
     if (block.headers.length < 2) continue;
     const iPath = 0;
@@ -333,24 +351,24 @@ export async function parsePages(
     for (const row of block.rows) {
       const path = textCell(row, iPath);
       if (!path) continue;
-      await turso.execute({
-        sql: `INSERT INTO ga4_pages
-                (id, client_id, csv_upload_id, month, page_path,
-                 views, active_users, views_per_active_user,
-                 avg_engagement_time_per_active_user, event_count,
-                 key_events, total_revenue)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [
-          nanoid(), clientId, uploadId, month, path,
-          intCell(row, iViews), intCell(row, iActive), floatCell(row, iViewsPer),
-          floatCell(row, iAvgTime), intCell(row, iEventCount),
-          intCell(row, iKeyEvents), floatCell(row, iRev),
-        ],
-      });
-      rowCount++;
+      inserts.push([
+        nanoid(), clientId, uploadId, month, path,
+        intCell(row, iViews), intCell(row, iActive), floatCell(row, iViewsPer),
+        floatCell(row, iAvgTime), intCell(row, iEventCount),
+        intCell(row, iKeyEvents), floatCell(row, iRev),
+      ]);
     }
   }
-  return rowCount;
+  await bulkInsert(
+    `INSERT INTO ga4_pages
+       (id, client_id, csv_upload_id, month, page_path,
+        views, active_users, views_per_active_user,
+        avg_engagement_time_per_active_user, event_count,
+        key_events, total_revenue)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    inserts,
+  );
+  return inserts.length;
 }
 
 // --------- Tech overview ---------
@@ -368,7 +386,7 @@ export async function parseTechOverview(
   uploadId: string,
 ): Promise<number> {
   const blocks = splitIntoBlocks(raw);
-  let rowCount = 0;
+  const inserts: any[][] = [];
   for (const block of blocks) {
     if (block.headers.length < 2) continue;
     const firstCol = (block.headers[0] || '').toLowerCase();
@@ -385,16 +403,16 @@ export async function parseTechOverview(
       // Platform column comes through as ["Web"] (array literal in
       // string form). Normalize for display.
       const cleanLabel = label.replace(/^\["?/, '').replace(/"?\]$/, '');
-      await turso.execute({
-        sql: `INSERT INTO ga4_tech
-                (id, client_id, csv_upload_id, month, kind, label, active_users)
-              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        args: [nanoid(), clientId, uploadId, month, kind, cleanLabel, intCell(row, iActive)],
-      });
-      rowCount++;
+      inserts.push([nanoid(), clientId, uploadId, month, kind, cleanLabel, intCell(row, iActive)]);
     }
   }
-  return rowCount;
+  await bulkInsert(
+    `INSERT INTO ga4_tech
+       (id, client_id, csv_upload_id, month, kind, label, active_users)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    inserts,
+  );
+  return inserts.length;
 }
 
 // --------- Demographic details: Country ---------
@@ -405,7 +423,7 @@ export async function parseDemographicCountry(
   uploadId: string,
 ): Promise<number> {
   const blocks = splitIntoBlocks(raw);
-  let rowCount = 0;
+  const inserts: any[][] = [];
   for (const block of blocks) {
     if (block.headers.length < 2) continue;
     const iCountry = 0;
@@ -421,23 +439,23 @@ export async function parseDemographicCountry(
     for (const row of block.rows) {
       const country = textCell(row, iCountry);
       if (!country) continue;
-      await turso.execute({
-        sql: `INSERT INTO ga4_geography
-                (id, client_id, csv_upload_id, month, country,
-                 active_users, new_users, engaged_sessions, engagement_rate,
-                 avg_engagement_time_per_active_user, event_count, key_events, total_revenue)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [
-          nanoid(), clientId, uploadId, month, country,
-          intCell(row, iActive), intCell(row, iNew), intCell(row, iEngaged),
-          floatCell(row, iEngRate), floatCell(row, iAvgTime),
-          intCell(row, iEventCount), intCell(row, iKeyEvents), floatCell(row, iRev),
-        ],
-      });
-      rowCount++;
+      inserts.push([
+        nanoid(), clientId, uploadId, month, country,
+        intCell(row, iActive), intCell(row, iNew), intCell(row, iEngaged),
+        floatCell(row, iEngRate), floatCell(row, iAvgTime),
+        intCell(row, iEventCount), intCell(row, iKeyEvents), floatCell(row, iRev),
+      ]);
     }
   }
-  return rowCount;
+  await bulkInsert(
+    `INSERT INTO ga4_geography
+       (id, client_id, csv_upload_id, month, country,
+        active_users, new_users, engaged_sessions, engagement_rate,
+        avg_engagement_time_per_active_user, event_count, key_events, total_revenue)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    inserts,
+  );
+  return inserts.length;
 }
 
 // --------- Top-level dispatcher ---------

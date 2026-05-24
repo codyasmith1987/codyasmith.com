@@ -742,8 +742,140 @@ const todayISO = new Date().toISOString().slice(0, 10);
         ecoNote.textContent = computeRoutingNote(id);
         block.appendChild(ecoNote);
 
+        // Per-site page-count editor. Only renders for Web Management
+        // when the client has 2+ managed sites. Each site has its own
+        // ecosystem routed by its own page count (audit finding 1 +
+        // Phase 4 UI). Empty page_count falls back to the primary's
+        // ecosystem on the server side; the row UI marks the fallback
+        // visually.
+        if (id === 'web-management') {
+          const allSites = clientSitesCache[state.client_id] || [];
+          const managed = allSites.filter(s => s.is_managed);
+          if (managed.length >= 2) {
+            block.appendChild(buildPerSiteEditor(managed));
+          }
+        }
+
         varsContainer.appendChild(block);
       }
+    }
+
+    // Per-site editor (multi-site WM). One row per managed site:
+    // primary indicator | domain | page count input | routed
+    // ecosystem chip. Blur saves the page count via the client_sites
+    // API; the row's ecosystem chip updates live.
+    function buildPerSiteEditor(managedSites) {
+      const wrap = document.createElement('div');
+      wrap.className = 'mt-4 p-3 bg-neutral-900/30 border border-white/5 rounded-md';
+      const header = document.createElement('p');
+      header.className = 'text-[10px] font-mono text-neutral-500 tracking-wide uppercase mb-1';
+      header.textContent = 'Per-site routing';
+      wrap.appendChild(header);
+      const desc = document.createElement('p');
+      desc.className = 'text-[11px] text-neutral-400 mb-3 leading-relaxed';
+      desc.textContent = 'Each site routes to its own ecosystem by its own page count. Primary pays full base. Each additional site pays 0.80 of its own ecosystem base. Empty page count falls back to the primary site’s ecosystem for that site.';
+      wrap.appendChild(desc);
+
+      const sorted = [...managedSites].sort((a, b) => {
+        if (!!a.is_primary === !!b.is_primary) return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+        return a.is_primary ? -1 : 1;
+      });
+
+      for (const site of sorted) {
+        const row = document.createElement('div');
+        row.className = 'py-2 border-b border-white/5 last:border-0 last:pb-0 first:pt-0 grid grid-cols-12 gap-3 items-center';
+
+        const tag = document.createElement('span');
+        tag.className = 'col-span-2 text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded text-center ' + (
+          site.is_primary
+            ? 'bg-amber-500/10 border border-amber-500/40 text-amber-700'
+            : 'bg-neutral-900 border border-white/10 text-neutral-400'
+        );
+        tag.textContent = site.is_primary ? 'primary' : 'site';
+        row.appendChild(tag);
+
+        const domain = document.createElement('span');
+        domain.className = 'col-span-4 text-sm text-neutral-100 truncate font-mono';
+        domain.textContent = site.label && site.label !== site.domain ? `${site.label} (${site.domain})` : site.domain;
+        row.appendChild(domain);
+
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.min = '0';
+        input.className = 'col-span-3 px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
+        input.placeholder = 'pages';
+        if (site.page_count !== null && site.page_count !== undefined) {
+          input.value = String(site.page_count);
+        }
+
+        const ecoTag = document.createElement('span');
+        ecoTag.className = 'col-span-3 text-[10px] font-mono text-amber-700 text-right';
+        ecoTag.textContent = describeSiteEcosystem(site.page_count, sorted);
+        row.appendChild(input);
+        row.appendChild(ecoTag);
+
+        // Blur-saves the page count. Updates the cached site so the
+        // routing chip refreshes immediately. On failure, the chip
+        // shows an error tag and the previous value is restored.
+        const priorValue = input.value;
+        input.addEventListener('blur', async () => {
+          const raw = input.value.trim();
+          const newPc = raw === '' ? null : Number(raw);
+          if (raw !== '' && (!Number.isFinite(newPc) || newPc < 0)) {
+            input.value = priorValue;
+            if (window.__toast) window.__toast('Page count must be a non-negative number.', 'error');
+            return;
+          }
+          // Optimistic update: refresh chip immediately.
+          site.page_count = newPc;
+          ecoTag.textContent = describeSiteEcosystem(newPc, sorted);
+          try {
+            const res = await fetch('/portal/api/admin/clients/sites', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+              body: JSON.stringify({
+                client_id: state.client_id,
+                action: 'set_page_count',
+                site_id: site.id,
+                page_count: newPc,
+              }),
+            });
+            if (!res.ok) {
+              const data = await res.json().catch(() => ({}));
+              if (window.__toast) window.__toast(data.error || 'Failed to save page count.', 'error');
+              site.page_count = priorValue === '' ? null : Number(priorValue);
+              input.value = priorValue;
+              ecoTag.textContent = describeSiteEcosystem(site.page_count, sorted);
+            } else {
+              if (window.__toast) window.__toast(`Page count saved for ${site.domain}.`, 'success');
+            }
+          } catch (err) {
+            if (window.__toast) window.__toast('Network error saving page count.', 'error');
+          }
+        });
+
+        wrap.appendChild(row);
+      }
+      return wrap;
+    }
+
+    // Compact ecosystem-routing chip text for a single site. Null
+    // page count routes to the primary site's ecosystem (the
+    // fallback path in the pricing pipeline).
+    function describeSiteEcosystem(pageCount, allSites) {
+      if (pageCount === null || pageCount === undefined) {
+        const primary = (allSites || []).find(s => s.is_primary);
+        if (primary && primary.page_count !== null && primary.page_count !== undefined) {
+          return `→ Primary’s eco (${routeWmEcoLabel(primary.page_count)})`;
+        }
+        return '→ Primary’s eco (TBD)';
+      }
+      return `→ ${routeWmEcoLabel(pageCount)}`;
+    }
+    function routeWmEcoLabel(pc) {
+      if (pc < 30) return 'Eco A';
+      if (pc <= 150) return 'Eco B';
+      return 'Eco C';
     }
 
     function onVarChange(e) {

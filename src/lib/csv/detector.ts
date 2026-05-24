@@ -16,6 +16,15 @@ export type CsvFormat =
   | 'security_urls'
   | 'structured_data_urls'
   | 'issue_urls'
+  // GA4 export kinds — multi-block CSVs detected by filename, parsed
+  // by the ga4.ts dispatcher. Each kind maps to its own database
+  // table or a shared one (Reports snapshot fans out to ga4_topline +
+  // ga4_source_medium + ga4_campaigns).
+  | 'ga4_reports_snapshot'
+  | 'ga4_traffic_acquisition'
+  | 'ga4_pages'
+  | 'ga4_tech'
+  | 'ga4_geography'
   // 'unknown' is still emitted by detectFormat for files that don't
   // match a signature; the ingest pipeline routes those to the raw
   // fallback and updates the upload row to 'unknown_stored' so
@@ -106,6 +115,28 @@ export function detectFormat(raw: string, filename: string): { format: CsvFormat
     return { format: 'crawl_overview', headers: [] };
   }
 
+  // GA4 exports — detected by filename substrings (case-insensitive,
+  // path stripped). GA4 admins control the export filename loosely
+  // (date suffix varies, "GA4" tag inconsistent), so match on the
+  // distinctive report-name substring rather than exact equality.
+  // Order matters: more specific patterns first.
+  const normalizedName = filename.toLowerCase().replace(/^.*[\\/]/, '');
+  if (normalizedName.includes('reports_snapshot')) {
+    return { format: 'ga4_reports_snapshot', headers: [] };
+  }
+  if (normalizedName.includes('traffic_acquisition')) {
+    return { format: 'ga4_traffic_acquisition', headers: [] };
+  }
+  if (normalizedName.includes('pages_and_screens') || normalizedName.includes('landing_page')) {
+    return { format: 'ga4_pages', headers: [] };
+  }
+  if (normalizedName.includes('tech_overview')) {
+    return { format: 'ga4_tech', headers: [] };
+  }
+  if (normalizedName.includes('demographic_details_country')) {
+    return { format: 'ga4_geography', headers: [] };
+  }
+
   // Per-issue URL exports from Screaming Frog. The filename matches a
   // known per-issue CSV (h1_missing.csv, page_titles_below_30_characters.csv,
   // etc.); each file lists the URLs that have that issue, with the URL
@@ -113,7 +144,6 @@ export function detectFormat(raw: string, filename: string): { format: CsvFormat
   // fallback so these route to the dedicated issue-urls parser that
   // populates site_issue_urls (and therefore the per-issue pop-out on
   // the health page).
-  const normalizedName = filename.toLowerCase().replace(/^.*[\\/]/, '');
   // Match on the known map (imported lazily to avoid a circular
   // dependency on the parser). The shape is { filename: issue_name }.
   // eslint-disable-next-line @typescript-eslint/no-var-requires

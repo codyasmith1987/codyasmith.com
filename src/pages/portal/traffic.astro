@@ -1,0 +1,363 @@
+---
+import Portal from '../../layouts/Portal.astro';
+import ClientSelector from '../../components/portal/ClientSelector.astro';
+import StateLoading from '../../components/portal/StateLoading.astro';
+import StateError from '../../components/portal/StateError.astro';
+import StateEmpty from '../../components/portal/StateEmpty.astro';
+import { getAllClients } from '../../lib/auth';
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const isAdmin = user.role === 'admin';
+const clients = isAdmin ? await getAllClients() : [];
+---
+
+<Portal title="Traffic">
+
+  <div class="max-w-4xl mx-auto">
+    <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
+      <div>
+        <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Audience &amp; Acquisition</p>
+        <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Traffic</h1>
+        <p class="text-sm text-neutral-400 mt-2">From Google Analytics 4. Shows the latest period uploaded.</p>
+      </div>
+      {isAdmin && <ClientSelector clients={clients} />}
+    </div>
+
+    <StateLoading id="ga4-loading" message="Loading traffic data..." />
+    <StateError id="ga4-error" detailId="ga4-error-detail" retryFn="loadGa4" />
+
+    <!-- Hero / topline KPIs -->
+    <div id="ga4-hero" class="mb-10 hidden">
+      <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
+        <p id="ga4-period" class="text-[10px] font-mono text-amber-600 tracking-[0.15em] uppercase mb-4"></p>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-6">
+          <div>
+            <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Active users</p>
+            <p id="kpi-active-users" class="font-serif text-3xl text-neutral-100">—</p>
+          </div>
+          <div>
+            <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">New users</p>
+            <p id="kpi-new-users" class="font-serif text-3xl text-neutral-100">—</p>
+          </div>
+          <div>
+            <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Sessions</p>
+            <p id="kpi-sessions" class="font-serif text-3xl text-neutral-100">—</p>
+          </div>
+          <div>
+            <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Avg engagement</p>
+            <p id="kpi-engagement" class="font-serif text-3xl text-neutral-100">—</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Data cards: rendered in JS -->
+    <div id="ga4-cards" class="space-y-6 mb-8"></div>
+
+    <StateEmpty
+      id="ga4-empty"
+      title="No traffic data yet"
+      message={isAdmin
+        ? 'Upload a GA4 Reports snapshot, Traffic acquisition, Pages and screens, Tech overview, or Demographic details CSV to populate this view.'
+        : 'Your traffic report will appear here once data is available.'}
+    />
+  </div>
+
+  <script define:vars={{ clientId: user.client_id, isAdmin, firstClientId: clients[0]?.id || '' }}>
+    function escapeHtml(s) {
+      if (s == null) return '';
+      return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    let activeClientId = isAdmin ? firstClientId : clientId;
+
+    const selector = document.getElementById('client-selector');
+    if (selector) {
+      selector.addEventListener('change', (e) => {
+        activeClientId = e.target.value;
+        loadGa4();
+      });
+    }
+
+    function fmtInt(n) {
+      if (n === null || n === undefined) return '—';
+      return Number(n).toLocaleString();
+    }
+    function fmtSeconds(seconds) {
+      if (seconds === null || seconds === undefined) return '—';
+      const s = Math.round(Number(seconds));
+      if (s < 60) return `${s}s`;
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      return r ? `${m}m ${r}s` : `${m}m`;
+    }
+    function fmtPercent(n) {
+      if (n === null || n === undefined) return '—';
+      return `${(Number(n) * 100).toFixed(1)}%`;
+    }
+    function fmtDate(yyyymmdd) {
+      if (!yyyymmdd || yyyymmdd.length !== 8) return null;
+      const y = yyyymmdd.slice(0, 4);
+      const m = yyyymmdd.slice(4, 6);
+      const d = yyyymmdd.slice(6, 8);
+      const date = new Date(Number(y), Number(m) - 1, Number(d));
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    async function loadGa4() {
+      const loadingEl = document.getElementById('ga4-loading');
+      const errorEl = document.getElementById('ga4-error');
+      const heroEl = document.getElementById('ga4-hero');
+      const cardsEl = document.getElementById('ga4-cards');
+      const emptyEl = document.getElementById('ga4-empty');
+
+      loadingEl.classList.remove('hidden');
+      errorEl.classList.add('hidden');
+      emptyEl.classList.add('hidden');
+      heroEl.classList.add('hidden');
+      cardsEl.innerHTML = '';
+
+      if (!activeClientId) {
+        loadingEl.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        return;
+      }
+
+      try {
+        const res = await fetch(`/portal/api/dashboard/ga4?client_id=${activeClientId}`);
+        if (!res.ok) throw new Error('Failed to load traffic data');
+        const data = await res.json();
+        loadingEl.classList.add('hidden');
+
+        if (!data.has_data) {
+          emptyEl.classList.remove('hidden');
+          return;
+        }
+
+        // Topline
+        if (data.topline) {
+          const periodFrom = fmtDate(data.topline.start_date);
+          const periodTo = fmtDate(data.topline.end_date);
+          const periodText = periodFrom && periodTo ? `${periodFrom} to ${periodTo}` : (data.month || '');
+          document.getElementById('ga4-period').textContent = periodText;
+          document.getElementById('kpi-active-users').textContent = fmtInt(data.topline.active_users);
+          document.getElementById('kpi-new-users').textContent = fmtInt(data.topline.new_users);
+          document.getElementById('kpi-sessions').textContent = fmtInt(data.topline.sessions);
+          document.getElementById('kpi-engagement').textContent = fmtSeconds(data.topline.avg_engagement_time_per_active_user);
+          heroEl.classList.remove('hidden');
+        }
+
+        const cards = [];
+
+        // Channel mix
+        if (data.channels && data.channels.length > 0) {
+          const total = data.channels.reduce((s, c) => s + (Number(c.sessions) || 0), 0);
+          const rows = data.channels.map(c => {
+            const share = total > 0 ? Math.round(((c.sessions || 0) / total) * 100) : 0;
+            return `<tr class="border-b border-white/[0.03] last:border-0">
+              <td class="py-2 pr-4 text-sm text-neutral-200">${escapeHtml(c.channel)}</td>
+              <td class="py-2 pr-4 text-xs font-mono text-neutral-400 text-right">${fmtInt(c.sessions)}</td>
+              <td class="py-2 pr-4 text-xs font-mono text-amber-600 text-right">${share}%</td>
+              <td class="py-2 pr-4 text-xs font-mono text-neutral-400 text-right">${fmtPercent(c.engagement_rate)}</td>
+              <td class="py-2 text-xs font-mono text-neutral-400 text-right">${fmtInt(c.key_events)}</td>
+            </tr>`;
+          }).join('');
+          cards.push(`
+            <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-6">
+              <h2 class="font-serif text-xl text-neutral-100 mb-1">Channel mix</h2>
+              <p class="text-xs text-neutral-500 mb-4">Where sessions come from. Higher engagement rate means more visitors stayed and acted on the page.</p>
+              <table class="w-full text-left">
+                <thead><tr class="border-b border-white/5">
+                  <th class="py-2 pr-4 text-[10px] font-mono text-neutral-400 uppercase tracking-wide">Channel</th>
+                  <th class="py-2 pr-4 text-[10px] font-mono text-neutral-400 uppercase tracking-wide text-right">Sessions</th>
+                  <th class="py-2 pr-4 text-[10px] font-mono text-neutral-400 uppercase tracking-wide text-right">Share</th>
+                  <th class="py-2 pr-4 text-[10px] font-mono text-neutral-400 uppercase tracking-wide text-right">Engagement</th>
+                  <th class="py-2 text-[10px] font-mono text-neutral-400 uppercase tracking-wide text-right">Key events</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          `);
+        }
+
+        // Top landing pages
+        if (data.pages && data.pages.length > 0) {
+          const top = data.pages.slice(0, 10);
+          const rows = top.map(p => {
+            const safePath = escapeHtml(p.page_path);
+            return `<tr class="border-b border-white/[0.03] last:border-0">
+              <td class="py-2 pr-4 text-xs font-mono text-amber-600 break-all"><span title="${safePath}">${safePath}</span></td>
+              <td class="py-2 pr-4 text-xs font-mono text-neutral-400 text-right">${fmtInt(p.views)}</td>
+              <td class="py-2 pr-4 text-xs font-mono text-neutral-400 text-right">${fmtInt(p.active_users)}</td>
+              <td class="py-2 text-xs font-mono text-neutral-400 text-right">${fmtSeconds(p.avg_engagement_time_per_active_user)}</td>
+            </tr>`;
+          }).join('');
+          cards.push(`
+            <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-6">
+              <h2 class="font-serif text-xl text-neutral-100 mb-1">Top pages</h2>
+              <p class="text-xs text-neutral-500 mb-4">The 10 pages getting the most attention this period.</p>
+              <table class="w-full text-left">
+                <thead><tr class="border-b border-white/5">
+                  <th class="py-2 pr-4 text-[10px] font-mono text-neutral-400 uppercase tracking-wide">Page</th>
+                  <th class="py-2 pr-4 text-[10px] font-mono text-neutral-400 uppercase tracking-wide text-right">Views</th>
+                  <th class="py-2 pr-4 text-[10px] font-mono text-neutral-400 uppercase tracking-wide text-right">Users</th>
+                  <th class="py-2 text-[10px] font-mono text-neutral-400 uppercase tracking-wide text-right">Avg time</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          `);
+        }
+
+        // AI referrals (subset of source/medium)
+        if (data.ai_referrals && data.ai_referrals.length > 0) {
+          const totalAi = data.ai_referrals.reduce((s, r) => s + (Number(r.sessions) || 0), 0);
+          const rows = data.ai_referrals.map(s => {
+            return `<tr class="border-b border-white/[0.03] last:border-0">
+              <td class="py-2 pr-4 text-sm text-neutral-200">${escapeHtml(s.source_medium)}</td>
+              <td class="py-2 text-xs font-mono text-neutral-400 text-right">${fmtInt(s.sessions)}</td>
+            </tr>`;
+          }).join('');
+          cards.push(`
+            <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-6">
+              <h2 class="font-serif text-xl text-neutral-100 mb-1">AI search referrals</h2>
+              <p class="text-xs text-neutral-500 mb-4">Sessions where the visitor came from an AI tool. ${fmtInt(totalAi)} total this period.</p>
+              <table class="w-full text-left">
+                <thead><tr class="border-b border-white/5">
+                  <th class="py-2 pr-4 text-[10px] font-mono text-neutral-400 uppercase tracking-wide">Source</th>
+                  <th class="py-2 text-[10px] font-mono text-neutral-400 uppercase tracking-wide text-right">Sessions</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          `);
+        }
+
+        // Top source/medium
+        if (data.sources && data.sources.length > 0) {
+          const top = data.sources.slice(0, 10);
+          const rows = top.map(s => {
+            return `<tr class="border-b border-white/[0.03] last:border-0">
+              <td class="py-2 pr-4 text-sm text-neutral-200">${escapeHtml(s.source_medium)}</td>
+              <td class="py-2 pr-4 text-xs font-mono text-neutral-400 text-right">${fmtInt(s.sessions)}</td>
+              <td class="py-2 text-xs font-mono text-neutral-400 text-right">${fmtInt(s.key_events)}</td>
+            </tr>`;
+          }).join('');
+          cards.push(`
+            <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-6">
+              <h2 class="font-serif text-xl text-neutral-100 mb-1">Top sources</h2>
+              <p class="text-xs text-neutral-500 mb-4">The 10 source / medium combinations sending the most sessions.</p>
+              <table class="w-full text-left">
+                <thead><tr class="border-b border-white/5">
+                  <th class="py-2 pr-4 text-[10px] font-mono text-neutral-400 uppercase tracking-wide">Source / medium</th>
+                  <th class="py-2 pr-4 text-[10px] font-mono text-neutral-400 uppercase tracking-wide text-right">Sessions</th>
+                  <th class="py-2 text-[10px] font-mono text-neutral-400 uppercase tracking-wide text-right">Key events</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          `);
+        }
+
+        // Device + OS side by side
+        if (data.tech && (data.tech.device_category?.length > 0 || data.tech.os?.length > 0)) {
+          const totalDevice = (data.tech.device_category || []).reduce((s, d) => s + (Number(d.active_users) || 0), 0);
+          const deviceRows = (data.tech.device_category || []).map(d => {
+            const share = totalDevice > 0 ? Math.round(((d.active_users || 0) / totalDevice) * 100) : 0;
+            const cleanLabel = (d.label || '').replace(/^web \/ /, '');
+            return `<tr class="border-b border-white/[0.03] last:border-0">
+              <td class="py-2 pr-4 text-sm text-neutral-200 capitalize">${escapeHtml(cleanLabel)}</td>
+              <td class="py-2 pr-4 text-xs font-mono text-neutral-400 text-right">${fmtInt(d.active_users)}</td>
+              <td class="py-2 text-xs font-mono text-amber-600 text-right">${share}%</td>
+            </tr>`;
+          }).join('');
+          const totalOs = (data.tech.os || []).reduce((s, o) => s + (Number(o.active_users) || 0), 0);
+          const osRows = (data.tech.os || []).map(o => {
+            const share = totalOs > 0 ? Math.round(((o.active_users || 0) / totalOs) * 100) : 0;
+            return `<tr class="border-b border-white/[0.03] last:border-0">
+              <td class="py-2 pr-4 text-sm text-neutral-200">${escapeHtml(o.label)}</td>
+              <td class="py-2 pr-4 text-xs font-mono text-neutral-400 text-right">${fmtInt(o.active_users)}</td>
+              <td class="py-2 text-xs font-mono text-amber-600 text-right">${share}%</td>
+            </tr>`;
+          }).join('');
+          cards.push(`
+            <div class="grid md:grid-cols-2 gap-6">
+              <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-6">
+                <h2 class="font-serif text-xl text-neutral-100 mb-1">Devices</h2>
+                <p class="text-xs text-neutral-500 mb-4">How visitors reach you.</p>
+                <table class="w-full text-left"><tbody>${deviceRows}</tbody></table>
+              </div>
+              <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-6">
+                <h2 class="font-serif text-xl text-neutral-100 mb-1">Operating systems</h2>
+                <p class="text-xs text-neutral-500 mb-4">Top operating systems by users.</p>
+                <table class="w-full text-left"><tbody>${osRows}</tbody></table>
+              </div>
+            </div>
+          `);
+        }
+
+        // Geography
+        if (data.geography && data.geography.length > 0) {
+          const rows = data.geography.slice(0, 10).map(g => {
+            return `<tr class="border-b border-white/[0.03] last:border-0">
+              <td class="py-2 pr-4 text-sm text-neutral-200">${escapeHtml(g.country)}</td>
+              <td class="py-2 pr-4 text-xs font-mono text-neutral-400 text-right">${fmtInt(g.active_users)}</td>
+              <td class="py-2 pr-4 text-xs font-mono text-neutral-400 text-right">${fmtInt(g.new_users)}</td>
+              <td class="py-2 text-xs font-mono text-neutral-400 text-right">${fmtPercent(g.engagement_rate)}</td>
+            </tr>`;
+          }).join('');
+          cards.push(`
+            <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-6">
+              <h2 class="font-serif text-xl text-neutral-100 mb-1">Top countries</h2>
+              <p class="text-xs text-neutral-500 mb-4">Where visitors are based.</p>
+              <table class="w-full text-left">
+                <thead><tr class="border-b border-white/5">
+                  <th class="py-2 pr-4 text-[10px] font-mono text-neutral-400 uppercase tracking-wide">Country</th>
+                  <th class="py-2 pr-4 text-[10px] font-mono text-neutral-400 uppercase tracking-wide text-right">Users</th>
+                  <th class="py-2 pr-4 text-[10px] font-mono text-neutral-400 uppercase tracking-wide text-right">New</th>
+                  <th class="py-2 text-[10px] font-mono text-neutral-400 uppercase tracking-wide text-right">Engagement</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          `);
+        }
+
+        // Google Ads campaigns
+        if (data.campaigns && data.campaigns.length > 0) {
+          const rows = data.campaigns.map(c => {
+            return `<tr class="border-b border-white/[0.03] last:border-0">
+              <td class="py-2 pr-4 text-sm text-neutral-200">${escapeHtml(c.campaign_name)}</td>
+              <td class="py-2 text-xs font-mono text-neutral-400 text-right">${fmtInt(c.sessions)}</td>
+            </tr>`;
+          }).join('');
+          cards.push(`
+            <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-6">
+              <h2 class="font-serif text-xl text-neutral-100 mb-1">Paid campaigns</h2>
+              <p class="text-xs text-neutral-500 mb-4">Sessions driven by Google Ads campaigns this period.</p>
+              <table class="w-full text-left">
+                <thead><tr class="border-b border-white/5">
+                  <th class="py-2 pr-4 text-[10px] font-mono text-neutral-400 uppercase tracking-wide">Campaign</th>
+                  <th class="py-2 text-[10px] font-mono text-neutral-400 uppercase tracking-wide text-right">Sessions</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          `);
+        }
+
+        cardsEl.innerHTML = cards.join('');
+
+      } catch (err) {
+        loadingEl.classList.add('hidden');
+        document.getElementById('ga4-error-detail').textContent = err.message || 'Could not connect to the server.';
+        errorEl.classList.remove('hidden');
+      }
+    }
+
+    loadGa4();
+  </script>
+</Portal>

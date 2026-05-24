@@ -90,6 +90,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
       const pricing = computePricing(config?.pricing_formula || '', selections);
       const managedSites = (await listManagedSites(agreement.client_id)).map(s => ({
         domain: s.domain, label: s.label, is_primary: s.is_primary,
+        page_count: s.page_count,
       }));
       const newScheduleA = buildScheduleA({
         proposalConfig: config,

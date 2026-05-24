@@ -25,6 +25,12 @@ export interface ClientSite {
   label: string | null;
   sort_order: number;
   notes: string | null;
+  // Per-site page count. Routes the site's WM ecosystem in the
+  // multi-site pricing pipeline (2026-05-24 locked formula). Null
+  // when no crawl data has populated it and admin has not entered
+  // it manually; the pricing pipeline falls back to the primary's
+  // ecosystem when null.
+  page_count: number | null;
 }
 
 function rowToSite(row: any): ClientSite {
@@ -37,10 +43,11 @@ function rowToSite(row: any): ClientSite {
     label: (row[5] as string | null) ?? null,
     sort_order: (row[6] as number) ?? 0,
     notes: (row[7] as string | null) ?? null,
+    page_count: (row[8] as number | null) ?? null,
   };
 }
 
-const SELECT_COLS = 'id, client_id, domain, is_primary, is_managed, label, sort_order, notes';
+const SELECT_COLS = 'id, client_id, domain, is_primary, is_managed, label, sort_order, notes, page_count';
 
 export async function listClientSites(clientId: string): Promise<ClientSite[]> {
   const result = await turso.execute({
@@ -158,6 +165,20 @@ export async function setSiteManaged(clientId: string, siteId: string, isManaged
   await turso.execute({
     sql: 'UPDATE client_sites SET is_managed = ? WHERE id = ? AND client_id = ?',
     args: [isManaged ? 1 : 0, siteId, clientId],
+  });
+}
+
+// Admin or auto-derivation sets a site's page count. Routes the WM
+// ecosystem for this site in the multi-site pricing pipeline.
+// Passing null clears the value so the pricing pipeline falls back
+// to the primary site's ecosystem for this site.
+export async function setSitePageCount(clientId: string, siteId: string, pageCount: number | null): Promise<void> {
+  const safe = pageCount === null || pageCount === undefined
+    ? null
+    : Math.max(0, Math.floor(Number(pageCount)));
+  await turso.execute({
+    sql: 'UPDATE client_sites SET page_count = ? WHERE id = ? AND client_id = ?',
+    args: [safe, siteId, clientId],
   });
 }
 

@@ -240,20 +240,91 @@ export function routeWebManagementEcosystem(pageCount: number | null): Ecosystem
 // =========================================================================
 // Pricing math
 // =========================================================================
+//
+// Multi-site formula locked 2026-05-24 per docs/audits/proposal-chain-
+// audit-2026-05-24.md finding 1. Replaces the prior "all sites priced
+// off primary's ecosystem" rule.
+//
+// Each managed site routes to its OWN ecosystem by its OWN page count.
+// The engagement tier (Good / Better / Best) is set once and applied
+// to every site. Each site contributes its own ecosystem's tier base.
+// The primary contributes its full base; each additional site
+// contributes its base × MULTI_SITE_DISCOUNT. Linear, no compounding.
+// Same discount applies to monthly and onboarding.
 
-// Multi-site monthly = base + (n - 1) * base * 0.80
-export function computeMultiSiteMonthly(base: number, sites: number): number {
-  const n = Math.max(1, sites);
-  return base + (n - 1) * base * 0.80;
+export const MULTI_SITE_DISCOUNT = 0.80;
+
+// Sum a per-site array of bases with the multi-site discount. The
+// FIRST element is the primary (full base); the rest are additional
+// sites at the discounted rate. Used for both monthly and onboarding.
+//
+// Callers compute each site's base by routing the site to its own
+// ecosystem (via routeWebManagementEcosystem) and looking up the
+// engagement tier's monthly or onb value at that ecosystem.
+//
+// Rounds to cents (2 decimals) per-step so float artifacts from
+// multiplying integer-dollar bases by 0.80 do not accumulate. Money
+// math is decimal; the bases are always whole or half-cent dollar
+// figures, and the discount is exactly 0.80.
+export function computeMultiSiteSum(perSiteBases: number[]): number {
+  if (perSiteBases.length === 0) return 0;
+  const [primary, ...additional] = perSiteBases;
+  const discountedSum = additional.reduce(
+    (sum, base) => sum + Math.round(base * MULTI_SITE_DISCOUNT * 100) / 100,
+    0
+  );
+  return Math.round((primary + discountedSum) * 100) / 100;
 }
 
-// Per 05 Section 4: takeover onboarding is per-site at FULL ecosystem
-// base, NOT the multi-site formula. This function multiplies, not
-// discounts. The test in tests/lib/products/web-management.test.mjs
-// asserts this against the documented rule.
+// Legacy single-ecosystem helpers. Retained for callsites that have
+// NOT been migrated to pass per-site arrays yet, AND for the fallback
+// path when no per-site page counts exist (the primary's ecosystem
+// applies to every site). When `sites` is the number of managed sites
+// and `base` is the single shared ecosystem base, the result is
+// identical to the new per-site formula with all sites at the same
+// base.
+export function computeMultiSiteMonthly(base: number, sites: number): number {
+  const n = Math.max(1, sites);
+  return computeMultiSiteSum(Array(n).fill(base));
+}
+
 export function computeMultiSiteOnboarding(base: number, sites: number): number {
   const n = Math.max(1, sites);
-  return base * n;
+  return computeMultiSiteSum(Array(n).fill(base));
+}
+
+// Build the per-site base arrays from ctx.managedSites + the chosen
+// tier. Each site routes to its own ecosystem via its page_count;
+// sites whose page_count is null fall back to the primary site's
+// ecosystem. Returns [monthlyBases[], onboardingBases[]] aligned per
+// site, primary first.
+//
+// When ctx.managedSites is empty/undefined, the caller falls back to
+// ctx.variables.site_count + ctx.ecosystemId (the legacy single-
+// ecosystem flow). This function is only relevant when managedSites
+// is populated.
+export function buildPerSiteBases(args: {
+  managedSites: Array<{ is_primary?: boolean; page_count?: number | null }>;
+  tierId: TierId;
+  primaryEcosystemId: EcosystemId;
+}): { monthlyBases: number[]; onboardingBases: number[] } {
+  // Sort so primary is first; the discount applies to the rest.
+  const sorted = [...args.managedSites].sort((a, b) => {
+    if (!!a.is_primary === !!b.is_primary) return 0;
+    return a.is_primary ? -1 : 1;
+  });
+  const monthlyBases: number[] = [];
+  const onboardingBases: number[] = [];
+  for (const site of sorted) {
+    const eco = site.page_count != null
+      ? (routeWebManagementEcosystem(site.page_count) || args.primaryEcosystemId)
+      : args.primaryEcosystemId;
+    const ecosystem = WM_ECOSYSTEMS[eco];
+    const tier = ecosystem?.tiers[args.tierId];
+    monthlyBases.push(tier?.monthly || 0);
+    onboardingBases.push(tier?.onb || 0);
+  }
+  return { monthlyBases, onboardingBases };
 }
 
 // =========================================================================
@@ -392,19 +463,44 @@ export const webManagementProduct: ProductDefinition = {
     if (!tier || tier.monthly == null || tier.onb == null) {
       return { monthly: 0, oneTime: 0, breakdown: [], displaySummary: {} };
     }
-    const sites = numberFromVar(ctx.variables.site_count, 1);
-    const monthly = computeMultiSiteMonthly(tier.monthly, sites);
-    const onb = computeMultiSiteOnboarding(tier.onb, sites);
+    // Two pricing paths:
+    //   (1) Per-site ecosystem (2026-05-24 locked formula): ctx.managedSites
+    //       is populated with at least one site that has a page_count.
+    //       Each site routes to its own ecosystem; bases come from
+    //       buildPerSiteBases().
+    //   (2) Fallback: no per-site data. All sites priced off the
+    //       primary's ecosystem (ctx.ecosystemId). Uses the legacy
+    //       single-base helpers, which now produce identical results
+    //       to path (1) when all sites are at the same ecosystem.
+    let monthly: number;
+    let onb: number;
+    let sitesCount: number;
+    const hasPerSiteData = ctx.managedSites && ctx.managedSites.length > 0
+      && ctx.managedSites.some(s => s.page_count != null);
+    if (hasPerSiteData) {
+      const { monthlyBases, onboardingBases } = buildPerSiteBases({
+        managedSites: ctx.managedSites!,
+        tierId: ctx.tierId,
+        primaryEcosystemId: ctx.ecosystemId,
+      });
+      monthly = computeMultiSiteSum(monthlyBases);
+      onb = computeMultiSiteSum(onboardingBases);
+      sitesCount = ctx.managedSites!.length;
+    } else {
+      sitesCount = numberFromVar(ctx.variables.site_count, 1);
+      monthly = computeMultiSiteMonthly(tier.monthly, sitesCount);
+      onb = computeMultiSiteOnboarding(tier.onb, sitesCount);
+    }
     return {
       monthly,
       oneTime: onb,
       breakdown: [
-        { label: `Web Management onboarding (${sites === 1 ? '1 site' : `${sites} sites`}, ${tier.name})`, amount: onb },
+        { label: `Web Management onboarding (${sitesCount === 1 ? '1 site' : `${sitesCount} sites`}, ${tier.name})`, amount: onb },
       ],
       displaySummary: {
         tier_name: tier.name,
         ecosystem_label: eco.label,
-        sites_text: sites === 1 ? '1 site' : `${sites} sites`,
+        sites_text: sitesCount === 1 ? '1 site' : `${sitesCount} sites`,
       },
     };
   },

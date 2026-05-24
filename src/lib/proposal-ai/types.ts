@@ -47,13 +47,16 @@ export type IndustryGuess =
   | 'other'
   | 'unknown';
 export type UrgencyGuess = 'tactical' | 'growth' | 'maintenance' | 'unknown';
+// 'hiring' was intentionally removed: it is a future Marketing
+// Consulting operations-domain add-on (see ClickUp 86ba34x8k), not a
+// standalone narrative focus. Re-add only when the operations-domain
+// MC tier ships.
 export type FocusTag =
   | 'revenue'
   | 'brand'
   | 'takeover'
   | 'search'
-  | 'pre-sell'
-  | 'hiring';
+  | 'pre-sell';
 
 export interface DomainGuess {
   domain: string;

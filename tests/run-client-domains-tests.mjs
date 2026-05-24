@@ -11,6 +11,15 @@ import {
   extractHostname as extractHostnameCi,
   findHeaderIndex,
 } from '../src/lib/csv/parsers/crawl-internal.ts';
+import {
+  extractHostname as extractHostnameRd,
+  findIdx as findIdxRd,
+} from '../src/lib/csv/parsers/redirects.ts';
+import {
+  extractHostname as extractHostnameIm,
+  findIdx as findIdxIm,
+} from '../src/lib/csv/parsers/images.ts';
+import { detectFormat } from '../src/lib/csv/detector.ts';
 
 const results = [];
 function test(name, pass, detail = '') {
@@ -55,6 +64,42 @@ async function run() {
     findHeaderIndex(headers, 'meta description') === 4);
   test('finds Word Count', findHeaderIndex(headers, 'word count') === 5);
   test('returns -1 for missing column', findHeaderIndex(headers, 'response time') === -1);
+
+  // ---------- redirects + images: hostname + header helpers ----------
+  test('redirects extractHostname strips www',
+    extractHostnameRd('https://www.example.com/p') === 'example.com');
+  test('images extractHostname returns null on empty',
+    extractHostnameIm('') === null);
+
+  const redirectsHeaders = ['Chain Type', 'Number of Redirects', 'Loop', 'Source', 'Final Address', 'Status Code 1', 'Redirect URL 1'];
+  test('redirects findIdx exact match',
+    findIdxRd(redirectsHeaders, 'chain type') === 0);
+  test('redirects findIdx hop column',
+    findIdxRd(redirectsHeaders, 'redirect url 1') === 6);
+
+  const imagesHeaders = ['Address', 'Content Type', 'Size (Bytes)', 'IMG Inlinks', 'Indexability', 'Dimensions'];
+  test('images findIdx Size (Bytes)',
+    findIdxIm(imagesHeaders, 'size (bytes)') === 2);
+  test('images findIdx Dimensions',
+    findIdxIm(imagesHeaders, 'dimensions') === 5);
+
+  // ---------- detector: new formats recognized ----------
+  // Synthesize a minimal CSV matching each detector signature.
+  const internalHtmlCsv = '"Address","Status Code","Indexability","Title 1","Word Count"\n"https://a.com/","200","Indexable","Hello","100"\n';
+  test('detector: internal_html as crawl_internal',
+    detectFormat(internalHtmlCsv, 'internal_html.csv').format === 'crawl_internal');
+
+  const redirectsCsv = '"Chain Type","Number of Redirects","Loop","Source","Final Address"\n"HTTP Redirect","1","false","https://a.com/old","https://a.com/new"\n';
+  test('detector: redirects.csv as redirects',
+    detectFormat(redirectsCsv, 'redirects.csv').format === 'redirects');
+
+  const imagesCsv = '"Address","Content Type","Size (Bytes)","IMG Inlinks","Indexability","Dimensions"\n"https://a.com/i.png","image/png","1000","5","Indexable","100x100"\n';
+  test('detector: images_all.csv as images',
+    detectFormat(imagesCsv, 'images_all.csv').format === 'images');
+
+  const crawlOverviewCsv = '"Site Crawled","https://a.com/"\n"Start Date","2026-05-23"\n';
+  test('detector: crawl_overview.csv as crawl_overview',
+    detectFormat(crawlOverviewCsv, 'crawl_overview.csv').format === 'crawl_overview');
 
   // ---------- Summary ----------
   const passed = results.filter(r => r.pass).length;

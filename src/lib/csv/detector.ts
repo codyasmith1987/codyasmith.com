@@ -5,6 +5,8 @@ export type CsvFormat =
   | 'issues_overview'
   | 'crawl_overview'
   | 'crawl_internal'
+  | 'redirects'
+  | 'images'
   | 'image_optimization'
   | 'keyword_research'
   | 'keyword_suggestions'
@@ -50,6 +52,20 @@ const SIGNATURES: FormatSignature[] = [
     // and not present together in any other SF report we parse).
     format: 'crawl_internal',
     requiredColumns: ['address', 'status code', 'indexability', 'title 1'],
+  },
+  {
+    // Screaming Frog Redirects bulk export. Has the chain-specific
+    // column set: Chain Type + Number of Redirects + Source + Final
+    // Address.
+    format: 'redirects',
+    requiredColumns: ['chain type', 'number of redirects', 'source', 'final address'],
+  },
+  {
+    // Screaming Frog Images bulk export (images_all.csv). Detect by
+    // the image-specific column combination: Address + Content Type
+    // + Size (Bytes) + IMG Inlinks + Dimensions.
+    format: 'images',
+    requiredColumns: ['address', 'content type', 'size (bytes)', 'img inlinks', 'dimensions'],
   },
 ];
 

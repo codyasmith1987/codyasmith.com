@@ -17,8 +17,37 @@ function formatLabel(format: string): string {
     <div class="mb-10">
       <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin</p>
       <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">CSV Upload</h1>
-      <p class="text-sm text-neutral-500 mt-3 leading-relaxed">Drop CSVs from Ubersuggest, Screaming Frog, and other tools. Format is auto-detected.</p>
+      <p class="text-sm text-neutral-500 mt-3 leading-relaxed">Drop CSVs from Ubersuggest, Screaming Frog, and other tools. Format is auto-detected. Drag many at once, or pick an entire export folder.</p>
     </div>
+
+    <!-- What we ingest -->
+    <details class="mb-8 bg-neutral-900/20 border border-white/5 rounded-xl">
+      <summary class="cursor-pointer px-5 py-3 text-[10px] font-mono text-neutral-500 tracking-[0.15em] uppercase hover:text-amber-400 transition-colors">
+        Which files feed which portal surfaces
+      </summary>
+      <div class="px-5 pb-5 pt-2 text-xs text-neutral-400 leading-relaxed space-y-3">
+        <div>
+          <p class="text-neutral-300 font-medium mb-1">Screaming Frog (drop the whole export folder)</p>
+          <ul class="space-y-1 list-disc list-inside text-[11px] text-neutral-500">
+            <li><code class="text-amber-400/80">internal_html.csv</code> or <code class="text-amber-400/80">internal_all.csv</code> — per-URL master (titles, meta, H1, word count, depth, response time). Powers per-URL insights and domain auto-detect.</li>
+            <li><code class="text-amber-400/80">crawl_overview.csv</code> — site-wide aggregates by section (Internal, External, Security, Response Codes, Page Titles, etc.). Powers summary widgets.</li>
+            <li><code class="text-amber-400/80">issues_overview_report.csv</code> — health page issues with priority and fix guidance.</li>
+            <li><code class="text-amber-400/80">redirects.csv</code> — redirect chain analysis with hop count and loop detection.</li>
+            <li><code class="text-amber-400/80">images_all.csv</code> — image audit (file size, dimensions, inlink count).</li>
+            <li><code class="text-amber-400/80">accessibility_all.csv</code> — WCAG violation counts (currently aggregated).</li>
+          </ul>
+        </div>
+        <div>
+          <p class="text-neutral-300 font-medium mb-1">Rank trackers</p>
+          <ul class="space-y-1 list-disc list-inside text-[11px] text-neutral-500">
+            <li>Position tracking exports (Ahrefs / SEMrush / SE Ranking) — powers the keywords page.</li>
+            <li>Keyword research exports (Ubersuggest style) — alternate keywords source.</li>
+            <li>Keyword suggestions / opportunities — third keywords source.</li>
+          </ul>
+        </div>
+        <p class="text-[11px] text-neutral-600">Other CSVs (Page Titles All, Meta Description All, H1 All, etc.) are derivable from <code>internal_html.csv</code> and don't need separate upload.</p>
+      </div>
+    </details>
 
     <!-- Upload form -->
     <form id="csv-form" class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-10">
@@ -40,6 +69,8 @@ function formatLabel(format: string): string {
           <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">CSV files</label>
           <input type="file" id="csv-files" accept=".csv" multiple required
             class="w-full text-sm text-neutral-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-amber-500 file:text-neutral-950 hover:file:bg-amber-400 file:cursor-pointer file:transition-colors file:duration-300" />
+          <p class="text-[10px] text-neutral-600 mt-1.5">Or <button type="button" id="pick-folder-btn" class="text-amber-400 hover:text-amber-300 underline">pick a folder</button> to upload every CSV in it. Unknown formats are reported but don't block the rest.</p>
+          <input type="file" id="csv-folder" webkitdirectory="" multiple class="hidden" />
         </div>
       </div>
       <div class="mt-6 flex items-center gap-5">
@@ -113,13 +144,30 @@ function formatLabel(format: string): string {
     const progress = document.getElementById('csv-progress')!;
     const resultsDiv = document.getElementById('csv-results')!;
 
+    // Folder-pick button forwards to the hidden webkitdirectory input.
+    // When the folder picker resolves, copy its files onto the main
+    // csv-files input via DataTransfer so the submit handler sees them.
+    const folderInput = document.getElementById('csv-folder') as HTMLInputElement;
+    const filesInput = document.getElementById('csv-files') as HTMLInputElement;
+    document.getElementById('pick-folder-btn')?.addEventListener('click', () => folderInput.click());
+    folderInput.addEventListener('change', () => {
+      const dt = new DataTransfer();
+      for (const f of Array.from(folderInput.files || [])) {
+        if (f.name.toLowerCase().endsWith('.csv')) dt.items.add(f);
+      }
+      filesInput.files = dt.files;
+      // Visual cue: show the count next to the picker.
+      progress.textContent = `${dt.files.length} CSV file(s) queued from folder pick.`;
+      progress.classList.remove('hidden');
+    });
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       btn.disabled = true;
       resultsDiv.innerHTML = '';
       resultsDiv.classList.remove('hidden');
 
-      const files = (document.getElementById('csv-files') as HTMLInputElement).files!;
+      const files = filesInput.files!;
       const clientId = (document.getElementById('csv-client') as HTMLSelectElement).value;
       const month = (document.getElementById('csv-month') as HTMLInputElement).value;
 

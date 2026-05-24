@@ -132,6 +132,9 @@ export function composeProposal(args: ComposeArgs): ProposalConfig {
     prepared_for,
     prepared_on,
     title,
+    discount_rate: typeof args.client.discount_rate === 'number'
+      ? Math.max(0, Math.min(1, args.client.discount_rate))
+      : 0,
     narrative: {
       intro,
       sections,
@@ -309,6 +312,27 @@ export function composePricing(args: {
       consultingMonthly = contribution.monthly;
       consultingTierName = contribution.displaySummary?.tier_name || '';
     }
+  }
+
+  // Apply the snapshotted per-client discount uniformly across all
+  // line items + totals. Clamped to [0, 1] at compose time so it
+  // cannot flip a total negative. A 0 discount is a no-op.
+  const discount = typeof args.config.discount_rate === 'number'
+    ? Math.max(0, Math.min(1, args.config.discount_rate))
+    : 0;
+  if (discount > 0) {
+    const keep = 1 - discount;
+    for (const line of breakdown) {
+      line.amount = Math.round(line.amount * keep * 100) / 100;
+    }
+    monthly = Math.round(monthly * keep * 100) / 100;
+    oneTime = Math.round(oneTime * keep * 100) / 100;
+    mgmtMonthly = Math.round(mgmtMonthly * keep * 100) / 100;
+    consultingMonthly = Math.round(consultingMonthly * keep * 100) / 100;
+    // Surface the discount explicitly as the final breakdown line so
+    // it shows up on the proposal page and in confirmation emails.
+    const pctLabel = `Client discount (${(discount * 100).toFixed(discount * 100 % 1 === 0 ? 0 : 1)}%)`;
+    breakdown.push({ label: pctLabel, amount: 0 });
   }
 
   return {

@@ -52,13 +52,14 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
   // Confirm the client exists, and pull the row for compose pre-fill.
   const clientCheck = await turso.execute({
-    sql: 'SELECT id, name, slug FROM clients WHERE id = ?',
+    sql: 'SELECT id, name, slug, discount_rate FROM clients WHERE id = ?',
     args: [client_id],
   });
   if (clientCheck.rows.length === 0) return json({ error: 'Client not found' }, 404);
   const clientRow = clientCheck.rows[0] as any;
   const clientName = clientRow[1] as string;
   const clientSlug = clientRow[2] as string;
+  const clientDiscount = typeof clientRow[3] === 'number' ? clientRow[3] : 0;
 
   // Decide which payload shape to use.
   let slug: string;
@@ -94,7 +95,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
     try {
       config = composeProposal({
-        client: { id: client_id, name: clientName, slug: clientSlug },
+        client: { id: client_id, name: clientName, slug: clientSlug, discount_rate: clientDiscount },
         signers,
         products,
         product_vars,

@@ -115,6 +115,9 @@ function formatLabel(format: string): string {
         <div class="flex items-center justify-between mb-4">
           <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase">Recent uploads</p>
           <div class="flex items-center gap-4">
+            <button type="button" id="clear-superseded-btn" class="text-[11px] text-amber-600 hover:text-amber-600 transition-colors">
+              Clear superseded duplicates
+            </button>
             <button type="button" id="clear-failed-btn" class="text-[11px] text-red-400/80 hover:text-red-300 transition-colors">
               Clear failed (0-row) uploads
             </button>
@@ -390,6 +393,29 @@ function formatLabel(format: string): string {
         }
       } catch (err: any) {
         alert(`Wipe failed: ${err?.message || 'network error'}`);
+      }
+    });
+
+    document.getElementById('clear-superseded-btn')?.addEventListener('click', async () => {
+      if (!confirm('Delete every csv_uploads row marked "Superseded by newer upload" across all clients? Data rows are already swept; this just clears the audit trail.')) return;
+      try {
+        const res = await fetch('/portal/api/admin/csv/clear-superseded', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({}),
+        });
+        const text = await res.text();
+        let data: any = null;
+        try { data = text ? JSON.parse(text) : null; } catch { /* noop */ }
+        if (res.ok && data?.ok) {
+          (window as any).__toast(`Cleared ${data.deleted} superseded upload row(s). ${data.child_rows_removed} orphan child row(s) wiped too.`, 'success');
+          window.location.reload();
+        } else {
+          const msg = (data && data.error) ? data.error : `HTTP ${res.status}${text ? ': ' + text.slice(0, 140) : ''}`;
+          alert(`Clear superseded failed: ${msg}`);
+        }
+      } catch (err: any) {
+        alert(`Clear superseded failed: ${err?.message || 'network error'}`);
       }
     });
 

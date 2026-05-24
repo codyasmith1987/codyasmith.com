@@ -302,13 +302,29 @@ function buildWebManagementNarrative(ctx: ProductContext): NarrativeSnippetSet {
   const siteWord = sites === 1 ? 'one site' : `${sites} sites`;
   const ecoBand = eco?.band || '';
 
+  // Engagement-strategy adaptation. Light touch; one additional
+  // paragraph at most when the synthesis points to a strong shape.
+  // Does NOT name tiers (no-dangling-tier-references rule); steers
+  // the framing instead.
+  const what_i_see_paragraphs: string[] = [
+    `Your site footprint sits at <strong>${ecoBand}</strong>${ecoBand ? ', placing it in ' : 'in '}${eco?.label || 'an ecosystem'} for management pricing. The tier you pick sets how often I update your sites, how fast I respond when something breaks, and how many hands-on hours per month sit in your pool.`,
+  ];
+  const strategy = ctx.engagementStrategy;
+  if (strategy?.cody_time_intensity === 'high') {
+    what_i_see_paragraphs.push(
+      `The footprint also reads heavy on cleanup. Onboarding focuses on stabilizing what is already in place before tightening the steady cadence.`
+    );
+  } else if (strategy?.clv_horizon === 'churn-risk') {
+    what_i_see_paragraphs.push(
+      `Engagement-shape note: the priority of the first 30 days is to set a stable floor under the site, not to expand scope. Stability now, growth conversations after.`
+    );
+  }
+
   return {
     intro_lines: [
       `Web Management keeps the ${siteWord} you have under management running, secure, and improving every month.`,
     ],
-    what_i_see_paragraphs: [
-      `Your site footprint sits at <strong>${ecoBand}</strong>${ecoBand ? ', placing it in ' : 'in '}${eco?.label || 'an ecosystem'} for management pricing. The tier you pick sets how often I update your sites, how fast I respond when something breaks, and how many hands-on hours per month sit in your pool.`,
-    ],
+    what_i_see_paragraphs,
     what_i_recommend_paragraphs: [
       sites === 1
         ? `<strong>Web Management</strong> for the site. The fee covers hosting, daily backups, security and uptime monitoring, software updates at the contracted cadence, and a pool of hands-on hours for site work. Unused hours do not roll over; that is the trade for a predictable monthly.`

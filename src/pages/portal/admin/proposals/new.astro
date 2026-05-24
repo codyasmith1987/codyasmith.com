@@ -861,6 +861,17 @@ const todayISO = new Date().toISOString().slice(0, 10);
       draftBtn.disabled = true;
       pubBtn.disabled = true;
 
+      // Engagement-strategy synthesis subset, pulled from the research
+      // result when present. Used by the composer to drive the
+      // proposal opener (The Situation) and to adapt per-product copy.
+      // Absent for manual composes that skip the research step.
+      const r = state.research_result;
+      const engagement_strategy = r && typeof r === 'object' ? {
+        sales_angles: Array.isArray(r.sales_angles) ? r.sales_angles : [],
+        clv_horizon: r.clv_horizon && typeof r.clv_horizon === 'object' ? r.clv_horizon.signal : null,
+        cody_time_intensity: r.cody_time_intensity && typeof r.cody_time_intensity === 'object' ? r.cody_time_intensity.level : null,
+      } : null;
+
       const payload = {
         client_id: state.client_id,
         status,
@@ -870,6 +881,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           narrative_variables: state.narrative_variables,
           signers: state.signers,
           overrides: state.overrides,
+          engagement_strategy,
         },
       };
 

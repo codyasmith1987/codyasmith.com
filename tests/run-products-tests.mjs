@@ -276,6 +276,132 @@ async function run() {
     buildPricing.monthly === 0, `got ${buildPricing?.monthly}`);
 
   // -------------------------------------------------------------------
+  // Phase 2: engagement-strategy synthesis flows to the composer.
+  // Opener (The Situation) renders from sales_angles; closer (How this
+  // works in practice) renders boundary language; per-product paragraphs
+  // adapt to clv_horizon / cody_time_intensity. None of it names tiers.
+  // -------------------------------------------------------------------
+
+  // (a) composeProposal with strategy: opener + closer present
+  const strategyConfig = composeProposal({
+    client: { id: 'c4', name: 'Strategy Co', slug: 'strategy-co' },
+    signers: [{ id: 's1', name: 'Dana Park', email: 'dana@strategy.com' }],
+    products: ['web-management', 'marketing-consulting'],
+    product_vars: {
+      'web-management': { page_count: 80, site_count: 1 },
+      'marketing-consulting': { revenue_band: '1m-to-10m' },
+    },
+    narrative_variables: { urgency: 'growth' },
+    engagement_strategy: {
+      sales_angles: [
+        { angle: 'The site reads like it was set up once and left alone.', supporting_evidence: 'no copyright update past 2022' },
+        { angle: 'Leadership messaging is buried below the fold on the homepage.', supporting_evidence: 'h2 placement' },
+        { angle: 'Three product lines share one contact form with no routing.', supporting_evidence: 'contact page form action' },
+      ],
+      clv_horizon: 'long-term-stable',
+      cody_time_intensity: 'medium',
+    },
+  });
+  const strategySections = strategyConfig.narrative.sections;
+  test('Phase 2: opener section "The Situation" rendered',
+    strategySections.some(s => s.h2 === 'The Situation'),
+    JSON.stringify(strategySections.map(s => s.h2)));
+  test('Phase 2: opener paragraph contains all three angles',
+    (() => {
+      const opener = strategySections.find(s => s.h2 === 'The Situation');
+      if (!opener) return false;
+      const text = opener.paragraphs.join(' ');
+      return text.includes('set up once and left alone')
+        && text.includes('Leadership messaging is buried')
+        && text.includes('Three product lines share');
+    })());
+  test('Phase 2: closer section "How this works in practice" rendered',
+    strategySections.some(s => s.h2 === 'How this works in practice'),
+    JSON.stringify(strategySections.map(s => s.h2)));
+  test('Phase 2: closer mentions WM hours pool',
+    (() => {
+      const closer = strategySections.find(s => s.h2 === 'How this works in practice');
+      return !!closer && closer.paragraphs.some(p => /pool of hours|hours per cycle/i.test(p));
+    })());
+  test('Phase 2: closer mentions MC strategy cadence',
+    (() => {
+      const closer = strategySections.find(s => s.h2 === 'How this works in practice');
+      return !!closer && closer.paragraphs.some(p => /strategy-call/i.test(p));
+    })());
+  test('Phase 2: closer mentions decision turnaround (5 business days)',
+    (() => {
+      const closer = strategySections.find(s => s.h2 === 'How this works in practice');
+      return !!closer && closer.paragraphs.some(p => /five business days/i.test(p));
+    })());
+  test('Phase 2: closer mentions change orders',
+    (() => {
+      const closer = strategySections.find(s => s.h2 === 'How this works in practice');
+      return !!closer && closer.paragraphs.some(p => /change order/i.test(p));
+    })());
+  test('Phase 2: MC "long-term-stable" adapts what-i-see paragraph',
+    (() => {
+      const see = strategySections.find(s => s.h2 === 'What I see in your business');
+      return !!see && see.paragraphs.some(p => /outside thinker you call/i.test(p));
+    })());
+  test('Phase 2: no tier names appear in client copy (good/better/best)',
+    (() => {
+      const sections = strategySections.filter(s => s.h2 !== 'What I recommend');
+      const text = sections.flatMap(s => s.paragraphs).join(' ').toLowerCase();
+      // "Good" alone is fine as a word; "Better" can appear in compounds
+      // ("better off"). The risk is the exact tier-label tokens.
+      // Check for phrases that would dangle: "the Good tier", "tier Good",
+      // "Better tier", etc.
+      return !/\b(good|better|best)\s+tier\b/.test(text)
+        && !/\btier\s+(good|better|best)\b/.test(text);
+    })());
+
+  // (b) composeProposal with cody_time_intensity = high triggers
+  // WM "heavy on cleanup" framing.
+  const highTimeConfig = composeProposal({
+    client: { id: 'c5', name: 'Heavy Co', slug: 'heavy-co' },
+    signers: [{ id: 's1', name: 'Eli Roy', email: 'eli@heavy.com' }],
+    products: ['web-management'],
+    product_vars: { 'web-management': { page_count: 80, site_count: 1 } },
+    engagement_strategy: {
+      sales_angles: [{ angle: 'Site is on an outdated stack.', supporting_evidence: 'wp-version meta' }],
+      clv_horizon: 'medium-term',
+      cody_time_intensity: 'high',
+    },
+  });
+  test('Phase 2: WM cody_time_intensity=high adds cleanup framing',
+    (() => {
+      const see = highTimeConfig.narrative.sections.find(s => s.h2 === 'What I see in your business');
+      return !!see && see.paragraphs.some(p => /heavy on cleanup|stabilizing what is already in place/i.test(p));
+    })());
+
+  // (c) composeProposal WITHOUT engagement_strategy still composes
+  // cleanly (no opener; closer still renders; no errors).
+  const noStrategyConfig = composeProposal({
+    client: { id: 'c6', name: 'Plain Co', slug: 'plain-co' },
+    signers: [{ id: 's1', name: 'Fay Lee', email: 'fay@plain.com' }],
+    products: ['web-management'],
+    product_vars: { 'web-management': { page_count: 80, site_count: 1 } },
+  });
+  test('Phase 2: no strategy = no opener',
+    !noStrategyConfig.narrative.sections.some(s => s.h2 === 'The Situation'));
+  test('Phase 2: no strategy = closer still present',
+    noStrategyConfig.narrative.sections.some(s => s.h2 === 'How this works in practice'));
+
+  // (d) Em / en dash guard on the new strategy-driven sections.
+  test('Phase 2: opener has no em or en dashes',
+    (() => {
+      const opener = strategySections.find(s => s.h2 === 'The Situation');
+      const text = (opener?.paragraphs || []).join(' ');
+      return !/[–—]/.test(text);
+    })());
+  test('Phase 2: closer has no em or en dashes',
+    (() => {
+      const closer = strategySections.find(s => s.h2 === 'How this works in practice');
+      const text = (closer?.paragraphs || []).join(' ');
+      return !/[–—]/.test(text);
+    })());
+
+  // -------------------------------------------------------------------
   // Summary
   // -------------------------------------------------------------------
   const passed = results.filter(r => r.pass).length;

@@ -92,6 +92,34 @@ export const POST: APIRoute = async ({ locals, request }) => {
       }
     }
     const overrides = (c.overrides && typeof c.overrides === 'object') ? c.overrides : {};
+    // Engagement-strategy synthesis from the wizard's research panel
+    // (subset of ClientResearchResult). Optional; absent on manual
+    // composes that bypass the research step. Validated lightly here:
+    // only sales_angles, clv_horizon, cody_time_intensity survive; any
+    // unexpected fields are ignored. The downstream composer is also
+    // defensive.
+    let engagement_strategy: any = null;
+    if (c.engagement_strategy && typeof c.engagement_strategy === 'object') {
+      const es = c.engagement_strategy as Record<string, unknown>;
+      const sales_angles = Array.isArray(es.sales_angles)
+        ? es.sales_angles
+            .filter((a: any) => a && typeof a === 'object' && typeof a.angle === 'string')
+            .map((a: any) => ({
+              angle: String(a.angle).trim(),
+              supporting_evidence: typeof a.supporting_evidence === 'string'
+                ? a.supporting_evidence.trim()
+                : '',
+            }))
+            .filter((a: any) => a.angle.length > 0)
+        : [];
+      const clvSet = new Set(['long-term-stable', 'medium-term', 'churn-risk', 'unknown']);
+      const intSet = new Set(['low', 'medium', 'high']);
+      engagement_strategy = {
+        sales_angles,
+        clv_horizon: typeof es.clv_horizon === 'string' && clvSet.has(es.clv_horizon) ? es.clv_horizon : null,
+        cody_time_intensity: typeof es.cody_time_intensity === 'string' && intSet.has(es.cody_time_intensity) ? es.cody_time_intensity : null,
+      };
+    }
 
     try {
       config = composeProposal({
@@ -101,6 +129,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
         product_vars,
         narrative_variables,
         overrides,
+        engagement_strategy,
       });
     } catch (err) {
       logger.error('composeProposal failed', err);

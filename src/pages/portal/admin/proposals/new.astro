@@ -835,6 +835,10 @@ const todayISO = new Date().toISOString().slice(0, 10);
         btn.textContent = d.domain + countSuffix + (isPrimary ? ' — primary' : '');
         btn.title = `From ${d.source === 'crawl_urls' ? 'Screaming Frog crawl' : 'rank-tracking upload'}: ${d.url_sample}`;
         btn.addEventListener('click', () => {
+          // If this chip is already the primary domain, do nothing.
+          // Re-triggering save would re-render the panel and wipe
+          // any research results the admin already pulled.
+          if (state.client_domain === d.domain) return;
           researchDomainInput.value = d.domain;
           researchDomainSlot.classList.remove('hidden');
           researchDomainSave.click();

@@ -92,19 +92,40 @@ export async function researchClient(
     }
   }
 
-  // Step 1: Serper queries.
+  // Step 1: Serper queries. Domain-anchored so the actual entity at
+  // the site drives the search even when the client name in the DB
+  // does not match (test fixtures, holding-company / DBA names,
+  // freshly-created clients that have not been renamed yet, etc.).
+  //
+  // The site: operator forces results from the actual domain (and
+  // gives Gemini the site's own about / company / services pages
+  // for ground-truth brand extraction). The "${domain}" + revenue
+  // anchor surfaces press releases or LinkedIn/Crunchbase pages that
+  // reference the domain alongside revenue or employee counts. We
+  // still include one name-based query so engagement-name mentions
+  // get picked up too.
   const searchFn = deps.serperSearch ?? defaultSerperSearch(deps.serperApiKey);
-  const queries = [
-    `"${args.clientName}" revenue OR employees OR annual sales`,
-    `"${args.clientName}" industry "${args.domain}"`,
-    `"${args.clientName}" about OR services OR team`,
+  const queries: Array<{ q: string; tag: string }> = [
+    { q: `site:${args.domain}`, tag: 'site' },
+    { q: `"${args.domain}" revenue OR employees OR annual sales OR funding`, tag: 'revenue' },
+    { q: `"${args.domain}" industry OR services OR team OR about`, tag: 'industry' },
   ];
+  // Keep a name-anchored fallback only when the client name looks
+  // like a real entity (not a test fixture). Heuristic: name has
+  // more than one word and is not literally a test placeholder.
+  const looksLikeRealName = args.clientName
+    && !/^(test|cody[\s_-]?test|sample|fixture|demo)/i.test(args.clientName.trim())
+    && args.clientName.trim().length > 4;
+  if (looksLikeRealName) {
+    queries.push({ q: `"${args.clientName}" revenue OR employees`, tag: 'name' });
+  }
+
   const searchHits: Array<{ url: string; query_type: string; snippet: string }> = [];
-  for (const q of queries) {
+  for (const { q, tag } of queries) {
     try {
       const hits = await searchFn(q, 5);
       for (const h of hits) {
-        searchHits.push({ url: h.url, query_type: 'research', snippet: h.snippet });
+        searchHits.push({ url: h.url, query_type: tag, snippet: h.snippet });
       }
     } catch (err) {
       logger.warn(`proposal-ai research Serper query failed: ${q}`, err);
@@ -120,9 +141,24 @@ export async function researchClient(
     return true;
   }).slice(0, 12); // cap fetch budget
 
-  // Step 2: scrape.
+  // Step 2a: always fetch the site's homepage directly. Even if no
+  // Serper query returned it, scraping the homepage gives Gemini the
+  // most authoritative source for the brand name, what the company
+  // actually does, and which other domains the site links to as
+  // owned properties (parent corp, subsidiaries). This is the single
+  // most useful page in the whole research call.
+  const homepageUrl = `https://${args.domain}/`;
+  const hasHomepage = dedup.some(h => {
+    try { return new URL(h.url).hostname.replace(/^www\./, '') === args.domain; }
+    catch { return false; }
+  });
+  const toScrape = hasHomepage
+    ? dedup
+    : [{ url: homepageUrl, query_type: 'homepage', snippet: '' }, ...dedup];
+
+  // Step 2b: scrape.
   const scrapeFn = deps.scrape ?? scrapeAll;
-  const scraped = await scrapeFn(dedup.map(h => ({ url: h.url, query_type: h.query_type, fallback_snippet: h.snippet })));
+  const scraped = await scrapeFn(toScrape.map(h => ({ url: h.url, query_type: h.query_type, fallback_snippet: h.snippet })));
 
   // Step 3: sitemap fetch for the primary domain.
   const sitemapFn = deps.sitemapFetch ?? fetchSitemapUrlCount;

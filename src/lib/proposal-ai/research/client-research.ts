@@ -31,18 +31,23 @@ import type {
   IndustryGuess,
   UrgencyGuess,
   FocusTag,
+  CmsGuess,
   DomainGuess,
 } from '../types';
 
 const VALID_REVENUE: ReadonlySet<RevenueBand> = new Set(['under-1m', '1m-to-10m', 'over-10m', 'unknown']);
 const VALID_CONFIDENCE: ReadonlySet<ConfidenceLevel> = new Set(['low', 'medium', 'high']);
 const VALID_INDUSTRY: ReadonlySet<IndustryGuess> = new Set([
-  'solo', 'professional-services', 'contractor', 'ecommerce',
+  'solo', 'professional-services', 'contractor', 'manufacturing',
   'family-of-companies', 'nonprofit', 'other', 'unknown',
 ]);
 const VALID_URGENCY: ReadonlySet<UrgencyGuess> = new Set(['tactical', 'growth', 'maintenance', 'unknown']);
 const VALID_FOCUS: ReadonlySet<FocusTag> = new Set([
-  'revenue', 'brand', 'takeover', 'search', 'pre-sell',
+  'brand', 'takeover', 'search', 'pre-sell',
+]);
+const VALID_CMS: ReadonlySet<CmsGuess> = new Set([
+  'wordpress', 'squarespace', 'wix', 'shopify', 'webflow',
+  'duda', 'godaddy-builder', 'custom', 'unknown',
 ]);
 
 export interface ResearchClientArgs {
@@ -339,6 +344,11 @@ export function validateClientResearch(raw: unknown): ClientResearchResult {
     urgency_evidence: strField(o.urgency_evidence, 'urgency_evidence'),
 
     inferred_focus: focus,
+
+    detected_cms: (typeof o.detected_cms === 'string' && VALID_CMS.has(o.detected_cms as CmsGuess))
+      ? (o.detected_cms as CmsGuess)
+      : 'unknown',
+    cms_evidence: typeof o.cms_evidence === 'string' ? o.cms_evidence : '',
 
     domains_found: domains,
     estimated_page_count: pageCount,

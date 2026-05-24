@@ -10,7 +10,7 @@
 // applied per-field with a click. The prompt tells Gemini to be
 // honest about uncertainty (confidence flags, "unknown" fallback).
 
-export const PROMPT_VERSION = 'client-research-v4';
+export const PROMPT_VERSION = 'client-research-v5';
 
 export const SYSTEM_PROMPT = `You are a research assistant for Cody A Smith LLC, a Web Management and Marketing Consulting practice. You look at scraped web content about a prospective client and return a structured assessment used to seed a proposal builder.
 
@@ -88,16 +88,31 @@ export function buildUserPrompt(input: UserPromptInput): string {
   "estimated_revenue_band": "under-1m" | "1m-to-10m" | "over-10m" | "unknown",
   "revenue_evidence": "one short sentence citing the source",
   "revenue_confidence": "low" | "medium" | "high",
-  "inferred_industry": "solo" | "professional-services" | "contractor" | "ecommerce" | "family-of-companies" | "nonprofit" | "other" | "unknown",
+  "inferred_industry": "solo" | "professional-services" | "contractor" | "manufacturing" | "family-of-companies" | "nonprofit" | "other" | "unknown",
   "industry_evidence": "one short sentence",
   "inferred_urgency": "tactical" | "growth" | "maintenance" | "unknown",
   "urgency_evidence": "one short sentence",
-  "inferred_focus": ["revenue" | "brand" | "takeover" | "search" | "pre-sell"],
+  "inferred_focus": ["brand" | "takeover" | "search" | "pre-sell"],
+  "detected_cms": "wordpress" | "squarespace" | "wix" | "shopify" | "webflow" | "duda" | "godaddy-builder" | "custom" | "unknown",
+  "cms_evidence": "one short sentence citing the specific HTML / generator signal",
   "domains_found": [{"domain": "...", "role_guess": "primary" | "micro-site" | "subsidiary" | "other", "confidence": "low" | "medium" | "high"}],
   "estimated_page_count": number | null,
   "page_count_source": "one short sentence",
   "notes": "anything Cody should read first"
-}`);
+}
+
+CMS detection guidance. Inspect the scraped homepage HTML for these signals:
+  - wordpress: wp-content / wp-includes / /wp-json/ paths, generator meta "WordPress", classes prefixed wp-, theme paths under /wp-content/themes/
+  - squarespace: static1.squarespace.com or sqsp- asset URLs, sqs- prefixed classes, generator meta
+  - wix: parastorage.com or wixstatic.com asset URLs, _wix_ prefixed identifiers
+  - shopify: cdn.shopify.com asset URLs, shopify- prefixed classes
+  - webflow: webflow.com or website-files.com asset URLs, w- prefixed classes
+  - duda: dudamobile.com or multiscreensite.com assets
+  - godaddy-builder: godaddysites.com, secureserver.net builder hosts
+  - custom: bespoke build, no recognizable platform signals
+  - unknown: cannot determine from the scraped content
+
+When in doubt, return "unknown" with low cms_evidence rather than guessing.`);
   return lines.join('\n');
 }
 
@@ -115,6 +130,8 @@ export const RESPONSE_SCHEMA: any = {
     inferred_urgency: { type: 'STRING' },
     urgency_evidence: { type: 'STRING' },
     inferred_focus: { type: 'ARRAY', items: { type: 'STRING' } },
+    detected_cms: { type: 'STRING' },
+    cms_evidence: { type: 'STRING' },
     domains_found: {
       type: 'ARRAY',
       items: {
@@ -140,6 +157,8 @@ export const RESPONSE_SCHEMA: any = {
     'inferred_urgency',
     'urgency_evidence',
     'inferred_focus',
+    'detected_cms',
+    'cms_evidence',
     'domains_found',
     'estimated_page_count',
     'page_count_source',

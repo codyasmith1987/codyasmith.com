@@ -245,7 +245,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
               <option value="solo">Solo professional</option>
               <option value="professional-services">Professional services firm</option>
               <option value="contractor">Contractor or trades</option>
-              <option value="ecommerce">E-commerce</option>
+              <option value="manufacturing">Manufacturing</option>
               <option value="family-of-companies">Family of companies</option>
               <option value="nonprofit">Nonprofit</option>
               <option value="other">Other</option>
@@ -262,8 +262,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           </div>
           <div>
             <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2" for="narr_focus">Focus</label>
-            <select id="narr_focus" multiple size="5" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
-              <option value="revenue">Revenue</option>
+            <select id="narr_focus" multiple size="4" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
               <option value="brand">Brand</option>
               <option value="takeover">Takeover</option>
               <option value="search">Search</option>
@@ -1228,6 +1227,19 @@ const todayISO = new Date().toISOString().slice(0, 10);
             }
           },
           disabled: !r.inferred_focus || r.inferred_focus.length === 0,
+        },
+        {
+          label: 'CMS detected',
+          value: r.detected_cms || 'unknown',
+          evidence: r.cms_evidence || '',
+          confidence: r.detected_cms && r.detected_cms !== 'unknown' ? 'high' : 'low',
+          // Informational. No Apply target (the CMS is not a
+          // wizard variable today). Future PR can route this into a
+          // Build product recommendation or migration framing.
+          apply: () => {
+            showResearchApplyMsg(`CMS noted as ${r.detected_cms}. No variable to apply this to yet.`, 'ok');
+          },
+          disabled: !r.detected_cms || r.detected_cms === 'unknown',
         },
         {
           label: 'Page count',

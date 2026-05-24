@@ -19,6 +19,7 @@ import Portal from '../../../../layouts/Portal.astro';
 import { getAllClients, getUsersByClientId } from '../../../../lib/auth';
 import turso from '../../../../lib/turso';
 import { PRODUCT_REGISTRY, PRODUCT_ORDER } from '../../../../lib/products';
+import { getClientDomainsFromData } from '../../../../lib/client-domains';
 
 export const prerender = false;
 
@@ -37,6 +38,24 @@ for (const c of clients) {
   usersByClient[c.id] = users
     .filter(u => u.role !== 'admin')
     .map(u => ({ id: u.id, name: u.name, email: u.email }));
+}
+
+// Derived domains per client: hostnames extracted from already-
+// uploaded Screaming Frog Internal HTML crawls (crawl_urls) and
+// rank-tracking data (keyword_rankings). Empty for clients with
+// neither type of upload; the wizard then falls back to the manual
+// single-domain input.
+const derivedDomainsByClient: Record<string, Array<{ domain: string; source: string; url_sample: string; url_count: number }>> = {};
+for (const c of clients) {
+  const derived = await getClientDomainsFromData(c.id);
+  if (derived.length > 0) {
+    derivedDomainsByClient[c.id] = derived.map(d => ({
+      domain: d.domain,
+      source: d.source,
+      url_sample: d.url_sample,
+      url_count: d.url_count,
+    }));
+  }
 }
 
 // Latest aggregate total_urls per client so the WM page_count input
@@ -144,6 +163,16 @@ const todayISO = new Date().toISOString().slice(0, 10);
               class="px-4 py-2 bg-amber-500/10 border border-amber-500/40 text-amber-300 text-xs rounded-md hover:bg-amber-500/20 transition-colors">
               Research this client
             </button>
+          </div>
+
+          <!-- Domains detected from already-uploaded data: Screaming
+               Frog Internal HTML crawls plus rank-tracking uploads.
+               Shows when at least one is found; otherwise hidden and
+               the manual input below is the only path. -->
+          <div id="derived-domains-slot" class="hidden mt-3 p-3 bg-neutral-900/40 border border-amber-500/20 rounded-md">
+            <p class="text-[10px] font-mono text-amber-400 tracking-wide uppercase mb-2">Detected from your uploaded data</p>
+            <div id="derived-domains-list" class="flex flex-wrap gap-2"></div>
+            <p class="text-[11px] text-neutral-500 mt-2">Click one to use it as the primary domain for this client.</p>
           </div>
 
           <div id="research-domain-slot" class="hidden mt-3 p-3 bg-neutral-900/40 border border-amber-500/20 rounded-md">
@@ -295,7 +324,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
     </form>
   </div>
 
-  <script is:inline define:vars={{ todayLong, productManifest, usersByClient, latestTotalUrls }}>
+  <script is:inline define:vars={{ todayLong, productManifest, usersByClient, latestTotalUrls, derivedDomainsByClient }}>
     // =========================================================================
     // Wizard state
     // =========================================================================
@@ -781,6 +810,38 @@ const todayISO = new Date().toISOString().slice(0, 10);
     const researchDomainMsg = document.getElementById('research-domain-msg');
     const researchStatus = document.getElementById('research-status');
     const researchResults = document.getElementById('research-results');
+    const derivedDomainsSlot = document.getElementById('derived-domains-slot');
+    const derivedDomainsList = document.getElementById('derived-domains-list');
+
+    function renderDerivedDomains() {
+      derivedDomainsList.innerHTML = '';
+      const list = derivedDomainsByClient[state.client_id] || [];
+      if (list.length === 0) {
+        derivedDomainsSlot.classList.add('hidden');
+        return;
+      }
+      derivedDomainsSlot.classList.remove('hidden');
+      for (const d of list) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        const isPrimary = state.client_domain === d.domain;
+        btn.className = 'px-3 py-1.5 text-xs rounded-md font-mono transition-colors ' +
+          (isPrimary
+            ? 'bg-amber-500/20 border border-amber-500/60 text-amber-300'
+            : 'bg-neutral-900/60 border border-white/10 text-neutral-300 hover:border-amber-500/40 hover:text-amber-400');
+        // Show the URL count next to the hostname so admin can see how
+        // much crawl data backs each derived domain.
+        const countSuffix = d.url_count > 1 ? ` (${d.url_count} URLs)` : '';
+        btn.textContent = d.domain + countSuffix + (isPrimary ? ' — primary' : '');
+        btn.title = `From ${d.source === 'crawl_urls' ? 'Screaming Frog crawl' : 'rank-tracking upload'}: ${d.url_sample}`;
+        btn.addEventListener('click', () => {
+          researchDomainInput.value = d.domain;
+          researchDomainSlot.classList.remove('hidden');
+          researchDomainSave.click();
+        });
+        derivedDomainsList.appendChild(btn);
+      }
+    }
 
     function refreshResearchPanel() {
       if (!state.client_id) {
@@ -791,6 +852,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
       researchResults.classList.add('hidden');
       researchResults.innerHTML = '';
       researchStatus.classList.add('hidden');
+      renderDerivedDomains();
       if (state.client_domain) {
         researchDomainSlot.classList.add('hidden');
         researchBtn.disabled = false;

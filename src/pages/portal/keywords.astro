@@ -233,7 +233,7 @@ const clients = isAdmin ? await getAllClients() : [];
               </span>
               <div class="min-w-0">
                 <span class="text-sm text-neutral-200 block truncate">${escapeHtml(k.keyword)}</span>
-                ${k.url ? `<span class="text-[10px] text-neutral-500 block truncate mt-0.5">${escapeHtml(urlDisplay)}</span>` : ''}
+                ${k.url ? `<a href="${escapeHtml(k.url)}" target="_blank" rel="noopener noreferrer" class="text-[10px] text-amber-600 hover:underline block truncate mt-0.5">${escapeHtml(urlDisplay)}</a>` : ''}
               </div>
             </div>
             <div class="flex items-center gap-5 shrink-0 ml-4">

@@ -4,6 +4,7 @@ export type CsvFormat =
   | 'position_tracking'
   | 'issues_overview'
   | 'crawl_overview'
+  | 'crawl_internal'
   | 'image_optimization'
   | 'keyword_research'
   | 'keyword_suggestions'
@@ -40,6 +41,15 @@ const SIGNATURES: FormatSignature[] = [
   {
     format: 'accessibility',
     requiredColumns: ['address', 'wcag 2.0 a violations'],
+  },
+  {
+    // Screaming Frog Internal HTML export. Per-URL crawl data: one
+    // row per crawled page. Detect by the SF-specific combination of
+    // Address + Status Code + Indexability + Title 1 (the four
+    // columns that are always present in the Internal HTML export
+    // and not present together in any other SF report we parse).
+    format: 'crawl_internal',
+    requiredColumns: ['address', 'status code', 'indexability', 'title 1'],
   },
 ];
 

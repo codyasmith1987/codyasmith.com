@@ -5,6 +5,8 @@ import { parse as parsePositionTracking } from './parsers/position-tracking';
 import { parse as parseIssuesOverview } from './parsers/issues-overview';
 import { parse as parseCrawlOverview } from './parsers/crawl-overview';
 import { parse as parseCrawlInternal } from './parsers/crawl-internal';
+import { parse as parseRedirects } from './parsers/redirects';
+import { parse as parseImages } from './parsers/images';
 import { parse as parseImageOptimization } from './parsers/image-optimization';
 import { parse as parseKeywordResearch } from './parsers/keyword-research';
 import { parse as parseKeywordSuggestions } from './parsers/keyword-suggestions';
@@ -19,6 +21,8 @@ const FORMAT_SOURCES: Record<string, { tables: string[]; source: string }> = {
   issues_overview: { tables: ['site_issues', 'metrics'], source: 'issues_overview' },
   crawl_overview: { tables: ['metrics'], source: 'crawl_overview' },
   crawl_internal: { tables: ['crawl_urls'], source: 'crawl_internal' },
+  redirects: { tables: ['redirect_chains'], source: 'redirects' },
+  images: { tables: ['image_urls'], source: 'images' },
   image_optimization: { tables: ['metrics'], source: 'image_optimization' },
   site_audit: { tables: ['site_issues'], source: 'site_audit' },
   accessibility: { tables: ['metrics'], source: 'accessibility' },
@@ -109,6 +113,12 @@ export async function ingestCSV(
         break;
       case 'crawl_internal':
         rowCount = await parseCrawlInternal(raw, clientId, month, uploadId);
+        break;
+      case 'redirects':
+        rowCount = await parseRedirects(raw, clientId, month, uploadId);
+        break;
+      case 'images':
+        rowCount = await parseImages(raw, clientId, month, uploadId);
         break;
       case 'image_optimization':
         rowCount = await parseImageOptimization(raw, clientId, month, uploadId);

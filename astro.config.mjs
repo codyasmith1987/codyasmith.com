@@ -26,19 +26,17 @@ export default defineConfig({
     }),
   ],
   adapter: node({ mode: 'standalone' }),
-  // checkOrigin is disabled. It rejects multipart POSTs as 403 when
-  // Origin does not match request.url.host. Behind Cloudflare + DO
-  // the host header sometimes resolves to the DO ingress instead of
-  // codyasmith.com, so the check returns false positives on legit
-  // uploads (csv.astro file uploads were getting "Cross-site POST
-  // form submissions are forbidden" 403s from the framework).
+  // checkOrigin stays false at the framework level: it builds the
+  // host from request.url.host, which behind Cloudflare + DO can
+  // resolve to the DO ingress (seahorse-app-pnt3t.ondigitalocean.app)
+  // instead of codyasmith.com and produce false-positive 403s on
+  // legitimate multipart uploads.
   //
-  // Our own CSRF protection lives in src/middleware.ts (X-CSRF-Token
-  // header validated against a session-scoped token). That is
-  // stronger than checkOrigin for the actual attack pattern (a cross-
-  // site form post can include cookies but cannot set the
-  // X-CSRF-Token header), so removing the framework-level check does
-  // not reduce real security.
+  // The Origin check is restored in src/middleware.ts against an
+  // explicit allow-list (codyasmith.com, www.codyasmith.com), so the
+  // defense-in-depth layer remains. Combined with the existing
+  // X-CSRF-Token check, two independent defenses gate every
+  // state-mutating /portal/api/ request.
   security: {
     checkOrigin: false
   },

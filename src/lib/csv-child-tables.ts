@@ -23,4 +23,8 @@ export const CSV_CHILD_TABLES: string[] = [
   'security_urls',
   'structured_data_urls',
   'accessibility_urls',
+  // Catch-all storage for uploads the portal accepted but does not
+  // yet have a typed parser for. Swept on re-upload + delete so the
+  // same filename can't accumulate raw copies.
+  'raw_csv_data',
 ];

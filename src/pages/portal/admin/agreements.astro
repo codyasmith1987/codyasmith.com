@@ -116,6 +116,18 @@ const statusLabel: Record<string, string> = {
       </div>
     )}
 
+    <details class="mb-6 group">
+      <summary class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase cursor-pointer hover:text-amber-600 transition-colors duration-300 select-none">Status guide</summary>
+      <div class="mt-3 p-4 bg-neutral-900/30 border border-white/5 rounded-lg space-y-2 text-sm text-neutral-300">
+        <p><span class="inline-block text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded bg-neutral-700/30 text-neutral-500 mr-2">Draft</span>Saved but not yet sent to signers. No emails out yet.</p>
+        <p><span class="inline-block text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 mr-2">Issued</span>Sent to signers. Invite emails are out and the contract page is live for signing.</p>
+        <p><span class="inline-block text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded bg-amber-500/15 text-amber-700 mr-2">Partial</span>One or more signers have signed; at least one still has not.</p>
+        <p><span class="inline-block text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-700 mr-2">Executed</span>Every required signer has signed. The agreement is in force.</p>
+        <p><span class="inline-block text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded bg-amber-500/15 text-amber-700 mr-2">Revoked</span>I pulled it back after issuing but before any signature. Signers see the agreement is no longer active.</p>
+        <p><span class="inline-block text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded bg-red-500/15 text-red-700 mr-2">Voided</span>Cancelled after at least one signature. The agreement was active and is now cancelled by either party.</p>
+      </div>
+    </details>
+
     {agreementSummaries.length > 0 ? (
       <div class="space-y-3">
         {agreementSummaries.map(a => (

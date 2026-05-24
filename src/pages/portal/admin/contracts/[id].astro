@@ -65,6 +65,16 @@ const statusColors: Record<string, string> = {
               <option value={s} selected={s === contract.status}>{s}</option>
             ))}
           </select>
+          <details class="mt-2 group">
+            <summary class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase cursor-pointer hover:text-amber-600 transition-colors select-none">What each status means</summary>
+            <div class="mt-2 text-[11px] text-neutral-400 space-y-1">
+              <p><strong class="text-neutral-200">draft:</strong> In progress, not delivered to client.</p>
+              <p><strong class="text-neutral-200">sent:</strong> Delivered for signature; awaiting countersignature.</p>
+              <p><strong class="text-neutral-200">active:</strong> Both parties signed; engagement is in effect.</p>
+              <p><strong class="text-neutral-200">completed:</strong> Engagement ended cleanly (term expired or all deliverables met).</p>
+              <p><strong class="text-neutral-200">cancelled:</strong> Ended early by either party.</p>
+            </div>
+          </details>
         </div>
         <div>
           <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Type</label>

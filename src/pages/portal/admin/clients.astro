@@ -144,8 +144,9 @@ const clients = await getAllClients();
     // Toggle active/inactive
     document.querySelectorAll('[data-toggle-client]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const clientId = (btn as HTMLElement).dataset.toggleClient!;
-        const isActive = (btn as HTMLElement).dataset.clientActive === '1';
+        const button = btn as HTMLButtonElement;
+        const clientId = button.dataset.toggleClient!;
+        const isActive = button.dataset.clientActive === '1';
 
         if (isActive) {
           const confirmed = await (window as any).__confirm({
@@ -157,20 +158,24 @@ const clients = await getAllClients();
           if (!confirmed) return;
         }
 
-        const res = await fetch('/portal/api/admin/toggle-client', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify({ client_id: clientId }),
+        await (window as any).__withButtonLoading(button, isActive ? 'Deactivating…' : 'Activating…', async () => {
+          const res = await fetch('/portal/api/admin/toggle-client', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ client_id: clientId }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const badge = document.querySelector(`[data-client-badge="${clientId}"]`)!;
+            badge.textContent = data.active ? 'Active' : 'Inactive';
+            badge.className = `text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${data.active ? 'bg-emerald-500/15 text-emerald-700' : 'bg-neutral-800 text-neutral-500'}`;
+            button.textContent = data.active ? 'Deactivate' : 'Activate';
+            button.dataset.clientActive = data.active ? '1' : '0';
+            (window as any).__toast(`Client ${data.active ? 'activated' : 'deactivated'}.`, 'success');
+          } else {
+            (window as any).__toast('Failed to toggle client.', 'error');
+          }
         });
-
-        if (res.ok) {
-          const data = await res.json();
-          const badge = document.querySelector(`[data-client-badge="${clientId}"]`)!;
-          badge.textContent = data.active ? 'Active' : 'Inactive';
-          badge.className = `text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${data.active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-neutral-800 text-neutral-500'}`;
-          (btn as HTMLElement).textContent = data.active ? 'Deactivate' : 'Activate';
-          (btn as HTMLElement).dataset.clientActive = data.active ? '1' : '0';
-        }
       });
     });
 
@@ -204,7 +209,8 @@ const clients = await getAllClients();
     });
     document.querySelectorAll('[data-save-edit]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const id = (btn as HTMLElement).dataset.saveEdit!;
+        const button = btn as HTMLButtonElement;
+        const id = button.dataset.saveEdit!;
         const nameEl = document.querySelector(`[data-edit-name="${id}"]`) as HTMLInputElement;
         const domainEl = document.querySelector(`[data-edit-domain="${id}"]`) as HTMLInputElement;
         const discountEl = document.querySelector(`[data-edit-discount="${id}"]`) as HTMLInputElement;
@@ -213,44 +219,50 @@ const clients = await getAllClients();
         const name = nameEl.value.trim();
         const domainRaw = domainEl.value.trim();
         const discountPct = parseFloat(discountEl.value);
+        // Discount input is a percentage (0-100). Stored as a decimal
+        // (0-1.0). Clamping happens here so server gets a valid rate.
         const discountRate = Number.isFinite(discountPct) ? Math.max(0, Math.min(100, discountPct)) / 100 : 0;
 
-        msgEl.textContent = 'Saving...';
-        msgEl.className = 'text-[11px] text-neutral-400';
+        msgEl.textContent = 'Saving…';
+        msgEl.className = 'text-[11px] text-neutral-500';
         msgEl.classList.remove('hidden');
 
-        let res;
-        try {
-          res = await fetch('/portal/api/admin/clients/update', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-            body: JSON.stringify({
-              client_id: id,
-              name,
-              domain: domainRaw,
-              discount_rate: discountRate,
-            }),
-          });
-        } catch (err: any) {
-          msgEl.textContent = `Network error: ${err?.message || 'fetch failed'}`;
-          msgEl.className = 'text-[11px] text-red-400';
-          return;
-        }
-        const rawText = await res.text();
-        let data: any = null;
-        try { data = rawText ? JSON.parse(rawText) : null; } catch {}
-        if (res.ok && data && data.ok) {
-          msgEl.textContent = 'Saved';
-          msgEl.className = 'text-[11px] text-emerald-400';
-          // Update display in place.
-          const nameDisplay = document.querySelector(`[data-client-name-display="${id}"]`);
-          if (nameDisplay) nameDisplay.textContent = name;
-          setTimeout(() => location.reload(), 600);
-        } else {
-          const errMsg = (data && data.error) ? data.error : `HTTP ${res.status}${rawText ? ': ' + rawText.slice(0, 140) : ''}`;
-          msgEl.textContent = errMsg;
-          msgEl.className = 'text-[11px] text-red-400';
-        }
+        await (window as any).__withButtonLoading(button, 'Saving…', async () => {
+          let res;
+          try {
+            res = await fetch('/portal/api/admin/clients/update', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+              body: JSON.stringify({
+                client_id: id,
+                name,
+                domain: domainRaw,
+                discount_rate: discountRate,
+              }),
+            });
+          } catch (err: any) {
+            msgEl.textContent = `Network error: ${err?.message || 'fetch failed'}`;
+            msgEl.className = 'text-[11px] text-red-700';
+            (window as any).__toast('Network error saving client.', 'error');
+            return;
+          }
+          const rawText = await res.text();
+          let data: any = null;
+          try { data = rawText ? JSON.parse(rawText) : null; } catch {}
+          if (res.ok && data && data.ok) {
+            msgEl.textContent = `Saved. Discount stored as ${(discountRate * 100).toFixed(discountRate * 100 % 1 === 0 ? 0 : 1)}%.`;
+            msgEl.className = 'text-[11px] text-emerald-700';
+            const nameDisplay = document.querySelector(`[data-client-name-display="${id}"]`);
+            if (nameDisplay) nameDisplay.textContent = name;
+            (window as any).__toast(`Client "${name}" saved.`, 'success');
+            setTimeout(() => location.reload(), 800);
+          } else {
+            const errMsg = (data && data.error) ? data.error : `HTTP ${res.status}${rawText ? ': ' + rawText.slice(0, 140) : ''}`;
+            msgEl.textContent = errMsg;
+            msgEl.className = 'text-[11px] text-red-700';
+            (window as any).__toast(errMsg, 'error');
+          }
+        });
       });
     });
 

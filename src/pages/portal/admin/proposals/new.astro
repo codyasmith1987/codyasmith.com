@@ -1730,41 +1730,18 @@ const todayISO = new Date().toISOString().slice(0, 10);
       });
     });
 
-    // Floating toast container, created once and reused. Lives at the
-    // bottom-right of the viewport so the admin sees confirmation no
-    // matter where they're scrolled. The inline research-status text
-    // also still updates so the message lands in the panel for accessibility.
-    let researchToastEl = null;
-    let researchToastTimer = null;
-    function ensureResearchToast() {
-      if (researchToastEl) return researchToastEl;
-      researchToastEl = document.createElement('div');
-      researchToastEl.id = 'research-apply-toast';
-      researchToastEl.className = 'hidden fixed bottom-6 right-6 z-50 max-w-sm px-4 py-3 rounded-lg shadow-lg text-sm font-medium';
-      researchToastEl.setAttribute('role', 'status');
-      researchToastEl.setAttribute('aria-live', 'polite');
-      document.body.appendChild(researchToastEl);
-      return researchToastEl;
-    }
     function showResearchApplyMsg(text, type) {
-      // Inline (in-panel) status, for context near the research button.
+      // Inline (in-panel) status for accessibility and context near the
+      // research button. The viewport-anchored confirmation comes from
+      // the shared portal Toast (window.__toast in components/portal/Toast.astro)
+      // which auto-positions bottom-right and dismisses after 4s.
       researchStatus.textContent = text;
       researchStatus.className = 'mt-3 text-[11px] ' + (type === 'ok' ? 'text-emerald-700' : 'text-red-700');
       researchStatus.classList.remove('hidden');
-      // Floating toast, viewport-anchored. Visible regardless of scroll.
-      const toast = ensureResearchToast();
-      toast.textContent = text;
-      toast.className = 'fixed bottom-6 right-6 z-50 max-w-sm px-4 py-3 rounded-lg shadow-lg text-sm font-medium ' + (
-        type === 'ok'
-          ? 'bg-emerald-500/15 border border-emerald-500/40 text-emerald-800'
-          : 'bg-red-500/15 border border-red-500/40 text-red-800'
-      );
-      toast.classList.remove('hidden');
-      if (researchToastTimer) clearTimeout(researchToastTimer);
-      researchToastTimer = setTimeout(() => {
-        researchStatus.classList.add('hidden');
-        toast.classList.add('hidden');
-      }, 4000);
+      setTimeout(() => researchStatus.classList.add('hidden'), 4000);
+      if (typeof window.__toast === 'function') {
+        window.__toast(text, type === 'ok' ? 'success' : 'error');
+      }
     }
   </script>
 </Portal>

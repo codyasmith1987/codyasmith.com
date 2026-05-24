@@ -256,9 +256,10 @@ const statusBadge: Record<string, string> = {
 
     document.querySelectorAll('[data-delete-proposal]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const slug = (btn as HTMLElement).dataset.deleteProposal!;
-        const title = (btn as HTMLElement).dataset.proposalTitle || slug;
-        const clientName = (btn as HTMLElement).dataset.clientName || '';
+        const button = btn as HTMLButtonElement;
+        const slug = button.dataset.deleteProposal!;
+        const title = button.dataset.proposalTitle || slug;
+        const clientName = button.dataset.clientName || '';
 
         const confirmed = await (window as any).__confirm({
           title: `Delete proposal`,
@@ -268,23 +269,26 @@ const statusBadge: Record<string, string> = {
         });
         if (!confirmed) return;
 
-        const res = await fetch(`/portal/api/admin/proposals/${encodeURIComponent(slug)}`, {
-          method: 'DELETE',
-          headers: { 'X-CSRF-Token': csrfToken },
-        });
+        await (window as any).__withButtonLoading(button, 'Deleting…', async () => {
+          const res = await fetch(`/portal/api/admin/proposals/${encodeURIComponent(slug)}`, {
+            method: 'DELETE',
+            headers: { 'X-CSRF-Token': csrfToken },
+          });
 
-        if (res.ok) {
-          const row = document.querySelector(`[data-proposal-row="${slug}"]`) as HTMLElement | null;
-          if (row) {
-            row.style.opacity = '0';
-            row.style.transform = 'translateY(-8px)';
-            row.style.transition = 'all 0.3s ease';
-            setTimeout(() => row.remove(), 300);
+          if (res.ok) {
+            (window as any).__toast(`Deleted "${title}"`, 'success');
+            const row = document.querySelector(`[data-proposal-row="${slug}"]`) as HTMLElement | null;
+            if (row) {
+              row.style.opacity = '0';
+              row.style.transform = 'translateY(-8px)';
+              row.style.transition = 'all 0.3s ease';
+              setTimeout(() => row.remove(), 300);
+            }
+          } else {
+            const data = await res.json().catch(() => ({ error: 'Failed to delete' }));
+            (window as any).__toast(data.error || 'Failed to delete proposal', 'error');
           }
-        } else {
-          const data = await res.json().catch(() => ({ error: 'Failed to delete' }));
-          (window as any).__toast(data.error || 'Failed to delete proposal', 'error');
-        }
+        });
       });
     });
   </script>

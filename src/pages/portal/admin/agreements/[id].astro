@@ -159,25 +159,46 @@ const csrfToken = Astro.locals.csrfToken || '';
     }).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); });
   }
 
+  // Run a button-bound async action with consistent loading + toast
+  // feedback. Wraps a fetch, disables the button + swaps its label for
+  // the duration, restores both on completion, and fires a toast.
+  // Keeps all five action buttons on this page from double-firing.
+  function runWithButton(btn, loadingText, doFetch, onSuccess) {
+    var originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = loadingText;
+    return doFetch().then(function(r) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+      if (r.ok) {
+        if (onSuccess) onSuccess(r);
+      } else {
+        window.__toast((r.data && r.data.error) || 'Action failed', 'error');
+      }
+      return r;
+    }).catch(function(err) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+      window.__toast(err && err.message ? err.message : 'Network error', 'error');
+    });
+  }
+
   var issueBtn = document.getElementById('issue-btn');
   if (issueBtn) issueBtn.addEventListener('click', function() {
     if (!confirm('Send the contract-issued email to all signers and flip status to "issued"?')) return;
-    issueBtn.disabled = true;
-    api('/portal/api/admin/agreements/' + slug + '/issue', 'POST', {}).then(function(r) {
-      if (r.ok) window.location.reload();
-      else { alert((r.data && r.data.error) || 'Issue failed'); issueBtn.disabled = false; }
-    });
+    runWithButton(issueBtn, 'Issuing…',
+      function() { return api('/portal/api/admin/agreements/' + slug + '/issue', 'POST', {}); },
+      function() { window.__toast('Agreement issued and signers notified.', 'success'); setTimeout(function() { window.location.reload(); }, 600); }
+    );
   });
 
   var reissueBtn = document.getElementById('reissue-btn');
   if (reissueBtn) reissueBtn.addEventListener('click', function() {
     if (!confirm('Resend invite emails to all signers?')) return;
-    reissueBtn.disabled = true;
-    api('/portal/api/admin/agreements/' + slug + '/issue', 'POST', {}).then(function(r) {
-      if (r.ok) alert('Resent.');
-      else alert((r.data && r.data.error) || 'Resend failed');
-      reissueBtn.disabled = false;
-    });
+    runWithButton(reissueBtn, 'Resending…',
+      function() { return api('/portal/api/admin/agreements/' + slug + '/issue', 'POST', {}); },
+      function() { window.__toast('Invite emails resent to all signers.', 'success'); }
+    );
   });
 
   var cancelBtn = document.getElementById('cancel-btn');
@@ -185,11 +206,10 @@ const csrfToken = Astro.locals.csrfToken || '';
     var reason = prompt('Reason for cancelling (optional):');
     if (reason === null) return;
     if (!confirm('Cancel this agreement? This sets status to voided.')) return;
-    cancelBtn.disabled = true;
-    api('/portal/api/admin/agreements/' + slug + '/cancel', 'POST', { reason: reason }).then(function(r) {
-      if (r.ok) window.location.reload();
-      else { alert((r.data && r.data.error) || 'Cancel failed'); cancelBtn.disabled = false; }
-    });
+    runWithButton(cancelBtn, 'Cancelling…',
+      function() { return api('/portal/api/admin/agreements/' + slug + '/cancel', 'POST', { reason: reason }); },
+      function() { window.__toast('Agreement cancelled.', 'success'); setTimeout(function() { window.location.reload(); }, 600); }
+    );
   });
 
   var saveScheduleBtn = document.getElementById('save-schedule');
@@ -199,20 +219,23 @@ const csrfToken = Astro.locals.csrfToken || '';
     var parsed;
     try { parsed = JSON.parse(scheduleEditor.value); } catch (e) {
       scheduleStatus.textContent = 'Invalid JSON';
-      scheduleStatus.className = 'text-xs text-red-400';
+      scheduleStatus.className = 'text-xs text-red-700';
+      window.__toast('Schedule A is not valid JSON.', 'error');
       return;
     }
-    saveScheduleBtn.disabled = true;
-    scheduleStatus.textContent = 'Saving...';
+    scheduleStatus.textContent = 'Saving…';
     scheduleStatus.className = 'text-xs text-neutral-500';
-    api('/portal/api/admin/agreements/' + slug, 'PATCH', { schedule_a: parsed }).then(function(r) {
-      saveScheduleBtn.disabled = false;
-      if (r.ok) {
+    runWithButton(saveScheduleBtn, 'Saving…',
+      function() { return api('/portal/api/admin/agreements/' + slug, 'PATCH', { schedule_a: parsed }); },
+      function() {
         scheduleStatus.textContent = 'Saved. Active signers notified of change.';
-        scheduleStatus.className = 'text-xs text-emerald-400';
-      } else {
+        scheduleStatus.className = 'text-xs text-emerald-700';
+        window.__toast('Schedule A saved. Active signers were notified.', 'success');
+      }
+    ).then(function(r) {
+      if (r && !r.ok) {
         scheduleStatus.textContent = (r.data && r.data.error) || 'Save failed';
-        scheduleStatus.className = 'text-xs text-red-400';
+        scheduleStatus.className = 'text-xs text-red-700';
       }
     });
   });
@@ -220,11 +243,10 @@ const csrfToken = Astro.locals.csrfToken || '';
   var saveNoteBtn = document.getElementById('save-note');
   var noteEditor = document.getElementById('personal-note-editor');
   saveNoteBtn.addEventListener('click', function() {
-    saveNoteBtn.textContent = 'Saving...';
-    api('/portal/api/admin/agreements/' + slug, 'PATCH', { personal_note: noteEditor.value }).then(function(r) {
-      saveNoteBtn.textContent = r.ok ? 'Saved' : 'Save failed';
-      setTimeout(function() { saveNoteBtn.textContent = 'Save note'; }, 1400);
-    });
+    runWithButton(saveNoteBtn, 'Saving…',
+      function() { return api('/portal/api/admin/agreements/' + slug, 'PATCH', { personal_note: noteEditor.value }); },
+      function() { window.__toast('Personal note saved.', 'success'); }
+    );
   });
 
   var verifyBtn = document.getElementById('verify-hashes-btn');

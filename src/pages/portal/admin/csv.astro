@@ -171,8 +171,10 @@ function formatLabel(format: string): string {
         if (f.name.toLowerCase().endsWith('.csv')) dt.items.add(f);
       }
       filesInput.files = dt.files;
-      // Visual cue: show the count next to the picker.
-      progress.textContent = `${dt.files.length} CSV file(s) queued from folder pick.`;
+      // Visual cue: show the count next to the picker. Prefix "Queued:"
+      // so the distinction between queue status and active upload
+      // progress is unambiguous later.
+      progress.textContent = `Queued: ${dt.files.length} CSV file(s) from folder pick. Click Upload to process.`;
       progress.classList.remove('hidden');
     });
 
@@ -203,7 +205,9 @@ function formatLabel(format: string): string {
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      const originalBtnText = btn.textContent;
       btn.disabled = true;
+      btn.textContent = 'Uploading…';
       resultsDiv.innerHTML = '';
       resultsDiv.classList.remove('hidden');
 
@@ -276,7 +280,14 @@ function formatLabel(format: string): string {
       }
 
       progress.textContent = `Done. ${files.length} file(s) processed across ${batches.length} batch(es).`;
+      btn.textContent = originalBtnText;
       btn.disabled = false;
+      // Toast confirms upload completion regardless of scroll position;
+      // results cards still render below, but the admin doesn't have to
+      // scroll to see that something happened.
+      (window as any).__toast(`Processed ${files.length} CSV file${files.length === 1 ? '' : 's'}. Updates feed dashboard, health, and metrics.`, 'success');
+      // Auto-scroll to the results so admin sees the cards.
+      resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
 
     // ---- Per-row delete + bulk clear-failed ----

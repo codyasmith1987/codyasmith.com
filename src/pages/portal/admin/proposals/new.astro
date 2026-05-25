@@ -431,15 +431,60 @@ const todayISO = new Date().toISOString().slice(0, 10);
         }
         const friendly = ageMin < 1 ? 'just now' : ageMin < 60 ? ageMin + ' min ago' : Math.round(ageMin / 60) + ' hr ago';
         const banner = document.createElement('div');
-        banner.className = 'bg-amber-500/10 border border-amber-500/40 rounded-md px-4 py-3 mb-6 flex items-center justify-between gap-4 text-[12px]';
+        banner.className = 'bg-amber-500/10 border border-amber-500/40 rounded-md px-4 py-3 mb-6 flex flex-wrap items-center justify-between gap-3 text-[12px]';
         banner.innerHTML =
-          '<p class="text-amber-600">There is an unsaved draft from ' + friendly + ' in browser memory. Submit a new proposal or discard to clear.</p>' +
-          '<button type="button" id="autosave-discard" class="text-amber-600 hover:text-red-400 transition-colors text-[11px] font-mono uppercase tracking-wide">Discard</button>';
+          '<p class="text-amber-600">There is an unsaved draft from ' + friendly + ' in browser memory.</p>' +
+          '<div class="flex items-center gap-3">' +
+            '<button type="button" id="autosave-restore" class="px-3 py-1 bg-amber-500 text-neutral-950 text-[11px] font-mono uppercase tracking-wide rounded hover:bg-amber-400 transition-colors">Restore draft</button>' +
+            '<button type="button" id="autosave-discard" class="text-amber-600 hover:text-red-400 transition-colors text-[11px] font-mono uppercase tracking-wide">Discard</button>' +
+          '</div>';
         const form = document.getElementById('proposal-form');
         if (form && form.parentNode) form.parentNode.insertBefore(banner, form);
         document.getElementById('autosave-discard').addEventListener('click', () => {
           clearAutosave();
           banner.remove();
+        });
+        document.getElementById('autosave-restore').addEventListener('click', () => {
+          // Best-effort restore: copy saved fields into state, then
+          // re-set form inputs to match, then call every existing
+          // render function so dependent sections rebuild from state.
+          // Some derived UI (research panel, strategy panel, build
+          // options editor) re-renders only when admin re-triggers
+          // the corresponding action; we don't try to rehydrate
+          // those automatically. Cross-cutting B (audit).
+          const saved = parsed.state || {};
+          Object.keys(saved).forEach(k => { state[k] = saved[k]; });
+          // Re-set primary form inputs from the restored state.
+          // Client picker
+          if (state.client_id) {
+            const sel = document.getElementById('client_id');
+            if (sel) sel.value = state.client_id;
+          }
+          // Signers — rebuild the signer list from saved entries.
+          // Skipped here for the rare full-signer-list rehydration
+          // case; admin re-adds via the Add signer button if needed.
+          // Narrative variables
+          ['industry', 'urgency'].forEach(k => {
+            const sel = document.getElementById('nv-' + k);
+            if (sel && state.narrative_variables && state.narrative_variables[k]) {
+              sel.value = state.narrative_variables[k];
+            }
+          });
+          // Overrides
+          ['title', 'slug', 'prepared_on', 'prepared_for'].forEach(k => {
+            const el = document.getElementById(k);
+            if (el && state.overrides && state.overrides[k] != null) {
+              el.value = state.overrides[k];
+            }
+          });
+          // Re-render dependent sections.
+          try { if (typeof renderVars === 'function') renderVars(); } catch {}
+          try { if (typeof renderDerivedDomains === 'function') renderDerivedDomains(); } catch {}
+          try { if (typeof syncOverrides === 'function') syncOverrides(); } catch {}
+          banner.remove();
+          if (window.__toast) {
+            window.__toast('Draft restored. Some sections (research, strategy, build options) may need re-triggering.', 'success');
+          }
         });
       } catch { /* ignore */ }
     })();

@@ -83,24 +83,23 @@ export async function fetchTrafficDaily(
   sinceDate: string,    // YYYY-MM-DD inclusive
   untilDate: string,    // YYYY-MM-DD inclusive
 ): Promise<DailyTraffic[]> {
-  // httpRequests1dGroups is deprecated and unavailable on Free plan
-  // zones as of 2026. Using httpRequestsAdaptiveGroups instead, which
-  // is the modern replacement and works on all plans. The schema is
-  // different: count is the top-level request count (not sum.requests),
-  // bytes is sum.edgeResponseBytes (not sum.bytes), and threats lives
-  // only in firewallEventsAdaptiveGroups (the security query handles
-  // that). pageViews isn't in this dataset; report 0.
-  const query = `
-    query Traffic($zoneId: String!, $since: String!, $until: String!) {
+  // CF Free plan caps httpRequestsAdaptiveGroups queries at a 1-day
+  // window. To get N days, loop N times in parallel. Each per-day
+  // query returns a single aggregate row.
+  // Schema constraints on Free plan: confirmed-working fields are
+  // count (top-level), sum.edgeResponseBytes, sum.visits. Cached
+  // metrics and threats aren't exposed here; threats live in the
+  // firewall query, cache hit rate widgets need to handle 0.
+  const dates = expandDateRange(sinceDate, untilDate);
+  const perDayQuery = `
+    query TrafficOneDay($zoneId: String!, $date: String!) {
       viewer {
         zones(filter: { zoneTag: $zoneId }) {
           httpRequestsAdaptiveGroups(
-            limit: 60
-            filter: { date_geq: $since, date_leq: $until }
-            orderBy: [date_ASC]
+            limit: 1
+            filter: { date_geq: $date, date_leq: $date }
           ) {
             count
-            dimensions { date }
             sum {
               edgeResponseBytes
               visits
@@ -110,22 +109,41 @@ export async function fetchTrafficDaily(
       }
     }
   `;
-  const data = await callGraphQL(token, query, { zoneId, since: sinceDate, until: untilDate });
-  const groups = data?.viewer?.zones?.[0]?.httpRequestsAdaptiveGroups || [];
-  // CF Free plan exposes a thin sum block on httpRequestsAdaptiveGroups.
-  // Confirmed working: count (top-level), sum.edgeResponseBytes,
-  // sum.visits. Cached metrics aren't exposed in this dataset on this
-  // plan; reporting 0. Cache hit rate widgets that need them should
-  // be hidden when both values are 0.
-  return groups.map((g: any) => ({
-    date: g.dimensions.date,
-    requests: Number(g.count) || 0,
-    cachedRequests: 0,
-    bytes: Number(g.sum?.edgeResponseBytes) || 0,
-    cachedBytes: 0,
-    threats: 0,
-    pageViews: Number(g.sum?.visits) || 0,
+  const results = await Promise.all(dates.map(async date => {
+    try {
+      const data = await callGraphQL(token, perDayQuery, { zoneId, date });
+      const groups = data?.viewer?.zones?.[0]?.httpRequestsAdaptiveGroups || [];
+      const g = groups[0] || {};
+      return {
+        date,
+        requests: Number(g.count) || 0,
+        cachedRequests: 0,
+        bytes: Number(g.sum?.edgeResponseBytes) || 0,
+        cachedBytes: 0,
+        threats: 0,
+        pageViews: Number(g.sum?.visits) || 0,
+      };
+    } catch (err) {
+      // One bad day shouldn't kill the whole sync. Return a zero
+      // row and let the rest accumulate.
+      return {
+        date, requests: 0, cachedRequests: 0,
+        bytes: 0, cachedBytes: 0, threats: 0, pageViews: 0,
+      };
+    }
   }));
+  return results;
+}
+
+// Generate every YYYY-MM-DD between two inclusive dates.
+function expandDateRange(since: string, until: string): string[] {
+  const out: string[] = [];
+  const start = new Date(since + 'T00:00:00Z');
+  const end = new Date(until + 'T00:00:00Z');
+  for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+    out.push(d.toISOString().slice(0, 10));
+  }
+  return out;
 }
 
 // Firewall events per day, broken out by action. CF's

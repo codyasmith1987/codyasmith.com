@@ -214,9 +214,21 @@ const clientConfig = {
        card lands "outside" the page. */
     min-width: 0;
   }
-  .tier:hover {
+  .tier:hover,
+  .tier:focus-visible {
     transform: translateY(-3px);
     border-color: #6b6359;
+    outline: none;
+  }
+  /* Touch + keyboard activation feedback. Mobile devices don't have
+     hover; :active gives the press-down feedback. :focus-visible
+     covers keyboard navigation. Audit P8. */
+  .tier:active {
+    transform: translateY(-1px);
+    border-color: #c47d5a;
+  }
+  .tier {
+    user-select: none;
   }
   /* Recommended uses a sepia accent border so the visual state reads as
      "the practice's suggestion" rather than "your selection." Pairs

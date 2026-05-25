@@ -332,18 +332,60 @@ export function validateClientResearch(raw: unknown): ClientResearchResult {
   if (!Array.isArray(o.domains_found)) {
     throw new Error('domains_found must be an array');
   }
+  // Hosting-platform suffixes that are NEVER a separate site. If the
+  // model returns one of these, it's a deployment artifact of the
+  // primary site (WP Engine staging, Netlify preview, Vercel preview,
+  // etc.). Drop them silently — they should never surface as a domain
+  // the client owns. Audit 2026-05-25.
+  const HOSTING_PLATFORM_SUFFIXES = [
+    '.wpenginepowered.com',
+    '.netlify.app',
+    '.vercel.app',
+    '.pages.dev',
+    '.fly.dev',
+    '.herokuapp.com',
+    '.azurewebsites.net',
+    '.github.io',
+    '.cloudfront.net',
+    '.amazonaws.com',
+    '.web.app',                // Firebase Hosting
+    '.firebaseapp.com',
+  ];
+  const VALID_ROLES = new Set([
+    'primary',
+    'possibly-related',
+    'same-business-alt-domain',
+    'staging-of-primary',
+    'other',
+  ]);
   const domains: DomainGuess[] = [];
   for (const d of o.domains_found) {
     if (!d || typeof d !== 'object') continue;
     const obj = d as Record<string, unknown>;
-    const domain = typeof obj.domain === 'string' ? obj.domain.trim() : '';
-    const role_guess = typeof obj.role_guess === 'string' ? obj.role_guess : 'other';
+    const domain = typeof obj.domain === 'string' ? obj.domain.trim().toLowerCase() : '';
+    if (!domain) continue;
+    // Filter hosting-platform suffixes regardless of what the model
+    // said about them.
+    const isHostingPlatform = HOSTING_PLATFORM_SUFFIXES.some(suffix =>
+      domain.endsWith(suffix) || domain === suffix.replace(/^\./, '')
+    );
+    if (isHostingPlatform) continue;
+    // Validate role_guess against the tightened vocabulary; fall back
+    // to 'other' rather than letting the model invent labels.
+    const rawRole = typeof obj.role_guess === 'string' ? obj.role_guess : 'other';
+    const role_guess = (VALID_ROLES.has(rawRole) ? rawRole : 'other') as DomainGuess['role_guess'];
     const confidence = typeof obj.confidence === 'string' && VALID_CONFIDENCE.has(obj.confidence as ConfidenceLevel)
       ? obj.confidence as ConfidenceLevel
       : 'low';
-    if (domain) {
-      domains.push({ domain, role_guess, confidence });
-    }
+    const evidence = typeof obj.evidence === 'string' ? obj.evidence.trim() : '';
+    // High-confidence entries without evidence are demoted to low.
+    // We're not going to bless a strong claim that has nothing to back
+    // it up; admin should see the demotion as a signal to confirm
+    // manually.
+    const effectiveConfidence: ConfidenceLevel = (confidence === 'high' && evidence.length === 0)
+      ? 'low'
+      : confidence;
+    domains.push({ domain, role_guess, confidence: effectiveConfidence, evidence });
   }
 
   let pageCount: number | null = null;

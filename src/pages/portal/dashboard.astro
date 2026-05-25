@@ -413,7 +413,26 @@ actionItems.sort((a, b) => a.urgency - b.urgency);
       }
       document.getElementById('verdict').textContent = verdict;
       document.getElementById('verdict-sub').textContent = sub;
-      document.getElementById('score-explain').textContent = `Score based on: ${page1} of ${kws.length} keywords on page 1, ${top3} in top 3, ${highIss} high-priority site issues.`;
+      // Honest score explanation. When no keyword data is uploaded
+      // yet (kws.length === 0), the "0 of 0 keywords on page 1"
+      // text reads like the score is anchored on real data when
+      // it isn't — the score in that case is just base 50 minus
+      // any high-priority issue penalty. Name the inputs we
+      // actually have.
+      const explainParts = [];
+      if (kws.length > 0) {
+        explainParts.push(`${page1} of ${kws.length} keywords on page 1`);
+        if (top3 > 0) explainParts.push(`${top3} in top 3`);
+      }
+      if (highIss > 0) {
+        explainParts.push(`${highIss} high-priority site issue${highIss !== 1 ? 's' : ''}`);
+      }
+      const scoreExplain = explainParts.length > 0
+        ? `Score based on: ${explainParts.join(', ')}.`
+        : kws.length === 0
+          ? `Baseline score. Upload keyword tracking and a site audit to anchor this against real data.`
+          : `Baseline score. No high-priority issues found.`;
+      document.getElementById('score-explain').textContent = scoreExplain;
 
       const ctx = document.getElementById('score-ring');
       try { if (scoreChart) scoreChart.destroy(); } catch {}

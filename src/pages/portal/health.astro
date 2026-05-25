@@ -297,9 +297,32 @@ const clients = isAdmin ? await getAllClients() : [];
                 const res = await fetch(`/portal/api/dashboard/issue-urls?client_id=${cid}&issue_name=${encodeURIComponent(issueName)}`);
                 const data = await res.json();
                 if (!data.urls || data.urls.length === 0) {
-                  slot.innerHTML = `<span class="text-neutral-500 italic">No affected pages stored yet for this issue. Re-upload the per-issue CSV (${escapeHtml(issueName)}) from Screaming Frog to populate the list.</span>`;
+                  // Three honest empty states. The endpoint tells us
+                  // which one we're in via `source`, `has_crawl`,
+                  // and `derivable`. Messaging differs per case so a
+                  // client doesn't see the same "upload the CSV"
+                  // line across every popout when actually we just
+                  // can't compute this particular issue without it.
+                  let emptyMsg;
+                  if (data.source === 'crawl_urls_derived') {
+                    emptyMsg = `No URLs in this crawl match the pattern for this issue. The audit summary may have flagged it from an older crawl or a slightly different rule than the portal's derivation.`;
+                  } else if (data.derivable && !data.has_crawl) {
+                    emptyMsg = `Upload the Screaming Frog Internal HTML CSV (internal_all.csv) and the portal will derive the affected URLs for this issue automatically. Or upload the per-issue CSV (${escapeHtml(issueName)}) for the exact list the audit produced.`;
+                  } else if (!data.derivable) {
+                    emptyMsg = `The portal cannot derive this issue's URL list from the crawl alone — it needs the per-issue CSV (${escapeHtml(issueName)}) from Screaming Frog's issues_reports folder.`;
+                  } else {
+                    emptyMsg = `Upload the per-issue CSV (${escapeHtml(issueName)}) from Screaming Frog to populate the list.`;
+                  }
+                  slot.innerHTML = `<span class="text-neutral-500 italic">${emptyMsg}</span>`;
                   return;
                 }
+                // When the list was derived from crawl_urls rather
+                // than pulled from a per-issue CSV, surface that so
+                // the client knows the count may differ slightly
+                // from the audit summary's affected_urls number.
+                const sourceBanner = data.source === 'crawl_urls_derived'
+                  ? `<p class="text-[10px] font-mono text-amber-600 mb-2 leading-relaxed">Derived from your crawl data. Count may differ slightly from the audit's affected_urls value because the audit applies edge-case rules (whitespace-only, etc.) the portal doesn't replicate exactly.</p>`
+                  : '';
                 // Each row carries the URL, a classification from the
                 // server (type + label + is_page), and an optional
                 // extras blob. Pages are listed plain; non-pages get
@@ -346,7 +369,7 @@ const clients = isAdmin ? await getAllClients() : [];
                     </div>
                   `);
                 }
-                slot.innerHTML = parts.join('');
+                slot.innerHTML = sourceBanner + parts.join('');
 
                 // After we know the split, update the card-row count
                 // language to match. Defaults to "${count} affected"

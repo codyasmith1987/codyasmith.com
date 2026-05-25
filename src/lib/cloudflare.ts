@@ -102,7 +102,6 @@ export async function fetchTrafficDaily(
             count
             dimensions { date }
             sum {
-              cachedRequests
               edgeResponseBytes
               cachedBytes
               visits
@@ -114,10 +113,13 @@ export async function fetchTrafficDaily(
   `;
   const data = await callGraphQL(token, query, { zoneId, since: sinceDate, until: untilDate });
   const groups = data?.viewer?.zones?.[0]?.httpRequestsAdaptiveGroups || [];
+  // cachedRequests isn't exposed on httpRequestsAdaptiveGroups; the
+  // dashboard derives cache hit rate from cachedBytes / edgeResponseBytes
+  // instead, which is a reasonable proxy. Report 0 here.
   return groups.map((g: any) => ({
     date: g.dimensions.date,
     requests: Number(g.count) || 0,
-    cachedRequests: Number(g.sum?.cachedRequests) || 0,
+    cachedRequests: 0,
     bytes: Number(g.sum?.edgeResponseBytes) || 0,
     cachedBytes: Number(g.sum?.cachedBytes) || 0,
     threats: 0,

@@ -118,6 +118,9 @@ function formatLabel(format: string): string {
             <button type="button" id="clear-superseded-btn" class="text-[11px] text-amber-600 hover:text-amber-600 transition-colors">
               Clear superseded duplicates
             </button>
+            <button type="button" id="clear-garbage-issues-btn" class="text-[11px] text-amber-600 hover:text-amber-600 transition-colors">
+              Clear garbage issue rows
+            </button>
             <button type="button" id="clear-failed-btn" class="text-[11px] text-red-400/80 hover:text-red-300 transition-colors">
               Clear failed (0-row) uploads
             </button>
@@ -393,6 +396,32 @@ function formatLabel(format: string): string {
         }
       } catch (err: any) {
         alert(`Wipe failed: ${err?.message || 'network error'}`);
+      }
+    });
+
+    document.getElementById('clear-garbage-issues-btn')?.addEventListener('click', async () => {
+      if (!confirm('Delete site_issues rows whose issue_name looks like a filename (contains "/", says "inlinks/outlinks/anchor text", or starts with an SF timestamp folder)? Caused by historical regression now fixed. Not reversible.')) return;
+      try {
+        const res = await fetch('/portal/api/admin/csv/clear-garbage-issues', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({}),
+        });
+        const text = await res.text();
+        let data: any = null;
+        try { data = text ? JSON.parse(text) : null; } catch { /* noop */ }
+        if (res.ok && data?.ok) {
+          const sampleLine = data.sample && data.sample.length > 0
+            ? ` Examples: ${data.sample.slice(0, 3).map((s: string) => `"${s.slice(0, 50)}"`).join(', ')}.`
+            : '';
+          (window as any).__toast(`Removed ${data.deleted} garbage issue row(s).${sampleLine}`, 'success');
+          window.location.reload();
+        } else {
+          const msg = (data && data.error) ? data.error : `HTTP ${res.status}${text ? ': ' + text.slice(0, 140) : ''}`;
+          alert(`Clear garbage failed: ${msg}`);
+        }
+      } catch (err: any) {
+        alert(`Clear garbage failed: ${err?.message || 'network error'}`);
       }
     });
 

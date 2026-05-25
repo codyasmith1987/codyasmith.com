@@ -212,13 +212,18 @@ export function detectFormat(raw: string, filename: string): { format: CsvFormat
     return { format: 'site_audit', headers };
   }
 
-  // Check filename hints for site audit
+  // Check filename hints for site audit issue files. Deliberately
+  // NOT included: *_inlinks, *_outlinks, all_anchor_text. Those are
+  // link-relationship dumps (Source URL, Anchor, Destination URL —
+  // many rows per source page) and DO NOT represent issues. The
+  // old heuristic caught them and produced garbage site_issues rows
+  // with the filename as the issue name. They now fall through to
+  // unknown_stored where a future link-graph parser can pick them
+  // up cleanly.
   const lowerName = filename.toLowerCase();
   if (lowerName.includes('broken_link') || lowerName.includes('low_word') ||
       lowerName.includes('no_meta') || lowerName.includes('title_tag') ||
-      lowerName.includes('response_code') || lowerName.includes('images_') ||
-      lowerName.includes('_inlinks') || lowerName.includes('outlinks') ||
-      lowerName.includes('anchor_text')) {
+      lowerName.includes('response_code') || lowerName.includes('images_')) {
     return { format: 'site_audit', headers };
   }
 

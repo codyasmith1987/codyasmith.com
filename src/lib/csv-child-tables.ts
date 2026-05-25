@@ -42,4 +42,9 @@ export const CSV_CHILD_TABLES: string[] = [
   'gsc_dimensions',
   'gsc_chart',
   'gsc_filters',
+  // Link relationship rows from Screaming Frog *_inlinks, *_outlinks,
+  // all_anchor_text variants. Per-source_file dedup is handled inside
+  // the parser, but the full-client sweep still needs this table on
+  // the list so deleting an upload row removes its link rows too.
+  'link_graph',
 ];

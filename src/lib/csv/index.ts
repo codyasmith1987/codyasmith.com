@@ -18,6 +18,7 @@ import { parse as parseSiteAudit } from './parsers/site-audit';
 import { parse as parseAccessibility } from './parsers/accessibility';
 import { parse as parseIssueUrls } from './parsers/issue-urls';
 import { parse as parseRawCsv } from './parsers/raw-csv';
+import { parse as parseLinks } from './parsers/links';
 import { parseGa4 } from './parsers/ga4';
 import { parseGsc } from './parsers/gsc';
 
@@ -214,6 +215,13 @@ export async function ingestCSV(
       }
       case 'issue_urls':
         rowCount = await parseIssueUrls(raw, clientId, month, uploadId, filename);
+        break;
+      case 'links':
+        // Per-source_file dedup happens inside the parser, so 'links'
+        // is intentionally absent from FORMAT_SOURCES — the format-level
+        // sweep at the top would wipe sibling link files in the same
+        // batch. Same pattern as 'issue_urls' and 'unknown_stored'.
+        rowCount = await parseLinks(raw, clientId, month, uploadId, filename);
         break;
       case 'ga4_reports_snapshot':
       case 'ga4_traffic_acquisition':

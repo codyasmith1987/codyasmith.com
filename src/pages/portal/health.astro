@@ -732,6 +732,29 @@ const clients = isAdmin ? await getAllClients() : [];
         }));
       }
 
+      // ----- Links to broken pages -----
+      if (data.has_link_data && data.inbound_broken_links.broken_destination_count > 0) {
+        const ibl = data.inbound_broken_links;
+        const sev4xx = ibl.samples.some(s => s.status_code >= 500) ? 'high' : 'medium';
+        cards.push(widgetCard({
+          id: 'widget-inbound-broken',
+          title: 'Links to broken pages',
+          description: 'Pages on your site that link to URLs returning 4xx or 5xx errors. Fixing or removing these links improves the visitor experience.',
+          stat_lines: [
+            { count: ibl.broken_destination_count, label: 'broken destination URLs', severity: sev4xx },
+            { count: ibl.total_inbound_links, label: 'total inbound links to fix', severity: ibl.total_inbound_links > 10 ? 'medium' : 'low' },
+          ],
+          sample_html: renderUrlList(ibl.samples, x => {
+            const sources = x.sample_source_urls.length === 0
+              ? ''
+              : `<ul class="ml-4 mt-1 space-y-0.5 text-neutral-500">
+                  ${x.sample_source_urls.map(s => `<li>linked from ${urlLink(s)}</li>`).join('')}
+                </ul>`;
+            return `<li>${urlLink(x.destination_url)} <span class="text-neutral-400">${x.status_code}, ${x.inbound_count} inbound</span>${sources}</li>`;
+          }),
+        }));
+      }
+
       if (cards.length > 0) {
         container.innerHTML = `
           <div class="border-t border-white/5 pt-8">

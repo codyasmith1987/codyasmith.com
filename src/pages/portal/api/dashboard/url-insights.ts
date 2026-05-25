@@ -35,6 +35,7 @@ interface UrlInsightsResponse {
   has_crawl_data: boolean;
   has_image_data: boolean;
   has_redirect_data: boolean;
+  has_link_data: boolean;
   title_quality: {
     missing_count: number;
     too_long_count: number;
@@ -80,6 +81,19 @@ interface UrlInsightsResponse {
     over_10_count: number;
     samples: Array<{ url: string; crawl_depth: number; inlinks_count: number | null }>;
   };
+  inbound_broken_links: {
+    // Distinct destination URLs returning 4xx/5xx that other pages
+    // currently link to.
+    broken_destination_count: number;
+    // Total link-graph rows pointing at those broken destinations.
+    total_inbound_links: number;
+    samples: Array<{
+      destination_url: string;
+      status_code: number;
+      inbound_count: number;
+      sample_source_urls: string[]; // top 5 source pages, capped
+    }>;
+  };
 }
 
 export const GET: APIRoute = async ({ locals, url }) => {
@@ -118,11 +132,17 @@ export const GET: APIRoute = async ({ locals, url }) => {
       args: [clientId],
     });
     const redirectMonth = (redirectMonthRow.rows[0]?.[0] as string | null) ?? null;
+    const linkMonthRow = await turso.execute({
+      sql: 'SELECT MAX(month) FROM link_graph WHERE client_id = ?',
+      args: [clientId],
+    });
+    const linkMonth = (linkMonthRow.rows[0]?.[0] as string | null) ?? null;
 
     const response: UrlInsightsResponse = {
       has_crawl_data: !!crawlMonth,
       has_image_data: !!imageMonth,
       has_redirect_data: !!redirectMonth,
+      has_link_data: !!linkMonth,
       title_quality: {
         missing_count: 0, too_long_count: 0, too_short_count: 0, duplicate_count: 0,
         sample_missing: [], sample_too_long: [], sample_too_short: [], sample_duplicates: [],
@@ -134,6 +154,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       redirect_chains: { loop_count: 0, multi_hop_count: 0, sample_loops: [], sample_multi_hop: [] },
       orphan_pages: { count: 0, samples: [] },
       deep_pages: { over_5_count: 0, over_10_count: 0, samples: [] },
+      inbound_broken_links: { broken_destination_count: 0, total_inbound_links: 0, samples: [] },
     };
 
     // Crawl-derived widgets only run when crawl_urls has data for
@@ -412,6 +433,56 @@ export const GET: APIRoute = async ({ locals, url }) => {
         hop_count: Number(r[2] || 0),
         final_status_code: r[3] != null ? Number(r[3]) : null,
       }));
+    }
+
+    // Inbound broken links: which destination URLs return 4xx/5xx, and
+    // which pages on this site currently link to them. Each row is one
+    // broken destination + a top-N sample of source pages, so the
+    // client can render "fix this link on these pages."
+    if (linkMonth) {
+      const brokenCounts = await turso.execute({
+        sql: `SELECT
+                COUNT(DISTINCT destination_url) AS broken_destinations,
+                COUNT(*) AS total_inbound
+              FROM link_graph
+              WHERE client_id = ? AND month = ?
+                AND status_code IS NOT NULL AND status_code >= 400`,
+        args: [clientId, linkMonth],
+      });
+      const bc = brokenCounts.rows[0] as any;
+      response.inbound_broken_links.broken_destination_count = Number(bc?.[0] || 0);
+      response.inbound_broken_links.total_inbound_links = Number(bc?.[1] || 0);
+
+      // Top destinations + capped concatenated source list. GROUP_CONCAT
+      // truncated by SUBSTR to keep the payload bounded if a destination
+      // has thousands of inbound links.
+      const topBroken = await turso.execute({
+        sql: `SELECT
+                destination_url,
+                MAX(status_code) AS status_code,
+                COUNT(*) AS inbound_count,
+                SUBSTR(GROUP_CONCAT(DISTINCT source_url), 1, 4000) AS sources_concat
+              FROM link_graph
+              WHERE client_id = ? AND month = ?
+                AND status_code IS NOT NULL AND status_code >= 400
+              GROUP BY destination_url
+              ORDER BY inbound_count DESC, destination_url
+              LIMIT ?`,
+        args: [clientId, linkMonth, SAMPLE_LIMIT],
+      });
+      response.inbound_broken_links.samples = (topBroken.rows as any[]).map(r => {
+        const sources = (r[3] ? String(r[3]) : '')
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
+          .slice(0, 5);
+        return {
+          destination_url: String(r[0]),
+          status_code: Number(r[1] || 0),
+          inbound_count: Number(r[2] || 0),
+          sample_source_urls: sources,
+        };
+      });
     }
 
     return json(response);

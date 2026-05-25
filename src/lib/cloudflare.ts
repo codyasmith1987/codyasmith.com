@@ -202,12 +202,33 @@ export async function listZones(token: string): Promise<CloudflareZone[]> {
   const maxPages = 20;
   for (let page = 1; page <= maxPages; page++) {
     const url = `https://api.cloudflare.com/client/v4/zones?page=${page}&per_page=${perPage}`;
-    const res = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-    });
+    // 10s timeout per page so we fail fast instead of hanging the
+    // whole endpoint when CF API is unresponsive.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10_000);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      });
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (err?.name === 'AbortError') {
+        throw {
+          message: `Cloudflare /zones page ${page} timed out after 10s`,
+          detail: 'AbortController timeout fired',
+        } as CloudflareError;
+      }
+      throw {
+        message: `Cloudflare /zones page ${page} fetch failed`,
+        detail: String(err?.message || err).slice(0, 500),
+      } as CloudflareError;
+    }
+    clearTimeout(timeoutId);
     const body = await res.json();
     if (!res.ok || !body?.success) {
       throw {

@@ -83,11 +83,16 @@ export async function fetchTrafficDaily(
   sinceDate: string,    // YYYY-MM-DD inclusive
   untilDate: string,    // YYYY-MM-DD inclusive
 ): Promise<DailyTraffic[]> {
+  // httpRequests1dGroups is deprecated and unavailable on Free plan
+  // zones as of 2026. Using httpRequestsAdaptiveGroups instead, which
+  // is the modern replacement and works on all plans. Field shape is
+  // similar but pageViews isn't in this dataset so we report 0 — it
+  // wasn't surfaced on /portal/security anyway.
   const query = `
     query Traffic($zoneId: String!, $since: String!, $until: String!) {
       viewer {
         zones(filter: { zoneTag: $zoneId }) {
-          httpRequests1dGroups(
+          httpRequestsAdaptiveGroups(
             limit: 60
             filter: { date_geq: $since, date_leq: $until }
             orderBy: [date_ASC]
@@ -99,7 +104,6 @@ export async function fetchTrafficDaily(
               bytes
               cachedBytes
               threats
-              pageViews
             }
           }
         }
@@ -107,7 +111,7 @@ export async function fetchTrafficDaily(
     }
   `;
   const data = await callGraphQL(token, query, { zoneId, since: sinceDate, until: untilDate });
-  const groups = data?.viewer?.zones?.[0]?.httpRequests1dGroups || [];
+  const groups = data?.viewer?.zones?.[0]?.httpRequestsAdaptiveGroups || [];
   return groups.map((g: any) => ({
     date: g.dimensions.date,
     requests: Number(g.sum?.requests) || 0,
@@ -115,7 +119,7 @@ export async function fetchTrafficDaily(
     bytes: Number(g.sum?.bytes) || 0,
     cachedBytes: Number(g.sum?.cachedBytes) || 0,
     threats: Number(g.sum?.threats) || 0,
-    pageViews: Number(g.sum?.pageViews) || 0,
+    pageViews: 0,
   }));
 }
 

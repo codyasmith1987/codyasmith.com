@@ -85,9 +85,25 @@ const csrfToken = Astro.locals.csrfToken || '';
       <section class="bg-neutral-900/30 border border-white/5 rounded-xl p-6">
         <h2 class="font-serif text-xl text-neutral-100 mb-4">Schedule A</h2>
         <p class="text-xs text-neutral-500 mb-3">Edit the JSON below. Saving notifies any signed signer that their signature is paused until they re-sign against the new state.</p>
+        <details class="mb-3">
+          <summary class="text-[10px] font-mono uppercase tracking-[0.18em] text-amber-600 cursor-pointer hover:text-amber-400">Schema reference (expected top-level keys)</summary>
+          <div class="mt-2 p-3 bg-neutral-950/50 border border-white/5 rounded text-[11px] font-mono text-neutral-400 leading-relaxed">
+            <p><span class="text-neutral-300">effective_date</span>: ISO date string (YYYY-MM-DD)</p>
+            <p><span class="text-neutral-300">designated_contacts</span>: {`{`} client: {`{`} name, title, address, email, phone {`}`} {`}`}</p>
+            <p><span class="text-neutral-300">products_purchased</span>: {`{`} web_management, marketing_consulting, build, other_sow: boolean {`}`}</p>
+            <p><span class="text-neutral-300">web_management</span>: {`{`} tier_name, monthly_base, monthly_total, included_hours, update_cadence, response_time, quarterly_training_sessions, sites: [{`{`} domain, label {`}`}], onboarding_total {`}`} | null</p>
+            <p><span class="text-neutral-300">marketing_consulting</span>: {`{`} tier_name, monthly_retainer, initial_audit_fee, strategy_call_frequency, deep_advisories_per_cycle, performance_reporting_cadence, hiring_guidance {`}`} | null</p>
+            <p><span class="text-neutral-300">hours_and_rates</span>: {`{`} included_hours, overage_buffer, overage_rate, rush_rate, emergency_rate {`}`}</p>
+            <p><span class="text-neutral-300">day_one_access</span>: {`{`} required_by, items: [{`{`} system, provider {`}`}] {`}`}</p>
+            <p><span class="text-neutral-300">pass_through_items</span>: [{`{`} name, monthly_cost, billing_note {`}`}]</p>
+            <p><span class="text-neutral-300">build_sow_ref</span>: string | null</p>
+            <p class="text-neutral-500 mt-2 italic">Save validates JSON shape and rejects with the parse error if invalid. Schedule A is rendered into the contract template on the next signer view; structural breaks surface there.</p>
+          </div>
+        </details>
         <textarea id="schedule-a-editor" rows="22" class="w-full bg-neutral-950 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-neutral-300" spellcheck="false">{JSON.stringify(agreement.schedule_a, null, 2)}</textarea>
         <div class="mt-3 flex items-center gap-3">
           <button type="button" id="save-schedule" class="px-4 py-2 bg-amber-500 text-neutral-950 text-sm font-semibold rounded-lg hover:bg-amber-400 transition-colors">Save Schedule A</button>
+          <a href={`/portal/contracts/preview/${agreement.slug}`} target="_blank" rel="noopener" class="px-4 py-2 border border-white/10 text-neutral-300 text-sm rounded-lg hover:border-amber-500/30 hover:text-amber-600 transition-colors">Preview rendered</a>
           <p id="schedule-status" class="text-xs text-neutral-500"></p>
         </div>
         <div class="mt-4 pt-4 border-t border-white/5">
@@ -279,9 +295,18 @@ const csrfToken = Astro.locals.csrfToken || '';
 
   var cancelBtn = document.getElementById('cancel-btn');
   if (cancelBtn) cancelBtn.addEventListener('click', function() {
-    var reason = prompt('Reason for cancelling (optional):');
-    if (reason === null) return;
-    if (!confirm('Cancel this agreement? This sets status to voided.')) return;
+    // Reason is REQUIRED so the audit trail never has an ambiguous null
+    // reason. Repeats the prompt until admin provides one or cancels
+    // the prompt explicitly.
+    var reason = '';
+    while (true) {
+      var entered = prompt('Reason for cancelling (required for the audit log):');
+      if (entered === null) return; // admin cancelled the prompt
+      reason = String(entered).trim();
+      if (reason.length > 0) break;
+      alert('A non-empty reason is required to cancel. Try again or close the prompt to abort.');
+    }
+    if (!confirm('Cancel this agreement? This sets status to voided. Reason: "' + reason + '"')) return;
     runWithButton(cancelBtn, 'Cancelling…',
       function() { return api('/portal/api/admin/agreements/' + slug + '/cancel', 'POST', { reason: reason }); },
       function() { window.__toast('Agreement cancelled.', 'success'); setTimeout(function() { window.location.reload(); }, 600); }

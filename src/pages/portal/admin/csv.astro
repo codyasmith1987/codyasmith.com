@@ -263,7 +263,13 @@ function formatLabel(format: string): string {
       // at MAX_BATCH_FILES so each batch finishes well under CF's
       // origin response window.
       const MAX_BATCH_BYTES = 8 * 1024 * 1024;
-      const MAX_BATCH_FILES = 25;
+      // Server processes batches in parallel now (Promise.allSettled),
+      // so per-batch wall time is roughly the slowest file, not the
+      // sum. Keep batches small enough that ~10 files of mixed sizes
+      // still finish well under Cloudflare's 100s origin response
+      // window even when the slowest file is a 7000-row SF link
+      // export. The server's hard cap is 50.
+      const MAX_BATCH_FILES = 10;
       const batches: File[][] = [];
       let currentBatch: File[] = [];
       let currentBatchBytes = 0;
@@ -328,9 +334,18 @@ function formatLabel(format: string): string {
         try { payload = rawText ? JSON.parse(rawText) : null; } catch { /* leave null */ }
 
         if (!res.ok || !payload) {
-          const errMsg = (payload && payload.error)
-            ? payload.error
-            : `HTTP ${res.status}${rawText ? ': ' + rawText.slice(0, 140) : ''}`;
+          // CF 524 means the origin took longer than 100s to respond,
+          // but our server keeps processing and the data usually does
+          // land in the DB. Tell the admin that explicitly so they
+          // don't retry blindly and create supersede churn.
+          let errMsg;
+          if (res.status === 524) {
+            errMsg = 'Server response timed out at Cloudflare (524). Data likely landed — check Recent uploads below in 10-20 seconds before retrying.';
+          } else if (payload && payload.error) {
+            errMsg = payload.error;
+          } else {
+            errMsg = `HTTP ${res.status}${rawText ? ': ' + rawText.slice(0, 140) : ''}`;
+          }
           for (const f of batch) {
             renderResultCard(f.name, { error: errMsg }, cardIdx++);
           }

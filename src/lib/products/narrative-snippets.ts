@@ -324,8 +324,90 @@ export function lookupSnippetOverride(args: {
   ];
 
   for (const key of candidates) {
+    // DB overrides win over the baked-in file registry. The override
+    // cache is populated by /portal/api/admin/proposals/snippets/save
+    // and refreshed at lookup time. Falls through to the file
+    // registry when no DB entry exists.
+    const dbEntry = lookupDbOverride(key);
+    if (dbEntry) return dbEntry;
     const entry = SNIPPET_REGISTRY[key];
     if (entry) return entry;
+  }
+  return null;
+}
+
+// -----------------------------------------------------------------
+// DB overrides — populated by the admin snippet matrix editor.
+// The cache is loaded by primeSnippetOverrides() and refreshed
+// every 60 seconds so edits in the editor surface on the next
+// request without a redeploy.
+// -----------------------------------------------------------------
+
+type DbOverride = { key: string; snippet: (ctx: ProductContext) => NarrativeSnippetSet };
+let dbOverrideCache: Map<string, DbOverride> | null = null;
+let dbOverrideCacheExpiresAt = 0;
+const DB_CACHE_TTL_MS = 60_000;
+
+function lookupDbOverride(key: string): ((ctx: ProductContext) => NarrativeSnippetSet) | null {
+  if (!dbOverrideCache) return null;
+  if (Date.now() > dbOverrideCacheExpiresAt) {
+    dbOverrideCache = null;
+    return null;
+  }
+  const hit = dbOverrideCache.get(key);
+  return hit ? hit.snippet : null;
+}
+
+// Called by the composer at the start of each compose. Refreshes the
+// DB override cache when stale.
+export async function primeSnippetOverrides(): Promise<void> {
+  if (dbOverrideCache && Date.now() <= dbOverrideCacheExpiresAt) return;
+  try {
+    const { default: turso } = await import('../turso');
+    const res = await turso.execute({
+      sql: `SELECT key, intro_lines, what_i_see_paragraphs, what_i_recommend_paragraphs FROM snippet_overrides`,
+    });
+    const next = new Map<string, DbOverride>();
+    for (const row of res.rows as any[]) {
+      const key = String(row[0]);
+      const intro = parseJsonArrayOrNull(row[1]);
+      const whatISee = parseJsonArrayOrNull(row[2]);
+      const whatIRecommend = parseJsonArrayOrNull(row[3]);
+      next.set(key, {
+        key,
+        snippet: () => ({
+          intro_lines: intro || [],
+          what_i_see_paragraphs: whatISee || [],
+          what_i_recommend_paragraphs: whatIRecommend || [],
+        }),
+      });
+    }
+    dbOverrideCache = next;
+    dbOverrideCacheExpiresAt = Date.now() + DB_CACHE_TTL_MS;
+  } catch {
+    // Failing to load DB overrides should never break compose. Fall
+    // back to the file registry silently.
+    dbOverrideCache = new Map();
+    dbOverrideCacheExpiresAt = Date.now() + 5_000;
+  }
+}
+
+// Manually invalidate the cache. Called by the save endpoint so the
+// new snippet takes effect immediately instead of waiting for the TTL.
+export function invalidateSnippetOverrideCache(): void {
+  dbOverrideCache = null;
+  dbOverrideCacheExpiresAt = 0;
+}
+
+function parseJsonArrayOrNull(raw: any): string[] | null {
+  if (raw === null || raw === undefined || raw === '') return null;
+  try {
+    const parsed = JSON.parse(String(raw));
+    if (Array.isArray(parsed)) {
+      return parsed.map(s => String(s)).filter(s => s.length > 0);
+    }
+  } catch {
+    // ignore parse error
   }
   return null;
 }

@@ -1103,7 +1103,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
       wrap.appendChild(label);
       const help = document.createElement('p');
       help.className = 'text-[11px] text-neutral-400 mb-3 leading-relaxed';
-      help.textContent = 'Pre-compute the WM monthly + onboarding delta this option adds (e.g., a Tailwater micro-site at Eco A Better contributes about $397.60 monthly and $640 onboarding under the multi-site formula). Sites listed here also append to Schedule A.';
+      help.textContent = 'New build sites add monthly only (Build replaces WM onboarding for the site it produces). Existing-site modifications re-route the site’s ecosystem automatically. Click Calculate to fill these and see the modification impact.';
       wrap.appendChild(help);
 
       // Auto-calculate button: sums each added site's contribution at
@@ -1134,17 +1134,20 @@ const todayISO = new Date().toISOString().slice(0, 10);
         return 'C';
       }
       calcBtn.addEventListener('click', () => {
-        const arr = Array.isArray(opt.wm_sites_added) ? opt.wm_sites_added : [];
-        if (arr.length === 0) {
-          calcStatus.textContent = 'No sites added yet.';
+        const addedArr = Array.isArray(opt.wm_sites_added) ? opt.wm_sites_added : [];
+        const modArr = Array.isArray(opt.wm_site_modifications) ? opt.wm_site_modifications : [];
+        if (addedArr.length === 0 && modArr.length === 0) {
+          calcStatus.textContent = 'No sites added or modified yet.';
           calcStatus.className = 'text-[11px] font-mono text-amber-700';
           return;
         }
         const tierId = calcTierSel.value;
+        // New build sites contribute monthly only. Build product covers
+        // their WM onboarding ("Replaces onboarding for the site it
+        // produces"), so onb stays at 0 from added sites.
         let monthlySum = 0;
-        let onbSum = 0;
         let skipped = 0;
-        for (const site of arr) {
+        for (const site of addedArr) {
           const pages = typeof site.page_count_estimate === 'number' ? site.page_count_estimate : null;
           const eco = routeWmEcoFromPages(pages);
           if (!eco || !wmEcosystemPricing[eco] || !wmEcosystemPricing[eco][tierId]) {
@@ -1153,15 +1156,51 @@ const todayISO = new Date().toISOString().slice(0, 10);
           }
           const tierPricing = wmEcosystemPricing[eco][tierId];
           monthlySum += tierPricing.monthly * WM_MULTI_SITE_DISCOUNT;
-          onbSum += tierPricing.onb * WM_MULTI_SITE_DISCOUNT;
         }
         opt.wm_monthly_delta = Math.round(monthlySum * 100) / 100;
-        opt.wm_onboarding_delta = Math.round(onbSum * 100) / 100;
+        opt.wm_onboarding_delta = 0;
         monthlyInput.value = String(opt.wm_monthly_delta);
-        onbInput.value = String(opt.wm_onboarding_delta);
+        onbInput.value = '0';
+        // Modifications apply automatically via the composer (it
+        // mutates managedSites before pricing), so they do NOT add to
+        // wm_monthly_delta or wm_onboarding_delta. Surface the impact
+        // in the status line so the admin can confirm the picture.
+        let modImpactParts = [];
+        let modSkipped = 0;
+        for (const mod of modArr) {
+          const domain = (mod && typeof mod.site_domain === 'string') ? mod.site_domain : '';
+          const newPages = (mod && typeof mod.new_page_count === 'number') ? mod.new_page_count : null;
+          if (!domain || newPages == null) { modSkipped++; continue; }
+          const managedNow = (clientSitesCache[state.client_id] || []).filter(s => s.is_managed);
+          const existing = managedNow.find(s => (s.domain || '').toLowerCase() === domain.toLowerCase());
+          if (!existing) { modSkipped++; continue; }
+          const oldPages = existing.page_count;
+          const oldEco = routeWmEcoFromPages(oldPages);
+          const newEco = routeWmEcoFromPages(newPages);
+          if (!oldEco || !newEco || !wmEcosystemPricing[oldEco]?.[tierId] || !wmEcosystemPricing[newEco]?.[tierId]) {
+            modSkipped++;
+            continue;
+          }
+          if (oldEco === newEco) {
+            modImpactParts.push(`${domain} stays ${newEco} (no change)`);
+            continue;
+          }
+          const oldP = wmEcosystemPricing[oldEco][tierId];
+          const newP = wmEcosystemPricing[newEco][tierId];
+          const dMonthly = Math.round((newP.monthly - oldP.monthly) * 100) / 100;
+          const dOnb = Math.round((newP.onb - oldP.onb) * 100) / 100;
+          modImpactParts.push(`${domain} ${oldEco}→${newEco} (+$${dMonthly}/mo, +$${dOnb} onb)`);
+        }
         const tierLabel = tierId.charAt(0).toUpperCase() + tierId.slice(1);
-        const skippedNote = skipped > 0 ? ` (${skipped} site(s) skipped — missing page count)` : '';
-        calcStatus.textContent = `At ${tierLabel}: +$${opt.wm_monthly_delta}/mo, +$${opt.wm_onboarding_delta} onb${skippedNote}`;
+        const skippedNote = skipped > 0 ? ` (${skipped} added site(s) skipped — missing page count)` : '';
+        const modSkippedNote = modSkipped > 0 ? ` (${modSkipped} modification(s) skipped — domain not in managed sites or missing page count)` : '';
+        const baseLine = addedArr.length > 0
+          ? `Added at ${tierLabel}: +$${opt.wm_monthly_delta}/mo, +$0 onb (build covers)`
+          : `No new build sites`;
+        const modLine = modImpactParts.length > 0
+          ? ` · Modifications apply via composer: ${modImpactParts.join('; ')}`
+          : '';
+        calcStatus.textContent = `${baseLine}${modLine}${skippedNote}${modSkippedNote}`;
         calcStatus.className = 'text-[11px] font-mono text-emerald-400';
       });
 
@@ -1269,6 +1308,112 @@ const todayISO = new Date().toISOString().slice(0, 10);
         renderSites();
       });
       wrap.appendChild(addSiteBtn);
+
+      // Modifications subsection: lets the option re-route an EXISTING
+      // managed site by changing its page count when this option is
+      // picked. The composer mutates managedSites before pricing, so
+      // both the WM monthly/onboarding line and Schedule A reflect the
+      // post-option ecosystem automatically (no delta to maintain).
+      const modsSeparator = document.createElement('div');
+      modsSeparator.className = 'mt-4 mb-2 border-t border-white/5';
+      wrap.appendChild(modsSeparator);
+
+      const modsLabel = document.createElement('p');
+      modsLabel.className = 'text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide';
+      modsLabel.textContent = 'Modify existing managed sites (re-routes ecosystem when this option is picked)';
+      wrap.appendChild(modsLabel);
+      const modsHelp = document.createElement('p');
+      modsHelp.className = 'text-[11px] text-neutral-400 mb-2 leading-relaxed';
+      modsHelp.textContent = 'Use when the option adds pages to an existing managed site (e.g., 21-page site grows to 31 pages, re-routes Eco A→B). The composer applies these automatically; no delta needed.';
+      wrap.appendChild(modsHelp);
+
+      const modsList = document.createElement('div');
+      modsList.className = 'space-y-2';
+      wrap.appendChild(modsList);
+
+      function renderMods() {
+        modsList.innerHTML = '';
+        const arr = Array.isArray(opt.wm_site_modifications) ? opt.wm_site_modifications : [];
+        const managedNow = (clientSitesCache[state.client_id] || []).filter(s => s.is_managed);
+        arr.forEach((mod, idx) => {
+          const row = document.createElement('div');
+          row.className = 'grid grid-cols-12 gap-2 items-end p-2 bg-neutral-900/40 border border-white/5 rounded';
+          row.innerHTML =
+            '<div class="col-span-5"><label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Site</label></div>' +
+            '<div class="col-span-2"><label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">New pages</label></div>' +
+            '<div class="col-span-4"><label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Note</label></div>' +
+            '<div class="col-span-1"></div>';
+          const siteCol = row.children[0];
+          const pagesCol = row.children[1];
+          const noteCol = row.children[2];
+          const rmCol = row.children[3];
+
+          const siteSel = document.createElement('select');
+          siteSel.className = 'w-full px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono';
+          const placeholder = document.createElement('option');
+          placeholder.value = '';
+          placeholder.textContent = managedNow.length === 0
+            ? '(no managed sites — add them in Sites & client)'
+            : '(pick a managed site)';
+          siteSel.appendChild(placeholder);
+          for (const s of managedNow) {
+            const opt2 = document.createElement('option');
+            opt2.value = s.domain;
+            const pageNote = (s.page_count !== null && s.page_count !== undefined)
+              ? ` (${s.page_count}p, Eco ${routeWmEcoFromPages(s.page_count) || '?'})`
+              : ' (page count unset)';
+            opt2.textContent = (s.label && s.label !== s.domain ? s.label + ' — ' : '') + s.domain + pageNote;
+            siteSel.appendChild(opt2);
+          }
+          siteSel.value = mod.site_domain || '';
+          siteSel.addEventListener('change', () => { mod.site_domain = siteSel.value; });
+          siteCol.appendChild(siteSel);
+
+          const pagesInput = document.createElement('input');
+          pagesInput.type = 'number';
+          pagesInput.min = '0';
+          pagesInput.className = 'w-full px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono';
+          pagesInput.placeholder = '31';
+          pagesInput.value = mod.new_page_count != null ? String(mod.new_page_count) : '';
+          pagesInput.addEventListener('input', () => {
+            const n = parseInt(pagesInput.value, 10);
+            mod.new_page_count = Number.isFinite(n) ? n : undefined;
+          });
+          pagesCol.appendChild(pagesInput);
+
+          const noteInput = document.createElement('input');
+          noteInput.type = 'text';
+          noteInput.className = 'w-full px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs';
+          noteInput.placeholder = 'adds 10 pages of new content';
+          noteInput.value = mod.note || '';
+          noteInput.addEventListener('input', () => { mod.note = noteInput.value; });
+          noteCol.appendChild(noteInput);
+
+          const rmBtn = document.createElement('button');
+          rmBtn.type = 'button';
+          rmBtn.className = 'text-[11px] text-neutral-400 hover:text-red-400 transition-colors';
+          rmBtn.textContent = '×';
+          rmBtn.title = 'Remove this modification';
+          rmBtn.addEventListener('click', () => {
+            opt.wm_site_modifications.splice(idx, 1);
+            renderMods();
+          });
+          rmCol.appendChild(rmBtn);
+          modsList.appendChild(row);
+        });
+      }
+      renderMods();
+
+      const addModBtn = document.createElement('button');
+      addModBtn.type = 'button';
+      addModBtn.className = 'mt-2 text-[11px] font-mono text-amber-600 hover:text-amber-400 transition-colors';
+      addModBtn.textContent = '+ Add modification';
+      addModBtn.addEventListener('click', () => {
+        if (!Array.isArray(opt.wm_site_modifications)) opt.wm_site_modifications = [];
+        opt.wm_site_modifications.push({ site_domain: '', new_page_count: undefined, note: '' });
+        renderMods();
+      });
+      wrap.appendChild(addModBtn);
 
       return wrap;
     }

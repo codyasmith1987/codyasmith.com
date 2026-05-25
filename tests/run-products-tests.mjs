@@ -19,6 +19,7 @@ import {
   computeMultiSiteOnboarding,
   computeMultiSiteSum,
   buildPerSiteBases,
+  applyBuildOptionSiteModifications,
   MULTI_SITE_DISCOUNT,
   WM_ECOSYSTEMS,
   webManagementProduct,
@@ -1040,6 +1041,155 @@ async function run() {
   test('cross-product o1: Schedule A WM has no added rows',
     !(o1Schedule.web_management?.sites || []).some(s => (s.domain || '').includes('micro.example.com')),
     `got ${JSON.stringify((o1Schedule.web_management?.sites || []).map(s => s.domain))}`);
+
+  // -------------------------------------------------------------------
+  // BuildOption wm_site_modifications: re-route an existing managed
+  // site's ecosystem when an option is picked. The composer mutates
+  // managedSites internally so both computePricing and buildScheduleA
+  // see the post-option page count, producing matching numbers.
+  // -------------------------------------------------------------------
+  const modHelperOriginal = [
+    { domain: 'example.com', is_primary: true, page_count: 21 },
+    { domain: 'other.example.com', is_primary: false, page_count: 50 },
+  ];
+  const modHelperResult = applyBuildOptionSiteModifications({
+    managedSites: modHelperOriginal,
+    allProductVars: {
+      build: {
+        build_options: [
+          { id: 'm1', wm_site_modifications: [{ site_domain: 'example.com', new_page_count: 35 }] },
+        ],
+      },
+    },
+    selections: { build_options: 'm1' },
+  });
+  test('applyBuildOptionSiteModifications: mutates matching site page_count',
+    modHelperResult[0].page_count === 35,
+    `got ${modHelperResult[0].page_count}`);
+  test('applyBuildOptionSiteModifications: leaves non-matching site untouched',
+    modHelperResult[1].page_count === 50,
+    `got ${modHelperResult[1].page_count}`);
+  test('applyBuildOptionSiteModifications: does not mutate the input array',
+    modHelperOriginal[0].page_count === 21,
+    `got ${modHelperOriginal[0].page_count}`);
+  const modHelperNoOp = applyBuildOptionSiteModifications({
+    managedSites: modHelperOriginal,
+    allProductVars: { build: { build_options: [{ id: 'm1', wm_site_modifications: [] }] } },
+    selections: { build_options: 'm1' },
+  });
+  test('applyBuildOptionSiteModifications: empty modifications returns input ref',
+    modHelperNoOp === modHelperOriginal);
+  const modHelperNoMatch = applyBuildOptionSiteModifications({
+    managedSites: modHelperOriginal,
+    allProductVars: {
+      build: {
+        build_options: [
+          { id: 'm1', wm_site_modifications: [{ site_domain: 'unknown.com', new_page_count: 99 }] },
+        ],
+      },
+    },
+    selections: { build_options: 'm1' },
+  });
+  test('applyBuildOptionSiteModifications: non-matching domain is a no-op',
+    modHelperNoMatch[0].page_count === 21 && modHelperNoMatch[1].page_count === 50);
+
+  // Integration: composeProposal + buildScheduleA with managedSites
+  // passed directly to Schedule A. Same client with 1 managed site
+  // (example.com at 21 pages, Eco A). Two options:
+  //   mo1: no modifications -> site stays Eco A
+  //   mo2: modify example.com to 35 pages -> site bumps to Eco B
+  // Better tier numbers: Eco A 497/800, Eco B 797/1200.
+  //
+  // NB: composePricing (proposal page price) currently does NOT receive
+  // managedSites, so modifications can't be reflected there yet. That's
+  // a pre-existing architectural gap (multi-site clients see fallback
+  // pricing on the proposal page). Schedule A is what binds; that path
+  // does receive managedSites and is what this test verifies.
+  const modCfg = composeProposal({
+    client: { id: 'mod1', name: 'Mod Test Client', slug: 'mod-test' },
+    signers: [{ id: 's1', name: 'Test Signer', email: 'test@example.com' }],
+    products: ['web-management', 'build'],
+    product_vars: {
+      'web-management': { page_count: 21, site_count: 1 },
+      'build': {
+        build_size: 'small',
+        build_count: 1,
+        build_description: 'Page additions',
+        build_options: [
+          { id: 'mo1', name: 'Option 1: Stay at current size', pitch: 'No content changes.', pricing_delta: 0 },
+          {
+            id: 'mo2',
+            name: 'Option 2: Add 10 pages to existing site',
+            pitch: 'Bumps the site from Eco A to Eco B.',
+            pricing_delta: 0,
+            wm_site_modifications: [
+              { site_domain: 'example.com', new_page_count: 35, note: 'adds 10 pages' },
+            ],
+          },
+        ],
+      },
+    },
+  });
+
+  const modManagedSites = [
+    { domain: 'example.com', is_primary: true, page_count: 21, label: null },
+  ];
+
+  const mo2Schedule = buildScheduleA({
+    proposalConfig: modCfg,
+    draftSelections: { wm_tier: 'better', build_options: 'mo2' },
+    pricing: null,
+    clientMetadata: {
+      legal_entity_name: 'Mod Test Client',
+      entity_type: 'limited liability company',
+      state_of_organization: 'Utah',
+      primary_contact_name: 'Test Signer',
+      primary_contact_email: 'test@example.com',
+      primary_contact_role: 'Owner',
+      principal_office_address: '1 Test St, Test City, UT 84720',
+    },
+    effectiveDate: '2026-05-25',
+    managedSites: modManagedSites,
+  });
+  const mo2WmSites = mo2Schedule.web_management?.sites || [];
+  test('modification mo2: Schedule A renders example.com at Eco B',
+    mo2WmSites.some(s => (s.domain || '').includes('example.com') && s.ecosystem === 'B'),
+    `got ${JSON.stringify(mo2WmSites.map(s => ({ d: s.domain, e: s.ecosystem })))}`);
+  test('modification mo2: Schedule A site has Eco B monthly contribution (797)',
+    mo2WmSites.some(s => (s.domain || '').includes('example.com') && s.monthly_contribution === 797),
+    `got ${JSON.stringify(mo2WmSites.map(s => ({ d: s.domain, m: s.monthly_contribution })))}`);
+  test('modification mo2: Schedule A WM monthly_total = 797 (per-site re-priced at Eco B)',
+    mo2Schedule.web_management?.monthly_total === 797,
+    `got ${mo2Schedule.web_management?.monthly_total}`);
+  test('modification mo2: Schedule A WM onboarding_total = 1200 (Eco B Better)',
+    mo2Schedule.web_management?.onboarding_total === 1200,
+    `got ${mo2Schedule.web_management?.onboarding_total}`);
+
+  const mo1Schedule = buildScheduleA({
+    proposalConfig: modCfg,
+    draftSelections: { wm_tier: 'better', build_options: 'mo1' },
+    pricing: null,
+    clientMetadata: {
+      legal_entity_name: 'Mod Test Client',
+      entity_type: 'limited liability company',
+      state_of_organization: 'Utah',
+      primary_contact_name: 'Test Signer',
+      primary_contact_email: 'test@example.com',
+      primary_contact_role: 'Owner',
+      principal_office_address: '1 Test St, Test City, UT 84720',
+    },
+    effectiveDate: '2026-05-25',
+    managedSites: modManagedSites,
+  });
+  const mo1WmSites = mo1Schedule.web_management?.sites || [];
+  test('modification mo1 (no mods): Schedule A renders example.com at Eco A',
+    mo1WmSites.some(s => (s.domain || '').includes('example.com') && s.ecosystem === 'A'),
+    `got ${JSON.stringify(mo1WmSites.map(s => ({ d: s.domain, e: s.ecosystem })))}`);
+  test('modification mo1: Schedule A WM monthly_total = 497 (Eco A Better, no mod)',
+    mo1Schedule.web_management?.monthly_total === 497,
+    `got ${mo1Schedule.web_management?.monthly_total}`);
+  test('modification mo1: input managedSites are not mutated (page_count still 21)',
+    modManagedSites[0].page_count === 21);
 
   // -------------------------------------------------------------------
   // Summary

@@ -114,6 +114,18 @@ export interface BuildOption {
     label: string;              // Display label for the site row.
     page_count_estimate?: number; // Routes ecosystem; the wizard uses this to compute the delta.
   }>;
+  // Modifications to existing managed sites when this option is picked.
+  // Lets an option express "the existing site grows to N pages" which
+  // re-routes its ecosystem and changes its tier pricing. The composer
+  // applies modifications BEFORE pricing the site rows, so Schedule A
+  // reflects the post-option ecosystem. Auto-calc on the wizard reads
+  // the site's current page count from managedSites to compute the
+  // delta accurately.
+  wm_site_modifications?: Array<{
+    site_domain: string;        // Existing managed domain to modify (must match an existing client_sites.domain).
+    new_page_count: number;     // Page count after this option is picked.
+    note?: string;              // Admin-visible reason (e.g., "adds 10 pages of new content").
+  }>;
 }
 
 // Each product declares its variable schema; the wizard renders inputs

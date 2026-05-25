@@ -327,6 +327,44 @@ export function buildPerSiteBases(args: {
   return { monthlyBases, onboardingBases };
 }
 
+// Apply a picked BuildOption's wm_site_modifications to a managedSites
+// array. Returns a new array (or the original reference if there are
+// no modifications). Both computePricing and buildScheduleAContribution
+// call this BEFORE pricing/rendering so the post-option state is the
+// single source of truth: WM totals and Schedule A both reflect the
+// modified page counts (and therefore the modified ecosystem routing).
+//
+// Modifications match by site_domain (case-insensitive). A modification
+// that does not match any managedSite is silently ignored — the wizard
+// authors them by picking from existing managed domains, but if the
+// admin renames a site between picks the modification will no-op
+// rather than crash.
+export function applyBuildOptionSiteModifications<
+  S extends { domain: string; page_count?: number | null }
+>(args: {
+  managedSites: S[];
+  allProductVars?: Record<string, any>;
+  selections?: Record<string, any>;
+}): S[] {
+  const productVars = args.allProductVars || {};
+  const buildOptionsArr = productVars['build']?.build_options;
+  const pickedBuildOptionId = args.selections?.['build_options'];
+  if (!Array.isArray(buildOptionsArr) || !pickedBuildOptionId) return args.managedSites;
+  const pickedOption = buildOptionsArr.find((o: any) => o && o.id === pickedBuildOptionId);
+  if (!pickedOption || !Array.isArray(pickedOption.wm_site_modifications)) return args.managedSites;
+  const modMap: Record<string, number> = {};
+  for (const mod of pickedOption.wm_site_modifications) {
+    if (mod && typeof mod.site_domain === 'string' && typeof mod.new_page_count === 'number') {
+      modMap[mod.site_domain.toLowerCase()] = mod.new_page_count;
+    }
+  }
+  if (Object.keys(modMap).length === 0) return args.managedSites;
+  return args.managedSites.map(s => {
+    const key = s.domain.toLowerCase();
+    return modMap[key] != null ? { ...s, page_count: modMap[key] } : s;
+  });
+}
+
 // =========================================================================
 // Step generation
 // =========================================================================
@@ -543,17 +581,26 @@ export const webManagementProduct: ProductDefinition = {
     let monthly: number;
     let onb: number;
     let sitesCount: number;
-    const hasPerSiteData = ctx.managedSites && ctx.managedSites.length > 0
-      && ctx.managedSites.some(s => s.page_count != null);
+    // Apply BuildOption modifications first so the WM monthly/onboarding
+    // line reflects the post-option page counts (matches Schedule A).
+    const modifiedManagedSites = ctx.managedSites && ctx.managedSites.length > 0
+      ? applyBuildOptionSiteModifications({
+          managedSites: ctx.managedSites,
+          allProductVars: ctx.allProductVars,
+          selections: ctx.selections,
+        })
+      : ctx.managedSites;
+    const hasPerSiteData = modifiedManagedSites && modifiedManagedSites.length > 0
+      && modifiedManagedSites.some(s => s.page_count != null);
     if (hasPerSiteData) {
       const { monthlyBases, onboardingBases } = buildPerSiteBases({
-        managedSites: ctx.managedSites!,
+        managedSites: modifiedManagedSites!,
         tierId: ctx.tierId,
         primaryEcosystemId: ctx.ecosystemId,
       });
       monthly = computeMultiSiteSum(monthlyBases);
       onb = computeMultiSiteSum(onboardingBases);
-      sitesCount = ctx.managedSites!.length;
+      sitesCount = modifiedManagedSites!.length;
     } else {
       sitesCount = numberFromVar(ctx.variables.site_count, 1);
       monthly = computeMultiSiteMonthly(tier.monthly, sitesCount);
@@ -597,7 +644,17 @@ export const webManagementProduct: ProductDefinition = {
     let siteRows: SiteRow[];
     let sites: number;
     if (ctx.managedSites && ctx.managedSites.length > 0) {
-      const sorted = [...ctx.managedSites].sort((a, b) => {
+      // Apply BuildOption wm_site_modifications BEFORE pricing so any
+      // changes to existing site page counts re-route the site's
+      // ecosystem in the Schedule A render. WM monthly/onboarding line
+      // (in computePricing) and Schedule A both call the same helper,
+      // so the post-option state is the single source of truth.
+      const mutated = applyBuildOptionSiteModifications({
+        managedSites: ctx.managedSites,
+        allProductVars: ctx.allProductVars,
+        selections: ctx.selections,
+      });
+      const sorted = [...mutated].sort((a, b) => {
         if (!!a.is_primary === !!b.is_primary) return a.domain.localeCompare(b.domain);
         return a.is_primary ? -1 : 1;
       });

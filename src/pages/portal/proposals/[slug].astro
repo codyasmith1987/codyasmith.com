@@ -569,19 +569,25 @@ const clientConfig = {
     color: #6b6359;
     font-style: italic;
   }
+  /* Recommended pill: sepia background + cream text reads more
+     prominently against the cream tier card than the original dark
+     navy background did, and matches the sepia border the .recommended
+     tier card already uses. Visual weight signals "this is the
+     practice's suggestion" without being shouty. Audit P3. */
   .pill {
     position: absolute;
     top: -13px;
     left: 50%;
     transform: translateX(-50%);
-    background: #1d2c3a;
+    background: #c47d5a;
     color: #faf7f2;
     font-family: "JetBrains Mono", ui-monospace, monospace;
     font-size: 11px;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     padding: 5px 14px;
-    font-weight: 500;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(196, 125, 90, 0.25);
   }
   .tier h3 {
     font-size: 30px;

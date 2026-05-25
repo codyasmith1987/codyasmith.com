@@ -244,7 +244,10 @@ const todayISO = new Date().toISOString().slice(0, 10);
 
       <!-- 3. PER-PRODUCT VARIABLES -->
       <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8" id="vars-section" hidden>
-        <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-5">3. Per-product variables</p>
+        <div class="flex items-baseline justify-between gap-4 flex-wrap mb-5">
+          <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase">3. Per-product variables</p>
+          <p class="text-[11px] text-neutral-500" id="vars-scope-summary"></p>
+        </div>
         <p class="text-[11px] text-neutral-500 mb-5">Routing variables for each in-scope product. Defaults pre-fill from client data when available.</p>
 
         <div id="vars-container" class="space-y-6"></div>
@@ -302,12 +305,14 @@ const todayISO = new Date().toISOString().slice(0, 10);
         </button>
       </section>
 
-      <!-- 6. HEADER OVERRIDES (collapsed by default; auto-derived from client) -->
+      <!-- 6. HEADER OVERRIDES (auto-derived from client; expanded by
+           default so admin sees what's being auto-filled and can
+           override before publish. Audit W14.) -->
       <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
-        <details>
+        <details open>
           <summary class="cursor-pointer">
             <span class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase">6. Header overrides</span>
-            <span class="text-[11px] text-neutral-500 ml-3">(optional; auto-derived from client)</span>
+            <span class="text-[11px] text-neutral-500 ml-3">(optional; auto-derived from client and signers)</span>
           </summary>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-5">
@@ -661,6 +666,17 @@ const todayISO = new Date().toISOString().slice(0, 10);
         return;
       }
       varsSection.hidden = false;
+      // Scope summary above the variable blocks so admin can see at a
+      // glance how many products are in scope without scanning the
+      // checkbox list. Audit W8.
+      const scopeEl = document.getElementById('vars-scope-summary');
+      if (scopeEl) {
+        const names = state.products
+          .map(pid => productManifest.find(p => p.id === pid))
+          .filter(Boolean)
+          .map(p => p.name);
+        scopeEl.textContent = state.products.length + ' in scope: ' + names.join(', ');
+      }
       varsContainer.innerHTML = '';
       for (const id of state.products) {
         const product = productManifest.find(p => p.id === id);
@@ -908,7 +924,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
       if (opts.length === 1) {
         const warn = document.createElement('p');
         warn.className = 'text-[11px] text-amber-700';
-        warn.textContent = 'Note: single option will not render a picker. Add a second option to surface the two-column choice on the proposal page.';
+        warn.textContent = 'A single option ships as a standard build. Add a second option to surface a two-column choice card on the published proposal.';
         container.appendChild(warn);
       }
       opts.forEach((opt, i) => {
@@ -1427,7 +1443,9 @@ const todayISO = new Date().toISOString().slice(0, 10);
       try { data = rawText ? JSON.parse(rawText) : null; } catch {}
       if (res.ok && data && data.ok) {
         clearAutosave();
-        showMsg(`Created proposal. Redirecting...`, 'ok');
+        const verb = status === 'draft' ? 'Draft saved' : 'Proposal published';
+        showMsg(verb + '. Redirecting...', 'ok');
+        if (window.__toast) window.__toast(verb + '.', 'success');
         setTimeout(() => { window.location.href = '/portal/admin/proposals'; }, 800);
       } else {
         // Voice-lint violations from the create endpoint render with
@@ -1590,7 +1608,15 @@ const todayISO = new Date().toISOString().slice(0, 10);
         e.preventDefault();
         const domain = addInput.value.trim();
         if (!domain) return;
+        // Loading state so admin sees the request is in flight and
+        // doesn't hit Enter again thinking the keypress was ignored.
+        // Audit W13.
+        const originalPlaceholder = addInput.placeholder;
+        addInput.disabled = true;
+        addInput.placeholder = 'Adding...';
         const result = await callSitesApi({ client_id: state.client_id, action: 'add', domain });
+        addInput.disabled = false;
+        addInput.placeholder = originalPlaceholder;
         if (result.ok) {
           addInput.value = '';
           renderDerivedDomains();
@@ -2262,7 +2288,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
 
             const label = document.createElement('span');
             label.className = 'text-[11px] font-mono text-neutral-400 uppercase tracking-wide';
-            label.textContent = 'Marked recommended:';
+            label.textContent = 'Set recommended tier:';
             wrap.appendChild(label);
 
             const select = document.createElement('select');

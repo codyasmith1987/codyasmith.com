@@ -938,11 +938,11 @@ const todayISO = new Date().toISOString().slice(0, 10);
       wrap.className = 'mt-4 p-3 bg-neutral-900/30 border border-white/5 rounded-md';
       const header = document.createElement('p');
       header.className = 'text-[10px] font-mono text-neutral-500 tracking-wide uppercase mb-1';
-      header.textContent = 'Deployment options (optional)';
+      header.textContent = 'Build shape options (optional)';
       wrap.appendChild(header);
       const desc = document.createElement('p');
       desc.className = 'text-[11px] text-neutral-400 mb-3 leading-relaxed';
-      desc.textContent = 'When the build can ship in more than one shape (e.g., unified site vs split sites), define each option here. Two or more options become a two-column choice on the proposal page. Leave empty for a single-shape build.';
+      desc.textContent = 'Use this when the build could be done as one bigger site OR as a split into two sites (or any similar fork). Add two options to give the client a side-by-side choice card on the proposal page. Leave empty if there is only one shape.';
       wrap.appendChild(desc);
       const list = document.createElement('div');
       list.className = 'space-y-3';
@@ -980,14 +980,14 @@ const todayISO = new Date().toISOString().slice(0, 10);
       if (opts.length === 0) {
         const empty = document.createElement('p');
         empty.className = 'text-[11px] text-neutral-500 italic';
-        empty.textContent = 'No options defined. Single-shape build.';
+        empty.textContent = 'No options yet. The build ships as one shape.';
         container.appendChild(empty);
         return;
       }
       if (opts.length === 1) {
         const warn = document.createElement('p');
         warn.className = 'text-[11px] text-amber-700';
-        warn.textContent = 'A single option ships as a standard build. Add a second option to surface a two-column choice card on the published proposal.';
+        warn.textContent = 'Only one option here. Add a second one so the client gets a side-by-side choice card on the proposal page.';
         container.appendChild(warn);
       }
       opts.forEach((opt, i) => {
@@ -1017,19 +1017,19 @@ const todayISO = new Date().toISOString().slice(0, 10);
 
       const nameWrap = document.createElement('div');
       nameWrap.className = 'mb-2';
-      nameWrap.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Name (shown on the proposal card)</label>`;
+      nameWrap.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Option name (what the client sees on the choice card)</label>`;
       const nameInput = document.createElement('input');
       nameInput.type = 'text';
       nameInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30';
       nameInput.value = opt.name || '';
-      nameInput.placeholder = 'Option 1: Single unified site';
+      nameInput.placeholder = 'Option 1: One bigger site';
       nameInput.addEventListener('input', () => { opt.name = nameInput.value; });
       nameWrap.appendChild(nameInput);
       card.appendChild(nameWrap);
 
       const pitchWrap = document.createElement('div');
       pitchWrap.className = 'mb-2';
-      pitchWrap.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Pitch (HTML allowed, shown on the option card)</label>`;
+      pitchWrap.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Short pitch (1-2 sentences the client reads under the option name)</label>`;
       const pitchInput = document.createElement('textarea');
       pitchInput.rows = 3;
       pitchInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
@@ -1042,7 +1042,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
       const grid = document.createElement('div');
       grid.className = 'mb-2 grid grid-cols-2 gap-3';
       const deltaCol = document.createElement('div');
-      deltaCol.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Pricing delta ($, can be negative)</label>`;
+      deltaCol.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Build cost difference vs the other option ($, can be negative; 0 if same price)</label>`;
       const deltaInput = document.createElement('input');
       deltaInput.type = 'number';
       deltaInput.step = '1';
@@ -1056,7 +1056,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
       grid.appendChild(deltaCol);
 
       const idCol = document.createElement('div');
-      idCol.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Option id (lowercase, letters/digits/hyphens)</label>`;
+      idCol.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Internal id (leave as-is unless you have a reason)</label>`;
       const optIdInput = document.createElement('input');
       optIdInput.type = 'text';
       optIdInput.pattern = '[a-z0-9_-]+';
@@ -1072,7 +1072,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
 
       const sowWrap = document.createElement('div');
       sowWrap.className = 'mb-2';
-      sowWrap.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Schedule A note (in the contract when this option is picked)</label>`;
+      sowWrap.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Sentence about this option for the signed contract</label>`;
       const sowInput = document.createElement('textarea');
       sowInput.rows = 2;
       sowInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
@@ -1099,11 +1099,11 @@ const todayISO = new Date().toISOString().slice(0, 10);
       wrap.className = 'mt-3 pl-3 border-l-2 border-amber-500/30';
       const label = document.createElement('p');
       label.className = 'text-[10px] font-mono text-neutral-500 mb-2 uppercase tracking-wide';
-      label.textContent = 'Web Management impact (when this option is picked)';
+      label.textContent = 'What changes for ongoing Web Management if this option is picked';
       wrap.appendChild(label);
       const help = document.createElement('p');
       help.className = 'text-[11px] text-neutral-400 mb-3 leading-relaxed';
-      help.textContent = 'New build sites add monthly only (Build replaces WM onboarding for the site it produces). Existing-site modifications re-route the site’s ecosystem automatically. Click Calculate to fill these and see the modification impact.';
+      help.textContent = 'New sites I build only add to the Web Management monthly fee. The one-time setup is already covered by the build cost. Changing an existing site’s page count may bump it to a different tier. Click Calculate and the dollar fields below fill in automatically.';
       wrap.appendChild(help);
 
       // Auto-calculate button: sums each added site's contribution at
@@ -1119,7 +1119,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
       const calcBtn = document.createElement('button');
       calcBtn.type = 'button';
       calcBtn.className = 'text-[11px] px-3 py-1 bg-neutral-800 border border-white/10 rounded text-amber-600 hover:border-amber-500/40 transition-colors';
-      calcBtn.textContent = 'Calculate from sites added';
+      calcBtn.textContent = 'Calculate the monthly + setup fees';
       const calcStatus = document.createElement('span');
       calcStatus.className = 'text-[11px] font-mono text-neutral-500';
       calcWrap.appendChild(calcTierSel);
@@ -1137,7 +1137,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
         const addedArr = Array.isArray(opt.wm_sites_added) ? opt.wm_sites_added : [];
         const modArr = Array.isArray(opt.wm_site_modifications) ? opt.wm_site_modifications : [];
         if (addedArr.length === 0 && modArr.length === 0) {
-          calcStatus.textContent = 'No sites added or modified yet.';
+          calcStatus.textContent = 'Nothing to calculate yet. Add a new site or a modification first.';
           calcStatus.className = 'text-[11px] font-mono text-amber-700';
           return;
         }
@@ -1182,23 +1182,23 @@ const todayISO = new Date().toISOString().slice(0, 10);
             continue;
           }
           if (oldEco === newEco) {
-            modImpactParts.push(`${domain} stays ${newEco} (no change)`);
+            modImpactParts.push(`${domain} stays at Eco ${newEco} (no tier change)`);
             continue;
           }
           const oldP = wmEcosystemPricing[oldEco][tierId];
           const newP = wmEcosystemPricing[newEco][tierId];
           const dMonthly = Math.round((newP.monthly - oldP.monthly) * 100) / 100;
           const dOnb = Math.round((newP.onb - oldP.onb) * 100) / 100;
-          modImpactParts.push(`${domain} ${oldEco}→${newEco} (+$${dMonthly}/mo, +$${dOnb} onb)`);
+          modImpactParts.push(`${domain} bumps from Eco ${oldEco} to Eco ${newEco} (+$${dMonthly} per month, +$${dOnb} one-time setup)`);
         }
         const tierLabel = tierId.charAt(0).toUpperCase() + tierId.slice(1);
-        const skippedNote = skipped > 0 ? ` (${skipped} added site(s) skipped — missing page count)` : '';
-        const modSkippedNote = modSkipped > 0 ? ` (${modSkipped} modification(s) skipped — domain not in managed sites or missing page count)` : '';
+        const skippedNote = skipped > 0 ? ` (${skipped} new site(s) skipped — missing page count)` : '';
+        const modSkippedNote = modSkipped > 0 ? ` (${modSkipped} modification(s) skipped — site not in managed list, or page count missing)` : '';
         const baseLine = addedArr.length > 0
-          ? `Added at ${tierLabel}: +$${opt.wm_monthly_delta}/mo, +$0 onb (build covers)`
-          : `No new build sites`;
+          ? `At ${tierLabel} tier: +$${opt.wm_monthly_delta} per month, +$0 one-time setup (build fee covers new site setup)`
+          : `No new sites`;
         const modLine = modImpactParts.length > 0
-          ? ` · Modifications apply via composer: ${modImpactParts.join('; ')}`
+          ? ` · Existing site changes (applied automatically): ${modImpactParts.join('; ')}`
           : '';
         calcStatus.textContent = `${baseLine}${modLine}${skippedNote}${modSkippedNote}`;
         calcStatus.className = 'text-[11px] font-mono text-emerald-400';
@@ -1207,7 +1207,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
       const grid = document.createElement('div');
       grid.className = 'grid grid-cols-2 gap-3 mb-3';
       const monthlyCol = document.createElement('div');
-      monthlyCol.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">WM monthly delta ($, can be 0)</label>`;
+      monthlyCol.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Web Management monthly added or removed ($) — Calculate fills this</label>`;
       const monthlyInput = document.createElement('input');
       monthlyInput.type = 'number';
       monthlyInput.step = '0.01';
@@ -1221,7 +1221,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
       grid.appendChild(monthlyCol);
 
       const onbCol = document.createElement('div');
-      onbCol.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">WM onboarding delta ($, can be 0)</label>`;
+      onbCol.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Web Management one-time setup added or removed ($) — Calculate fills this</label>`;
       const onbInput = document.createElement('input');
       onbInput.type = 'number';
       onbInput.step = '0.01';
@@ -1237,7 +1237,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
 
       const sitesLabel = document.createElement('p');
       sitesLabel.className = 'text-[10px] font-mono text-neutral-500 mb-2 uppercase tracking-wide';
-      sitesLabel.textContent = 'Sites added when this option is picked (appended to Schedule A WM section)';
+      sitesLabel.textContent = 'New sites this option builds (added to the contract’s site list)';
       wrap.appendChild(sitesLabel);
 
       const sitesList = document.createElement('div');
@@ -1320,11 +1320,11 @@ const todayISO = new Date().toISOString().slice(0, 10);
 
       const modsLabel = document.createElement('p');
       modsLabel.className = 'text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide';
-      modsLabel.textContent = 'Modify existing managed sites (re-routes ecosystem when this option is picked)';
+      modsLabel.textContent = 'Existing sites whose page count changes if this option is picked';
       wrap.appendChild(modsLabel);
       const modsHelp = document.createElement('p');
       modsHelp.className = 'text-[11px] text-neutral-400 mb-2 leading-relaxed';
-      modsHelp.textContent = 'Use when the option adds pages to an existing managed site (e.g., 21-page site grows to 31 pages, re-routes Eco A→B). The composer applies these automatically; no delta needed.';
+      modsHelp.textContent = 'Use this when the build adds pages to a site I already manage (e.g., 21-page site grows to 31 pages). If the new total bumps the site into a different Web Management tier, the pricing updates automatically.';
       wrap.appendChild(modsHelp);
 
       const modsList = document.createElement('div');
@@ -1340,8 +1340,8 @@ const todayISO = new Date().toISOString().slice(0, 10);
           row.className = 'grid grid-cols-12 gap-2 items-end p-2 bg-neutral-900/40 border border-white/5 rounded';
           row.innerHTML =
             '<div class="col-span-5"><label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Site</label></div>' +
-            '<div class="col-span-2"><label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">New pages</label></div>' +
-            '<div class="col-span-4"><label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Note</label></div>' +
+            '<div class="col-span-2"><label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">New total pages</label></div>' +
+            '<div class="col-span-4"><label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Note (optional)</label></div>' +
             '<div class="col-span-1"></div>';
           const siteCol = row.children[0];
           const pagesCol = row.children[1];
@@ -1353,8 +1353,8 @@ const todayISO = new Date().toISOString().slice(0, 10);
           const placeholder = document.createElement('option');
           placeholder.value = '';
           placeholder.textContent = managedNow.length === 0
-            ? '(no managed sites — add them in Sites & client)'
-            : '(pick a managed site)';
+            ? '(no managed sites yet — add one in the Sites step first)'
+            : '(pick a site)';
           siteSel.appendChild(placeholder);
           for (const s of managedNow) {
             const opt2 = document.createElement('option');
@@ -1384,7 +1384,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           const noteInput = document.createElement('input');
           noteInput.type = 'text';
           noteInput.className = 'w-full px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs';
-          noteInput.placeholder = 'adds 10 pages of new content';
+          noteInput.placeholder = 'adds switchgear category section, ~15 pages';
           noteInput.value = mod.note || '';
           noteInput.addEventListener('input', () => { mod.note = noteInput.value; });
           noteCol.appendChild(noteInput);
@@ -1423,7 +1423,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
       wrap.className = 'mt-2 pl-3 border-l-2 border-amber-500/30';
       const label = document.createElement('p');
       label.className = 'text-[10px] font-mono text-neutral-500 mb-2 uppercase tracking-wide';
-      label.textContent = 'Rollout phases (under "How it rolls out" when this option is picked)';
+      label.textContent = 'Build steps shown to the client on the proposal page (the "how it rolls out" section)';
       wrap.appendChild(label);
       const phasesList = document.createElement('div');
       phasesList.className = 'space-y-2';

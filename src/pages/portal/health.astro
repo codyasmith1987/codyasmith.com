@@ -192,35 +192,60 @@ const clients = isAdmin ? await getAllClients() : [];
         document.getElementById('health-grade').textContent = grade.icon;
         document.getElementById('health-grade').className = `w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold shrink-0 ${grade.color}`;
 
-        // Counts framed the way clients name pages. navigable_pages is
-        // the number a client would give if asked to list their pages
-        // by hand: status 200, indexable, HTML, with tag archives,
-        // pagination, feeds, attachment URLs, and WordPress utility
-        // endpoints excluded. distinct_affected_urls counts pages (the
-        // same universe) with at least one issue this month. Falls
-        // back to summed affected_urls when the per-issue URL lists
-        // have not been ingested yet — that sum is over-rolled-up,
-        // but better than zero.
+        // Counts framed the way clients name pages. Three honest
+        // states the headline can be in:
+        //
+        //   1. Best: navigable_pages > 0 AND distinct_affected_urls
+        //      came from site_issue_urls (the per-issue URL lists).
+        //      "X of your Y pages" is anchored against real numbers.
+        //   2. OK: distinct_affected_urls came from site_issue_urls
+        //      but navigable_pages is 0 (no crawl_internal upload).
+        //      "X pages" is still trustworthy (X is a distinct count).
+        //   3. Fallback: distinct_affected_urls is 0 because per-issue
+        //      URL lists were not uploaded. The only number available
+        //      is the SUM of affected_urls across categories — which
+        //      over-counts (an image with 3 issues counts 3 times).
+        //      Must NOT call that a page count.
         const navigablePages = Number(stats.navigable_pages) || 0;
         const urlsCrawled = Number(stats.urls_crawled) || 0;
-        let distinctAffectedUrls = Number(stats.distinct_affected_urls) || 0;
-        if (distinctAffectedUrls === 0) {
-          distinctAffectedUrls = issues.reduce((s, i) => s + (i.affected_urls || 0), 0);
+        const distinctAffectedUrls = Number(stats.distinct_affected_urls) || 0;
+        const usingSumFallback = distinctAffectedUrls === 0;
+        const findingsSum = usingSumFallback
+          ? issues.reduce((s, i) => s + (i.affected_urls || 0), 0)
+          : 0;
+
+        let pageFraming;
+        let pageFramingHasVerb;
+        if (navigablePages > 0 && !usingSumFallback) {
+          pageFraming = `${distinctAffectedUrls} of your ${navigablePages} page${navigablePages !== 1 ? 's' : ''}`;
+          pageFramingHasVerb = false; // verb handled by caller
+        } else if (!usingSumFallback) {
+          pageFraming = `${distinctAffectedUrls} page${distinctAffectedUrls !== 1 ? 's' : ''}`;
+          pageFramingHasVerb = false;
+        } else {
+          // Honest about over-counting: name findings, name categories,
+          // explicitly disclaim that a page can show up in multiple.
+          pageFraming = `${findingsSum} finding${findingsSum !== 1 ? 's' : ''} across ${issues.length} categor${issues.length !== 1 ? 'ies' : 'y'}`;
+          pageFramingHasVerb = true; // self-contained phrase
         }
-        // Build the "X of Y pages" framing only when we have a page
-        // count to anchor against. Otherwise just name the distinct
-        // affected count without the denominator.
-        const pageFraming = navigablePages > 0
-          ? `${distinctAffectedUrls} of your ${navigablePages} page${navigablePages !== 1 ? 's' : ''}`
-          : `${distinctAffectedUrls} page${distinctAffectedUrls !== 1 ? 's' : ''}`;
         let headline = '', desc = '';
+
+        // Tail sentence varies by what we actually know. The
+        // sum-fallback case names findings + disclaims overlap so we
+        // never claim a page count we can't substantiate.
+        const tail = usingSumFallback
+          ? `${pageFraming} reported. A single page can appear in multiple categories, so the finding count is higher than the page count.`
+          : `${pageFraming} ${distinctAffectedUrls === 1 ? 'has' : 'have'} at least one.`;
 
         if (grade.label === 'Excellent' || grade.label === 'Good') {
           headline = `Site health: ${grade.label}`;
-          desc = `Your site is in good shape. ${issues.length} issue categor${issues.length !== 1 ? 'ies' : 'y'} found across ${pageFraming}, but nothing critical. The items below are opportunities to polish, not emergencies.`;
+          const middle = usingSumFallback
+            ? `${pageFraming}`
+            : `across ${pageFraming}`;
+          desc = `Your site is in good shape. ${issues.length} issue categor${issues.length !== 1 ? 'ies' : 'y'} found ${middle}, but nothing critical. The items below are opportunities to polish, not emergencies.`;
         } else if (grade.label === 'Fair') {
           headline = `Site health: ${grade.label} (fixable issues)`;
-          desc = `${issues.length} issue categor${issues.length !== 1 ? 'ies' : 'y'} found, with ${high > 0 ? `${high} high-priority item${high !== 1 ? 's' : ''} that should be addressed soon` : `${medium} medium-priority item${medium !== 1 ? 's' : ''} worth cleaning up`}. ${pageFraming} ${distinctAffectedUrls === 1 ? 'has' : 'have'} at least one. None of this is unusual for a site that's actively being worked on.`;
+          desc = `${issues.length} issue categor${issues.length !== 1 ? 'ies' : 'y'} found, with ${high > 0 ? `${high} high-priority item${high !== 1 ? 's' : ''} that should be addressed soon` : `${medium} medium-priority item${medium !== 1 ? 's' : ''} worth cleaning up`}. ${tail} None of this is unusual for a site that's actively being worked on.`;
         } else {
           headline = `Site health: ${grade.label}`;
           desc = `${high} high-priority issue${high !== 1 ? 's' : ''} and ${medium} medium-priority issue${medium !== 1 ? 's' : ''} found. These are actively hurting your search rankings and should be addressed. The list below is ordered by impact.`;

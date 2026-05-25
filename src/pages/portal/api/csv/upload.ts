@@ -136,7 +136,13 @@ async function processOne(
     return { filename: file.name, error: 'Only CSV or ZIP files are accepted' };
   }
   const raw = await file.text();
-  return ingestOneCsv(file.name, raw, file.size, clientId, month, userId, userName);
+  // The folder-picker (webkitdirectory) hands back a name like
+  // "2026.05.24.15.21.38/issues_reports/response_codes_external_client_error_(4xx)_inlinks.csv"
+  // — relative path included. The detector and parsers expect the
+  // basename only. Strip the directory prefix so filename-based
+  // routing matches the same way it would for a single-file pick.
+  const baseName = file.name.replace(/^.*[\\/]/, '');
+  return ingestOneCsv(baseName, raw, file.size, clientId, month, userId, userName);
 }
 
 export const POST: APIRoute = async ({ locals, request }) => {

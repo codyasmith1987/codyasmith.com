@@ -336,11 +336,21 @@ const printHref = `/portal/contracts/${agreement.slug}/print`;
     text-decoration: underline;
   }
   .signer-status-card .pending-pill {
+    display: inline-block;
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--ink-quiet);
+    color: #a86b3c;
+    background: #fef3e0;
+    border: 1px solid #f0d4a8;
+    padding: 4px 10px 4px 8px;
+    border-radius: 4px;
+    margin-top: 4px;
+  }
+  .signer-status-card .pending-pill::before {
+    content: "⏳ ";
+    margin-right: 2px;
   }
   .sign-error {
     margin-top: 12px;
@@ -359,7 +369,7 @@ const printHref = `/portal/contracts/${agreement.slug}/print`;
 <div class="exec-shell">
   <nav class="exec-nav">
     <a href="/portal/dashboard">&larr; Portal dashboard</a>
-    <a href={printHref}>Print friendly view</a>
+    <a href={printHref}>Print or download contract</a>
   </nav>
 
   <ContractRenderer
@@ -370,6 +380,17 @@ const printHref = `/portal/contracts/${agreement.slug}/print`;
     status={agreement.status}
     bannerHtml={bannerHtml}
   />
+
+  {!meSigner && agreement.status !== 'executed' && agreement.status !== 'voided' && (
+    <div class="signer-status-card" style="border-left: 3px solid #c47d5a;">
+      <div>
+        <div class="who">You are not listed as a signer on this agreement.</div>
+        <p style="margin-top: 8px; font-size: 13px; color: var(--ink-quiet);">
+          If you should be signing, ask the practice to add your email as a signer on this contract.
+        </p>
+      </div>
+    </div>
+  )}
 
   {meSigner && agreement.status !== 'executed' && agreement.status !== 'voided' && (
     <>
@@ -382,7 +403,7 @@ const printHref = `/portal/contracts/${agreement.slug}/print`;
               <label for={`intake-${f.id}`}>
                 {f.label}
                 {f.required && <span class="required-tag">Required to sign</span>}
-                <span class="save-status" id={`save-${f.id}`}>Saved</span>
+                <span class="save-status" id={`save-${f.id}`}>✓ Saved</span>
               </label>
               {f.type === 'textarea' ? (
                 <textarea id={`intake-${f.id}`} name={f.id} data-intake-field={f.id} data-required={f.required ? 'true' : 'false'}>{f.value || ''}</textarea>
@@ -412,7 +433,7 @@ const printHref = `/portal/contracts/${agreement.slug}/print`;
         <form class="sign-block" id="sign-block" novalidate>
           <h2>Sign in the portal</h2>
           <p class="sign-intro">
-            By checking the boxes and typing your full legal name, you are signing this agreement electronically. Your typed name is your signature. The portal records the time, your network address, your browser, and a unique fingerprint of the exact document at the moment you sign. These together form the legal record under the Utah Uniform Electronic Transactions Act (Utah Code Title 46 Chapter 4) and the federal ESIGN Act.
+            By checking the boxes and typing your full legal name, you are signing this agreement electronically. Your typed name is your signature. The portal records the time, your IP address, your browser, and a unique fingerprint of the exact document at the moment you sign. These together form the legal record under the Utah Uniform Electronic Transactions Act (Utah Code Title 46 Chapter 4) and the federal ESIGN Act.
           </p>
           <div class="checkbox-row">
             <input type="checkbox" id="consent-checkbox" />
@@ -424,10 +445,11 @@ const printHref = `/portal/contracts/${agreement.slug}/print`;
           </div>
           <label for="signature-input" style="display: block; font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-quiet); margin: 12px 0 6px;">Your full legal name</label>
           <input type="text" id="signature-input" class="signature-input" placeholder="Type your full legal name" autocomplete="off" />
+          <p class="signature-preview-label" id="signature-preview-label" style="display: none;">Preview, this is how your signature will appear on the executed contract:</p>
           <div class="signature-preview" id="signature-preview"></div>
           <button type="submit" class="sign-button" id="sign-button" disabled>Complete the items above to sign</button>
           <div class="sign-error" id="sign-error" style="display: none;"></div>
-          <div class="audit-preview" id="audit-preview">When you click Sign, your IP address, browser, time, and a unique fingerprint of this exact document are permanently stored against your signature.</div>
+          <div class="audit-preview" id="audit-preview">When you click Sign, the audit details listed above are permanently stored against your signature.</div>
         </form>
       )}
     </>
@@ -484,7 +506,7 @@ const printHref = `/portal/contracts/${agreement.slug}/print`;
     // after the fetch returned, and quick networks looked like nothing
     // happened.
     if (status) {
-      status.textContent = 'Saving…';
+      status.textContent = 'Saving...';
       status.classList.add('visible');
     }
     return fetch('/portal/api/contracts/' + cfg.slug + '/intake', {
@@ -527,6 +549,7 @@ const printHref = `/portal/contracts/${agreement.slug}/print`;
   var intentBox = document.getElementById('intent-checkbox');
   var sigInput = document.getElementById('signature-input');
   var sigPreview = document.getElementById('signature-preview');
+  var sigPreviewLabel = document.getElementById('signature-preview-label');
   var signBtn = document.getElementById('sign-button');
   var signForm = document.getElementById('sign-block');
   var errorBox = document.getElementById('sign-error');
@@ -534,7 +557,8 @@ const printHref = `/portal/contracts/${agreement.slug}/print`;
   function refreshSignButton() {
     if (!signBtn) return;
     var name = sigInput ? sigInput.value.trim() : '';
-    if (sigPreview) sigPreview.textContent = name ? ('Will be saved as: ' + name) : '';
+    if (sigPreview) sigPreview.textContent = name;
+    if (sigPreviewLabel) sigPreviewLabel.style.display = name ? 'block' : 'none';
     var requiredFields = document.querySelectorAll('[data-intake-field][data-required="true"]');
     var missingRequired = false;
     requiredFields.forEach(function(el) {

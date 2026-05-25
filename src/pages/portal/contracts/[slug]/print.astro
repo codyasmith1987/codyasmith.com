@@ -180,7 +180,17 @@ const pageTitle = `${template.title} — ${clientLegalName}`;
   <div class="print-header">
     <p class="eyebrow">{clientLegalName}</p>
     <h1>{template.title}</h1>
-    <p class="meta">Status: {agreement.status} &middot; Generated {new Date().toLocaleDateString('en-US', { dateStyle: 'long' })}</p>
+    {/* Show status on the print copy ONLY when the agreement is in a
+        terminal state worth printing (executed or voided). Draft and
+        issued states are workflow-internal; surfacing them on a
+        printed/downloaded contract that the client may circulate is
+        misleading. Audit S1. */}
+    <p class="meta">
+      {(agreement.status === 'executed' || agreement.status === 'voided')
+        ? <>Status: {agreement.status} &middot; </>
+        : null}
+      Generated {new Date().toLocaleDateString('en-US', { dateStyle: 'long' })}
+    </p>
   </div>
 
   <div set:html={bodyHtml} />

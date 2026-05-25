@@ -99,11 +99,12 @@ const csrfToken = Astro.locals.csrfToken || '';
 
       <section class="bg-neutral-900/30 border border-white/5 rounded-xl p-6">
         <h2 class="font-serif text-xl text-neutral-100 mb-4">Signers</h2>
-        <div class="space-y-3 mb-6">
+        <div class="space-y-3 mb-6" id="signers-list">
           {signers.map(s => {
             const active = signatures.find(sig => sig.signer_id === s.id && !sig.revoked_at);
+            const canResend = !active && (agreement.status === 'issued' || agreement.status === 'partially_signed');
             return (
-              <div class="flex items-start justify-between gap-3 pb-3 border-b border-white/5">
+              <div class="flex items-start justify-between gap-3 pb-3 border-b border-white/5" data-signer-row={s.id}>
                 <div>
                   <p class="text-sm text-neutral-200">{s.name_snapshot}</p>
                   <p class="text-xs font-mono text-neutral-400">{s.email_snapshot} · {s.signer_role}</p>
@@ -112,7 +113,14 @@ const csrfToken = Astro.locals.csrfToken || '';
                   ) : (
                     <p class="text-xs text-neutral-400 mt-1">Awaiting</p>
                   )}
+                  <p class="text-[10px] font-mono mt-1 hidden" data-signer-send-status={s.id}></p>
                 </div>
+                {canResend && (
+                  <button type="button" data-resend-signer={s.id}
+                    class="shrink-0 px-2 py-1 border border-white/10 text-neutral-300 text-[11px] rounded hover:border-amber-500/40 hover:text-amber-600 transition-colors">
+                    Resend
+                  </button>
+                )}
               </div>
             );
           })}
@@ -183,23 +191,91 @@ const csrfToken = Astro.locals.csrfToken || '';
     });
   }
 
+  // Surface per-signer send results on each signer row so admin can
+  // see exactly which emails went out vs which failed. Falls back to
+  // a toast when a row isn't found (shouldn't happen but defensive).
+  function showSendResults(results) {
+    if (!Array.isArray(results) || results.length === 0) return;
+    var failed = 0;
+    for (var i = 0; i < results.length; i++) {
+      var r = results[i];
+      // Find signer row by email match (server returns email_snapshot).
+      var rows = document.querySelectorAll('[data-signer-row]');
+      var matchedStatusEl = null;
+      for (var j = 0; j < rows.length; j++) {
+        var row = rows[j];
+        var emailLine = row.querySelector('p.font-mono');
+        if (emailLine && emailLine.textContent && emailLine.textContent.indexOf(r.email) !== -1) {
+          var id = row.getAttribute('data-signer-row');
+          matchedStatusEl = document.querySelector('[data-signer-send-status="' + id + '"]');
+          break;
+        }
+      }
+      if (matchedStatusEl) {
+        matchedStatusEl.classList.remove('hidden');
+        if (r.ok) {
+          matchedStatusEl.textContent = 'Email sent ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+          matchedStatusEl.className = 'text-[10px] font-mono mt-1 text-emerald-400';
+        } else {
+          matchedStatusEl.textContent = 'Email send FAILED';
+          matchedStatusEl.className = 'text-[10px] font-mono mt-1 text-red-400';
+          failed++;
+        }
+      }
+    }
+    if (failed > 0) {
+      window.__toast(failed + ' of ' + results.length + ' email(s) failed. See per-signer status above.', 'error');
+    }
+  }
+
   var issueBtn = document.getElementById('issue-btn');
   if (issueBtn) issueBtn.addEventListener('click', function() {
     if (!confirm('Send the contract-issued email to all signers and flip status to "issued"?')) return;
     runWithButton(issueBtn, 'Issuing…',
       function() { return api('/portal/api/admin/agreements/' + slug + '/issue', 'POST', {}); },
-      function() { window.__toast('Agreement issued and signers notified.', 'success'); setTimeout(function() { window.location.reload(); }, 600); }
+      function(r) {
+        showSendResults(r.data && r.data.send_results);
+        if (!r.data || !r.data.send_results || r.data.send_results.every(function(x) { return x.ok; })) {
+          window.__toast('Agreement issued and signers notified.', 'success');
+        }
+        setTimeout(function() { window.location.reload(); }, 1200);
+      }
     );
   });
 
   var reissueBtn = document.getElementById('reissue-btn');
   if (reissueBtn) reissueBtn.addEventListener('click', function() {
-    if (!confirm('Resend invite emails to all signers?')) return;
+    if (!confirm('Resend invite emails to all unsigned signers?')) return;
     runWithButton(reissueBtn, 'Resending…',
-      function() { return api('/portal/api/admin/agreements/' + slug + '/issue', 'POST', {}); },
-      function() { window.__toast('Invite emails resent to all signers.', 'success'); }
+      function() { return api('/portal/api/admin/agreements/' + slug + '/resend', 'POST', {}); },
+      function(r) {
+        showSendResults(r.data && r.data.send_results);
+        if (r.data && r.data.send_results && r.data.send_results.every(function(x) { return x.ok; })) {
+          window.__toast('Invite emails resent to all signers.', 'success');
+        }
+      }
     );
   });
+
+  // Per-signer resend buttons. Each fires the resend endpoint with the
+  // specific signer_id so other signers aren't touched.
+  var perRowResendBtns = document.querySelectorAll('[data-resend-signer]');
+  for (var pi = 0; pi < perRowResendBtns.length; pi++) {
+    (function(btn) {
+      var signerId = btn.getAttribute('data-resend-signer');
+      btn.addEventListener('click', function() {
+        runWithButton(btn, 'Sending…',
+          function() { return api('/portal/api/admin/agreements/' + slug + '/resend', 'POST', { signer_id: signerId }); },
+          function(r) {
+            showSendResults(r.data && r.data.send_results);
+            if (r.data && r.data.send_results && r.data.send_results[0] && r.data.send_results[0].ok) {
+              window.__toast('Email sent.', 'success');
+            }
+          }
+        );
+      });
+    })(perRowResendBtns[pi]);
+  }
 
   var cancelBtn = document.getElementById('cancel-btn');
   if (cancelBtn) cancelBtn.addEventListener('click', function() {

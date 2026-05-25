@@ -430,6 +430,13 @@ export interface ComposeArgs {
   // adapts per-product narrative wording. Absent for legacy/manual
   // composer calls.
   engagement_strategy?: EngagementStrategy | null;
+  // Per-product admin overrides for which tier is marked recommended
+  // on the published proposal. Audit Finding 3 UI piece — PR #101 made
+  // composeProposal honor the AI's recommended_tier_per_product
+  // automatically; this lets admin override that with an explicit pick.
+  // Override beats AI. Missing entry = use AI rec, falling back to
+  // each product's static `recommended` tier flag.
+  tier_overrides?: Partial<Record<ProductId, TierId>>;
   // Managed sites with per-site page_count. Drives per-site ecosystem
   // routing in the multi-site pricing pipeline (2026-05-24 locked
   // formula). Empty / undefined falls back to single-ecosystem

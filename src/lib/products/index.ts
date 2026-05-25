@@ -26,6 +26,7 @@ import type {
   NarrativeSnippetSet,
   NarrativePhase,
   EngagementStrategy,
+  EngagementStrategySynthProductId,
 } from './types';
 
 // =========================================================================
@@ -76,7 +77,40 @@ export function composeProposal(args: ComposeArgs): ProposalConfig {
   // can read them off the context without a wider type change. Each
   // value is only added when not already present (real per-product
   // variables win).
-  const engagementStrategy = args.engagement_strategy || null;
+  // Apply admin tier overrides on top of the AI's recommended_tier_per_product.
+  // Audit Finding 3 UI piece — admin's explicit pick beats AI rec. We mutate
+  // a copy of engagementStrategy so downstream code reads the effective tier
+  // from a single source (recommended_tier_per_product) without needing a
+  // separate override-aware code path. PR #101 already wired the static
+  // composer to honor recommended_tier_per_product; this just changes what's
+  // in that field when admin overrode.
+  const WIZARD_TO_SYNTH_TIER_KEY: Partial<Record<ProductId, EngagementStrategySynthProductId>> = {
+    'web-management': 'web_management',
+    'marketing-consulting': 'marketing_consulting',
+    'build': 'build',
+    'training': 'training',
+  };
+  let engagementStrategy = args.engagement_strategy || null;
+  if (args.tier_overrides && Object.keys(args.tier_overrides).length > 0) {
+    const merged = engagementStrategy ? { ...engagementStrategy } : {
+      sales_angles: [],
+      internal_gaps: [],
+      risk_signals: [],
+    } as EngagementStrategy;
+    const existingTiers = (engagementStrategy?.recommended_tier_per_product) || {};
+    const nextTiers = { ...existingTiers };
+    for (const [productId, tier] of Object.entries(args.tier_overrides)) {
+      if (!tier) continue;
+      const synthKey = WIZARD_TO_SYNTH_TIER_KEY[productId as ProductId];
+      if (!synthKey) continue;
+      nextTiers[synthKey] = {
+        tier,
+        rationale: 'Admin override (set in wizard, beats AI recommendation)',
+      };
+    }
+    merged.recommended_tier_per_product = nextTiers;
+    engagementStrategy = merged;
+  }
   const narrativeVariables = args.narrative_variables || {};
   const composeLevelVars: Record<string, string | number | boolean | null> = {
     client_name: args.client.name,

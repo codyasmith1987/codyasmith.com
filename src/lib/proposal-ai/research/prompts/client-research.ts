@@ -33,7 +33,7 @@ Honesty rules.
 - Every inference field carries a one-sentence evidence note that quotes or paraphrases the actual source content. Generic claims like "the website suggests" are not acceptable.
 - Confidence: "high" means the source content states the fact directly. "medium" means strong inference from two or more independent signals. "low" means a single weak signal.
 - estimated_page_count comes from the sitemap count supplied in the user prompt. If the supplied count is null, return null and explain in page_count_source.
-- domains_found must include ONLY domains the primary site explicitly identifies as its own (parent corp, subsidiary, alternate brand, micro-site under the same ownership). Do NOT include social profiles (facebook.com, linkedin.com, instagram.com, vimeo.com, etc.), third-party platforms (zendesk subdomains, silkroad job boards, etc.), or arbitrary external links the site mentions but does not own. Each entry's role_guess must be primary, micro-site, subsidiary, alternate-brand, or other (with confidence "low" forcing other).
+- domains_found must include ONLY domains the primary site explicitly identifies as its own or strongly suggests the business runs. Do NOT include social profiles (facebook.com, linkedin.com, instagram.com, vimeo.com, etc.), third-party platforms (zendesk subdomains, silkroad job boards, etc.), or arbitrary external links the site mentions but does not own. Do NOT include hosting-platform URLs (anything under *.wpenginepowered.com, *.netlify.app, *.vercel.app, *.pages.dev, *.fly.dev, *.herokuapp.com, *.azurewebsites.net, *.github.io) — those are deployment artifacts of the same site, not separate domains; if you see one, drop it. Each entry's role_guess must be one of: "primary" (the main domain), "possibly-related" (some signal but uncertain), "same-business-alt-domain" (strong evidence such as same About copy or same logo across both), "staging-of-primary" (only if a hosting-platform URL slipped past the filter), or "other". Each entry MUST also include an "evidence" string quoting or paraphrasing the actual source content that prompted inclusion. "The site mentions this URL" is not sufficient evidence; cite the context (e.g., "Footer link 'Visit our parent company' points to..." or "About page lists this domain as a sister property"). If you cannot cite evidence, drop the entry. Honesty over completeness: it is better to return fewer domains the admin must trust than more they must verify.
 - revenue_evidence must cite a SPECIFIC source from the scraped content that mentions revenue, employee count, or funding. "The website does not mention revenue" is not evidence; it is grounds for returning "unknown" with low confidence.
 - inferred_industry must come from what the business actually does, not from keyword matches against the client name string.
 
@@ -167,7 +167,7 @@ export function buildUserPrompt(input: UserPromptInput): string {
   "inferred_focus": ["brand" | "takeover" | "search" | "pre-sell"],
   "detected_cms": "wordpress" | "squarespace" | "wix" | "shopify" | "webflow" | "duda" | "godaddy-builder" | "custom" | "unknown",
   "cms_evidence": "one short sentence citing the specific HTML / generator signal",
-  "domains_found": [{"domain": "...", "role_guess": "primary" | "micro-site" | "subsidiary" | "other", "confidence": "low" | "medium" | "high"}],
+  "domains_found": [{"domain": "...", "role_guess": "primary" | "possibly-related" | "same-business-alt-domain" | "staging-of-primary" | "other", "confidence": "low" | "medium" | "high", "evidence": "quote or paraphrase from the source that justifies including this domain"}],
   "estimated_page_count": number | null,
   "page_count_source": "one short sentence",
   "recommended_product_mix": {
@@ -260,8 +260,9 @@ export const RESPONSE_SCHEMA: any = {
           domain: { type: 'STRING' },
           role_guess: { type: 'STRING' },
           confidence: { type: 'STRING' },
+          evidence: { type: 'STRING' },
         },
-        required: ['domain', 'role_guess', 'confidence'],
+        required: ['domain', 'role_guess', 'confidence', 'evidence'],
       },
     },
     estimated_page_count: { type: 'NUMBER', nullable: true },

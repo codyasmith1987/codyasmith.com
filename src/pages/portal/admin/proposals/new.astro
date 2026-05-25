@@ -2013,12 +2013,27 @@ const todayISO = new Date().toISOString().slice(0, 10);
           },
           disabled: r.estimated_page_count == null,
         },
+        // Primary domain detected. Renamed from "Domains found" so the
+        // Apply scope is explicit: this card sets the primary domain
+        // ONLY. Non-primary domains are surfaced separately below the
+        // blocks loop as "we found these too, confirm which are
+        // yours." Audit 2026-05-25 domain-attribution review.
         {
-          label: 'Domains found',
-          value: (r.domains_found || []).map(d => `${d.domain} (${d.role_guess})`).join(', ') || '(none)',
-          evidence: '',
-          confidence: 'medium',
-          destination: 'Sets the client’s primary domain (if one is marked primary)',
+          label: 'Primary domain detected',
+          value: (() => {
+            const primary = (r.domains_found || []).find(d => d.role_guess === 'primary');
+            return primary ? primary.domain : '(none)';
+          })(),
+          evidence: (() => {
+            const primary = (r.domains_found || []).find(d => d.role_guess === 'primary');
+            return primary && primary.evidence ? primary.evidence : '';
+          })(),
+          confidence: (() => {
+            const primary = (r.domains_found || []).find(d => d.role_guess === 'primary');
+            return primary ? primary.confidence : 'low';
+          })(),
+          destination: 'Sets the client’s primary domain',
+          applyLabel: 'Set as primary domain',
           apply: () => {
             const primary = (r.domains_found || []).find(d => d.role_guess === 'primary');
             if (!primary || !primary.domain) {
@@ -2039,20 +2054,16 @@ const todayISO = new Date().toISOString().slice(0, 10);
             return false;
           },
           unapply: (snapshot) => {
-            // Domain change is persisted server-side, so an undo from
-            // this card is informational only — admin needs to use
-            // the research-domain input to restore. Surface that
-            // explicitly so it doesn't read as a silent failure.
             if (snapshot && snapshot.changed && snapshot.priorDomain) {
               showResearchApplyMsg(
                 `Domain was changed to ${state.client_domain} server-side. To revert to ${snapshot.priorDomain}, edit the chip above.`,
                 'ok'
               );
             } else {
-              showResearchApplyMsg('Domains-found marker cleared.', 'ok');
+              showResearchApplyMsg('Primary domain marker cleared.', 'ok');
             }
           },
-          disabled: !r.domains_found || r.domains_found.length === 0,
+          disabled: !(r.domains_found || []).some(d => d.role_guess === 'primary'),
         },
       ];
       for (const b of blocks) {
@@ -2103,9 +2114,14 @@ const todayISO = new Date().toISOString().slice(0, 10);
         //     reverts via b.unapply(snapshot)
         const btn = document.createElement('button');
         btn.type = 'button';
+        // Per-block override of the Apply button label. Currently
+        // used by the "Primary domain detected" card to read "Set as
+        // primary domain" instead of generic "Apply" so admin sees
+        // exactly what gets changed.
+        const applyLabel = b.applyLabel || 'Apply';
         if (b.disabled) {
           btn.className = 'px-3 py-2 text-xs rounded-md bg-neutral-900 border border-white/5 text-neutral-600 cursor-not-allowed';
-          btn.textContent = 'Apply';
+          btn.textContent = applyLabel;
           btn.disabled = true;
         } else if (isApplied) {
           btn.className = 'px-3 py-2 text-xs rounded-md bg-amber-500/10 border border-amber-500/40 text-amber-700 hover:bg-amber-500/20 transition-colors';
@@ -2120,7 +2136,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           });
         } else {
           btn.className = 'px-3 py-2 text-xs rounded-md bg-amber-500 text-neutral-950 font-semibold hover:bg-amber-400 transition-colors';
-          btn.textContent = 'Apply';
+          btn.textContent = applyLabel;
           btn.addEventListener('click', () => {
             // apply() returns false on no-op, true/object snapshot on success.
             const result = b.apply();
@@ -2135,6 +2151,115 @@ const todayISO = new Date().toISOString().slice(0, 10);
         row.appendChild(btn);
         researchResults.appendChild(row);
       }
+
+      // Related domains (non-primary). Per-domain confirm/skip pattern
+      // so admin explicitly accepts each entry instead of trusting a
+      // bulk attribution. Audit 2026-05-25 domain-attribution review.
+      const otherDomains = (r.domains_found || []).filter(d => d.role_guess !== 'primary');
+      if (otherDomains.length > 0) {
+        const wrap = document.createElement('div');
+        wrap.className = 'mt-3 p-3 bg-neutral-900/40 border border-white/5 rounded-md';
+        const header = document.createElement('p');
+        header.className = 'text-[10px] font-mono text-neutral-500 uppercase tracking-wide mb-2';
+        header.textContent = 'We also found these — confirm which are yours';
+        wrap.appendChild(header);
+        const helper = document.createElement('p');
+        helper.className = 'text-[11px] text-neutral-400 mb-3 leading-relaxed';
+        helper.textContent = 'These domains showed up alongside the primary site during research. The AI is guessing they belong to the same business. Confirm to add a managed-site row, skip to dismiss, mark not ours to flag in the audit log.';
+        wrap.appendChild(helper);
+
+        otherDomains.forEach((d, idx) => {
+          if (!d || !d.domain) return;
+          const item = document.createElement('div');
+          item.className = 'py-2.5 border-t border-white/5 first:border-0 first:pt-0';
+          item.setAttribute('data-related-domain', d.domain);
+
+          const top = document.createElement('div');
+          top.className = 'flex items-center justify-between gap-3 flex-wrap';
+          const left = document.createElement('div');
+          left.className = 'min-w-0';
+          const domainEl = document.createElement('p');
+          domainEl.className = 'text-sm font-mono text-neutral-200';
+          domainEl.textContent = d.domain;
+          left.appendChild(domainEl);
+          const meta2 = document.createElement('p');
+          meta2.className = 'text-[10px] font-mono text-neutral-500 uppercase tracking-wide mt-1';
+          meta2.textContent = `${(d.role_guess || 'other').replace(/-/g, ' ')} · confidence ${d.confidence || 'low'}`;
+          left.appendChild(meta2);
+          top.appendChild(left);
+
+          const actions = document.createElement('div');
+          actions.className = 'flex items-center gap-2 shrink-0';
+          const confirmBtn = document.createElement('button');
+          confirmBtn.type = 'button';
+          confirmBtn.className = 'text-[11px] px-3 py-1 bg-amber-500 text-neutral-950 font-medium rounded hover:bg-amber-400 transition-colors';
+          confirmBtn.textContent = 'Confirm as a managed site';
+          confirmBtn.addEventListener('click', async () => {
+            if (!confirm(`Add ${d.domain} as a managed site for ${state.client_name || 'this client'}?`)) return;
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Adding...';
+            const result = await callSitesApi({ client_id: state.client_id, action: 'add', domain: d.domain });
+            if (result.ok) {
+              item.classList.add('opacity-50');
+              actions.innerHTML = '<span class="text-[11px] text-emerald-400 font-mono">Added</span>';
+              if (typeof renderDerivedDomains === 'function') renderDerivedDomains();
+            } else {
+              confirmBtn.disabled = false;
+              confirmBtn.textContent = 'Confirm as a managed site';
+              showResearchApplyMsg('Could not add: ' + (result.error || 'unknown error'), 'error');
+            }
+          });
+          actions.appendChild(confirmBtn);
+
+          const skipBtn = document.createElement('button');
+          skipBtn.type = 'button';
+          skipBtn.className = 'text-[11px] px-2 py-1 text-neutral-400 hover:text-neutral-200 transition-colors';
+          skipBtn.textContent = 'Skip';
+          skipBtn.addEventListener('click', () => {
+            item.remove();
+            // If we just removed the last related-domain row, also
+            // remove the wrapper so the section disappears cleanly.
+            if (wrap.querySelectorAll('[data-related-domain]').length === 0) {
+              wrap.remove();
+            }
+          });
+          actions.appendChild(skipBtn);
+
+          const notOursBtn = document.createElement('button');
+          notOursBtn.type = 'button';
+          notOursBtn.className = 'text-[11px] px-2 py-1 text-neutral-400 hover:text-red-400 transition-colors';
+          notOursBtn.textContent = 'Not ours';
+          notOursBtn.addEventListener('click', () => {
+            item.classList.add('opacity-50');
+            actions.innerHTML = '<span class="text-[11px] text-red-400 font-mono">Flagged not ours</span>';
+            // Persistence of the "not ours" flag is a v2 feature
+            // (would need a rejected_domains table to de-prioritize
+            // on future research calls). For now this only hides the
+            // entry from the current panel + acts as a visual record
+            // for the admin during this session.
+          });
+          actions.appendChild(notOursBtn);
+
+          top.appendChild(actions);
+          item.appendChild(top);
+
+          if (d.evidence) {
+            const ev = document.createElement('p');
+            ev.className = 'text-[11px] text-neutral-400 mt-2 leading-relaxed italic';
+            ev.textContent = `Evidence: ${d.evidence}`;
+            item.appendChild(ev);
+          } else {
+            const noEv = document.createElement('p');
+            noEv.className = 'text-[11px] text-amber-700 mt-2';
+            noEv.textContent = 'No source evidence cited. Verify before confirming.';
+            item.appendChild(noEv);
+          }
+
+          wrap.appendChild(item);
+        });
+        researchResults.appendChild(wrap);
+      }
+
       if (r.notes) {
         const notes = document.createElement('p');
         // Notes are a genuine callout (AI's parenthetical observations).

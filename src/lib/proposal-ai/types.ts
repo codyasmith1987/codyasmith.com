@@ -73,8 +73,21 @@ export type FocusTag =
 
 export interface DomainGuess {
   domain: string;
-  role_guess: string;     // 'primary' | 'micro-site' | 'subsidiary' | 'other'
+  // role_guess vocabulary intentionally softened from prior version.
+  // 'subsidiary' / 'alternate-brand' make legal/marketing claims we
+  // can't verify from scraped content; 'possibly-related' is honest
+  // about what scraping can actually tell us. Audit 2026-05-25.
+  role_guess:
+    | 'primary'
+    | 'possibly-related'         // some signal the domain is connected, not certain
+    | 'same-business-alt-domain' // strong evidence (e.g., same About text, same logo)
+    | 'staging-of-primary'       // hosting-platform URL of the primary site
+    | 'other';
   confidence: ConfidenceLevel;
+  // Quote or paraphrase from the scraped content explaining WHY this
+  // domain was included. Empty string when the model can't cite.
+  // Validator drops entries with empty evidence at confidence high.
+  evidence: string;
 }
 
 export type CmsGuess =

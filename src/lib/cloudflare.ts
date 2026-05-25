@@ -103,7 +103,6 @@ export async function fetchTrafficDaily(
             dimensions { date }
             sum {
               edgeResponseBytes
-              cachedBytes
               visits
             }
           }
@@ -113,15 +112,17 @@ export async function fetchTrafficDaily(
   `;
   const data = await callGraphQL(token, query, { zoneId, since: sinceDate, until: untilDate });
   const groups = data?.viewer?.zones?.[0]?.httpRequestsAdaptiveGroups || [];
-  // cachedRequests isn't exposed on httpRequestsAdaptiveGroups; the
-  // dashboard derives cache hit rate from cachedBytes / edgeResponseBytes
-  // instead, which is a reasonable proxy. Report 0 here.
+  // CF Free plan exposes a thin sum block on httpRequestsAdaptiveGroups.
+  // Confirmed working: count (top-level), sum.edgeResponseBytes,
+  // sum.visits. Cached metrics aren't exposed in this dataset on this
+  // plan; reporting 0. Cache hit rate widgets that need them should
+  // be hidden when both values are 0.
   return groups.map((g: any) => ({
     date: g.dimensions.date,
     requests: Number(g.count) || 0,
     cachedRequests: 0,
     bytes: Number(g.sum?.edgeResponseBytes) || 0,
-    cachedBytes: Number(g.sum?.cachedBytes) || 0,
+    cachedBytes: 0,
     threats: 0,
     pageViews: Number(g.sum?.visits) || 0,
   }));

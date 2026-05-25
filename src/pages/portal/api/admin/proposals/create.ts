@@ -142,6 +142,24 @@ export const POST: APIRoute = async ({ locals, request }) => {
       };
     }
 
+    // Per-product tier overrides from the wizard (audit Finding 3 UI).
+    // Admin can pin a tier different from the AI's recommendation;
+    // composeProposal applies overrides on top of engagement_strategy.
+    // Validate: only known product ids + known tier ids (good/better/best);
+    // drop the rest silently.
+    const wizardProductSet = new Set(['web-management', 'marketing-consulting', 'build', 'training', 'other-sow']);
+    const tierIdSet = new Set(['good', 'better', 'best']);
+    let tier_overrides: Record<string, string> | undefined;
+    if (c.tier_overrides && typeof c.tier_overrides === 'object') {
+      const cleaned: Record<string, string> = {};
+      for (const [k, v] of Object.entries(c.tier_overrides as Record<string, any>)) {
+        if (!wizardProductSet.has(k)) continue;
+        if (typeof v !== 'string' || !tierIdSet.has(v)) continue;
+        cleaned[k] = v;
+      }
+      if (Object.keys(cleaned).length > 0) tier_overrides = cleaned;
+    }
+
     // Pull managed sites with their per-site page counts so the
     // composer can route each site to its own ecosystem at the
     // engagement tier (2026-05-24 locked formula). The proposal-page
@@ -171,6 +189,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
         narrative_variables,
         overrides,
         engagement_strategy,
+        tier_overrides: tier_overrides as any,
         managedSites,
       });
     } catch (err) {

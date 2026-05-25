@@ -360,6 +360,12 @@ const todayISO = new Date().toISOString().slice(0, 10);
       signers: [],                     // [{ name, email }]
       overrides: {},                   // { title?, slug?, prepared_for?, prepared_on? }
       research_result: null,           // last AI research blob, when populated
+      // Admin tier-overrides per product. Audit Finding 3 UI piece.
+      // Empty object = use AI rec (or static default if no AI). Set
+      // `state.tier_overrides[productId] = 'best'` to pin a tier
+      // different from AI's. Picked via the dropdown in the strategy
+      // panel; flows into the create endpoint's tier_overrides field.
+      tier_overrides: {},              // { productId: 'good' | 'better' | 'best' }
     };
 
     // =========================================================================
@@ -1308,6 +1314,15 @@ const todayISO = new Date().toISOString().slice(0, 10);
           : null,
       } : null;
 
+      // Strip tier_overrides entries for products no longer in scope so
+      // the payload only carries live picks. Composer ignores unknown
+      // entries anyway but this keeps the persisted config tidy.
+      const tier_overrides_payload = {};
+      for (const [pid, tier] of Object.entries(state.tier_overrides || {})) {
+        if (!tier) continue;
+        if (state.products.includes(pid)) tier_overrides_payload[pid] = tier;
+      }
+
       const payload = {
         client_id: state.client_id,
         status,
@@ -1318,6 +1333,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           signers: state.signers,
           overrides: state.overrides,
           engagement_strategy,
+          tier_overrides: Object.keys(tier_overrides_payload).length > 0 ? tier_overrides_payload : undefined,
         },
       };
 
@@ -2128,6 +2144,65 @@ const todayISO = new Date().toISOString().slice(0, 10);
             p.className = 'text-xs text-amber-600 mt-2 leading-relaxed';
             p.textContent = `Tier hint: ${tier.tier}${tier.rationale ? '. ' + tier.rationale : ''}`;
             row.appendChild(p);
+          }
+
+          // Tier-override picker (audit Finding 3 UI). Only renders when
+          // the product is IN SCOPE and the product supports tier picks.
+          // Build doesn't use tiers; Training only has one option. Skip
+          // those. Dropdown defaults to the effective tier: explicit
+          // override beats AI rec beats static product default.
+          if (inScope && (wizardId === 'web-management' || wizardId === 'marketing-consulting')) {
+            const STATIC_DEFAULT_TIER = 'better';
+            const override = state.tier_overrides[wizardId];
+            const aiTier = tier ? tier.tier : null;
+            const effectiveTier = override || aiTier || STATIC_DEFAULT_TIER;
+
+            const wrap = document.createElement('div');
+            wrap.className = 'mt-3 flex flex-wrap items-center gap-2';
+
+            const label = document.createElement('span');
+            label.className = 'text-[11px] font-mono text-neutral-400 uppercase tracking-wide';
+            label.textContent = 'Marked recommended:';
+            wrap.appendChild(label);
+
+            const select = document.createElement('select');
+            select.className = 'text-xs bg-neutral-900/50 border border-white/10 rounded px-2 py-1 text-neutral-200 focus:outline-none focus:border-amber-500/40';
+            for (const tierId of ['good', 'better', 'best']) {
+              const opt = document.createElement('option');
+              opt.value = tierId;
+              const note = tierId === aiTier ? ' (AI rec)'
+                : tierId === STATIC_DEFAULT_TIER && !aiTier ? ' (default)'
+                : '';
+              opt.textContent = tierId.charAt(0).toUpperCase() + tierId.slice(1) + note;
+              if (tierId === effectiveTier) opt.selected = true;
+              select.appendChild(opt);
+            }
+            select.addEventListener('change', () => {
+              const picked = select.value;
+              const matchesDefault = picked === (aiTier || STATIC_DEFAULT_TIER);
+              if (matchesDefault) {
+                delete state.tier_overrides[wizardId];
+              } else {
+                state.tier_overrides[wizardId] = picked;
+              }
+            });
+            wrap.appendChild(select);
+
+            const sourceTag = document.createElement('span');
+            sourceTag.className = 'text-[10px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded';
+            const source = override ? 'admin override'
+              : aiTier ? 'from AI rec'
+              : 'product default';
+            sourceTag.textContent = source;
+            sourceTag.classList.add(
+              override ? 'bg-amber-500/10' : 'bg-neutral-900',
+              override ? 'border' : 'border',
+              override ? 'border-amber-500/40' : 'border-white/10',
+              override ? 'text-amber-600' : 'text-neutral-500',
+            );
+            wrap.appendChild(sourceTag);
+
+            row.appendChild(wrap);
           }
 
           card.appendChild(row);

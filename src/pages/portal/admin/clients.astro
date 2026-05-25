@@ -531,7 +531,18 @@ function ecoChipLabel(pageCount: number | null): string {
       statusEl.textContent = 'Loading zones…';
       try {
         const res = await fetch('/portal/api/admin/cloudflare/zones-overview');
-        const data = await res.json();
+        const text = await res.text();
+        let data: any = {};
+        try {
+          data = JSON.parse(text);
+        } catch {
+          // Server returned HTML or non-JSON. Surface the status +
+          // a tiny snippet so we can diagnose without DevTools.
+          const snippet = text.replace(/\s+/g, ' ').trim().slice(0, 120);
+          statusEl.textContent = `HTTP ${res.status} (non-JSON response): ${snippet}…`;
+          statusEl.className = 'text-[11px] font-mono text-red-400 mb-3';
+          return;
+        }
         if (!res.ok) {
           statusEl.textContent = data?.error || `HTTP ${res.status}`;
           statusEl.className = 'text-[11px] font-mono text-red-400 mb-3';

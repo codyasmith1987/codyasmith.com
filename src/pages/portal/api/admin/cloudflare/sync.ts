@@ -46,7 +46,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   if (!clientId) return json({ error: 'client_id is required' }, 400);
 
   const siteId = body?.site_id ? String(body.site_id).trim() : null;
-  const days = Math.min(60, Math.max(1, Number(body?.days) || 30));
+  const days = Math.min(90, Math.max(1, Number(body?.days) || 30));
 
   // Compute window. `until` is yesterday because CF's daily aggregate
   // typically lags by 4-6 hours after midnight UTC; pulling "today"

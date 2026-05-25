@@ -1064,8 +1064,136 @@ const todayISO = new Date().toISOString().slice(0, 10);
       sowWrap.appendChild(sowInput);
       card.appendChild(sowWrap);
 
+      // Cross-product WM impact subsection. Lets the option add
+      // managed sites + pre-computed pricing deltas to WM when the
+      // prospect picks this option (the Raised Bar pattern). The
+      // composer applies wm_monthly_delta + wm_onboarding_delta
+      // additively; wm_sites_added rows append to Schedule A's WM
+      // section.
+      card.appendChild(buildWmImpactEditor(opt));
+
       card.appendChild(buildPhasesEditor(opt));
       return card;
+    }
+
+    function buildWmImpactEditor(opt) {
+      const wrap = document.createElement('div');
+      wrap.className = 'mt-3 pl-3 border-l-2 border-amber-500/30';
+      const label = document.createElement('p');
+      label.className = 'text-[10px] font-mono text-neutral-500 mb-2 uppercase tracking-wide';
+      label.textContent = 'Web Management impact (when this option is picked)';
+      wrap.appendChild(label);
+      const help = document.createElement('p');
+      help.className = 'text-[11px] text-neutral-400 mb-3 leading-relaxed';
+      help.textContent = 'Pre-compute the WM monthly + onboarding delta this option adds (e.g., a Tailwater micro-site at Eco A Better contributes about $397.60 monthly and $640 onboarding under the multi-site formula). Sites listed here also append to Schedule A.';
+      wrap.appendChild(help);
+
+      const grid = document.createElement('div');
+      grid.className = 'grid grid-cols-2 gap-3 mb-3';
+      const monthlyCol = document.createElement('div');
+      monthlyCol.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">WM monthly delta ($, can be 0)</label>`;
+      const monthlyInput = document.createElement('input');
+      monthlyInput.type = 'number';
+      monthlyInput.step = '0.01';
+      monthlyInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
+      monthlyInput.value = opt.wm_monthly_delta != null ? String(opt.wm_monthly_delta) : '0';
+      monthlyInput.addEventListener('input', () => {
+        const n = parseFloat(monthlyInput.value);
+        opt.wm_monthly_delta = Number.isFinite(n) ? n : 0;
+      });
+      monthlyCol.appendChild(monthlyInput);
+      grid.appendChild(monthlyCol);
+
+      const onbCol = document.createElement('div');
+      onbCol.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">WM onboarding delta ($, can be 0)</label>`;
+      const onbInput = document.createElement('input');
+      onbInput.type = 'number';
+      onbInput.step = '0.01';
+      onbInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
+      onbInput.value = opt.wm_onboarding_delta != null ? String(opt.wm_onboarding_delta) : '0';
+      onbInput.addEventListener('input', () => {
+        const n = parseFloat(onbInput.value);
+        opt.wm_onboarding_delta = Number.isFinite(n) ? n : 0;
+      });
+      onbCol.appendChild(onbInput);
+      grid.appendChild(onbCol);
+      wrap.appendChild(grid);
+
+      const sitesLabel = document.createElement('p');
+      sitesLabel.className = 'text-[10px] font-mono text-neutral-500 mb-2 uppercase tracking-wide';
+      sitesLabel.textContent = 'Sites added when this option is picked (appended to Schedule A WM section)';
+      wrap.appendChild(sitesLabel);
+
+      const sitesList = document.createElement('div');
+      sitesList.className = 'space-y-2';
+      wrap.appendChild(sitesList);
+
+      function renderSites() {
+        sitesList.innerHTML = '';
+        const arr = Array.isArray(opt.wm_sites_added) ? opt.wm_sites_added : [];
+        arr.forEach((site, idx) => {
+          const row = document.createElement('div');
+          row.className = 'grid grid-cols-12 gap-2 items-end p-2 bg-neutral-900/40 border border-white/5 rounded';
+          row.innerHTML =
+            '<div class="col-span-5"><label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Domain</label></div>' +
+            '<div class="col-span-4"><label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Display label</label></div>' +
+            '<div class="col-span-2"><label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Pages (est)</label></div>' +
+            '<div class="col-span-1"></div>';
+          const domainCol = row.children[0];
+          const labelCol = row.children[1];
+          const pagesCol = row.children[2];
+          const rmCol = row.children[3];
+          const domainInput = document.createElement('input');
+          domainInput.type = 'text';
+          domainInput.className = 'w-full px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono';
+          domainInput.value = site.domain || '';
+          domainInput.placeholder = 'tailwater-micro.com';
+          domainInput.addEventListener('input', () => { site.domain = domainInput.value.trim().toLowerCase(); });
+          domainCol.appendChild(domainInput);
+          const labelInput = document.createElement('input');
+          labelInput.type = 'text';
+          labelInput.className = 'w-full px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs';
+          labelInput.value = site.label || '';
+          labelInput.placeholder = 'Tailwater micro-site';
+          labelInput.addEventListener('input', () => { site.label = labelInput.value; });
+          labelCol.appendChild(labelInput);
+          const pagesInput = document.createElement('input');
+          pagesInput.type = 'number';
+          pagesInput.min = '0';
+          pagesInput.className = 'w-full px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono';
+          pagesInput.value = site.page_count_estimate != null ? String(site.page_count_estimate) : '';
+          pagesInput.addEventListener('input', () => {
+            const n = parseInt(pagesInput.value, 10);
+            site.page_count_estimate = Number.isFinite(n) ? n : undefined;
+          });
+          pagesCol.appendChild(pagesInput);
+          const rmBtn = document.createElement('button');
+          rmBtn.type = 'button';
+          rmBtn.className = 'text-[11px] text-neutral-400 hover:text-red-400 transition-colors';
+          rmBtn.textContent = '×';
+          rmBtn.title = 'Remove this added site';
+          rmBtn.addEventListener('click', () => {
+            opt.wm_sites_added.splice(idx, 1);
+            renderSites();
+          });
+          rmCol.appendChild(rmBtn);
+          sitesList.appendChild(row);
+        });
+      }
+      renderSites();
+
+      const addSiteBtn = document.createElement('button');
+      addSiteBtn.type = 'button';
+      addSiteBtn.className = 'mt-2 text-[11px] font-mono text-amber-600 hover:text-amber-400 transition-colors';
+      addSiteBtn.textContent = '+ Add site';
+      addSiteBtn.addEventListener('click', () => {
+        if (!Array.isArray(opt.wm_sites_added)) opt.wm_sites_added = [];
+        opt.wm_sites_added.push({ domain: '', label: '', page_count_estimate: undefined });
+        renderSites();
+      });
+      wrap.appendChild(addSiteBtn);
+
+      return wrap;
     }
 
     function buildPhasesEditor(opt) {

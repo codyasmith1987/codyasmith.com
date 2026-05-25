@@ -922,6 +922,126 @@ async function run() {
     fallbackCfg.products?.length === 1 && fallbackCfg.products[0] === 'training');
 
   // -------------------------------------------------------------------
+  // Cross-product BuildOption -> WM effects (Raised Bar pattern).
+  // Compose a WM (Eco B Better) + Build (small) proposal with 2
+  // build_options:
+  //   o1: no WM delta, no extra sites
+  //   o2: +$200 monthly, +$500 onboarding, +1 added site
+  // Pricing changes with the picked option; Schedule A WM site rows
+  // grow accordingly. Audit 2026-05-25 cross-product extension.
+  // -------------------------------------------------------------------
+  const jasonCfg = composeProposal({
+    client: { id: 'jr1', name: 'Jason Roth Practice', slug: 'jr-practice' },
+    signers: [{ id: 's1', name: 'Jason Roth', email: 'jr@jrp.com' }],
+    products: ['web-management', 'build'],
+    product_vars: {
+      'web-management': { page_count: 80, site_count: 1 },
+      'build': {
+        build_size: 'small',
+        build_count: 1,
+        build_description: 'Test build',
+        build_options: [
+          {
+            id: 'o1',
+            name: 'Option 1: Single site',
+            pitch: 'Just the one site.',
+            pricing_delta: 0,
+            wm_monthly_delta: 0,
+            wm_onboarding_delta: 0,
+            wm_sites_added: [],
+          },
+          {
+            id: 'o2',
+            name: 'Option 2: Split setup',
+            pitch: 'Adds a micro-site.',
+            pricing_delta: 4500,
+            wm_monthly_delta: 200,
+            wm_onboarding_delta: 500,
+            wm_sites_added: [
+              { domain: 'micro.example.com', label: 'Micro-site', page_count_estimate: 10 },
+            ],
+          },
+        ],
+      },
+    },
+  });
+
+  // Pricing on o1: WM Eco B Better ($797 monthly, $1200 onboarding) +
+  // Build small ($5625) + no deltas
+  const o1Pricing = computePricing(
+    jasonCfg.pricing_formula,
+    { wm_tier: 'better', build_options: 'o1' },
+    jasonCfg,
+  );
+  test('cross-product o1: monthly = 797 (no WM delta)',
+    o1Pricing.monthly === 797, `got ${o1Pricing?.monthly}`);
+  test('cross-product o1: oneTime = 1200 + 5625 = 6825 (no Build/WM delta)',
+    o1Pricing.oneTime === 6825, `got ${o1Pricing?.oneTime}`);
+
+  // Pricing on o2: WM base 797 + delta 200 = 997; Build base 5625 +
+  // pricing_delta 4500 = 10125; WM onboarding 1200 + delta 500 = 1700;
+  // total oneTime = 10125 + 1700 = 11825
+  const o2Pricing = computePricing(
+    jasonCfg.pricing_formula,
+    { wm_tier: 'better', build_options: 'o2' },
+    jasonCfg,
+  );
+  test('cross-product o2: monthly = 997 (WM +200)',
+    o2Pricing.monthly === 997, `got ${o2Pricing?.monthly}`);
+  test('cross-product o2: oneTime = 1200 + 500 + 5625 + 4500 = 11825 (WM onb +500, Build +4500)',
+    o2Pricing.oneTime === 11825, `got ${o2Pricing?.oneTime}`);
+  test('cross-product o2: breakdown includes WM monthly adjustment line',
+    o2Pricing.breakdown.some(b => b.label.includes('Web Management adjustment') && b.amount === 200),
+    JSON.stringify(o2Pricing.breakdown));
+  test('cross-product o2: breakdown includes WM onboarding adjustment line',
+    o2Pricing.breakdown.some(b => b.label.includes('Web Management onboarding adjustment') && b.amount === 500),
+    JSON.stringify(o2Pricing.breakdown));
+
+  // Schedule A on o2: WM section's sites array gets the added micro-site row.
+  const o2Schedule = buildScheduleA({
+    proposalConfig: jasonCfg,
+    draftSelections: { wm_tier: 'better', build_options: 'o2' },
+    pricing: o2Pricing,
+    clientMetadata: {
+      legal_entity_name: 'Jason Roth Practice',
+      entity_type: 'limited liability company',
+      state_of_organization: 'Utah',
+      primary_contact_name: 'Jason Roth',
+      primary_contact_email: 'jr@jrp.com',
+      primary_contact_role: 'Owner',
+      principal_office_address: '1 Test St, Test City, UT 84720',
+    },
+    effectiveDate: '2026-05-25',
+  });
+  const o2WmSites = o2Schedule.web_management?.sites || [];
+  test('cross-product o2: Schedule A WM gains the added micro-site row',
+    o2WmSites.some(s => (s.domain || '').includes('micro.example.com')),
+    `got ${JSON.stringify(o2WmSites.map(s => s.domain))}`);
+  test('cross-product o2: Schedule A WM site_count reflects added site',
+    o2Schedule.web_management?.site_count >= 2,
+    `got ${o2Schedule.web_management?.site_count}`);
+
+  // Schedule A on o1: no added rows.
+  const o1Schedule = buildScheduleA({
+    proposalConfig: jasonCfg,
+    draftSelections: { wm_tier: 'better', build_options: 'o1' },
+    pricing: o1Pricing,
+    clientMetadata: {
+      legal_entity_name: 'Jason Roth Practice',
+      entity_type: 'limited liability company',
+      state_of_organization: 'Utah',
+      primary_contact_name: 'Jason Roth',
+      primary_contact_email: 'jr@jrp.com',
+      primary_contact_role: 'Owner',
+      principal_office_address: '1 Test St, Test City, UT 84720',
+    },
+    effectiveDate: '2026-05-25',
+  });
+  test('cross-product o1: Schedule A WM has no added rows',
+    !(o1Schedule.web_management?.sites || []).some(s => (s.domain || '').includes('micro.example.com')),
+    `got ${JSON.stringify((o1Schedule.web_management?.sites || []).map(s => s.domain))}`);
+
+  // -------------------------------------------------------------------
   // Summary
   // -------------------------------------------------------------------
   const passed = results.filter(r => r.pass).length;

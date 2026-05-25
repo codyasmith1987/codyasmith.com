@@ -18,6 +18,7 @@
 //   }
 
 import type { APIRoute } from 'astro';
+import { nanoid } from 'nanoid';
 import turso from '../../../../../lib/turso';
 import { listZones } from '../../../../../lib/cloudflare';
 import { logActivity } from '../../../../../lib/activity';
@@ -60,9 +61,6 @@ export const POST: APIRoute = async ({ locals, request }) => {
           WHERE client_id = ? AND status = 'active'`,
     args: [clientId],
   });
-  if (sitesRes.rows.length === 0) {
-    return json({ ok: true, matched: [], unmatched: [], total_zones_in_account: 0 });
-  }
 
   let zones;
   try {
@@ -77,6 +75,75 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const zoneByName = new Map<string, { id: string; name: string }>();
   for (const z of zones) {
     zoneByName.set(normalize(z.name), { id: z.id, name: z.name });
+  }
+
+  // Bootstrap path: client has no client_sites rows yet. Fall back to
+  // clients.domain and create a primary managed site if a zone matches.
+  // This is the common case for clients added via the create-client
+  // form (which doesn't capture a domain field). Admin sets the
+  // Domain via Edit, then Auto-link creates the site row.
+  if (sitesRes.rows.length === 0) {
+    const clientRes = await turso.execute({
+      sql: `SELECT domain FROM clients WHERE id = ?`,
+      args: [clientId],
+    });
+    if (clientRes.rows.length === 0) {
+      return json({ ok: false, error: 'Client not found.' }, 404);
+    }
+    const clientDomain = (clientRes.rows[0] as any)[0]
+      ? String((clientRes.rows[0] as any)[0]).trim()
+      : '';
+    if (!clientDomain) {
+      return json({
+        ok: false,
+        error: 'This client has no sites and no domain set. Click Edit above and set the Domain field, then try Auto-link again. Visible zones in your account: ' + zones.map(z => z.name).join(', '),
+      }, 400);
+    }
+    const matchingZone = zoneByName.get(normalize(clientDomain));
+    if (!matchingZone) {
+      return json({
+        ok: false,
+        error: `No zone in your CF account matches "${clientDomain}". Visible zones: ${zones.map(z => z.name).join(', ')}. Add the zone to CF or update the client's Domain to match an existing zone.`,
+      }, 400);
+    }
+
+    // Create the primary managed site row + set zone_id in one INSERT.
+    const newId = nanoid();
+    await turso.execute({
+      sql: `INSERT INTO client_sites
+            (id, client_id, domain, is_primary, is_managed, label, sort_order, cloudflare_zone_id)
+            VALUES (?, ?, ?, 1, 1, ?, 0, ?)`,
+      args: [newId, clientId, clientDomain, clientDomain, matchingZone.id],
+    });
+
+    await turso.execute({
+      sql: `UPDATE cloudflare_account_config
+            SET last_zone_list_synced_at = datetime('now')
+            WHERE id = ?`,
+      args: [CONFIG_ID],
+    });
+
+    await logActivity({
+      clientId,
+      userId: locals.user!.id,
+      action: 'auto_linked',
+      entityType: 'cloudflare',
+      entityId: clientId,
+      summary: `${locals.user!.name} bootstrapped Cloudflare site ${clientDomain} from clients.domain (1 zone matched)`,
+    });
+
+    return json({
+      ok: true,
+      matched: [{
+        site_id: newId,
+        domain: clientDomain,
+        zone_id: matchingZone.id,
+        zone_name: matchingZone.name,
+        created_site: true,
+      }],
+      unmatched: [],
+      total_zones_in_account: zones.length,
+    });
   }
 
   const matched: any[] = [];

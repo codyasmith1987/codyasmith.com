@@ -579,6 +579,37 @@ export function composePricing(args: {
     }
   }
 
+  // Cross-product effects from a picked Build option. The Raised Bar
+  // pattern: Option 2 ("split setup") adds a managed site, which
+  // bumps WM monthly + onboarding. The option carries pre-computed
+  // wm_monthly_delta + wm_onboarding_delta so the dispatcher just
+  // adds them — no multi-site recomputation at pick time.
+  const buildVars = productVars['build'];
+  const buildOptionsArr = buildVars && Array.isArray(buildVars.build_options)
+    ? buildVars.build_options
+    : [];
+  const pickedBuildOptionId = args.selections['build_options'];
+  if (pickedBuildOptionId && buildOptionsArr.length >= 2 && products.includes('web-management')) {
+    const pickedOption = buildOptionsArr.find((o: any) => o && o.id === pickedBuildOptionId);
+    if (pickedOption) {
+      if (typeof pickedOption.wm_monthly_delta === 'number' && pickedOption.wm_monthly_delta !== 0) {
+        monthly += pickedOption.wm_monthly_delta;
+        mgmtMonthly += pickedOption.wm_monthly_delta;
+        breakdown.push({
+          label: `Web Management adjustment (${pickedOption.name})`,
+          amount: pickedOption.wm_monthly_delta,
+        });
+      }
+      if (typeof pickedOption.wm_onboarding_delta === 'number' && pickedOption.wm_onboarding_delta !== 0) {
+        oneTime += pickedOption.wm_onboarding_delta;
+        breakdown.push({
+          label: `Web Management onboarding adjustment (${pickedOption.name})`,
+          amount: pickedOption.wm_onboarding_delta,
+        });
+      }
+    }
+  }
+
   // Apply the snapshotted per-client discount uniformly across all
   // line items + totals. Clamped to [0, 1] at compose time so it
   // cannot flip a total negative. A 0 discount is a no-op.
@@ -658,7 +689,14 @@ function buildContextForProduct(args: {
       return { id: p, tierId: otherTier };
     });
 
-  return { ecosystemId, tierId, variables, otherProducts, selections: args.selections };
+  return {
+    ecosystemId,
+    tierId,
+    variables,
+    otherProducts,
+    selections: args.selections,
+    allProductVars: args.productVars,
+  };
 }
 
 // Exported for use in contract-schedule.ts product_driven_v1 branch.

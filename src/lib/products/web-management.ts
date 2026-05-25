@@ -642,6 +642,49 @@ export const webManagementProduct: ProductDefinition = {
         };
       });
     }
+    // Cross-product effect from a picked Build option (Raised Bar
+    // pattern). If a build_options pick adds sites via wm_sites_added,
+    // append placeholder rows to the WM Schedule A section so the
+    // executed contract reflects the picked shape. The pricing was
+    // already adjusted via wm_monthly_delta + wm_onboarding_delta at
+    // the dispatcher; here we just surface the rows.
+    try {
+      const productVars = ctx.allProductVars || {};
+      const buildOptionsArr = productVars['build']?.build_options;
+      const pickedBuildOptionId = ctx.selections?.['build_options'];
+      if (Array.isArray(buildOptionsArr) && pickedBuildOptionId) {
+        const pickedOption = buildOptionsArr.find((o: any) => o && o.id === pickedBuildOptionId);
+        if (pickedOption && Array.isArray(pickedOption.wm_sites_added)) {
+          for (const addedSite of pickedOption.wm_sites_added) {
+            if (!addedSite || !addedSite.domain) continue;
+            const pageCount = addedSite.page_count_estimate;
+            const siteEco = pageCount != null
+              ? (routeWebManagementEcosystem(pageCount) || ctx.ecosystemId!)
+              : ctx.ecosystemId!;
+            const siteEcoObj = WM_ECOSYSTEMS[siteEco];
+            const siteTier = siteEcoObj?.tiers[ctx.tierId!];
+            const monthlyBase = siteTier?.monthly || 0;
+            const onbBase = siteTier?.onb || 0;
+            siteRows.push({
+              domain: addedSite.label && addedSite.label !== addedSite.domain
+                ? `${addedSite.label} (${addedSite.domain})`
+                : addedSite.domain,
+              description: `added when prospect picked "${pickedOption.name}"`,
+              ecosystem: siteEco,
+              monthly_contribution: Math.round(monthlyBase * MULTI_SITE_DISCOUNT * 100) / 100,
+              onboarding_contribution: Math.round(onbBase * MULTI_SITE_DISCOUNT * 100) / 100,
+              is_primary: false,
+            });
+            sites++;
+          }
+        }
+      }
+    } catch {
+      // Defensive: cross-product Schedule A augmentation should never
+      // crash WM's own Schedule A build. Skip silently if shape is
+      // wrong.
+    }
+
     return {
       products_purchased: { web_management: true },
       web_management: {

@@ -179,6 +179,13 @@ actionItems.sort((a, b) => a.urgency - b.urgency);
           <h1 id="verdict" class="text-2xl md:text-3xl font-serif text-neutral-100 leading-snug mb-4 max-w-md"></h1>
           <p id="verdict-sub" class="text-sm text-neutral-500 leading-relaxed max-w-sm"></p>
           <p id="score-explain" class="text-[10px] text-neutral-500 mt-4 max-w-sm"></p>
+
+          <!-- Component breakdown. Composite-score components with
+               their sub-scores OR "Not yet uploaded" for missing data.
+               Lets the client see exactly what's in the score and
+               what isn't, so a 72 doesn't look the same whether it
+               averages all four components or just two. -->
+          <div id="score-breakdown" class="w-full max-w-lg mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
         </div>
       </section>
 
@@ -310,19 +317,14 @@ actionItems.sort((a, b) => a.urgency - b.urgency);
       },
     };
 
-    function computeScore(kws, issues) {
-      let s = 50;
-      if (kws.length > 0) {
-        s += Math.round((kws.filter(k => k.position <= 10).length / kws.length) * 30);
-        s += Math.round((kws.filter(k => k.position <= 3).length / kws.length) * 20);
-      }
-      const h = issues.filter(i => ['critical','high'].includes((i.priority||'').toLowerCase())).length;
-      const m = issues.filter(i => (i.priority||'').toLowerCase() === 'medium').length;
-      s -= Math.min(30, h * 10 + m * 3);
-      return Math.max(0, Math.min(100, s));
-    }
-
+    // Score logic moved server-side to /portal/api/dashboard/score.
+    // The endpoint computes four weighted component sub-scores
+    // (visibility / health / engagement / search) and averages only
+    // the ones with data. Dashboard renders the breakdown below the
+    // ring so a client sees exactly which components are
+    // contributing.
     function scoreColor(s) {
+      if (s == null) return '#737373';   // neutral when insufficient data
       if (s >= 75) return '#10b981';
       if (s >= 50) return '#fbbf24';
       return '#ef4444';
@@ -346,10 +348,14 @@ actionItems.sort((a, b) => a.urgency - b.urgency);
 
       try {
         const qs = `?client_id=${activeClientId}`;
-        const [sumR, kwR, isR] = await Promise.all([
+        // Score moved server-side. Fetched alongside the other dashboard
+        // data so the score component breakdown renders in the same
+        // pass as the keyword and issue chapters.
+        const [sumR, kwR, isR, scoreR] = await Promise.all([
           fetch('/portal/api/dashboard/summary' + qs),
           fetch('/portal/api/dashboard/keywords' + qs + '&limit=200'),
           fetch('/portal/api/dashboard/issues' + qs),
+          fetch('/portal/api/dashboard/score' + qs),
         ]);
 
         if (!sumR.ok || !kwR.ok || !isR.ok) throw new Error('Failed to load dashboard data');
@@ -357,13 +363,14 @@ actionItems.sort((a, b) => a.urgency - b.urgency);
         const summary = await sumR.json();
         const kwData = await kwR.json();
         const isData = await isR.json();
+        const scoreData = scoreR.ok ? await scoreR.json() : null;
 
         const kws = (kwData.keywords || []).filter(k => k.position);
         const issues = isData.issues || [];
 
         loadingEl.classList.add('hidden');
 
-        if (!kws.length && !issues.length) {
+        if (!kws.length && !issues.length && (!scoreData || !scoreData.has_data)) {
           document.getElementById('empty-state').classList.remove('hidden');
           document.getElementById('story').classList.add('hidden');
           return;
@@ -379,26 +386,40 @@ actionItems.sort((a, b) => a.urgency - b.urgency);
         dateEl.textContent = 'Date unavailable';
       }
 
-      const score = computeScore(kws, issues);
+      // ── CHAPTER 1: composite score from /api/dashboard/score ──
+      // Pulls the weighted-average of available components. Missing
+      // data is EXCLUDED from the average, not zeroed, so a client
+      // with only an SF audit uploaded doesn't see a lying score
+      // inflated or deflated by zero values for GA4/GSC/keywords.
+      const score = scoreData && scoreData.has_data ? scoreData.overall : null;
+      const components = (scoreData && scoreData.components) || [];
       const color = scoreColor(score);
-      const page1 = kws.filter(k => k.position <= 10).length;
-      const top3 = kws.filter(k => k.position <= 3).length;
-      const highIss = issues.filter(i => ['critical','high'].includes((i.priority||'').toLowerCase())).length;
 
-      // ── CHAPTER 1 ──
       const sn = document.getElementById('score-number');
-      sn.textContent = score;
+      sn.textContent = score == null ? '—' : score;
       sn.style.color = color;
-      document.getElementById('score-ring').setAttribute('aria-label', `Website health score: ${score} out of 100`);
+      document.getElementById('score-ring').setAttribute(
+        'aria-label',
+        score == null
+          ? 'No data uploaded yet'
+          : `Website health score: ${score} out of 100, average of ${scoreData.components_used} of ${scoreData.components_total} components`
+      );
 
       // Glow color
       const wrap = document.getElementById('score-wrap');
-      const glowAlpha = score >= 75 ? '0.12' : score >= 50 ? '0.08' : '0.08';
-      const glowRgb = score >= 75 ? '16,185,129' : score >= 50 ? '251,191,36' : '239,68,68';
+      const glowRgb = score == null ? '115,115,115'
+        : score >= 75 ? '16,185,129'
+        : score >= 50 ? '251,191,36'
+        : '239,68,68';
+      const glowAlpha = score == null ? '0.05' : '0.10';
       wrap.style.setProperty('--glow-color', `rgba(${glowRgb},${glowAlpha})`);
 
+      // Verdict + subtitle.
       let verdict, sub;
-      if (score >= 80) {
+      if (score == null) {
+        verdict = 'No score yet.';
+        sub = 'Upload keyword tracking, a site audit, GA4 traffic, or Google Search Console data to start scoring. Even one of those will produce a score with the component breakdown below noting what is still missing.';
+      } else if (score >= 80) {
         verdict = 'Your website is in excellent shape.';
         sub = 'People are finding you on Google, your site is technically sound, and you\'re ahead of most competitors in your space. Let\'s keep it there.';
       } else if (score >= 65) {
@@ -413,39 +434,74 @@ actionItems.sort((a, b) => a.urgency - b.urgency);
       }
       document.getElementById('verdict').textContent = verdict;
       document.getElementById('verdict-sub').textContent = sub;
-      // Honest score explanation. When no keyword data is uploaded
-      // yet (kws.length === 0), the "0 of 0 keywords on page 1"
-      // text reads like the score is anchored on real data when
-      // it isn't — the score in that case is just base 50 minus
-      // any high-priority issue penalty. Name the inputs we
-      // actually have.
-      const explainParts = [];
-      if (kws.length > 0) {
-        explainParts.push(`${page1} of ${kws.length} keywords on page 1`);
-        if (top3 > 0) explainParts.push(`${top3} in top 3`);
+
+      // Composite-score explain text: name which components are
+      // contributing and which are absent. Honest about scope.
+      const availableNames = components.filter(c => c.available).map(c => c.label);
+      const missingNames = components.filter(c => !c.available).map(c => c.label);
+      let scoreExplain;
+      if (availableNames.length === 0) {
+        scoreExplain = 'Awaiting data on all four scoring components.';
+      } else if (missingNames.length === 0) {
+        scoreExplain = `Composite of all four components: ${availableNames.join(', ')}.`;
+      } else {
+        scoreExplain = `Average of ${availableNames.length} of 4 components (${availableNames.join(', ')}). Missing: ${missingNames.join(', ')}.`;
       }
-      if (highIss > 0) {
-        explainParts.push(`${highIss} high-priority site issue${highIss !== 1 ? 's' : ''}`);
-      }
-      const scoreExplain = explainParts.length > 0
-        ? `Score based on: ${explainParts.join(', ')}.`
-        : kws.length === 0
-          ? `Baseline score. Upload keyword tracking and a site audit to anchor this against real data.`
-          : `Baseline score. No high-priority issues found.`;
       document.getElementById('score-explain').textContent = scoreExplain;
 
+      // Component breakdown cards. One per component. Available ones
+      // show their sub-score with a bar; missing ones say "Not yet
+      // uploaded" so the client knows what's excluded.
+      const breakdownEl = document.getElementById('score-breakdown');
+      breakdownEl.innerHTML = components.map(c => {
+        if (!c.available || c.score == null) {
+          return `
+            <div class="bg-neutral-900/30 border border-white/5 rounded-xl px-4 py-3 text-left">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs text-neutral-300">${escapeHtml(c.label)}</span>
+                <span class="text-[10px] font-mono text-neutral-500">—</span>
+              </div>
+              <p class="text-[10px] text-neutral-500 leading-snug">Not yet uploaded. ${escapeHtml(c.basis)}</p>
+            </div>
+          `;
+        }
+        const subColor = c.score >= 75 ? 'text-emerald-400' : c.score >= 50 ? 'text-amber-600' : 'text-red-400';
+        const barColor = c.score >= 75 ? 'bg-emerald-500/60' : c.score >= 50 ? 'bg-amber-500/60' : 'bg-red-500/60';
+        return `
+          <div class="bg-neutral-900/30 border border-white/5 rounded-xl px-4 py-3 text-left">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs text-neutral-300">${escapeHtml(c.label)}</span>
+              <span class="text-sm font-mono ${subColor}">${c.score}</span>
+            </div>
+            <div class="h-1 bg-white/5 rounded-full overflow-hidden mb-2">
+              <div class="${barColor} h-full" style="width: ${c.score}%"></div>
+            </div>
+            <p class="text-[10px] text-neutral-500 leading-snug">${escapeHtml(c.basis)}</p>
+          </div>
+        `;
+      }).join('');
+
+      // Chart: ring renders with the composite score (or neutral
+      // gray when score is null).
+      const ringValue = score == null ? 0 : score;
+      const ringRemainder = score == null ? 100 : 100 - score;
       const ctx = document.getElementById('score-ring');
       try { if (scoreChart) scoreChart.destroy(); } catch {}
       scoreChart = null;
       scoreChart = new Chart(ctx, {
         type: 'doughnut',
-        data: { datasets: [{ data: [score, 100 - score], backgroundColor: [color, 'rgba(38,38,38,0.3)'], borderWidth: 0 }] },
+        data: { datasets: [{ data: [ringValue, ringRemainder], backgroundColor: [color, 'rgba(38,38,38,0.3)'], borderWidth: 0 }] },
         options: {
           cutout: '78%', responsive: true, maintainAspectRatio: true,
           plugins: { legend: { display: false }, tooltip: { enabled: false } },
           animation: { animateRotate: true, duration: 1500, easing: 'easeOutQuart' },
         },
       });
+
+      // Keep these in scope for the rest of the chapters below.
+      const page1 = kws.filter(k => k.position <= 10).length;
+      const top3 = kws.filter(k => k.position <= 3).length;
+      const highIss = issues.filter(i => ['critical','high'].includes((i.priority||'').toLowerCase())).length;
 
       // ── CHAPTER 2 ──
       if (kws.length > 0) {

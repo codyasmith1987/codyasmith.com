@@ -64,23 +64,7 @@ function fmtDate(s: string | null): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-const statusBadge: Record<string, string> = {
-  draft: 'bg-neutral-700/30 text-neutral-400',
-  issued: 'bg-blue-500/10 text-blue-400',
-  partially_signed: 'bg-amber-500/10 text-amber-600',
-  executed: 'bg-emerald-500/10 text-emerald-400',
-  revoked: 'bg-amber-500/10 text-amber-600',
-  voided: 'bg-red-500/10 text-red-400',
-};
-
-const statusLabel: Record<string, string> = {
-  draft: 'Draft',
-  issued: 'Issued',
-  partially_signed: 'Partial',
-  executed: 'Executed',
-  revoked: 'Revoked',
-  voided: 'Voided',
-};
+import { AGREEMENT_STATUS, badgeClass, lookupStatus, STATUS_PILL_BASE } from '../../../lib/admin-status-styling';
 ---
 
 <Portal title="Agreements">
@@ -137,7 +121,10 @@ const statusLabel: Record<string, string> = {
                 <div class="flex items-baseline gap-3 flex-wrap">
                   <p class="text-sm font-medium text-neutral-200">{clientById[a.client_id] || 'Unknown client'}</p>
                   <a href={`/portal/contracts/${a.slug}`} target="_blank" rel="noopener" class="text-[10px] font-mono text-neutral-400 hover:text-amber-600 transition-colors">/{a.slug}</a>
-                  <span class={`px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider rounded ${statusBadge[a.status] || statusBadge.draft}`}>{statusLabel[a.status] || a.status}</span>
+                  {(() => {
+                    const info = lookupStatus(AGREEMENT_STATUS, a.status);
+                    return <span class:list={[STATUS_PILL_BASE, badgeClass(info.token)]}>{info.label}</span>;
+                  })()}
                 </div>
                 <p class="text-xs text-neutral-500 mt-1">{a.title}</p>
 

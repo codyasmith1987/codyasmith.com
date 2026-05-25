@@ -162,13 +162,26 @@ const clients = isAdmin ? await getAllClients() : [];
         const page2 = withPos.filter(k => k.position > 10 && k.position <= 20).length;
         const buried = withPos.filter(k => k.position > 20).length;
         const total = withPos.length;
+        const unranked = allKeywords.length - total;
 
-        document.getElementById('kw-total').textContent = allKeywords.length;
+        // TRACKED shows the number of keywords with positions —
+        // matches the distribution bar's denominator so the widths
+        // line up with what the card is counting. Adds a small
+        // "+ N unranked" suffix when the upload covered more
+        // keywords than positions were available for.
+        const trackedEl = document.getElementById('kw-total');
+        if (unranked > 0) {
+          trackedEl.innerHTML = `${total} <span class="text-xs font-mono text-neutral-400">+ ${unranked} unranked</span>`;
+        } else {
+          trackedEl.textContent = total;
+        }
         document.getElementById('kw-top3').textContent = top3;
         document.getElementById('kw-page1').textContent = page1;
         document.getElementById('kw-buried').textContent = (page2 + buried) || '0';
 
-        // Distribution bar
+        // Distribution bar — keyed off `total` (keywords with
+        // positions) since unranked keywords don't belong in
+        // top3/page1/page2+ buckets. Now matches the TRACKED card.
         if (total > 0) {
           document.getElementById('bar-top3').style.width = `${(top3 / total) * 100}%`;
           document.getElementById('bar-page1').style.width = `${((page1 - top3) / total) * 100}%`;

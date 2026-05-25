@@ -177,7 +177,21 @@ export async function fetchSecurityDaily(
       }
     }
   `;
-  const data = await callGraphQL(token, query, { zoneId, since: sinceISO, until: untilISO });
+  // CF Free plan may not expose firewallEventsAdaptiveGroups (we've
+  // seen "zone does not have access to the path" on Free zones).
+  // Wrap in try/catch and return empty array on failure so the
+  // traffic side of the sync still succeeds. Caller logs the
+  // empty result; the /portal/security page handles 0 security
+  // rows gracefully.
+  let data: any;
+  try {
+    data = await callGraphQL(token, query, { zoneId, since: sinceISO, until: untilISO });
+  } catch (err: any) {
+    // Likely path-access restriction on Free plan. Logged at the
+    // caller level via the sync endpoint. Empty rows let traffic
+    // still record.
+    return [];
+  }
   const rows = data?.viewer?.zones?.[0]?.firewallEventsAdaptiveGroups || [];
 
   // Aggregate by day-of-datetime + action. CF returns one row per

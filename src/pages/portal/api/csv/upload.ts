@@ -186,15 +186,36 @@ export const POST: APIRoute = async ({ locals, request }) => {
     const userId = locals.user!.id;
     const userName = locals.user!.name;
 
-    // Process sequentially. Parallel would hammer Turso and complicate
-    // the clearPreviousData / supersede logic. processOne can return
-    // a single result OR an array (for ZIPs that fan out to multiple
-    // CSV uploads); flatten so the UI gets one chip per ingested CSV.
+    // Process the batch in parallel. Earlier comment claimed sequential
+    // was required to avoid hammering Turso and to keep supersede
+    // semantics simple; in practice Turso handles concurrent writes
+    // fine and supersede operates per-filename per-client per-month
+    // (no contention between different filenames). Sequential was the
+    // direct cause of the Cloudflare 524 timeouts on large SF batches
+    // where 4-5 big link CSVs (6000+ rows each) would push a 25-file
+    // batch past CF's 100s origin response window even though no
+    // single file is slow. Parallel makes the batch limited by the
+    // SLOWEST file, not the sum.
+    //
+    // processOne can return a single result OR an array (for ZIPs
+    // that fan out to multiple CSV uploads); flatten so the UI gets
+    // one chip per ingested CSV. Promise.allSettled so one parser
+    // throw doesn't fail the whole batch.
+    const settled = await Promise.allSettled(
+      files.map(file => processOne(file, clientId, month, userId, userName))
+    );
     const results: PerFileResult[] = [];
-    for (const file of files) {
-      const r = await processOne(file, clientId, month, userId, userName);
-      if (Array.isArray(r)) results.push(...r);
-      else results.push(r);
+    for (let i = 0; i < settled.length; i++) {
+      const s = settled[i];
+      if (s.status === 'fulfilled') {
+        if (Array.isArray(s.value)) results.push(...s.value);
+        else results.push(s.value);
+      } else {
+        results.push({
+          filename: files[i].name,
+          error: s.reason?.message || 'processing failed',
+        });
+      }
     }
 
     // Backward compat: when only one file was sent via legacy 'file'

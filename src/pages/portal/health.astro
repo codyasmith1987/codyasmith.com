@@ -297,31 +297,42 @@ const clients = isAdmin ? await getAllClients() : [];
                 const res = await fetch(`/portal/api/dashboard/issue-urls?client_id=${cid}&issue_name=${encodeURIComponent(issueName)}`);
                 const data = await res.json();
                 if (!data.urls || data.urls.length === 0) {
-                  // Three honest empty states. The endpoint tells us
-                  // which one we're in via `source`, `has_crawl`,
-                  // and `derivable`. Messaging differs per case so a
-                  // client doesn't see the same "upload the CSV"
-                  // line across every popout when actually we just
-                  // can't compute this particular issue without it.
+                  // Empty state messaging keyed off what's actually
+                  // missing. The endpoint tells us:
+                  //   - source: 'derived' means the derivation ran
+                  //     against a source table that returned zero
+                  //     rows (legit empty, not a missing-data state)
+                  //   - has_expected_source tells us whether the
+                  //     specific table this issue needs has any
+                  //     data at all
+                  //   - derivable tells us whether the portal has a
+                  //     derivation path for this issue at all
+                  const TABLE_LABELS = {
+                    crawl_urls: 'Screaming Frog Internal HTML (internal_all.csv)',
+                    image_urls: 'Screaming Frog Images bulk export (images_all.csv)',
+                    content_urls: 'Screaming Frog Content bulk export (content_all.csv)',
+                    accessibility_urls: 'Screaming Frog Accessibility bulk export (accessibility_all.csv)',
+                    structured_data_urls: 'Screaming Frog Structured Data bulk export (structured_data_all.csv)',
+                  };
                   let emptyMsg;
-                  if (data.source === 'crawl_urls_derived') {
-                    emptyMsg = `No URLs in this crawl match the pattern for this issue. The audit summary may have flagged it from an older crawl or a slightly different rule than the portal's derivation.`;
-                  } else if (data.derivable && !data.has_crawl) {
-                    emptyMsg = `Upload the Screaming Frog Internal HTML CSV (internal_all.csv) and the portal will derive the affected URLs for this issue automatically. Or upload the per-issue CSV (${escapeHtml(issueName)}) for the exact list the audit produced.`;
+                  if (data.source === 'derived') {
+                    emptyMsg = `No URLs in your latest data match this pattern. The audit summary may have flagged it from an older upload or a slightly different rule than the portal's derivation.`;
+                  } else if (data.derivable && !data.has_expected_source) {
+                    const tableHint = data.expected_source ? TABLE_LABELS[data.expected_source] : 'the relevant SF export';
+                    emptyMsg = `Upload the ${tableHint} and the portal will derive the affected URLs automatically. Or upload the per-issue CSV (${escapeHtml(issueName)}) for the exact list the audit produced.`;
                   } else if (!data.derivable) {
-                    emptyMsg = `The portal cannot derive this issue's URL list from the crawl alone — it needs the per-issue CSV (${escapeHtml(issueName)}) from Screaming Frog's issues_reports folder.`;
+                    emptyMsg = `The portal cannot derive this issue's URL list from your stored data — it needs the per-issue CSV (${escapeHtml(issueName)}) from Screaming Frog's issues_reports folder.`;
                   } else {
                     emptyMsg = `Upload the per-issue CSV (${escapeHtml(issueName)}) from Screaming Frog to populate the list.`;
                   }
                   slot.innerHTML = `<span class="text-neutral-500 italic">${emptyMsg}</span>`;
                   return;
                 }
-                // When the list was derived from crawl_urls rather
-                // than pulled from a per-issue CSV, surface that so
-                // the client knows the count may differ slightly
-                // from the audit summary's affected_urls number.
-                const sourceBanner = data.source === 'crawl_urls_derived'
-                  ? `<p class="text-[10px] font-mono text-amber-600 mb-2 leading-relaxed">Derived from your crawl data. Count may differ slightly from the audit's affected_urls value because the audit applies edge-case rules (whitespace-only, etc.) the portal doesn't replicate exactly.</p>`
+                // When the list was derived rather than pulled from
+                // a per-issue CSV, surface that — counts may differ
+                // slightly from the audit's affected_urls value.
+                const sourceBanner = data.source === 'derived'
+                  ? `<p class="text-[10px] font-mono text-amber-600 mb-2 leading-relaxed">Derived from your ${escapeHtml((data.source_table || '').replace(/_/g, ' '))} data. Count may differ slightly from the audit's affected_urls value because the audit applies edge-case rules (pixel widths, whitespace handling, etc.) the portal doesn't replicate exactly.</p>`
                   : '';
                 // Each row carries the URL, a classification from the
                 // server (type + label + is_page), and an optional

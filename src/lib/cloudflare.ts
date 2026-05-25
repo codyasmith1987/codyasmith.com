@@ -181,6 +181,54 @@ export async function fetchSecurityDaily(
   return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
 }
 
+export interface CloudflareZone {
+  id: string;
+  name: string;        // e.g. "zipkithomes.com"
+  account_id: string;
+  account_name: string;
+}
+
+// List every zone the token can see. Used by the account-level
+// auto-link flow: given an account-scoped token (Zone:Analytics:Read
+// across the account), enumerate zones once, then resolve each
+// client_sites row's hostname against the list to fill in zone IDs.
+//
+// Pagination: CF returns 50 zones per page by default. Capped at
+// 1000 zones (20 pages); anyone exceeding that has a different
+// problem than wiring analytics here.
+export async function listZones(token: string): Promise<CloudflareZone[]> {
+  const zones: CloudflareZone[] = [];
+  const perPage = 50;
+  const maxPages = 20;
+  for (let page = 1; page <= maxPages; page++) {
+    const url = `https://api.cloudflare.com/client/v4/zones?page=${page}&per_page=${perPage}`;
+    const res = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    const body = await res.json();
+    if (!res.ok || !body?.success) {
+      throw {
+        message: `Cloudflare zones API ${res.status}`,
+        detail: JSON.stringify(body?.errors || body).slice(0, 500),
+      } as CloudflareError;
+    }
+    for (const z of body.result || []) {
+      zones.push({
+        id: String(z.id || ''),
+        name: String(z.name || ''),
+        account_id: String(z.account?.id || ''),
+        account_name: String(z.account?.name || ''),
+      });
+    }
+    const totalCount = Number(body.result_info?.total_count || 0);
+    if (page * perPage >= totalCount) break;
+  }
+  return zones;
+}
+
 // Smoke test: hit a tiny query to validate the token + zone work.
 // Used by the settings UI to give immediate feedback when the admin
 // pastes credentials.

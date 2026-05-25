@@ -855,7 +855,14 @@ const clientConfig = {
     {step.type === 'tier_picker' && (
       <div class={`tiers${step.show_when ? ' tiers-hidden' : ''}`} id={`step-tiers-${step.id}`} data-step-id={step.id}>
         {Array.isArray(step.options) && step.options.map((opt: any) => (
-          <div class={`tier${opt.recommended ? ' recommended' : ''}`} data-step-id={step.id} data-option-id={opt.id}>
+          <div
+            class={`tier${opt.recommended ? ' recommended' : ''}`}
+            data-step-id={step.id}
+            data-option-id={opt.id}
+            role="button"
+            tabindex="0"
+            aria-label={`${opt.name}${opt.recommended ? ', recommended' : ''}${opt.price_label ? `, ${opt.price_label}${opt.price_suffix || ''}` : ''}`}
+          >
             {opt.recommended && <div class="pill">Recommended</div>}
             <h3>{opt.name}</h3>
             {opt.tagline && <div class="tagline">{opt.tagline}</div>}
@@ -875,7 +882,14 @@ const clientConfig = {
     {step.type === 'binary_picker' && (
       <div class="addon-choice" id={`step-choice-${step.id}`} data-step-id={step.id}>
         {Array.isArray(step.options) && step.options.map((opt: any) => (
-          <div class="addon-option" data-step-id={step.id} data-option-id={opt.id}>
+          <div
+            class="addon-option"
+            data-step-id={step.id}
+            data-option-id={opt.id}
+            role="button"
+            tabindex="0"
+            aria-label={`${opt.name}${opt.price_label ? `, ${opt.price_label}` : ''}`}
+          >
             <h3>{opt.name}</h3>
             {opt.html && <p set:html={opt.html} />}
             <div class="addon-pricing">
@@ -1544,7 +1558,7 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
   var allCards = document.querySelectorAll('[data-step-id][data-option-id]');
   for (var ai = 0; ai < allCards.length; ai++) {
     (function(card) {
-      card.addEventListener('click', function() {
+      function pickCard() {
         if (state.finalizedAt) return;
         var stepId = card.getAttribute('data-step-id');
         var optId = card.getAttribute('data-option-id');
@@ -1573,6 +1587,16 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
         }
         // All steps answered — scroll to the form.
         scrollTo('proposal-form-container');
+      }
+      card.addEventListener('click', pickCard);
+      // Keyboard support for tier cards and addon options. Enter or
+      // Space activates the card; matches button-like semantics
+      // declared via role="button" + tabindex="0" in the JSX.
+      card.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          pickCard();
+        }
       });
     })(allCards[ai]);
   }

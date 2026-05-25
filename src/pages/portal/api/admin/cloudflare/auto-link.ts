@@ -58,7 +58,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
   const sitesRes = await turso.execute({
     sql: `SELECT id, domain FROM client_sites
-          WHERE client_id = ? AND status = 'active'`,
+          WHERE client_id = ? AND is_managed = 1`,
     args: [clientId],
   });
 

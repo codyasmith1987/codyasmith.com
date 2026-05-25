@@ -214,13 +214,36 @@ export const prerender = false;
       setStatus('', null);
       showViolations(null);
       deleteBtn.classList.toggle('hidden', snippet.source === 'file');
+      // Capture which element was focused before the modal opened so
+      // we can restore focus to it on close. Improves keyboard nav
+      // and screen-reader continuity.
+      lastFocusBeforeModal = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       modal.classList.remove('hidden');
       modal.classList.add('flex');
+      // Focus the first writable input in the modal so admin can
+      // start typing immediately.
+      requestAnimationFrame(() => {
+        const firstInput = modal.querySelector('input, textarea, select');
+        if (firstInput instanceof HTMLElement) firstInput.focus();
+      });
     }
 
+    // Pattern template for cross-cutting E (UI/UX audit 2026-05-25):
+    // every modal in the portal should wire Esc, click-outside, and
+    // focus-trap. This is the inline version of a future shared
+    // wireModal() helper. Modals using this pattern: snippet editor
+    // (here). Next adopters: contracts new-contract form
+    // (currently has Esc but no focus trap), agreement-related
+    // dialogs when added.
+    let lastFocusBeforeModal = null;
     function closeModal() {
       modal.classList.add('hidden');
       modal.classList.remove('flex');
+      // Restore focus to whatever was focused before the modal opened.
+      if (lastFocusBeforeModal) {
+        try { lastFocusBeforeModal.focus(); } catch { /* ignore */ }
+      }
+      lastFocusBeforeModal = null;
     }
     document.getElementById('edit-modal-close').addEventListener('click', closeModal);
     modal.addEventListener('click', (e) => {
@@ -229,6 +252,26 @@ export const prerender = false;
     // Esc key closes the modal when it's open.
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+    });
+    // Focus trap: when Tab/Shift+Tab would leave the modal, wrap to
+    // the other end. Keeps keyboard navigation inside the open modal
+    // so screen readers and keyboard-only users can't accidentally
+    // tab into the page behind.
+    modal.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab' || modal.classList.contains('hidden')) return;
+      const focusables = modal.querySelectorAll(
+        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     });
 
     document.getElementById('edit-save').addEventListener('click', async () => {

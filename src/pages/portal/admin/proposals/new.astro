@@ -1669,10 +1669,26 @@ const todayISO = new Date().toISOString().slice(0, 10);
     researchBtn.addEventListener('click', async () => {
       if (!state.client_id || !state.client_domain) return;
       researchBtn.disabled = true;
-      researchStatus.textContent = 'Looking up. This usually takes 5 to 15 seconds.';
+      // Loading state: spinner + skeleton cards so admin sees the
+      // call is in progress (research takes 5-15 seconds typically).
+      // Same status text still appears so the timing expectation is
+      // explicit.
+      researchStatus.innerHTML =
+        '<span class="inline-flex items-center gap-2">' +
+          '<span class="inline-block w-3 h-3 border-2 border-amber-600/40 border-t-amber-600 rounded-full animate-spin"></span>' +
+          '<span>Looking up. This usually takes 5 to 15 seconds.</span>' +
+        '</span>';
       researchStatus.classList.remove('hidden');
-      researchResults.classList.add('hidden');
-      researchResults.innerHTML = '';
+      researchResults.classList.remove('hidden');
+      // Skeleton card stand-ins for the 4 result blocks so the layout
+      // doesn't jump when results land.
+      researchResults.innerHTML =
+        '<div class="space-y-3 animate-pulse">' +
+          '<div class="h-24 bg-neutral-900/40 border border-white/5 rounded-md"></div>' +
+          '<div class="h-32 bg-neutral-900/40 border border-white/5 rounded-md"></div>' +
+          '<div class="h-20 bg-neutral-900/40 border border-white/5 rounded-md"></div>' +
+          '<div class="h-28 bg-neutral-900/40 border border-white/5 rounded-md"></div>' +
+        '</div>';
 
       // Two-stage error reporting: the fetch itself can throw (network),
       // and the response body may not be JSON (Cloudflare swaps 5xx

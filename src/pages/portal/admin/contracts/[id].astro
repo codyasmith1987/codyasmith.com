@@ -279,7 +279,7 @@ const statusColors: Record<string, string> = {
     document.getElementById('delete-contract')?.addEventListener('click', async () => {
       const confirmed = await window.__confirm({
         title: 'Delete contract',
-        message: 'This will permanently delete this contract and all its projects, milestones, and tasks.',
+        message: 'This will permanently delete this contract and its related invoices, approvals, and change orders.',
         confirmLabel: 'Delete',
         danger: true,
       });
@@ -291,10 +291,10 @@ const statusColors: Record<string, string> = {
       });
 
       if (res.ok) {
-        window.__toast({ type: 'success', message: 'Contract deleted' });
+        window.__toast('Contract deleted.', 'success');
         setTimeout(() => window.location.href = '/portal/admin/contracts', 600);
       } else {
-        window.__toast({ type: 'error', message: 'Failed to delete contract' });
+        window.__toast('Failed to delete contract.', 'error');
       }
     });
 

@@ -1430,7 +1430,7 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
         if (revokeBtn) revokeBtn.classList.add('step-hidden');
       } else if (SIGNER_ROLE === 'admin') {
         sendBtn.disabled = true;
-        sendBtn.textContent = 'Admin preview — submit disabled';
+        sendBtn.textContent = 'Admin preview, submit disabled';
         if (formNote) formNote.textContent = 'Admin preview. The proposal must be accepted by an authorized signer.';
         if (revokeBtn) revokeBtn.classList.add('step-hidden');
       } else {

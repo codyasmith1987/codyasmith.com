@@ -111,8 +111,14 @@ const todayISO = new Date().toISOString().slice(0, 10);
 <Portal title="New Proposal">
   <div class="max-w-4xl mx-auto">
     <div class="mb-10">
-      <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin / Proposals</p>
-      <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">New proposal</h1>
+      <p class="text-[10px] font-mono tracking-[0.2em] uppercase mb-3">
+        <a href="/portal/admin/proposals" class="text-amber-600 hover:text-amber-400 transition-colors">Admin / Proposals</a>
+        <span class="text-neutral-500"> / New</span>
+      </p>
+      <div class="flex items-baseline justify-between gap-4 flex-wrap">
+        <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">New proposal</h1>
+        <span id="autosave-indicator" class="text-[10px] font-mono text-neutral-500"></span>
+      </div>
       <p class="text-neutral-500 text-sm mt-3">
         Pick the client and the products in scope. The system composes the rest from product definitions.
       </p>
@@ -367,6 +373,71 @@ const todayISO = new Date().toISOString().slice(0, 10);
       // panel; flows into the create endpoint's tier_overrides field.
       tier_overrides: {},              // { productId: 'good' | 'better' | 'best' }
     };
+
+    // Autosave wizard state to sessionStorage every 3 seconds. Clears
+    // on successful submit (in submitProposal below). No auto-restore
+    // in v1 — admin sees the indicator and knows state is preserved
+    // in case of a tab close. A follow-up PR can add a "Restore draft
+    // from X" prompt once the per-product UI re-render path is wired
+    // to a single state-restore entry point.
+    const AUTOSAVE_KEY = 'proposal-wizard-draft';
+    let lastAutosaveJson = '';
+    function autosaveNow() {
+      try {
+        const json = JSON.stringify(state);
+        if (json === lastAutosaveJson) return;
+        sessionStorage.setItem(AUTOSAVE_KEY, JSON.stringify({
+          state,
+          savedAt: new Date().toISOString(),
+        }));
+        lastAutosaveJson = json;
+        const indicator = document.getElementById('autosave-indicator');
+        if (indicator) {
+          const time = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+          indicator.textContent = 'Autosaved ' + time;
+        }
+      } catch (err) {
+        // sessionStorage may be full or disabled (private browsing on
+        // some browsers). Silently degrade.
+      }
+    }
+    function clearAutosave() {
+      try { sessionStorage.removeItem(AUTOSAVE_KEY); } catch { /* ignore */ }
+      const indicator = document.getElementById('autosave-indicator');
+      if (indicator) indicator.textContent = '';
+    }
+    setInterval(autosaveNow, 3000);
+
+    // Surface that an unsaved draft exists from a prior session so
+    // admin knows the data is recoverable (e.g., they can ask me to
+    // pull it out of sessionStorage manually). Banner is dismissible.
+    (function noteExistingDraft() {
+      try {
+        const raw = sessionStorage.getItem(AUTOSAVE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (!parsed || !parsed.savedAt) return;
+        const savedAt = new Date(parsed.savedAt);
+        const ageMin = Math.round((Date.now() - savedAt.getTime()) / 60000);
+        // Ignore drafts older than 24 hours.
+        if (ageMin > 24 * 60) {
+          sessionStorage.removeItem(AUTOSAVE_KEY);
+          return;
+        }
+        const friendly = ageMin < 1 ? 'just now' : ageMin < 60 ? ageMin + ' min ago' : Math.round(ageMin / 60) + ' hr ago';
+        const banner = document.createElement('div');
+        banner.className = 'bg-amber-500/10 border border-amber-500/40 rounded-md px-4 py-3 mb-6 flex items-center justify-between gap-4 text-[12px]';
+        banner.innerHTML =
+          '<p class="text-amber-600">There is an unsaved draft from ' + friendly + ' in browser memory. Submit a new proposal or discard to clear.</p>' +
+          '<button type="button" id="autosave-discard" class="text-amber-600 hover:text-red-400 transition-colors text-[11px] font-mono uppercase tracking-wide">Discard</button>';
+        const form = document.getElementById('proposal-form');
+        if (form && form.parentNode) form.parentNode.insertBefore(banner, form);
+        document.getElementById('autosave-discard').addEventListener('click', () => {
+          clearAutosave();
+          banner.remove();
+        });
+      } catch { /* ignore */ }
+    })();
 
     // =========================================================================
     // CSRF + helpers
@@ -1355,6 +1426,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
       let data = null;
       try { data = rawText ? JSON.parse(rawText) : null; } catch {}
       if (res.ok && data && data.ok) {
+        clearAutosave();
         showMsg(`Created proposal. Redirecting...`, 'ok');
         setTimeout(() => { window.location.href = '/portal/admin/proposals'; }, 800);
       } else {

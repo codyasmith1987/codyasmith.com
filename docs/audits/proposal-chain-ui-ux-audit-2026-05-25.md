@@ -218,6 +218,22 @@ The first 10 items together are roughly one focused day of work and would close 
 
 ---
 
+## Closure status (added 2026-05-25)
+
+All findings tracked here have shipped fixes in PRs #137-148. The exceptions are explicitly deferred with reasons:
+
+- **W4** (button style consistency): deferred. Mechanical refactor across 2,400 lines of wizard JS. Risks regression if a button is mis-classified. Warrants its own focused PR with a manual visual diff pass.
+- **W5** (inline validation on blur): deferred. Needs a validation-library or pattern decision (per-field error rendering convention). Voice-lint catches the AI-style violations at submit; the gap is field-shape errors (missing required, invalid email) which currently surface as modal-blocking on submit.
+- **W11** (research apply/unapply visual flash): deferred. Requires careful CSS animation work + identifying the row that changed across re-renders.
+- **W12** (domain chip x button): not reproducible. The audit pointed at a "small x" but the current code renders an `+ add site` input inline, not an x-button on each chip. Possibly a stale finding from an earlier wizard version.
+- **W15** (text-color hierarchy): deferred. Too subjective without a token system to standardize against. The Cody persona quiz palette (sun + mountain + spring + clouds) is the design vocabulary; standardizing requires extracting tokens first.
+- **AL3** (bulk operations on lists): deferred. Feature work, not polish. Worth scoping separately when the user volume justifies it.
+- **N2** (notification endpoint param shape): deferred. The current shared endpoint works for both audiences with the same param shape; the audit's recommendation to split into admin + client endpoints is a refactor without immediate user benefit.
+- **Cross-cutting B** (wizard auto-restore on reload): partial. Save + indicator + dismissible banner ship; full auto-restore requires per-product UI re-render wiring that warrants its own PR (PR #149 candidate).
+- **Cross-cutting E** (shared modal helper with focus trap): partial. Esc handlers added per-page (snippet editor + contracts new form). Shared helper extraction with focus trap is a separate refactor (PR #150 candidate).
+
+All other findings are closed. See the per-batch commit messages in PRs #137-148 for the implementation detail.
+
 ## What this audit did NOT cover
 
 - Performance: wizard page weight (large file, lots of inline JS), composer execution time, render times under load

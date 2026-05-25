@@ -160,6 +160,68 @@ function ecoChipLabel(pageCount: number | null): string {
               </details>
             )}
 
+            {/* Cloudflare config per managed site. Renders for any
+                client with at least 1 managed site, since CF is
+                per-zone and applies whether the client has one site
+                or several. The token field is write-only — the UI
+                shows whether a token is currently set but never
+                displays the value. */}
+            {sitesByClient[client.id] && sitesByClient[client.id].length >= 1 && (
+              <details class="mt-3 group" data-cf-slot={client.id}>
+                <summary class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase cursor-pointer hover:text-amber-600 transition-colors select-none">
+                  Cloudflare integration ({sitesByClient[client.id].filter(s => s.cloudflare_zone_id).length}/{sitesByClient[client.id].length} configured)
+                </summary>
+                <div class="mt-3 p-3 bg-neutral-900/40 border border-white/5 rounded-md space-y-4">
+                  <p class="text-[11px] text-neutral-400 leading-relaxed">Per-site Cloudflare zone ID + API token. Token should be scoped to <span class="font-mono">Zone Analytics:Read</span> only. After saving, click Test to verify the token reaches the zone, then Sync to pull the last 30 days. Data appears on /portal/security.</p>
+                  {sitesByClient[client.id].map(site => (
+                    <div class="space-y-2 p-3 bg-neutral-900/30 border border-white/5 rounded" data-cf-site-row={site.id}>
+                      <div class="flex items-center justify-between">
+                        <span class="text-sm text-neutral-100 font-mono truncate">{site.domain}</span>
+                        <span class="text-[10px] font-mono text-neutral-500">
+                          {site.cloudflare_last_synced_at ? `Synced ${site.cloudflare_last_synced_at}` : 'Never synced'}
+                        </span>
+                      </div>
+                      <div class="grid grid-cols-12 gap-2 items-center">
+                        <label class="col-span-2 text-[10px] font-mono text-neutral-400 tracking-wide uppercase">Zone ID</label>
+                        <input
+                          type="text"
+                          data-cf-zone-id={site.id}
+                          value={site.cloudflare_zone_id || ''}
+                          placeholder="32-char hex"
+                          class="col-span-10 px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono focus:outline-none focus:border-amber-500/30"
+                        />
+                      </div>
+                      <div class="grid grid-cols-12 gap-2 items-center">
+                        <label class="col-span-2 text-[10px] font-mono text-neutral-400 tracking-wide uppercase">Token</label>
+                        <input
+                          type="password"
+                          data-cf-token={site.id}
+                          placeholder={site.cloudflare_token_set ? '(currently set — paste new to replace)' : 'Bearer token'}
+                          autocomplete="new-password"
+                          class="col-span-10 px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono focus:outline-none focus:border-amber-500/30"
+                        />
+                      </div>
+                      <div class="flex items-center gap-3 pt-1">
+                        <button type="button" data-cf-save={site.id}
+                          class="px-3 py-1.5 bg-amber-500 text-neutral-950 text-[11px] font-medium rounded hover:bg-amber-400 transition-colors">
+                          Save
+                        </button>
+                        <button type="button" data-cf-test={site.id}
+                          class="px-3 py-1.5 border border-white/10 text-neutral-300 text-[11px] rounded hover:border-amber-500/30 hover:text-amber-600 transition-colors">
+                          Test credentials
+                        </button>
+                        <button type="button" data-cf-sync={site.id}
+                          class="px-3 py-1.5 border border-white/10 text-neutral-300 text-[11px] rounded hover:border-amber-500/30 hover:text-amber-600 transition-colors">
+                          Sync 30 days
+                        </button>
+                        <span data-cf-status={site.id} class="text-[10px] font-mono"></span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+
             <!-- Edit form (hidden until Edit clicked) -->
             <div data-edit-slot={client.id} class="hidden mt-4 pt-4 border-t border-white/5">
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -249,6 +311,107 @@ function ecoChipLabel(pageCount: number | null): string {
         } catch {
           (window as any).__toast?.('Network error saving page count.', 'error');
           inputEl.value = priorValue;
+        }
+      });
+    });
+
+    // Cloudflare config + sync handlers. Save persists zone + token,
+    // Test runs a smoke query against the GraphQL API, Sync pulls
+    // last 30 days into cloudflare_traffic_daily +
+    // cloudflare_security_daily.
+    function cfSetStatus(siteId: string, text: string, kind: 'ok' | 'error' | 'info' = 'info') {
+      const el = document.querySelector(`[data-cf-status="${siteId}"]`) as HTMLElement | null;
+      if (!el) return;
+      el.textContent = text;
+      el.className = 'text-[10px] font-mono ' + (
+        kind === 'ok' ? 'text-emerald-400' :
+        kind === 'error' ? 'text-red-400' :
+        'text-neutral-400'
+      );
+    }
+    document.querySelectorAll('[data-cf-save]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const button = btn as HTMLButtonElement;
+        const siteId = button.dataset.cfSave!;
+        const zoneEl = document.querySelector(`[data-cf-zone-id="${siteId}"]`) as HTMLInputElement;
+        const tokenEl = document.querySelector(`[data-cf-token="${siteId}"]`) as HTMLInputElement;
+        const zoneId = zoneEl?.value?.trim() || '';
+        // Empty token means "leave existing in place." Submit
+        // undefined for the field so the endpoint knows.
+        const tokenValue = tokenEl?.value || '';
+        const body: any = { site_id: siteId, zone_id: zoneId };
+        if (tokenValue !== '') body.api_token = tokenValue;
+        cfSetStatus(siteId, 'Saving…');
+        try {
+          const res = await fetch('/portal/api/admin/cloudflare/configure', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data?.ok) {
+            cfSetStatus(siteId, 'Saved.', 'ok');
+            if (tokenEl) tokenEl.value = ''; // clear so it stays write-only
+          } else {
+            cfSetStatus(siteId, data?.error || `HTTP ${res.status}`, 'error');
+          }
+        } catch (err: any) {
+          cfSetStatus(siteId, err?.message || 'Network error', 'error');
+        }
+      });
+    });
+    document.querySelectorAll('[data-cf-test]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const siteId = (btn as HTMLButtonElement).dataset.cfTest!;
+        cfSetStatus(siteId, 'Testing…');
+        try {
+          const res = await fetch('/portal/api/admin/cloudflare/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ site_id: siteId }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (data?.ok) {
+            cfSetStatus(siteId, 'Credentials valid.', 'ok');
+          } else {
+            cfSetStatus(siteId, data?.error || `HTTP ${res.status}`, 'error');
+          }
+        } catch (err: any) {
+          cfSetStatus(siteId, err?.message || 'Network error', 'error');
+        }
+      });
+    });
+    document.querySelectorAll('[data-cf-sync]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const siteId = (btn as HTMLButtonElement).dataset.cfSync!;
+        // Sync needs client_id too; pull it from the parent's
+        // [data-cf-slot] which carries that.
+        const slot = (btn as HTMLElement).closest('[data-cf-slot]') as HTMLElement;
+        const clientId = slot?.dataset.cfSlot;
+        if (!clientId) {
+          cfSetStatus(siteId, 'Could not resolve client.', 'error');
+          return;
+        }
+        cfSetStatus(siteId, 'Syncing 30 days…');
+        try {
+          const res = await fetch('/portal/api/admin/cloudflare/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ client_id: clientId, site_id: siteId, days: 30 }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data?.ok) {
+            const r = data.results?.[0];
+            if (r?.error) {
+              cfSetStatus(siteId, r.error, 'error');
+            } else {
+              cfSetStatus(siteId, `Synced ${r?.traffic_days || 0} traffic days, ${r?.security_days || 0} security days.`, 'ok');
+            }
+          } else {
+            cfSetStatus(siteId, data?.error || `HTTP ${res.status}`, 'error');
+          }
+        } catch (err: any) {
+          cfSetStatus(siteId, err?.message || 'Network error', 'error');
         }
       });
     });

@@ -31,6 +31,12 @@ export interface ClientSite {
   // it manually; the pricing pipeline falls back to the primary's
   // ecosystem when null.
   page_count: number | null;
+  // Cloudflare integration fields. Token presence exposed as a
+  // boolean only — never returns the token itself to anything
+  // outside the admin API endpoints.
+  cloudflare_zone_id: string | null;
+  cloudflare_token_set: boolean;
+  cloudflare_last_synced_at: string | null;
 }
 
 function rowToSite(row: any): ClientSite {
@@ -44,10 +50,13 @@ function rowToSite(row: any): ClientSite {
     sort_order: (row[6] as number) ?? 0,
     notes: (row[7] as string | null) ?? null,
     page_count: (row[8] as number | null) ?? null,
+    cloudflare_zone_id: (row[9] as string | null) ?? null,
+    cloudflare_token_set: !!(row[10] as string | null),
+    cloudflare_last_synced_at: (row[11] as string | null) ?? null,
   };
 }
 
-const SELECT_COLS = 'id, client_id, domain, is_primary, is_managed, label, sort_order, notes, page_count';
+const SELECT_COLS = 'id, client_id, domain, is_primary, is_managed, label, sort_order, notes, page_count, cloudflare_zone_id, cloudflare_api_token, cloudflare_last_synced_at';
 
 export async function listClientSites(clientId: string): Promise<ClientSite[]> {
   const result = await turso.execute({

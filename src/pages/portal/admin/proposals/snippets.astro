@@ -218,15 +218,17 @@ export const prerender = false;
       modal.classList.add('flex');
     }
 
-    document.getElementById('edit-modal-close').addEventListener('click', () => {
+    function closeModal() {
       modal.classList.add('hidden');
       modal.classList.remove('flex');
-    });
+    }
+    document.getElementById('edit-modal-close').addEventListener('click', closeModal);
     modal.addEventListener('click', (e) => {
-      if (e.target === modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-      }
+      if (e.target === modal) closeModal();
+    });
+    // Esc key closes the modal when it's open.
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
     });
 
     document.getElementById('edit-save').addEventListener('click', async () => {
@@ -288,12 +290,23 @@ export const prerender = false;
       }
     });
 
+    // Key format matches the server-side KEY_RE in save.ts: at least
+    // one product id (lowercase letters/digits/hyphens, '+' joined for
+    // combos), then ::ecosystem::urgency where ecosystem is A/B/C/*
+    // and urgency is tactical/growth/maintenance/*.
+    const CLIENT_KEY_RE = /^[a-z0-9+\-]+::([ABC]|\*)::(tactical|growth|maintenance|\*)$/;
+
     document.getElementById('new-snippet-create').addEventListener('click', async () => {
       const keyInput = document.getElementById('new-key');
       const statusInput = document.getElementById('new-snippet-status');
       const key = (keyInput.value || '').trim();
       if (!key) {
         statusInput.textContent = 'Key required.';
+        statusInput.className = 'text-[11px] font-mono ml-3 text-red-400';
+        return;
+      }
+      if (!CLIENT_KEY_RE.test(key)) {
+        statusInput.textContent = 'Format: product_combo::ecosystem::urgency (e.g., "web-management::B::tactical"). Ecosystem A/B/C/*, urgency tactical/growth/maintenance/*.';
         statusInput.className = 'text-[11px] font-mono ml-3 text-red-400';
         return;
       }

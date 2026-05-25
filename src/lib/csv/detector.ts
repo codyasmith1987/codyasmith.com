@@ -1,4 +1,5 @@
 import Papa from 'papaparse';
+import { ISSUE_CSV_FILENAME_MAP } from './parsers/issue-urls';
 
 export type CsvFormat =
   | 'position_tracking'
@@ -171,10 +172,6 @@ export function detectFormat(raw: string, filename: string): { format: CsvFormat
   // fallback so these route to the dedicated issue-urls parser that
   // populates site_issue_urls (and therefore the per-issue pop-out on
   // the health page).
-  // Match on the known map (imported lazily to avoid a circular
-  // dependency on the parser). The shape is { filename: issue_name }.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { ISSUE_CSV_FILENAME_MAP } = require('./parsers/issue-urls');
   if (ISSUE_CSV_FILENAME_MAP[normalizedName]) {
     return { format: 'issue_urls', headers: [] };
   }

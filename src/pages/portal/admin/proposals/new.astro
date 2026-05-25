@@ -1430,10 +1430,22 @@ const todayISO = new Date().toISOString().slice(0, 10);
         showMsg(`Created proposal. Redirecting...`, 'ok');
         setTimeout(() => { window.location.href = '/portal/admin/proposals'; }, 800);
       } else {
-        const msg = (data && data.error)
-          ? data.error
-          : `HTTP ${res.status}${rawText ? ': ' + rawText.slice(0, 140) : ''}`;
-        showMsg(msg, 'error');
+        // Voice-lint violations from the create endpoint render with
+        // per-field detail so admin sees exactly what rule fired and
+        // where. Cross-cutting D from the 2026-05-25 UI/UX audit.
+        if (res.status === 400 && data && Array.isArray(data.voice_violations) && data.voice_violations.length > 0) {
+          const parts = data.voice_violations.map(function(v) {
+            const rules = (v.violations || []).map(function(x) { return x.rule + ' matched "' + x.matched + '"'; }).join('; ');
+            const snippet = v.text.length > 100 ? v.text.slice(0, 100) + '…' : v.text;
+            return v.field + ': "' + snippet + '" — ' + rules;
+          }).join(' | ');
+          showMsg('Voice-lint failed. ' + parts, 'error');
+        } else {
+          const msg = (data && data.error)
+            ? data.error
+            : `HTTP ${res.status}${rawText ? ': ' + rawText.slice(0, 140) : ''}`;
+          showMsg(msg, 'error');
+        }
         draftBtn.disabled = false;
         pubBtn.disabled = false;
       }

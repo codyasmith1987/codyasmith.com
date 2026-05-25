@@ -93,6 +93,35 @@ export const POST: APIRoute = async ({ locals, request }) => {
       }
     }
     const overrides = (c.overrides && typeof c.overrides === 'object') ? c.overrides : {};
+
+    // Voice-lint admin-typed strings before persist. Catches em or en
+    // dashes, AI-template language, overclaim, drop-cap patterns,
+    // dangling tier references, etc. Same rules the snippet matrix
+    // editor enforces. Cross-cutting D from
+    // docs/audits/proposal-chain-ui-ux-audit-2026-05-25.md.
+    const { lintSnippet } = await import('../../../../../lib/proposal-ai/voice-lint');
+    type Violation = { field: string; text: string; violations: Array<{ rule: string; matched: string }> };
+    const voiceViolations: Violation[] = [];
+    const lintField = (label: string, value: any) => {
+      if (typeof value !== 'string') return;
+      const trimmed = value.trim();
+      if (!trimmed) return;
+      const result = lintSnippet(trimmed);
+      if (!result.ok) {
+        voiceViolations.push({ field: label, text: trimmed.slice(0, 200), violations: result.violations });
+      }
+    };
+    lintField('overrides.title', overrides.title);
+    lintField('overrides.prepared_for', overrides.prepared_for);
+    // narrative_variables.industry / urgency are picked from fixed
+    // lists so they don't need lint. Custom strings (if any field is
+    // free-text in narrative_variables) would lint here.
+    if (voiceViolations.length > 0) {
+      return json({
+        error: 'Voice-lint violations. Fix and re-submit.',
+        voice_violations: voiceViolations,
+      }, 400);
+    }
     // Engagement-strategy synthesis from the wizard's research panel
     // (subset of ClientResearchResult). Optional; absent on manual
     // composes that bypass the research step. Validated lightly here:

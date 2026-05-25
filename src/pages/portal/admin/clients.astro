@@ -106,6 +106,10 @@ function ecoChipLabel(pageCount: number | null): string {
           class="px-4 py-2 border border-white/10 text-neutral-300 text-xs rounded hover:border-red-500/30 hover:text-red-400 transition-colors">
           Clear token
         </button>
+        <button type="button" id="cf-sync-all"
+          class="px-4 py-2 border border-white/10 text-neutral-300 text-xs rounded hover:border-amber-500/30 hover:text-amber-600 transition-colors">
+          Sync all CF sites now
+        </button>
         <span id="cf-account-status" class="text-[11px] font-mono text-neutral-400"></span>
       </div>
 
@@ -630,6 +634,40 @@ function ecoChipLabel(pageCount: number | null): string {
     document.getElementById('cf-zone-browser-details')?.addEventListener('toggle', (e) => {
       const det = e.target as HTMLDetailsElement;
       if (det.open) loadZoneBrowser();
+    });
+
+    // Sync-all CF sites. Loops every site with a zone_id across all
+    // clients and pulls 30 days of CF data into local tables. Same
+    // endpoint a daily cron should hit if/when scheduled sync ships.
+    document.getElementById('cf-sync-all')?.addEventListener('click', async () => {
+      cfAccountStatus('Syncing all CF sites (30 days)…');
+      try {
+        const res = await fetch('/portal/api/admin/cloudflare/sync-all', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ days: 30 }),
+        });
+        const text = await res.text();
+        let data: any = {};
+        try { data = JSON.parse(text); }
+        catch {
+          cfAccountStatus(`HTTP ${res.status} non-JSON: ${text.slice(0, 100)}…`, 'error');
+          return;
+        }
+        if (res.ok && data?.ok) {
+          const errs = (data.results || []).filter((r: any) => r.error);
+          if (errs.length === 0) {
+            cfAccountStatus(`Synced ${data.synced} site(s).`, 'ok');
+          } else {
+            const errList = errs.map((e: any) => `${e.domain}: ${e.error}`).join('; ');
+            cfAccountStatus(`Synced ${data.synced}, ${data.failed} failed — ${errList}`, 'error');
+          }
+        } else {
+          cfAccountStatus(data?.error || `HTTP ${res.status}`, 'error');
+        }
+      } catch (err: any) {
+        cfAccountStatus(err?.message || 'Network error', 'error');
+      }
     });
 
     document.getElementById('cf-account-clear')?.addEventListener('click', async () => {

@@ -24,7 +24,12 @@ const agreementSummaries = await Promise.all(agreements.map(async a => {
   for (const s of signatures) if (!s.revoked_at) activeBySigner[s.signer_id] = s;
   return {
     ...a,
-    signers: signers.map(s => ({ id: s.id, name: s.name_snapshot, signed: !!activeBySigner[s.id] })),
+    signers: signers.map(s => ({
+      id: s.id,
+      name: s.name_snapshot,
+      signed: !!activeBySigner[s.id],
+      signed_at: activeBySigner[s.id]?.signed_at || null,
+    })),
   };
 }));
 
@@ -133,11 +138,14 @@ import { AGREEMENT_STATUS, badgeClass, lookupStatus, STATUS_PILL_BASE } from '..
                 <p class="text-xs text-neutral-500 mt-1">{a.title}</p>
 
                 {a.signers.length > 0 && (
-                  <div class="flex items-center gap-4 mt-3 text-xs">
+                  <div class="flex items-center gap-4 mt-3 text-xs flex-wrap">
                     {a.signers.map(s => (
                       <span class="flex items-center gap-1.5">
                         {s.signed ? <span class="text-emerald-400">✓</span> : <span class="text-neutral-400">○</span>}
                         <span class:list={[s.signed ? 'text-neutral-300' : 'text-neutral-400']}>{s.name}</span>
+                        {s.signed && s.signed_at && (
+                          <span class="text-[10px] font-mono text-neutral-500">{fmtDate(s.signed_at)}</span>
+                        )}
                       </span>
                     ))}
                   </div>

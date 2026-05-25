@@ -28,12 +28,36 @@ const clientRow = await turso.execute({
   args: [agreement.client_id],
 });
 const clientName = (clientRow.rows[0]?.[0] as string) || 'Unknown';
+const clientSlug = (clientRow.rows[0]?.[1] as string) || null;
 
+// If the agreement was generated from a proposal, look it up so the
+// breadcrumb can walk Client > Proposal > Agreement. Audit A9.
+let sourceProposal: { slug: string; title: string } | null = null;
+if (agreement.proposal_id) {
+  const propRow = await turso.execute({
+    sql: `SELECT slug, title FROM proposals WHERE id = ? LIMIT 1`,
+    args: [agreement.proposal_id],
+  });
+  if (propRow.rows.length > 0) {
+    sourceProposal = {
+      slug: String(propRow.rows[0][0]),
+      title: String(propRow.rows[0][1] || ''),
+    };
+  }
+}
+
+// Activity trail is capped at 200 most recent events. Most agreements
+// stay well under but a long-running engagement with many resigns +
+// schedule edits could exceed. Surfaced in the UI with a "truncated"
+// note when the cap is hit so admin knows to query the DB or audit
+// CSV export for the full history. Audit A7.
+const ACTIVITY_LIMIT = 200;
 const activityResult = await turso.execute({
-  sql: `SELECT id, user_id, action, summary, metadata, created_at FROM activity_log WHERE entity_type = 'agreement' AND entity_id = ? ORDER BY created_at DESC LIMIT 200`,
-  args: [agreement.id],
+  sql: `SELECT id, user_id, action, summary, metadata, created_at FROM activity_log WHERE entity_type = 'agreement' AND entity_id = ? ORDER BY created_at DESC LIMIT ?`,
+  args: [agreement.id, ACTIVITY_LIMIT + 1],
 });
-const activity = (activityResult.rows as any[]).map(r => ({
+const activityTruncated = activityResult.rows.length > ACTIVITY_LIMIT;
+const activity = (activityResult.rows as any[]).slice(0, ACTIVITY_LIMIT).map(r => ({
   id: r[0],
   user_id: r[1],
   action: r[2],
@@ -55,8 +79,22 @@ const csrfToken = Astro.locals.csrfToken || '';
 ---
 <Portal title={`Agreement: ${agreement.title}`}>
   <div class="max-w-4xl mx-auto">
-    <div class="mb-6">
-      <a href="/portal/admin/agreements" class="text-xs font-mono text-neutral-500 hover:text-amber-600 transition-colors">← Back to agreements</a>
+    <div class="mb-6 text-xs font-mono text-neutral-500">
+      <a href="/portal/admin/agreements" class="hover:text-amber-600 transition-colors">Admin / Agreements</a>
+      {clientSlug && (
+        <>
+          <span class="mx-2 text-neutral-600">/</span>
+          <a href={`/portal/admin/clients`} class="hover:text-amber-600 transition-colors">{clientName}</a>
+        </>
+      )}
+      {sourceProposal && (
+        <>
+          <span class="mx-2 text-neutral-600">/</span>
+          <a href={`/portal/proposals/${sourceProposal.slug}`} target="_blank" rel="noopener" class="hover:text-amber-600 transition-colors">{sourceProposal.title}</a>
+        </>
+      )}
+      <span class="mx-2 text-neutral-600">/</span>
+      <span class="text-neutral-300">{agreement.title}</span>
     </div>
 
     <div class="flex items-start justify-between gap-6 mb-8">
@@ -143,7 +181,7 @@ const csrfToken = Astro.locals.csrfToken || '';
         </div>
 
         <details class="border-t border-white/5 pt-4">
-          <summary class="cursor-pointer text-xs font-mono uppercase tracking-[0.18em] text-amber-600 mb-3">Audit trail · {signatures.length + activity.length} events</summary>
+          <summary class="cursor-pointer text-xs font-mono uppercase tracking-[0.18em] text-amber-600 mb-3">Audit trail · {signatures.length + activity.length} events{activityTruncated ? ` (showing most recent ${ACTIVITY_LIMIT}, export CSV for full history)` : ''}</summary>
           <div class="mt-3 space-y-2 font-mono text-[11px]">
             {signatures.map(sig => (
               <div class="p-2 bg-neutral-950/50 rounded">
@@ -167,6 +205,7 @@ const csrfToken = Astro.locals.csrfToken || '';
             <button type="button" id="verify-hashes-btn" class="px-3 py-1.5 bg-neutral-800/50 border border-white/10 rounded text-xs text-neutral-300 hover:bg-neutral-700/50 transition-colors">Verify hashes</button>
           </div>
           <pre id="verify-output" class="mt-3 hidden text-[10px] text-neutral-400 whitespace-pre-wrap"></pre>
+          <button type="button" id="download-hash-report" class="mt-2 px-3 py-1.5 bg-neutral-800/50 border border-white/10 rounded text-xs text-neutral-300 hover:bg-neutral-700/50 transition-colors hidden">Download hash report as JSON</button>
         </details>
       </section>
     </div>
@@ -352,15 +391,35 @@ const csrfToken = Astro.locals.csrfToken || '';
 
   var verifyBtn = document.getElementById('verify-hashes-btn');
   var verifyOutput = document.getElementById('verify-output');
+  var downloadHashBtn = document.getElementById('download-hash-report');
+  var lastHashReport = null;
   verifyBtn.addEventListener('click', function() {
     verifyBtn.disabled = true;
     verifyBtn.textContent = 'Verifying...';
     fetch('/portal/api/admin/agreements/' + slug + '/verify-hashes').then(function(r) { return r.json(); }).then(function(data) {
       verifyOutput.classList.remove('hidden');
       verifyOutput.textContent = JSON.stringify(data, null, 2);
+      lastHashReport = data;
+      if (downloadHashBtn) downloadHashBtn.classList.remove('hidden');
       verifyBtn.disabled = false;
       verifyBtn.textContent = 'Verify hashes';
     });
   });
+  // Audit A8: download the hash report as JSON for compliance audits
+  // so admin doesn't have to screenshot or copy-paste from the pre.
+  if (downloadHashBtn) {
+    downloadHashBtn.addEventListener('click', function() {
+      if (!lastHashReport) return;
+      var blob = new Blob([JSON.stringify(lastHashReport, null, 2)], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'hash-report-' + slug + '-' + new Date().toISOString().slice(0, 10) + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+  }
 })();
 </script>

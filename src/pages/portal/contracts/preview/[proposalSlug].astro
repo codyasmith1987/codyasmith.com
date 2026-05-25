@@ -115,6 +115,12 @@ const renderContext = {
   today: effectiveDate,
 };
 
+// Render in 'preview' mode. renderTemplate strips admin-only blocks
+// (<!-- internal:start --> ... <!-- internal:end -->) for both 'client'
+// and 'preview' status values, matching the run-contract-render-tests
+// assertion. This call site relies on that behavior so a preview can
+// safely be shared with the prospect from this URL without leaking
+// the practice's internal scoping notes. Audit PR1.
 const bodyHtml = renderTemplate(template.body_markdown, renderContext, 'preview');
 const scheduleAHtml = renderScheduleA(scheduleA, 'preview');
 
@@ -176,7 +182,7 @@ const pageTitle = renderedTitle;
 <body>
   <div class="preview-shell">
     <nav class="preview-nav">
-      <a href={`/portal/proposals/${proposalRow.slug}`}>← Back to proposal</a>
+      <a href={`/portal/proposals/${proposalRow.slug}`}>&larr; Back to proposal</a>
       <span>Preview &middot; not yet issued</span>
     </nav>
     <ContractRenderer

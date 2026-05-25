@@ -102,6 +102,24 @@ const productManifest = PRODUCT_ORDER.map(id => {
   };
 });
 
+// WM-specific pricing exposed for the BuildOption WM impact "calculate
+// for me" button. Per-tier monthly + onboarding bases per ecosystem
+// so the client-side calculator can apply the 2026-05-24 locked
+// 0.80 multi-site formula. Routing helper (page_count to ecosystem)
+// mirrored client-side. Future products can extend this pattern.
+const wmEcosystemPricing = Object.fromEntries(
+  Object.entries(PRODUCT_REGISTRY['web-management'].ecosystems).map(([eid, eco]: any) => [
+    eid,
+    Object.fromEntries(
+      Object.entries(eco.tiers).map(([tid, tier]: any) => [
+        tid,
+        { monthly: tier.monthly ?? 0, onb: tier.onb ?? 0, label: tier.name },
+      ])
+    ),
+  ])
+);
+const WM_MULTI_SITE_DISCOUNT = 0.80;
+
 const todayLong = new Date().toLocaleDateString('en-US', {
   year: 'numeric', month: 'long', day: 'numeric',
 });
@@ -356,7 +374,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
     </form>
   </div>
 
-  <script is:inline define:vars={{ todayLong, productManifest, usersByClient, latestTotalUrls, clientSitesByClient }}>
+  <script is:inline define:vars={{ todayLong, productManifest, usersByClient, latestTotalUrls, clientSitesByClient, wmEcosystemPricing, WM_MULTI_SITE_DISCOUNT }}>
     // =========================================================================
     // Wizard state
     // =========================================================================
@@ -1087,6 +1105,65 @@ const todayISO = new Date().toISOString().slice(0, 10);
       help.className = 'text-[11px] text-neutral-400 mb-3 leading-relaxed';
       help.textContent = 'Pre-compute the WM monthly + onboarding delta this option adds (e.g., a Tailwater micro-site at Eco A Better contributes about $397.60 monthly and $640 onboarding under the multi-site formula). Sites listed here also append to Schedule A.';
       wrap.appendChild(help);
+
+      // Auto-calculate button: sums each added site's contribution at
+      // the picked tier × 0.80 (multi-site additional factor) and
+      // writes the result into the monthly + onboarding inputs.
+      // Saves admin from doing the math by hand and stops them from
+      // typing a number that disagrees with the locked formula.
+      const calcWrap = document.createElement('div');
+      calcWrap.className = 'mb-3 flex items-center gap-3 flex-wrap';
+      const calcTierSel = document.createElement('select');
+      calcTierSel.className = 'px-2 py-1 bg-neutral-900/50 border border-white/10 rounded text-neutral-200 text-xs';
+      calcTierSel.innerHTML = '<option value="good">Good</option><option value="better" selected>Better</option><option value="best">Best</option>';
+      const calcBtn = document.createElement('button');
+      calcBtn.type = 'button';
+      calcBtn.className = 'text-[11px] px-3 py-1 bg-neutral-800 border border-white/10 rounded text-amber-600 hover:border-amber-500/40 transition-colors';
+      calcBtn.textContent = 'Calculate from sites added';
+      const calcStatus = document.createElement('span');
+      calcStatus.className = 'text-[11px] font-mono text-neutral-500';
+      calcWrap.appendChild(calcTierSel);
+      calcWrap.appendChild(calcBtn);
+      calcWrap.appendChild(calcStatus);
+      wrap.appendChild(calcWrap);
+
+      function routeWmEcoFromPages(pages) {
+        if (pages == null || !Number.isFinite(pages)) return null;
+        if (pages < 30) return 'A';
+        if (pages <= 150) return 'B';
+        return 'C';
+      }
+      calcBtn.addEventListener('click', () => {
+        const arr = Array.isArray(opt.wm_sites_added) ? opt.wm_sites_added : [];
+        if (arr.length === 0) {
+          calcStatus.textContent = 'No sites added yet.';
+          calcStatus.className = 'text-[11px] font-mono text-amber-700';
+          return;
+        }
+        const tierId = calcTierSel.value;
+        let monthlySum = 0;
+        let onbSum = 0;
+        let skipped = 0;
+        for (const site of arr) {
+          const pages = typeof site.page_count_estimate === 'number' ? site.page_count_estimate : null;
+          const eco = routeWmEcoFromPages(pages);
+          if (!eco || !wmEcosystemPricing[eco] || !wmEcosystemPricing[eco][tierId]) {
+            skipped++;
+            continue;
+          }
+          const tierPricing = wmEcosystemPricing[eco][tierId];
+          monthlySum += tierPricing.monthly * WM_MULTI_SITE_DISCOUNT;
+          onbSum += tierPricing.onb * WM_MULTI_SITE_DISCOUNT;
+        }
+        opt.wm_monthly_delta = Math.round(monthlySum * 100) / 100;
+        opt.wm_onboarding_delta = Math.round(onbSum * 100) / 100;
+        monthlyInput.value = String(opt.wm_monthly_delta);
+        onbInput.value = String(opt.wm_onboarding_delta);
+        const tierLabel = tierId.charAt(0).toUpperCase() + tierId.slice(1);
+        const skippedNote = skipped > 0 ? ` (${skipped} site(s) skipped — missing page count)` : '';
+        calcStatus.textContent = `At ${tierLabel}: +$${opt.wm_monthly_delta}/mo, +$${opt.wm_onboarding_delta} onb${skippedNote}`;
+        calcStatus.className = 'text-[11px] font-mono text-emerald-400';
+      });
 
       const grid = document.createElement('div');
       grid.className = 'grid grid-cols-2 gap-3 mb-3';

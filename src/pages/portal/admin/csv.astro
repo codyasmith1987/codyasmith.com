@@ -254,11 +254,37 @@ function formatLabel(format: string): string {
       // multipart body well under DO/CF size limits. The legacy
       // single-file path on the endpoint still works for direct
       // API callers.
-      const BATCH_SIZE = 2;
+      // Pack files into batches that stay under MAX_BATCH_BYTES per
+      // POST so we never trip the middleware's body-size cap. The
+      // server allows 25MB per CSV upload request; we cap at 8MB
+      // client-side to leave headroom for FormData overhead + the
+      // CSRF header. Falls back to one-file batches if a single file
+      // exceeds the cap (still works — the server allows up to 25MB).
+      const MAX_BATCH_BYTES = 8 * 1024 * 1024;
       const batches: File[][] = [];
-      for (let i = 0; i < files.length; i += BATCH_SIZE) {
-        batches.push(files.slice(i, i + BATCH_SIZE));
+      let currentBatch: File[] = [];
+      let currentBatchBytes = 0;
+      for (const f of files) {
+        const fileBytes = f.size || 0;
+        // Single oversize file gets its own batch.
+        if (fileBytes > MAX_BATCH_BYTES) {
+          if (currentBatch.length > 0) {
+            batches.push(currentBatch);
+            currentBatch = [];
+            currentBatchBytes = 0;
+          }
+          batches.push([f]);
+          continue;
+        }
+        if (currentBatchBytes + fileBytes > MAX_BATCH_BYTES && currentBatch.length > 0) {
+          batches.push(currentBatch);
+          currentBatch = [];
+          currentBatchBytes = 0;
+        }
+        currentBatch.push(f);
+        currentBatchBytes += fileBytes;
       }
+      if (currentBatch.length > 0) batches.push(currentBatch);
 
       const totalFiles = files.length;
       let completedFiles = 0;

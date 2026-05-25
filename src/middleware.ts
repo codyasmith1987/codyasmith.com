@@ -117,10 +117,21 @@ async function handleRequest(context: Parameters<Parameters<typeof defineMiddlew
   context.locals.csrfToken = generateCsrfToken(result.session!.id);
 
   // Reject oversized request bodies (1MB limit) on portal API routes
-  const MAX_BODY_SIZE = 1024 * 1024; // 1MB
+  // Default 1MB cap on portal API routes. CSV upload bumped to 25MB
+  // because SF folder uploads ship 2-file batches that can total
+  // 500KB-2MB; the strict 1MB cap was killing legitimate uploads
+  // with "Request body too large." CF Free plan allows up to 100MB
+  // and DO App Platform handles 25MB comfortably, so 25MB is well
+  // inside infrastructure limits.
+  const DEFAULT_PORTAL_API_MAX_BODY = 1024 * 1024;          // 1MB
+  const CSV_UPLOAD_MAX_BODY = 25 * 1024 * 1024;             // 25MB
+  const isCsvUpload = context.url.pathname === '/portal/api/csv/upload';
+  const maxBody = isCsvUpload ? CSV_UPLOAD_MAX_BODY : DEFAULT_PORTAL_API_MAX_BODY;
   const contentLength = parseInt(context.request.headers.get('content-length') || '0', 10);
-  if (contentLength > MAX_BODY_SIZE && context.url.pathname.startsWith('/portal/api/')) {
-    return new Response(JSON.stringify({ error: 'Request body too large' }), {
+  if (contentLength > maxBody && context.url.pathname.startsWith('/portal/api/')) {
+    return new Response(JSON.stringify({
+      error: `Request body too large (${Math.round(contentLength / 1024)}KB; max ${Math.round(maxBody / 1024)}KB for this endpoint)`,
+    }), {
       status: 413,
       headers: { 'Content-Type': 'application/json' },
     });

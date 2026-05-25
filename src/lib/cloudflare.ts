@@ -85,9 +85,11 @@ export async function fetchTrafficDaily(
 ): Promise<DailyTraffic[]> {
   // httpRequests1dGroups is deprecated and unavailable on Free plan
   // zones as of 2026. Using httpRequestsAdaptiveGroups instead, which
-  // is the modern replacement and works on all plans. Field shape is
-  // similar but pageViews isn't in this dataset so we report 0 — it
-  // wasn't surfaced on /portal/security anyway.
+  // is the modern replacement and works on all plans. The schema is
+  // different: count is the top-level request count (not sum.requests),
+  // bytes is sum.edgeResponseBytes (not sum.bytes), and threats lives
+  // only in firewallEventsAdaptiveGroups (the security query handles
+  // that). pageViews isn't in this dataset; report 0.
   const query = `
     query Traffic($zoneId: String!, $since: String!, $until: String!) {
       viewer {
@@ -97,13 +99,13 @@ export async function fetchTrafficDaily(
             filter: { date_geq: $since, date_leq: $until }
             orderBy: [date_ASC]
           ) {
+            count
             dimensions { date }
             sum {
-              requests
               cachedRequests
-              bytes
+              edgeResponseBytes
               cachedBytes
-              threats
+              visits
             }
           }
         }
@@ -114,12 +116,12 @@ export async function fetchTrafficDaily(
   const groups = data?.viewer?.zones?.[0]?.httpRequestsAdaptiveGroups || [];
   return groups.map((g: any) => ({
     date: g.dimensions.date,
-    requests: Number(g.sum?.requests) || 0,
+    requests: Number(g.count) || 0,
     cachedRequests: Number(g.sum?.cachedRequests) || 0,
-    bytes: Number(g.sum?.bytes) || 0,
+    bytes: Number(g.sum?.edgeResponseBytes) || 0,
     cachedBytes: Number(g.sum?.cachedBytes) || 0,
-    threats: Number(g.sum?.threats) || 0,
-    pageViews: 0,
+    threats: 0,
+    pageViews: Number(g.sum?.visits) || 0,
   }));
 }
 

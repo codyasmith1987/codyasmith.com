@@ -73,6 +73,43 @@ function ecoChipLabel(pageCount: number | null): string {
       <p id="client-msg" class="mt-4 text-sm hidden"></p>
     </form>
 
+    {/* Cloudflare account token. One token scoped to "All zones in
+        account, Analytics: Read" lets the portal auto-resolve a
+        zone ID for any client site whose hostname matches a zone in
+        the account. Per-site tokens on client_sites stay as
+        overrides for cross-account scenarios. */}
+    <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-10" id="cf-account-banner">
+      <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-3">Cloudflare account token</p>
+      <p class="text-xs text-neutral-400 leading-relaxed mb-5">
+        One token scoped to <span class="font-mono">Zone Analytics: Read</span> across all zones in your CF account.
+        Any client site whose hostname matches a zone in this account gets analytics automatically once you click
+        Auto-link below the client. Per-site tokens override the account token when set.
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+        <div class="sm:col-span-4">
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Label</label>
+          <input type="text" id="cf-account-label" placeholder="Cody A Smith LLC"
+            class="w-full px-3 py-2 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+        </div>
+        <div class="sm:col-span-8">
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">API token</label>
+          <input type="password" id="cf-account-token" placeholder="(unset — paste account-scoped token)" autocomplete="new-password"
+            class="w-full px-3 py-2 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
+        </div>
+      </div>
+      <div class="mt-4 flex flex-wrap items-center gap-3">
+        <button type="button" id="cf-account-save"
+          class="px-4 py-2 bg-amber-500 text-neutral-950 text-xs font-medium rounded hover:bg-amber-400 transition-colors">
+          Save and validate
+        </button>
+        <button type="button" id="cf-account-clear"
+          class="px-4 py-2 border border-white/10 text-neutral-300 text-xs rounded hover:border-red-500/30 hover:text-red-400 transition-colors">
+          Clear token
+        </button>
+        <span id="cf-account-status" class="text-[11px] font-mono text-neutral-400"></span>
+      </div>
+    </div>
+
     <!-- Client list -->
     {clients.length > 0 ? (
       <div class="space-y-3">
@@ -172,7 +209,18 @@ function ecoChipLabel(pageCount: number | null): string {
                   Cloudflare integration ({sitesByClient[client.id].filter(s => s.cloudflare_zone_id).length}/{sitesByClient[client.id].length} configured)
                 </summary>
                 <div class="mt-3 p-3 bg-neutral-900/40 border border-white/5 rounded-md space-y-4">
-                  <p class="text-[11px] text-neutral-400 leading-relaxed">Per-site Cloudflare zone ID + API token. Token should be scoped to <span class="font-mono">Zone Analytics:Read</span> only. After saving, click Test to verify the token reaches the zone, then Sync to pull the last 30 days. Data appears on /portal/security.</p>
+                  <p class="text-[11px] text-neutral-400 leading-relaxed">
+                    Set the account token at the top of this page once, then click Auto-link to resolve every site's hostname to a zone in your CF account.
+                    Per-site zone ID and token fields below are overrides — useful when a site lives in a different CF account from the one your account token can see.
+                    Data appears on <span class="font-mono">/portal/security</span> after Sync.
+                  </p>
+                  <div class="flex flex-wrap items-center gap-3 pb-2 border-b border-white/5">
+                    <button type="button" data-cf-auto-link={client.id}
+                      class="px-3 py-1.5 bg-amber-500 text-neutral-950 text-[11px] font-medium rounded hover:bg-amber-400 transition-colors">
+                      Auto-link this client's sites
+                    </button>
+                    <span data-cf-auto-link-status={client.id} class="text-[10px] font-mono text-neutral-400"></span>
+                  </div>
                   {sitesByClient[client.id].map(site => (
                     <div class="space-y-2 p-3 bg-neutral-900/30 border border-white/5 rounded" data-cf-site-row={site.id}>
                       <div class="flex items-center justify-between">
@@ -381,6 +429,136 @@ function ecoChipLabel(pageCount: number | null): string {
         }
       });
     });
+    // Account-level Cloudflare token UI. One row in
+    // cloudflare_account_config; the endpoint validates by hitting
+    // /zones before storing. After saving, the per-client Auto-link
+    // buttons (below) become useful.
+    function cfAccountStatus(text: string, kind: 'ok' | 'error' | 'info' = 'info') {
+      const el = document.getElementById('cf-account-status');
+      if (!el) return;
+      el.textContent = text;
+      el.className = 'text-[11px] font-mono ' + (
+        kind === 'ok' ? 'text-emerald-400' :
+        kind === 'error' ? 'text-red-400' :
+        'text-neutral-400'
+      );
+    }
+    async function loadCfAccountState() {
+      try {
+        const res = await fetch('/portal/api/admin/cloudflare/account');
+        if (!res.ok) return;
+        const data = await res.json();
+        const labelEl = document.getElementById('cf-account-label') as HTMLInputElement | null;
+        const tokenEl = document.getElementById('cf-account-token') as HTMLInputElement | null;
+        if (data?.configured) {
+          if (labelEl && data.label) labelEl.value = data.label;
+          if (tokenEl) tokenEl.placeholder = '(currently set — paste new to replace)';
+          const last = data.last_zone_list_synced_at ? ` (zones refreshed ${data.last_zone_list_synced_at})` : '';
+          cfAccountStatus('Connected' + last, 'ok');
+        } else {
+          cfAccountStatus('Not configured', 'info');
+        }
+      } catch {
+        // Silent — the banner just stays in its initial state.
+      }
+    }
+    loadCfAccountState();
+
+    document.getElementById('cf-account-save')?.addEventListener('click', async () => {
+      const labelEl = document.getElementById('cf-account-label') as HTMLInputElement;
+      const tokenEl = document.getElementById('cf-account-token') as HTMLInputElement;
+      const label = labelEl?.value?.trim() || '';
+      const apiToken = tokenEl?.value || '';
+      if (!apiToken) {
+        cfAccountStatus('Paste a token first.', 'error');
+        return;
+      }
+      cfAccountStatus('Validating with Cloudflare…');
+      try {
+        const res = await fetch('/portal/api/admin/cloudflare/account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ api_token: apiToken, label }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data?.ok) {
+          const sample = (data.sample_zones || []).slice(0, 3).join(', ');
+          const more = (data.zone_count || 0) > 3 ? `, +${data.zone_count - 3} more` : '';
+          cfAccountStatus(`Saved. ${data.zone_count} zones visible (${sample}${more}).`, 'ok');
+          if (tokenEl) tokenEl.value = ''; // keep it write-only after save
+          tokenEl.placeholder = '(currently set — paste new to replace)';
+        } else {
+          cfAccountStatus(data?.error || `HTTP ${res.status}`, 'error');
+        }
+      } catch (err: any) {
+        cfAccountStatus(err?.message || 'Network error', 'error');
+      }
+    });
+
+    document.getElementById('cf-account-clear')?.addEventListener('click', async () => {
+      const confirmed = await (window as any).__confirm({
+        title: 'Clear Cloudflare account token',
+        message: 'The portal will stop being able to auto-link sites. Per-site tokens stay in place.',
+        confirmText: 'Clear',
+      });
+      if (!confirmed) return;
+      cfAccountStatus('Clearing…');
+      try {
+        const res = await fetch('/portal/api/admin/cloudflare/account', {
+          method: 'DELETE',
+          headers: { 'X-CSRF-Token': csrfToken },
+        });
+        if (res.ok) {
+          cfAccountStatus('Cleared.', 'ok');
+          const tokenEl = document.getElementById('cf-account-token') as HTMLInputElement;
+          if (tokenEl) tokenEl.placeholder = '(unset — paste account-scoped token)';
+        } else {
+          const data = await res.json().catch(() => ({}));
+          cfAccountStatus(data?.error || `HTTP ${res.status}`, 'error');
+        }
+      } catch (err: any) {
+        cfAccountStatus(err?.message || 'Network error', 'error');
+      }
+    });
+
+    // Per-client auto-link button. POSTs the client_id; the endpoint
+    // resolves each site's hostname against the zones the account
+    // token can see and writes cloudflare_zone_id on matches.
+    document.querySelectorAll('[data-cf-auto-link]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const clientId = (btn as HTMLButtonElement).dataset.cfAutoLink!;
+        const statusEl = document.querySelector(`[data-cf-auto-link-status="${clientId}"]`) as HTMLElement | null;
+        const setStatus = (text: string, kind: 'ok' | 'error' | 'info' = 'info') => {
+          if (!statusEl) return;
+          statusEl.textContent = text;
+          statusEl.className = 'text-[10px] font-mono ' + (
+            kind === 'ok' ? 'text-emerald-400' :
+            kind === 'error' ? 'text-red-400' :
+            'text-neutral-400'
+          );
+        };
+        setStatus('Resolving zones…');
+        try {
+          const res = await fetch('/portal/api/admin/cloudflare/auto-link', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ client_id: clientId }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data?.ok) {
+            const m = data.matched?.length || 0;
+            const u = data.unmatched?.length || 0;
+            const unmatchedList = u > 0 ? ` Unmatched: ${data.unmatched.map((x: any) => x.domain).join(', ')}` : '';
+            setStatus(`Linked ${m} of ${m + u} sites.${unmatchedList} Reload to see the new zone IDs.`, m > 0 ? 'ok' : 'info');
+          } else {
+            setStatus(data?.error || `HTTP ${res.status}`, 'error');
+          }
+        } catch (err: any) {
+          setStatus(err?.message || 'Network error', 'error');
+        }
+      });
+    });
+
     document.querySelectorAll('[data-cf-sync]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const siteId = (btn as HTMLButtonElement).dataset.cfSync!;

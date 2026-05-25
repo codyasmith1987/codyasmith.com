@@ -60,25 +60,37 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const untilISO = yesterday.toISOString().replace(/\.\d{3}Z$/, 'Z').replace(/T.*$/, 'T23:59:59Z');
   const sinceISO = since.toISOString().replace(/\.\d{3}Z$/, 'Z').replace(/T.*$/, 'T00:00:00Z');
 
-  // Resolve which sites to sync.
+  // Account-level token fallback. If a site has its own
+  // cloudflare_api_token set, that wins; otherwise the account token
+  // is used. The auto-link flow at /portal/admin/clients sets
+  // cloudflare_zone_id from the account; sync just needs SOMETHING
+  // that can read the zone.
+  const accountCfgRes = await turso.execute({
+    sql: `SELECT api_token FROM cloudflare_account_config WHERE id = 'default'`,
+  });
+  const accountToken: string | null = accountCfgRes.rows.length > 0
+    ? String((accountCfgRes.rows[0] as any)[0])
+    : null;
+
+  // Resolve which sites to sync. Token requirement is RELAXED: a
+  // site needs cloudflare_zone_id, plus either its own token or the
+  // account token. The token resolution happens per row below.
   const sitesQuery = siteId
     ? `SELECT id, domain, cloudflare_zone_id, cloudflare_api_token
        FROM client_sites
        WHERE id = ? AND client_id = ?
-         AND cloudflare_zone_id IS NOT NULL
-         AND cloudflare_api_token IS NOT NULL`
+         AND cloudflare_zone_id IS NOT NULL`
     : `SELECT id, domain, cloudflare_zone_id, cloudflare_api_token
        FROM client_sites
        WHERE client_id = ?
-         AND cloudflare_zone_id IS NOT NULL
-         AND cloudflare_api_token IS NOT NULL`;
+         AND cloudflare_zone_id IS NOT NULL`;
   const sitesArgs = siteId ? [siteId, clientId] : [clientId];
 
   const sitesRes = await turso.execute({ sql: sitesQuery, args: sitesArgs });
   if (sitesRes.rows.length === 0) {
     return json({
       ok: false,
-      error: 'No client_sites rows configured with both cloudflare_zone_id and cloudflare_api_token.',
+      error: 'No client_sites rows have a cloudflare_zone_id set. Configure a zone manually, or set the account token and click Auto-link.',
     });
   }
 
@@ -87,7 +99,18 @@ export const POST: APIRoute = async ({ locals, request }) => {
     const sId = siteRow[0] as string;
     const domain = siteRow[1] as string;
     const zoneId = siteRow[2] as string;
-    const token = siteRow[3] as string;
+    const perSiteToken = siteRow[3] ? String(siteRow[3]) : null;
+    const token = perSiteToken || accountToken;
+    if (!token) {
+      results.push({
+        site_id: sId,
+        domain,
+        traffic_days: 0,
+        security_days: 0,
+        error: 'No token available — set the account token at the top of /portal/admin/clients, or paste a per-site token below.',
+      });
+      continue;
+    }
 
     try {
       // Traffic. Fetch + upsert daily rows.

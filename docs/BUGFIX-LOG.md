@@ -8,6 +8,22 @@ When working on the portal, **check this file before guessing at any auth, redir
 
 ---
 
+## 2026-05-25 — Cloudflare API calls fail intermittently with "Cannot use the access token from location: <IP>"
+
+**Symptom.** A portal endpoint that calls the Cloudflare API (via the `listZones` / `fetchTrafficDaily` / `fetchSecurityDaily` helpers in `src/lib/cloudflare.ts`) starts failing with CF API error code 9109: `Cannot use the access token from location: <some IP>`. The same code path worked moments earlier. The IP in the error message is a DigitalOcean App Platform container egress IP. May surface as a CF 504 HTML page reaching the browser because Cloudflare in front of `codyasmith.com` transforms 5xx origin responses to its own gateway-timeout page, swallowing the JSON error body. The endpoint's own logs in DO show the actual 403 from CF.
+
+**Root cause.** Cloudflare API tokens support an optional Client IP Address Filter (Token settings → Client IP Address Filtering). Tokens with a filter only work from the allow-listed IPs. DigitalOcean App Platform does NOT guarantee a stable egress IP for a container; the IP rotates whenever the container is recycled (deploy, scaling event, health-check recovery). Adding the current egress IP to the allow list fixes the symptom until the next container restart, then it breaks again with a different IP.
+
+**Fix.** Edit the CF API token, remove all entries from Client IP Address Filtering (leave the field empty so the filter is off entirely). The token scope (e.g. `Zone Analytics: Read on All zones from account: X`) is restriction enough. Do NOT pin to specific IPs even when "they look stable" — DO will rotate them.
+
+**Why this took two attempts.** First incident (token initially created with filter): added IP `147.182.177.9` to allow list. Worked. Second incident (after deploys recycled the container): IP rotated to `134.122.31.25`, token rejected again. Spent ~45 minutes chasing other theories (CF WAF blocking the URL path, listZones hanging, AJAX-specific headers, browser cache, JSON parse error) before the structured error logging in PR #128 finally surfaced the actual CF response.
+
+**Watch for.** If ANY CF API call fails after working earlier in the session, especially after a deploy or container restart, the FIRST hypothesis is the token's IP filter has rotated out of the allow list. The DO logs will show the actual CF error code 9109 with the new egress IP. Symptom in the browser may be misleading (CF 504 HTML) because CF transforms origin 5xx — return 200 with `ok: false` from API endpoints that call CF, so the JSON error body reaches the client.
+
+Related: when adding new API endpoints that wrap CF, return 200 + `ok: false` for non-fatal errors instead of 5xx, otherwise CF in front of the portal will mask the real error with its own gateway-timeout page.
+
+---
+
 ## 2026-05-24 — CSV upload errors with "require is not defined" on most files
 
 **Symptom.** Uploading a folder of Screaming Frog CSVs at `/portal/admin/csv` returns the error string `require is not defined` on almost every file. Only `crawl_overview.csv` parses successfully. Affects production after the deploy of PR #109 (Slice A no-rejection) which expanded the per-issue URL filename map.

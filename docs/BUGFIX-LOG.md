@@ -8,6 +8,18 @@ When working on the portal, **check this file before guessing at any auth, redir
 
 ---
 
+## 2026-05-24 — CSV upload errors with "require is not defined" on most files
+
+**Symptom.** Uploading a folder of Screaming Frog CSVs at `/portal/admin/csv` returns the error string `require is not defined` on almost every file. Only `crawl_overview.csv` parses successfully. Affects production after the deploy of PR #109 (Slice A no-rejection) which expanded the per-issue URL filename map.
+
+**Root cause.** `src/lib/csv/detector.ts:177` used a CommonJS `require('./parsers/issue-urls')` call to lazy-load `ISSUE_CSV_FILENAME_MAP`. The eslint-disable comment justified this as "imported lazily to avoid a circular dependency on the parser." That claim was wrong — `issue-urls.ts` only imports Papa, nanoid, and turso, not detector.ts. The `require()` shipped in the Astro standalone Node ESM bundle where `require` is not defined, so every file that fell through to the per-issue detection branch (anything that isn't crawl_overview, GA4, or GSC) crashed at that line. `crawl_overview.csv` worked because its detection happens earlier in the function and returns before reaching line 177.
+
+**Fix.** Replace the `require()` with a static ESM import at the top of `detector.ts`. PR #120.
+
+**Watch for.** If CSV uploads start failing with `require is not defined` after a parser-registry change, grep `src/lib/csv/` and `src/lib/proposal-ai/` for `require(` calls. The Astro standalone bundle does not shim CommonJS `require`. Any new parser added with `require()` instead of `import` will break the upload route the same way. The pattern to fix is "lazy require to dodge a circular import" — almost always there is no actual circle and a static ESM import is correct.
+
+---
+
 ## 2026-05-23 — Portal `/portal/set-password` redirect loop
 
 **Symptom.** Clicking a magic-link invite (or any other path to `/portal/set-password`) lands on an unstyled mostly-black page showing only the text "Redirecting from /portal/set-password to /portal/login," and the page keeps reloading. Affects incognito, fresh sessions, every browser. URL stays at `/portal/set-password` with the body showing the redirect message.

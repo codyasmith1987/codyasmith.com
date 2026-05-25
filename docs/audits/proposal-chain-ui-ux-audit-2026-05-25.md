@@ -229,8 +229,8 @@ All findings tracked here have shipped fixes in PRs #137-148. The exceptions are
 - **W15** (text-color hierarchy): deferred. Too subjective without a token system to standardize against. The Cody persona quiz palette (sun + mountain + spring + clouds) is the design vocabulary; standardizing requires extracting tokens first.
 - **AL3** (bulk operations on lists): deferred. Feature work, not polish. Worth scoping separately when the user volume justifies it.
 - **N2** (notification endpoint param shape): deferred. The current shared endpoint works for both audiences with the same param shape; the audit's recommendation to split into admin + client endpoints is a refactor without immediate user benefit.
-- **Cross-cutting B** (wizard auto-restore on reload): partial. Save + indicator + dismissible banner ship; full auto-restore requires per-product UI re-render wiring that warrants its own PR (PR #149 candidate).
-- **Cross-cutting E** (shared modal helper with focus trap): partial. Esc handlers added per-page (snippet editor + contracts new form). Shared helper extraction with focus trap is a separate refactor (PR #150 candidate).
+- **Cross-cutting B** (wizard auto-restore on reload): CLOSED in PR #150. Restore button on the autosave banner copies saved state onto live state, re-sets form inputs (client_id, narrative_variables, overrides), calls renderVars + renderDerivedDomains + syncOverrides. Best-effort. Toast notes that research/strategy/build options sections may need re-triggering since their re-hydration is more complex than v1 scope.
+- **Cross-cutting E** (shared modal helper with focus trap): focus trap + focus restoration CLOSED on the snippet editor modal in PR #151. Establishes the pattern template for other modals. The pure "shared helper extraction" (a `wireModal()` function importable across pages) is still deferred because the script-tag bundling pattern decision (is:inline + define:vars vs bundled imports) hasn't been finalized; current modals copy the ~30-line template.
 
 All other findings are closed. See the per-batch commit messages in PRs #137-148 for the implementation detail.
 

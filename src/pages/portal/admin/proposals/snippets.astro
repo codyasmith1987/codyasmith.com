@@ -175,7 +175,7 @@ export const prerender = false;
             ? '<span class="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-600 uppercase tracking-wide">DB only</span>'
             : s.source === 'both'
               ? '<span class="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-600 uppercase tracking-wide">DB overrides file</span>'
-              : '<span class="text-[10px] font-mono px-2 py-0.5 rounded bg-neutral-900 border border-white/10 text-neutral-400 uppercase tracking-wide">File baseline</span>';
+              : '<span class="text-[10px] font-mono px-2 py-0.5 rounded bg-neutral-900 border border-white/10 text-neutral-400 uppercase tracking-wide" title="No DB override. Composer reads this snippet from the version-controlled file registry.">File only</span>';
           return `
             <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5">
               <div class="flex items-center justify-between gap-4 flex-wrap">
@@ -250,10 +250,13 @@ export const prerender = false;
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.ok) {
           setStatus('Saved.', 'ok');
-          load();
+          // Defer the list refresh until AFTER the modal closes so
+          // the list refresh doesn't visibly flicker behind the
+          // still-open modal. Audit SN4.
           setTimeout(() => {
             modal.classList.add('hidden');
             modal.classList.remove('flex');
+            load();
           }, 700);
         } else {
           setStatus(data?.error || `HTTP ${res.status}`, 'error');

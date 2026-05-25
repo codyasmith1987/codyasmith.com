@@ -187,6 +187,20 @@ const csrfToken = Astro.locals.csrfToken || '';
     statusMsg.textContent = 'Saving...';
     statusMsg.className = 'text-sm text-neutral-400 mt-3';
     var payload = collectPayload();
+    // Duplicate-email check before send. Same email signing twice
+    // for one agreement isn't valid — UETA signatures bind a
+    // specific person. Audit A2.
+    var emailsLower = payload.signers.map(function(s) { return (s.email || '').toLowerCase(); }).filter(Boolean);
+    var seen = {};
+    for (var ei = 0; ei < emailsLower.length; ei++) {
+      var e = emailsLower[ei];
+      if (seen[e]) {
+        statusMsg.textContent = 'Duplicate signer email: "' + e + '". Each signer must have a unique email.';
+        statusMsg.className = 'text-sm text-red-400 mt-3';
+        return;
+      }
+      seen[e] = true;
+    }
     fetch('/portal/api/admin/agreements/', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-csrf-token': csrf },

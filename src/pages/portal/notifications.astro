@@ -55,14 +55,30 @@ const user = Astro.locals.user!;
           return;
         }
 
+        // Notification type icons. Mirrors admin/notifications.astro
+        // so client + admin notification surfaces render consistently.
+        // Audit N1.
+        const typeIcons: Record<string, string> = {
+          approval_requested: '\u{1F4CB}',
+          approval_responded: '✅',
+          milestone_completed: '\u{1F3C1}',
+          invoice_sent: '\u{1F4E8}',
+          payment_received: '\u{1F4B0}',
+          change_order_submitted: '\u{1F4DD}',
+          change_order_approved: '✅',
+          task_completed: '✔',
+          general: '\u{1F514}',
+        };
+
         const hasUnread = notifications.some((n: any) => !n.read);
         if (hasUnread) markAllBtn.classList.remove('hidden');
 
         list.innerHTML = notifications.map((n: any) => `
           <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 flex items-start gap-4 ${n.read ? 'opacity-50' : ''}" data-notif-id="${escapeHtml(n.id)}">
+            <span class="text-lg shrink-0">${escapeHtml(typeIcons[n.type] || typeIcons.general)}</span>
             <div class="flex-1 min-w-0">
               <div class="flex items-start justify-between gap-3">
-                <p class="text-sm font-medium text-neutral-200">${escapeHtml(n.title)}</p>
+                <p class="text-sm font-medium text-neutral-200 line-clamp-2">${escapeHtml(n.title)}</p>
                 ${!n.read ? `<button data-mark-read="${escapeHtml(n.id)}" class="text-[10px] text-neutral-400 hover:text-amber-600 transition-colors shrink-0">Mark read</button>` : ''}
               </div>
               ${n.body ? `<p class="text-xs text-neutral-500 mt-1">${escapeHtml(n.body)}</p>` : ''}

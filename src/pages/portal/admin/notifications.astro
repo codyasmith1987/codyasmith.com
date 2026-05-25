@@ -75,7 +75,7 @@ export const prerender = false;
             <span class="text-lg shrink-0">${escapeHtml(typeIcons[n.type] || typeIcons.general)}</span>
             <div class="flex-1 min-w-0">
               <div class="flex items-start justify-between gap-3">
-                <p class="text-sm font-medium text-neutral-200">${escapeHtml(n.title)}</p>
+                <p class="text-sm font-medium text-neutral-200 line-clamp-2">${escapeHtml(n.title)}</p>
                 ${!n.read ? `<button data-mark-read="${escapeHtml(n.id)}" class="text-[10px] text-neutral-400 hover:text-amber-600 transition-colors shrink-0">Mark read</button>` : ''}
               </div>
               ${n.body ? `<p class="text-xs text-neutral-500 mt-1">${escapeHtml(n.body)}</p>` : ''}

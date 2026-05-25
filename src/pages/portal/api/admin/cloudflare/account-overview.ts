@@ -62,11 +62,23 @@ export const GET: APIRoute = async ({ locals, url }) => {
       zones = await listZones(token);
       stepEnd('list_zones', t0);
     } catch (err: any) {
-      logger.error('[account-overview] list_zones failed', err);
+      const errPayload = {
+        name: err?.name,
+        message: err?.message,
+        detail: err?.detail,
+        stack: err?.stack?.split('\n').slice(0, 3).join(' | '),
+        raw: typeof err === 'string' ? err : JSON.stringify(err).slice(0, 1000),
+      };
+      logger.error(`[account-overview] list_zones failed: ${JSON.stringify(errPayload)}`);
+      // Return 200 not 502 because Cloudflare appears to transform
+      // 5xx origin responses to their own 504 HTML, swallowing the
+      // JSON. ok:false lets the client know it failed.
       return json({
-        error: `Step list_zones failed: ${err?.detail || err?.message || err}`,
+        ok: false,
+        step: 'list_zones',
+        error: errPayload,
         debug: { timings, overall_ms: Date.now() - overallStart },
-      }, 502);
+      }, 200);
     }
   }
 

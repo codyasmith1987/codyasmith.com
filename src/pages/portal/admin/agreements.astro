@@ -83,22 +83,26 @@ import { AGREEMENT_STATUS, badgeClass, lookupStatus, STATUS_PILL_BASE } from '..
       </a>
     </div>
 
-    {availableProposals.length > 0 && (
-      <div class="mb-8 p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl">
-        <p class="text-xs font-mono text-blue-300 mb-2 tracking-[0.18em] uppercase">Quick action</p>
-        <p class="text-sm text-neutral-300 mb-3">Issue agreement from a finalized proposal:</p>
-        <div class="flex flex-wrap gap-2">
-          {availableProposals.map(p => (
-            <a
-              href={`/portal/admin/agreements/new?proposal=${p.id}`}
-              class="px-3 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-md text-xs text-blue-300 hover:bg-blue-500/20 transition-colors"
-            >
-              {p.client_name}: {p.title}
-            </a>
-          ))}
-        </div>
-      </div>
-    )}
+    <div class="mb-8 p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl">
+      <p class="text-xs font-mono text-blue-300 mb-2 tracking-[0.18em] uppercase">Quick action</p>
+      {availableProposals.length > 0 ? (
+        <>
+          <p class="text-sm text-neutral-300 mb-3">Issue agreement from a finalized proposal:</p>
+          <div class="flex flex-wrap gap-2">
+            {availableProposals.map(p => (
+              <a
+                href={`/portal/admin/agreements/new?proposal=${p.id}`}
+                class="px-3 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-md text-xs text-blue-300 hover:bg-blue-500/20 transition-colors"
+              >
+                {p.client_name}: {p.title}
+              </a>
+            ))}
+          </div>
+        </>
+      ) : (
+        <p class="text-sm text-neutral-400">No proposals ready for agreement. A proposal becomes "ready" once a prospect has accepted it (status: finalized). <a href="/portal/admin/proposals" class="text-amber-600 hover:text-amber-400">View proposals →</a></p>
+      )}
+    </div>
 
     <details class="mb-6 group">
       <summary class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase cursor-pointer hover:text-amber-600 transition-colors duration-300 select-none">Status guide</summary>

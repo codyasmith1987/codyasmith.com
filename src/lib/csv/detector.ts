@@ -17,6 +17,11 @@ export type CsvFormat =
   | 'security_urls'
   | 'structured_data_urls'
   | 'issue_urls'
+  // Link-graph rows from SF *_inlinks, *_outlinks, all_anchor_text,
+  // and the issue-context-filtered inlinks variants. Each filename
+  // becomes its own source_file label inside link_graph, with
+  // per-source_file dedup handled by the parser.
+  | 'links'
   // GA4 export kinds — multi-block CSVs detected by filename, parsed
   // by the ga4.ts dispatcher. Each kind maps to its own database
   // table or a shared one (Reports snapshot fans out to ga4_topline +
@@ -163,6 +168,44 @@ export function detectFormat(raw: string, filename: string): { format: CsvFormat
     case 'search appearance.csv':  return { format: 'gsc_search_appearance', headers: [] };
     case 'chart.csv':              return { format: 'gsc_chart', headers: [] };
     case 'filters.csv':            return { format: 'gsc_filters', headers: [] };
+  }
+
+  // Screaming Frog search_console_all.csv. When SF's GSC API
+  // integration is connected the file adds Clicks/Impressions/CTR/
+  // Position columns; when it's not, the file is identical to the
+  // Internal HTML export (Address + Status Code + Title 1 +
+  // Indexability + Indexability Status). Either way we route it to
+  // the crawl_internal parser — the columns above are a strict
+  // subset of crawl_internal's hot columns, and any extra GSC
+  // metrics fall into raw_json for later extraction. Filename
+  // detection comes BEFORE the column-signature check so the file
+  // doesn't get false-mislabeled as 'crawl_internal' via the
+  // signature path (it routes there explicitly with the right
+  // label).
+  if (normalizedName === 'search_console_all.csv') {
+    return { format: 'crawl_internal', headers: [] };
+  }
+
+  // Screaming Frog link-relationship exports. All share the same
+  // (Source, Destination, Anchor, Status Code, ...) shape. Filename
+  // detection by suffix because the column-signature would have to
+  // overlap with crawl_internal heavily to be unique. Ordered
+  // BEFORE the issue-urls map check so we don't accidentally route
+  // links_internal_outlinks_with_no_anchor_text.csv to issue-urls
+  // when the link-graph view is the richer one. Catches:
+  //   - *_inlinks.csv (25+ context-filtered variants)
+  //   - *_outlinks.csv (absolute_outlinks, pathrelative_outlinks,
+  //     rootrelative_outlinks, internal_outlinks_with_no_anchor_text)
+  //   - all_anchor_text.csv
+  //   - links_all.csv
+  // The "issue_url" map files like h1_missing.csv have a different
+  // shape (Address-only) and stay routed there; the suffix check
+  // here is narrower than the map check.
+  if (normalizedName.endsWith('_inlinks.csv') ||
+      normalizedName.endsWith('_outlinks.csv') ||
+      normalizedName === 'all_anchor_text.csv' ||
+      normalizedName.startsWith('links_')) {
+    return { format: 'links', headers: [] };
   }
 
   // Per-issue URL exports from Screaming Frog. The filename matches a

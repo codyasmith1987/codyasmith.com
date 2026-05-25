@@ -530,7 +530,7 @@ function ecoChipLabel(pageCount: number | null): string {
       if (!listEl || !statusEl) return;
       statusEl.textContent = 'Loading zones…';
       try {
-        const res = await fetch('/portal/api/admin/cloudflare/zones-overview');
+        const res = await fetch('/portal/api/admin/cloudflare/account-overview');
         const text = await res.text();
         let data: any = {};
         try {
@@ -599,7 +599,7 @@ function ecoChipLabel(pageCount: number | null): string {
             statusEl.textContent = `Assigning ${zoneName}…`;
             statusEl.className = 'text-[11px] font-mono text-neutral-400 mb-3';
             try {
-              const res2 = await fetch('/portal/api/admin/cloudflare/assign-zone', {
+              const res2 = await fetch('/portal/api/admin/cloudflare/link-site', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
                 body: JSON.stringify({ zone_id: zoneId, zone_name: zoneName, client_id: clientId }),

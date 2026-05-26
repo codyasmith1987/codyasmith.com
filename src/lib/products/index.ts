@@ -302,6 +302,15 @@ function composeNarrative(args: ComposeNarrativeArgs): {
 
   // "What I see in your business" h2 with paragraphs.
   const seeParagraphs = contributions.flatMap(c => c.set.what_i_see_paragraphs || []);
+  // "Where the work is" h2 from synthesis internal_gaps. The buyer's
+  // own problems framed in Cody's voice, surfaced between his
+  // observation of their business and his recommended engagement.
+  // Per audit move 1: internal_gaps was being dropped at create.ts
+  // and never reached the buyer; this surfaces it.
+  const workParagraphs = composeWhereTheWorkIs({
+    engagementStrategy: args.engagementStrategy,
+    orderedProducts: args.orderedProducts,
+  });
   // "What I recommend" h2 with paragraphs.
   const recommendParagraphs = contributions.flatMap(c => c.set.what_i_recommend_paragraphs || []);
 
@@ -330,6 +339,9 @@ function composeNarrative(args: ComposeNarrativeArgs): {
   }
   if (seeParagraphs.length > 0) {
     sections.push({ h2: 'What I see in your business', paragraphs: seeParagraphs });
+  }
+  if (workParagraphs.length > 0) {
+    sections.push({ h2: 'Where the work is', paragraphs: workParagraphs });
   }
   if (recommendParagraphs.length > 0) {
     sections.push({ h2: 'What I recommend', paragraphs: recommendParagraphs });
@@ -416,6 +428,77 @@ function composeSituationOpener(args: {
     ? `One thing stood out looking at ${args.clientName}.`
     : `A few things stood out looking at ${args.clientName}.`;
   return [`${leadIn} ${angles.join(' ')}`];
+}
+
+// =========================================================================
+// "Where the work is" from synthesis internal_gaps
+// =========================================================================
+//
+// Renders the AI's identified internal_gaps as a buyer-facing
+// section between "What I see" and "What I recommend." High and
+// medium severity only; low gaps stay admin-side. Each gap reads
+// as one concrete thing the engagement addresses, with a soft
+// inline product attribution when known. Voice goal: name the
+// problem in Cody's framing, not "your site is broken."
+//
+// Per audit move 1. Previously internal_gaps was dropped at
+// create.ts:131-172 and never reached the composer.
+function composeWhereTheWorkIs(args: {
+  engagementStrategy?: EngagementStrategy | null;
+  orderedProducts: ProductId[];
+}): string[] {
+  const strategy = args.engagementStrategy;
+  if (!strategy || !Array.isArray(strategy.internal_gaps) || strategy.internal_gaps.length === 0) {
+    return [];
+  }
+  // Synthesis product id (web_management) -> wizard product short name.
+  const synthToShortName: Record<string, string> = {
+    web_management: 'Web Management',
+    marketing_consulting: 'Marketing Consulting',
+    build: 'Build',
+    training: 'Training',
+  };
+  const inScopeSynthIds = new Set<string>(
+    args.orderedProducts.map(id => {
+      if (id === 'web-management') return 'web_management';
+      if (id === 'marketing-consulting') return 'marketing_consulting';
+      if (id === 'build') return 'build';
+      if (id === 'training') return 'training';
+      return '';
+    }).filter(Boolean)
+  );
+
+  // Keep high + medium severity only; drop low (admin-only signal).
+  // Cap at five so the section stays scannable.
+  const kept = strategy.internal_gaps
+    .filter(g => g && (g.severity === 'high' || g.severity === 'medium'))
+    .filter(g => typeof g.gap === 'string' && g.gap.trim().length > 0)
+    .slice(0, 5);
+  if (kept.length === 0) return [];
+
+  const leadIn = kept.length === 1
+    ? `Here is one concrete thing the engagement addresses.`
+    : `Here are the concrete things the engagement addresses.`;
+
+  // Each gap renders as a single sentence. Cody-voice framing:
+  // describe the gap as a fact, attach the product that handles it
+  // when it maps cleanly to one in scope. Punctuation normalized so
+  // the AI's input doesn't double-period or run on.
+  const sentences: string[] = [];
+  for (const g of kept) {
+    const gapText = g.gap.trim().replace(/[.!?]+$/, '');
+    const productKey = g.product_implication;
+    let attribution = '';
+    if (productKey && productKey !== 'none' && inScopeSynthIds.has(productKey)) {
+      const productName = synthToShortName[productKey];
+      if (productName) {
+        attribution = ` <strong>${productName}</strong> handles this.`;
+      }
+    }
+    sentences.push(`${gapText}.${attribution}`);
+  }
+
+  return [`${leadIn} ${sentences.join(' ')}`];
 }
 
 // =========================================================================

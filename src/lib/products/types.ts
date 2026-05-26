@@ -290,11 +290,25 @@ export interface EngagementStrategyTierRec {
   rationale?: string;
 }
 
+// Concrete things that are broken or under-served on the prospect's
+// current site. Distinct from sales_angles (their pitch to customers);
+// this is what the data reveals they haven't said out loud. Drives the
+// "Where the work is" section on the proposal page so the buyer reads
+// their own problems in Cody's framing, not just his pitch.
+export type EngagementStrategyInternalGapSeverity = 'low' | 'medium' | 'high';
+export interface EngagementStrategyInternalGap {
+  gap: string;
+  evidence?: string;
+  severity: EngagementStrategyInternalGapSeverity;
+  product_implication?: EngagementStrategySynthProductId | 'none';
+}
+
 export interface EngagementStrategy {
   sales_angles: EngagementStrategySalesAngle[];
   clv_horizon?: 'long-term-stable' | 'medium-term' | 'churn-risk' | 'unknown' | null;
   cody_time_intensity?: 'low' | 'medium' | 'high' | null;
   recommended_tier_per_product?: Partial<Record<EngagementStrategySynthProductId, EngagementStrategyTierRec>>;
+  internal_gaps?: EngagementStrategyInternalGap[];
 }
 
 export interface ProductContext {

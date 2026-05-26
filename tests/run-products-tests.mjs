@@ -711,6 +711,71 @@ async function run() {
       return !!see && see.paragraphs.some(p => /heavy on cleanup|stabilizing what is already in place/i.test(p));
     })());
 
+  // (b.2) Move 1: internal_gaps surface as "Where the work is"
+  // section between "What I see" and "What I recommend." High +
+  // medium severity only; low gets dropped. Product attribution
+  // appears when in-scope.
+  const gapsConfig = composeProposal({
+    client: { id: 'cgap', name: 'Gap Co', slug: 'gap-co' },
+    signers: [{ id: 's1', name: 'Ana Lee', email: 'ana@gap.com' }],
+    products: ['web-management', 'marketing-consulting'],
+    product_vars: {
+      'web-management': { page_count: 80, site_count: 1 },
+      'marketing-consulting': { revenue_band: '1m-to-10m' },
+    },
+    engagement_strategy: {
+      sales_angles: [{ angle: 'They sell quality.', supporting_evidence: 'homepage hero' }],
+      internal_gaps: [
+        { gap: 'Privacy policy still shows 2022 copyright', evidence: 'footer scrape', severity: 'medium', product_implication: 'web_management' },
+        { gap: 'Product pages lack clear calls to action', evidence: 'pages all dead-end', severity: 'medium', product_implication: 'marketing_consulting' },
+        { gap: 'Typo on About page', evidence: 'paragraph 3', severity: 'low' },
+      ],
+    },
+  });
+  const workSection = gapsConfig.narrative.sections.find(s => s.h2 === 'Where the work is');
+  test('Move 1: "Where the work is" section renders when internal_gaps present',
+    !!workSection);
+  test('Move 1: section appears between "What I see" and "What I recommend"',
+    (() => {
+      const idxSee = gapsConfig.narrative.sections.findIndex(s => s.h2 === 'What I see in your business');
+      const idxWork = gapsConfig.narrative.sections.findIndex(s => s.h2 === 'Where the work is');
+      const idxRec = gapsConfig.narrative.sections.findIndex(s => s.h2 === 'What I recommend');
+      return idxSee < idxWork && idxWork < idxRec;
+    })());
+  test('Move 1: low-severity gaps are dropped',
+    (() => {
+      const text = (workSection?.paragraphs || []).join(' ');
+      return !text.toLowerCase().includes('typo');
+    })());
+  test('Move 1: medium and high severity gaps surface',
+    (() => {
+      const text = (workSection?.paragraphs || []).join(' ');
+      return /privacy policy/i.test(text) && /calls to action/i.test(text);
+    })());
+  test('Move 1: in-scope product attribution renders inline',
+    (() => {
+      const text = (workSection?.paragraphs || []).join(' ');
+      return /<strong>Web Management<\/strong>/.test(text) && /<strong>Marketing Consulting<\/strong>/.test(text);
+    })());
+  test('Move 1: no em or en dashes in the work section',
+    (() => {
+      const text = (workSection?.paragraphs || []).join(' ');
+      return !/[–—]/.test(text);
+    })());
+
+  // No internal_gaps = no "Where the work is" section.
+  const noGapsConfig = composeProposal({
+    client: { id: 'cnogap', name: 'No Gap Co', slug: 'no-gap-co' },
+    signers: [{ id: 's1', name: 'Ben Lee', email: 'ben@nogap.com' }],
+    products: ['web-management'],
+    product_vars: { 'web-management': { page_count: 80, site_count: 1 } },
+    engagement_strategy: {
+      sales_angles: [{ angle: 'Quality matters here.', supporting_evidence: 'hero text' }],
+    },
+  });
+  test('Move 1: no internal_gaps = no "Where the work is" section',
+    !noGapsConfig.narrative.sections.some(s => s.h2 === 'Where the work is'));
+
   // (c) composeProposal WITHOUT engagement_strategy still composes
   // cleanly (no opener; closer still renders; no errors).
   const noStrategyConfig = composeProposal({

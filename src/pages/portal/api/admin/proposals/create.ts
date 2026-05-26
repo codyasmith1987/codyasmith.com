@@ -163,11 +163,30 @@ export const POST: APIRoute = async ({ locals, request }) => {
         }
         if (Object.keys(cleaned).length > 0) recommended_tier_per_product = cleaned;
       }
+      // internal_gaps: concrete things broken or under-served on the
+      // prospect's current site. Validate shape, drop low-severity by
+      // default (the section keeps focus on high/medium), require
+      // gap text + valid severity, attach product_implication if
+      // it's a known product id. Per audit move 1.
+      const severitySet = new Set(['low', 'medium', 'high']);
+      const gapProductSet = new Set([...synthProductSet, 'none']);
+      const internal_gaps = Array.isArray(es.internal_gaps)
+        ? es.internal_gaps
+            .filter((g: any) => g && typeof g === 'object' && typeof g.gap === 'string' && g.gap.trim().length > 0)
+            .filter((g: any) => severitySet.has(g.severity))
+            .map((g: any) => ({
+              gap: String(g.gap).trim(),
+              evidence: typeof g.evidence === 'string' ? g.evidence.trim() : '',
+              severity: g.severity,
+              product_implication: gapProductSet.has(g.product_implication) ? g.product_implication : undefined,
+            }))
+        : [];
       engagement_strategy = {
         sales_angles,
         clv_horizon: typeof es.clv_horizon === 'string' && clvSet.has(es.clv_horizon) ? es.clv_horizon : null,
         cody_time_intensity: typeof es.cody_time_intensity === 'string' && intSet.has(es.cody_time_intensity) ? es.cody_time_intensity : null,
         recommended_tier_per_product,
+        internal_gaps,
       };
     }
 

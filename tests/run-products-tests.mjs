@@ -1066,6 +1066,59 @@ async function run() {
     })());
 
   // -------------------------------------------------------------------
+  // Move 8: per-product rationale appended to "What I recommend" from
+  // engagement_strategy.recommended_product_mix.
+  // -------------------------------------------------------------------
+  const mixCfg = composeProposal({
+    client: { id: 'mx1', name: 'Mix Co', slug: 'mix-co' },
+    signers: [{ id: 's1', name: 'Lo Lee', email: 'l@mix.com' }],
+    products: ['web-management', 'marketing-consulting'],
+    product_vars: {
+      'web-management': { page_count: 80, site_count: 1 },
+      'marketing-consulting': { revenue_band: '1m-to-10m' },
+    },
+    engagement_strategy: {
+      sales_angles: [{ angle: 'They sell quality.', supporting_evidence: 'hero' }],
+      recommended_product_mix: {
+        web_management: { recommended: true, rationale: 'The 80-page site needs steady upkeep and security coverage.', confidence: 'high' },
+        marketing_consulting: { recommended: true, rationale: 'Growth-mode messaging needs thinking-partner work on top of execution.', confidence: 'medium' },
+        build: { recommended: false, rationale: 'The current site is functional; no build is needed.', confidence: 'high' },
+      },
+    },
+  });
+  const recSection = mixCfg.narrative.sections.find(s => s.h2 === 'What I recommend');
+  test('Move 8: "Why Web Management?" paragraph appended to "What I recommend"',
+    !!recSection && recSection.paragraphs.some(p => p.includes('<strong>Why Web Management?</strong>') && p.includes('steady upkeep')));
+  test('Move 8: "Why Marketing Consulting?" paragraph appended',
+    !!recSection && recSection.paragraphs.some(p => p.includes('<strong>Why Marketing Consulting?</strong>') && p.includes('thinking-partner')));
+  test('Move 8: out-of-scope product (Build) is NOT included',
+    !!recSection && !recSection.paragraphs.some(p => p.includes('<strong>Why Build?</strong>')));
+  test('Move 8: rationale paragraphs end with sentence punctuation',
+    (() => {
+      const matches = (recSection?.paragraphs || []).filter(p => p.includes('<strong>Why '));
+      return matches.length > 0 && matches.every(p => /[.!?]$/.test(p));
+    })());
+  test('Move 8: confidence is NOT surfaced in buyer-facing copy',
+    (() => {
+      const all = JSON.stringify(mixCfg.narrative);
+      return !/confidence|high confidence|medium confidence/i.test(all);
+    })());
+
+  // No recommended_product_mix = no extra paragraphs appended.
+  const noMixCfg = composeProposal({
+    client: { id: 'mx2', name: 'No Mix Co', slug: 'no-mix-co' },
+    signers: [{ id: 's1', name: 'Lo Lee', email: 'l@nomix.com' }],
+    products: ['web-management'],
+    product_vars: { 'web-management': { page_count: 80, site_count: 1 } },
+    engagement_strategy: {
+      sales_angles: [{ angle: 'Quality matters.', supporting_evidence: 'hero' }],
+    },
+  });
+  const noMixRec = noMixCfg.narrative.sections.find(s => s.h2 === 'What I recommend');
+  test('Move 8: no recommended_product_mix = no "Why" paragraphs',
+    !!noMixRec && !noMixRec.paragraphs.some(p => p.includes('<strong>Why ')));
+
+  // -------------------------------------------------------------------
   // Move 5: AI rationale surfaces under Recommended pill on tier cards.
   // -------------------------------------------------------------------
   const rationaleCfg = composeProposal({

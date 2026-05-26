@@ -342,6 +342,15 @@ function composeNarrative(args: ComposeNarrativeArgs): {
   });
   // "What I recommend" h2 with paragraphs.
   const recommendParagraphs = contributions.flatMap(c => c.set.what_i_recommend_paragraphs || []);
+  // Per audit move 8: append per-product "Why I'm pitching X here"
+  // paragraphs from engagement_strategy.recommended_product_mix.
+  // Surfaces the AI's reasoning to the buyer instead of keeping it
+  // admin-only. Confidence stays admin-side; only rationale ships.
+  const mixRationaleParagraphs = composeWhyEachProduct({
+    engagementStrategy: args.engagementStrategy,
+    orderedProducts: args.orderedProducts,
+  });
+  for (const p of mixRationaleParagraphs) recommendParagraphs.push(p);
 
   // Closer: "How this works in practice." Constant boundary-setting
   // language that adapts to the product mix (not the strategy fields).
@@ -457,6 +466,51 @@ function composeSituationOpener(args: {
     ? `One thing stood out looking at ${args.clientName}.`
     : `A few things stood out looking at ${args.clientName}.`;
   return [`${leadIn} ${angles.join(' ')}`];
+}
+
+// =========================================================================
+// Per-product rationale from synthesis recommended_product_mix
+// =========================================================================
+//
+// For each in-scope product that has a non-empty rationale in the
+// synthesis, append a paragraph at the end of "What I recommend"
+// that names why that product is being pitched. Buyer reads
+// "<strong>Why Web Management?</strong> {rationale}" inline with
+// the rest of the recommendation section.
+//
+// Per audit move 8. Confidence is admin-only.
+function composeWhyEachProduct(args: {
+  engagementStrategy?: EngagementStrategy | null;
+  orderedProducts: ProductId[];
+}): string[] {
+  const strategy = args.engagementStrategy;
+  if (!strategy || !strategy.recommended_product_mix) return [];
+  // Synthesis product id (web_management) -> wizard product short name.
+  const synthToShortName: Record<string, string> = {
+    web_management: 'Web Management',
+    marketing_consulting: 'Marketing Consulting',
+    build: 'Build',
+    training: 'Training',
+  };
+  // Same map but reversed: wizard id -> synthesis id for lookup.
+  const wizardToSynth: Record<string, string> = {
+    'web-management': 'web_management',
+    'marketing-consulting': 'marketing_consulting',
+    'build': 'build',
+    'training': 'training',
+  };
+  const out: string[] = [];
+  for (const wizardId of args.orderedProducts) {
+    const synthId = wizardToSynth[wizardId];
+    if (!synthId) continue;
+    const rec = strategy.recommended_product_mix[synthId as EngagementStrategySynthProductId];
+    if (!rec || !rec.rationale || rec.rationale.trim().length === 0) continue;
+    const name = synthToShortName[synthId];
+    if (!name) continue;
+    const cleaned = rec.rationale.trim().replace(/[.!?]+$/, '') + '.';
+    out.push(`<strong>Why ${name}?</strong> ${cleaned}`);
+  }
+  return out;
 }
 
 // =========================================================================

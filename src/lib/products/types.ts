@@ -326,11 +326,23 @@ export interface EngagementStrategyPersonaAxes {
   stars_clouds?: 'stars' | 'clouds' | null;
 }
 
+// AI's per-product recommendation with rationale. Per audit move 8:
+// the rationale flows to the buyer-facing proposal as a "Why I'm
+// recommending each piece" paragraph at the bottom of "What I
+// recommend." Confidence is kept admin-side (telling a buyer "I'm
+// not sure about this" undercuts the pitch).
+export interface EngagementStrategyProductMixRec {
+  recommended: boolean;
+  rationale?: string;
+  confidence?: 'low' | 'medium' | 'high';
+}
+
 export interface EngagementStrategy {
   sales_angles: EngagementStrategySalesAngle[];
   clv_horizon?: 'long-term-stable' | 'medium-term' | 'churn-risk' | 'unknown' | null;
   cody_time_intensity?: 'low' | 'medium' | 'high' | null;
   recommended_tier_per_product?: Partial<Record<EngagementStrategySynthProductId, EngagementStrategyTierRec>>;
+  recommended_product_mix?: Partial<Record<EngagementStrategySynthProductId, EngagementStrategyProductMixRec>>;
   internal_gaps?: EngagementStrategyInternalGap[];
   persona_axes?: EngagementStrategyPersonaAxes | null;
 }

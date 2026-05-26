@@ -181,11 +181,31 @@ export const POST: APIRoute = async ({ locals, request }) => {
               product_implication: gapProductSet.has(g.product_implication) ? g.product_implication : undefined,
             }))
         : [];
+      // Per audit move 8: recommended_product_mix carries per-product
+      // rationale + confidence from the AI synthesis. Validate shape,
+      // drop unrecognized product ids, surface rationale to the
+      // composer so it can render the "Why each piece" paragraphs.
+      let recommended_product_mix: any = null;
+      if (es.recommended_product_mix && typeof es.recommended_product_mix === 'object') {
+        const confSet = new Set(['low', 'medium', 'high']);
+        const cleaned: Record<string, any> = {};
+        for (const [k, v] of Object.entries(es.recommended_product_mix as Record<string, any>)) {
+          if (!synthProductSet.has(k)) continue;
+          if (!v || typeof v !== 'object') continue;
+          cleaned[k] = {
+            recommended: !!v.recommended,
+            rationale: typeof v.rationale === 'string' ? v.rationale.trim() : undefined,
+            confidence: confSet.has(v.confidence) ? v.confidence : undefined,
+          };
+        }
+        if (Object.keys(cleaned).length > 0) recommended_product_mix = cleaned;
+      }
       engagement_strategy = {
         sales_angles,
         clv_horizon: typeof es.clv_horizon === 'string' && clvSet.has(es.clv_horizon) ? es.clv_horizon : null,
         cody_time_intensity: typeof es.cody_time_intensity === 'string' && intSet.has(es.cody_time_intensity) ? es.cody_time_intensity : null,
         recommended_tier_per_product,
+        recommended_product_mix,
         internal_gaps,
       };
     }

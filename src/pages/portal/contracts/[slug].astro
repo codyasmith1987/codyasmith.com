@@ -87,19 +87,47 @@ const myEmailLc = (user.email || '').toLowerCase().trim();
 const meSigner = signers.find(s => s.email_snapshot.toLowerCase() === myEmailLc);
 const myActiveSig = meSigner ? activeBySigner[meSigner.id] : null;
 
+// Per audit move 10: derive sensible defaults for intake fields
+// from what the system already knows about this client. When
+// client_metadata exists from a prior agreement, that wins. For
+// first-time clients (no prior metadata), fall back to:
+//   - legal_entity_name <- clients.name
+//   - primary_contact_name <- first agreement signer name
+//   - primary_contact_email <- first agreement signer email
+// Reduces friction at signature time and signals "I already know
+// who you are" before asking them to retype it.
+const firstSigner = signers.find(s => s.signer_role === 'client') || signers[0] || null;
+const intakeDefaults = {
+  legal_entity_name: clientMetadata?.legal_entity_name || clientFallbackName,
+  entity_type: clientMetadata?.entity_type || undefined,
+  state_of_organization: clientMetadata?.state_of_organization || undefined,
+  primary_contact_name: clientMetadata?.primary_contact_name || (firstSigner?.name_snapshot || undefined),
+  primary_contact_title: clientMetadata?.primary_contact_title || undefined,
+  primary_contact_email: clientMetadata?.primary_contact_email || (firstSigner?.email_snapshot || undefined),
+  primary_contact_phone: clientMetadata?.primary_contact_phone || undefined,
+  principal_address: clientMetadata?.principal_address || undefined,
+  notice_address: clientMetadata?.notice_address || undefined,
+};
+
 // Intake completeness.
 const requiredIntakeFields = [
-  { id: 'legal_entity_name', label: 'Legal entity name', value: clientMetadata?.legal_entity_name, required: true, type: 'text' },
-  { id: 'entity_type', label: 'Entity type (LLC, S-corp, etc.)', value: clientMetadata?.entity_type, required: false, type: 'text' },
-  { id: 'state_of_organization', label: 'State of organization', value: clientMetadata?.state_of_organization, required: false, type: 'text' },
-  { id: 'primary_contact_name', label: 'Primary contact name', value: clientMetadata?.primary_contact_name, required: false, type: 'text' },
-  { id: 'primary_contact_title', label: 'Primary contact title', value: clientMetadata?.primary_contact_title, required: false, type: 'text' },
-  { id: 'primary_contact_email', label: 'Primary contact email', value: clientMetadata?.primary_contact_email, required: true, type: 'email' },
-  { id: 'primary_contact_phone', label: 'Primary contact phone', value: clientMetadata?.primary_contact_phone, required: false, type: 'tel' },
-  { id: 'principal_address', label: 'Principal address', value: clientMetadata?.principal_address, required: false, type: 'textarea' },
-  { id: 'notice_address', label: 'Notice address (if different)', value: clientMetadata?.notice_address, required: false, type: 'textarea' },
+  { id: 'legal_entity_name', label: 'Legal entity name', value: intakeDefaults.legal_entity_name, required: true, type: 'text' },
+  { id: 'entity_type', label: 'Entity type (LLC, S-corp, etc.)', value: intakeDefaults.entity_type, required: false, type: 'text' },
+  { id: 'state_of_organization', label: 'State of organization', value: intakeDefaults.state_of_organization, required: false, type: 'text' },
+  { id: 'primary_contact_name', label: 'Primary contact name', value: intakeDefaults.primary_contact_name, required: false, type: 'text' },
+  { id: 'primary_contact_title', label: 'Primary contact title', value: intakeDefaults.primary_contact_title, required: false, type: 'text' },
+  { id: 'primary_contact_email', label: 'Primary contact email', value: intakeDefaults.primary_contact_email, required: true, type: 'email' },
+  { id: 'primary_contact_phone', label: 'Primary contact phone', value: intakeDefaults.primary_contact_phone, required: false, type: 'tel' },
+  { id: 'principal_address', label: 'Principal address', value: intakeDefaults.principal_address, required: false, type: 'textarea' },
+  { id: 'notice_address', label: 'Notice address (if different)', value: intakeDefaults.notice_address, required: false, type: 'textarea' },
 ];
-const missingIntake = requiredIntakeFields.filter(f => !f.value);
+// "Missing" tracks fields the user must EXPLICITLY confirm. A
+// derived signer-name fallback or clients.name fallback is a useful
+// default but the client should sign off on it before we treat the
+// intake as complete. So "missing" means "no true client_metadata
+// value yet" — derived defaults still show the field pre-filled so
+// the client can confirm or correct.
+const missingIntake = requiredIntakeFields.filter(f => !(clientMetadata as any)?.[f.id]);
 const intakeComplete = Boolean(clientMetadata?.legal_entity_name && clientMetadata?.primary_contact_email);
 
 // Status banner.

@@ -211,6 +211,11 @@ export function composeProposal(args: ComposeArgs): ProposalConfig {
     // persona_axes (from move 3 lead_personas join), and the like.
     // Per audit move 3.
     engagement_strategy: engagementStrategy || undefined,
+    // Per ClickUp 86ba3ww35 fix: snapshot managedSites at compose time
+    // so composePricing (proposal-page price path) routes each site to
+    // its own ecosystem the same way Schedule A does. Without this,
+    // multi-site WM totals diverged between proposal page and contract.
+    managed_sites: args.managedSites && args.managedSites.length > 0 ? args.managedSites : undefined,
   };
 }
 
@@ -765,6 +770,14 @@ export function composePricing(args: {
   const productVars = args.config.product_vars || {};
   if (!products || products.length === 0) return null;
 
+  // Per ClickUp 86ba3ww35 fix: thread the managed_sites snapshot
+  // and engagement_strategy that compose-time persisted onto the
+  // config so this pricing path matches what Schedule A produces.
+  // Without these, multi-site WM totals fell back to single-eco
+  // and disagreed with the contract for any client with 2+ sites.
+  const managedSites = args.config.managed_sites;
+  const engagementStrategy = args.config.engagement_strategy ?? null;
+
   let monthly = 0;
   let oneTime = 0;
   const breakdown: Array<{ label: string; amount: number }> = [];
@@ -774,12 +787,16 @@ export function composePricing(args: {
     selections: args.selections,
     productVars,
     products,
+    managedSites,
+    engagementStrategy,
   });
   const mcCtx = buildContextForProduct({
     id: 'marketing-consulting',
     selections: args.selections,
     productVars,
     products,
+    managedSites,
+    engagementStrategy,
   });
 
   // Iterate products in order, accumulating.
@@ -796,6 +813,8 @@ export function composePricing(args: {
       selections: args.selections,
       productVars,
       products,
+      managedSites,
+      engagementStrategy,
     });
     const contribution = product.computePricing(ctx);
     monthly += contribution.monthly;
@@ -885,6 +904,19 @@ function buildContextForProduct(args: {
   selections: Record<string, string | null>;
   productVars: Record<ProductId, ProductVariables>;
   products: ProductId[];
+  // Per ClickUp 86ba3ww35 fix: thread managedSites so WM's
+  // computePricing produces per-site routed totals on the proposal
+  // page (was falling back to single-eco for multi-site clients,
+  // causing the proposal page price to disagree with Schedule A).
+  managedSites?: Array<{
+    domain: string;
+    label?: string | null;
+    is_primary?: boolean;
+    page_count?: number | null;
+  }>;
+  // Engagement strategy too — same gap (some snippets read it,
+  // dispatcher path was dropping it).
+  engagementStrategy?: EngagementStrategy | null;
 }): ProductContext {
   const product = PRODUCT_REGISTRY[args.id];
   const variables = args.productVars[args.id] || {};
@@ -929,6 +961,8 @@ function buildContextForProduct(args: {
     otherProducts,
     selections: args.selections,
     allProductVars: args.productVars,
+    managedSites: args.managedSites,
+    engagementStrategy: args.engagementStrategy ?? null,
   };
 }
 

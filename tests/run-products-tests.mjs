@@ -1066,6 +1066,81 @@ async function run() {
     })());
 
   // -------------------------------------------------------------------
+  // ClickUp 86ba3ww35 fix: composePricing now reads managed_sites
+  // snapshot from config and threads it through buildContextForProduct,
+  // matching what Schedule A does. Verifies proposal-page pricing
+  // does NOT diverge from Schedule A for multi-site clients.
+  // -------------------------------------------------------------------
+  const multiSiteCfg = composeProposal({
+    client: { id: 'ms1', name: 'Multi Site Co', slug: 'multi-site-co' },
+    signers: [{ id: 's1', name: 'Mo Lee', email: 'm@ms.com' }],
+    products: ['web-management'],
+    product_vars: { 'web-management': { page_count: 80, site_count: 2 } },
+    managedSites: [
+      { domain: 'main.example.com', label: null, is_primary: true, page_count: 80 },
+      { domain: 'micro.example.com', label: null, is_primary: false, page_count: 15 },
+    ],
+  });
+  test('composePricing fix: managed_sites snapshot persists on config',
+    Array.isArray(multiSiteCfg.managed_sites) && multiSiteCfg.managed_sites.length === 2);
+
+  const proposalPagePricing = computePricing(
+    multiSiteCfg.pricing_formula,
+    { wm_tier: 'better' },
+    multiSiteCfg,
+  );
+  const parityScheduleA = buildScheduleA({
+    proposalConfig: multiSiteCfg,
+    draftSelections: { wm_tier: 'better' },
+    pricing: proposalPagePricing,
+    clientMetadata: {
+      legal_entity_name: 'Multi Site Co',
+      entity_type: 'limited liability company',
+      state_of_organization: 'Utah',
+      primary_contact_name: 'Mo Lee',
+      primary_contact_email: 'm@ms.com',
+      primary_contact_role: 'Owner',
+      principal_office_address: '1 Test St, Test City, UT 84720',
+    },
+    effectiveDate: '2026-05-26',
+    managedSites: [
+      { domain: 'main.example.com', label: null, is_primary: true, page_count: 80 },
+      { domain: 'micro.example.com', label: null, is_primary: false, page_count: 15 },
+    ],
+  });
+  const scheduleMonthly = parityScheduleA.web_management?.monthly_total;
+  // Schedule A rounds to whole dollars; composePricing keeps cents.
+  // The fix's goal is that BOTH paths use per-site routing (not that
+  // they're penny-identical). Rounded equality is the real check —
+  // before the fix, composePricing fell back to single-eco and the
+  // gap was hundreds of dollars per month, not a rounding penny.
+  test('composePricing fix: proposal-page WM monthly == Schedule A WM monthly (multi-site, rounded)',
+    proposalPagePricing &&
+    typeof scheduleMonthly === 'number' &&
+    Math.round(proposalPagePricing.monthly) === scheduleMonthly,
+    `proposal=${proposalPagePricing?.monthly} schedule=${scheduleMonthly}`);
+  test('composePricing fix: proposal-page total uses per-site routing (not single-eco fallback)',
+    proposalPagePricing &&
+    // Single-eco fallback would be 1 site at $797 = $797; per-site for
+    // 80+15 pages at Eco A + B should land near $1,194-1,195.
+    proposalPagePricing.monthly > 1000,
+    `got monthly=${proposalPagePricing?.monthly}`);
+
+  const singleCfg = composeProposal({
+    client: { id: 'ss1', name: 'Single Site Co', slug: 'single-site-co' },
+    signers: [{ id: 's1', name: 'So Lee', email: 's@ss.com' }],
+    products: ['web-management'],
+    product_vars: { 'web-management': { page_count: 80, site_count: 1 } },
+  });
+  const singlePricing = computePricing(
+    singleCfg.pricing_formula,
+    { wm_tier: 'better' },
+    singleCfg,
+  );
+  test('composePricing fix: single-site case unchanged (no regression)',
+    singlePricing?.monthly === 797, `got ${singlePricing?.monthly}`);
+
+  // -------------------------------------------------------------------
   // Move 9: per-product sales-angle line prepended to "What I
   // recommend" from sales_angles[].product_implication.
   // -------------------------------------------------------------------

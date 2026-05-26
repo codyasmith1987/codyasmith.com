@@ -479,6 +479,17 @@ export interface ProposalConfig {
   // persona-aware variants, admin re-render) can access the
   // structured per-prospect signals that drove this proposal.
   engagement_strategy?: EngagementStrategy | null;
+  // Per ClickUp 86ba3ww35 fix: snapshot managedSites at compose time
+  // so composePricing (the proposal-page price path) routes each site
+  // to its own ecosystem the same way Schedule A does. Without this
+  // snapshot, the proposal-page WM total fell back to single-eco for
+  // multi-site clients and disagreed with the contract's Schedule A.
+  managed_sites?: Array<{
+    domain: string;
+    label?: string | null;
+    is_primary?: boolean;
+    page_count?: number | null;
+  }>;
 }
 
 export interface NarrativeVariables {

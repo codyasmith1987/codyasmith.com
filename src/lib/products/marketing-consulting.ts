@@ -234,7 +234,7 @@ export function routeMarketingConsultingEcosystem(revenueBand: string | null): E
 // Step generation
 // =========================================================================
 
-function buildTierOption(tierId: TierId, ecosystem: Ecosystem, aiRecommendedTier?: TierId | null): ProposalStepOption {
+function buildTierOption(tierId: TierId, ecosystem: Ecosystem, aiRecommendedTier?: TierId | null, aiRecommendedRationale?: string): ProposalStepOption {
   const tier = ecosystem.tiers[tierId];
   // AI's per-prospect tier recommendation overrides the static product
   // default (Better is recommended at every ecosystem). When no AI rec
@@ -243,11 +243,17 @@ function buildTierOption(tierId: TierId, ecosystem: Ecosystem, aiRecommendedTier
   const recommended = aiRecommendedTier
     ? aiRecommendedTier === tierId
     : !!tier.recommended;
+  // Per audit move 5: surface AI rationale on the recommended card.
+  const showRationale = aiRecommendedTier
+    && aiRecommendedTier === tierId
+    && typeof aiRecommendedRationale === 'string'
+    && aiRecommendedRationale.trim().length > 0;
   return {
     id: tierId,
     name: tier.name,
     tagline: tier.tagline,
     recommended,
+    recommended_rationale: showRationale ? aiRecommendedRationale!.trim() : undefined,
     price_label: formatMoney(tier.monthly || 0),
     price_suffix: '/ month',
     price_subline: `${formatMoney(tier.audit || 0)} audit at signing, ${ecosystem.label}`,
@@ -329,6 +335,8 @@ export const marketingConsultingProduct: ProductDefinition = {
     const aiRecommendedTier = aiTier === 'good' || aiTier === 'better' || aiTier === 'best'
       ? aiTier as TierId
       : null;
+    // Per audit move 5: AI rationale on the recommended card.
+    const aiRecommendedRationale = ctx.engagementStrategy?.recommended_tier_per_product?.marketing_consulting?.rationale;
 
     // If MC is the only product in scope, present a single tier_picker.
     // If other products are also in scope, present a yes/no first
@@ -345,9 +353,9 @@ export const marketingConsultingProduct: ProductDefinition = {
           h2: 'Pick a Marketing Consulting level',
           prompt: `Good, Better, or Best for Marketing Consulting. The level sets the cadence and depth of the strategic cycle.`,
           options: [
-            buildTierOption('good', eco, aiRecommendedTier),
-            buildTierOption('better', eco, aiRecommendedTier),
-            buildTierOption('best', eco, aiRecommendedTier),
+            buildTierOption('good', eco, aiRecommendedTier, aiRecommendedRationale),
+            buildTierOption('better', eco, aiRecommendedTier, aiRecommendedRationale),
+            buildTierOption('best', eco, aiRecommendedTier, aiRecommendedRationale),
           ],
         },
       ];
@@ -380,9 +388,9 @@ export const marketingConsultingProduct: ProductDefinition = {
         depends_on: 'mc_yes_no',
         show_when: { mc_yes_no: 'yes' },
         options: [
-          buildTierOption('good', eco, aiRecommendedTier),
-          buildTierOption('better', eco, aiRecommendedTier),
-          buildTierOption('best', eco, aiRecommendedTier),
+          buildTierOption('good', eco, aiRecommendedTier, aiRecommendedRationale),
+          buildTierOption('better', eco, aiRecommendedTier, aiRecommendedRationale),
+          buildTierOption('best', eco, aiRecommendedTier, aiRecommendedRationale),
         ],
       },
     ];

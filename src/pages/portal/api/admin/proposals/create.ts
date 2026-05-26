@@ -208,6 +208,50 @@ export const POST: APIRoute = async ({ locals, request }) => {
       if (Object.keys(cleaned).length > 0) tier_overrides = cleaned;
     }
 
+    // Per audit move 3: join lead_personas by signer email so a
+    // prospect who took the personalization quiz before becoming a
+    // lead has their persona axes carried into the engagement
+    // strategy. The composer (and snippet authors) can branch on
+    // these to shape voice. First signer with a non-empty email
+    // wins; absent persona = strategy gets no persona_axes field
+    // and downstream code falls through silently.
+    if (Array.isArray(signers) && signers.length > 0) {
+      const firstEmail = signers
+        .map(s => (typeof s?.email === 'string' ? s.email.trim().toLowerCase() : ''))
+        .find(e => e && e.length > 0);
+      if (firstEmail) {
+        try {
+          const personaRow = await turso.execute({
+            sql: `SELECT email, name, sun_moon, beach_mountain, spring_fall, stars_clouds
+                  FROM lead_personas WHERE email = ?`,
+            args: [firstEmail],
+          });
+          if (personaRow.rows.length > 0) {
+            const r = personaRow.rows[0];
+            const personaAxes = {
+              email: r[0] as string,
+              name: (r[1] as string) || null,
+              sun_moon: (r[2] as 'sun' | 'moon' | null) || null,
+              beach_mountain: (r[3] as 'beach' | 'mountain' | null) || null,
+              spring_fall: (r[4] as 'spring' | 'fall' | null) || null,
+              stars_clouds: (r[5] as 'stars' | 'clouds' | null) || null,
+            };
+            if (engagement_strategy) {
+              engagement_strategy.persona_axes = personaAxes;
+            } else {
+              engagement_strategy = {
+                sales_angles: [],
+                internal_gaps: [],
+                persona_axes: personaAxes,
+              };
+            }
+          }
+        } catch (err) {
+          logger.warn('Persona join failed; composing without persona axes', err);
+        }
+      }
+    }
+
     // Pull managed sites with their per-site page counts so the
     // composer can route each site to its own ecosystem at the
     // engagement tier (2026-05-24 locked formula). The proposal-page

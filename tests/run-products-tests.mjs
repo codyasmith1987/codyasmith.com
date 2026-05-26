@@ -1065,6 +1065,54 @@ async function run() {
     })());
 
   // -------------------------------------------------------------------
+  // Move 3: persona_axes flow through composeProposal into the
+  // engagement strategy on the returned config. (The actual DB join
+  // happens at create.ts time; here we verify the type plumbing.)
+  // -------------------------------------------------------------------
+  const personaCfg = composeProposal({
+    client: { id: 'pc1', name: 'Persona Co', slug: 'persona-co' },
+    signers: [{ id: 's1', name: 'Quincy Lee', email: 'q@persona.com' }],
+    products: ['web-management'],
+    product_vars: { 'web-management': { page_count: 80, site_count: 1 } },
+    engagement_strategy: {
+      sales_angles: [{ angle: 'They sell quality.', supporting_evidence: 'hero text' }],
+      persona_axes: {
+        email: 'q@persona.com',
+        name: 'Quincy Lee',
+        sun_moon: 'sun',
+        beach_mountain: 'mountain',
+        spring_fall: 'spring',
+        stars_clouds: 'clouds',
+      },
+    },
+  });
+  test('Move 3: persona_axes survive composeProposal',
+    personaCfg.engagement_strategy?.persona_axes?.sun_moon === 'sun' &&
+    personaCfg.engagement_strategy?.persona_axes?.beach_mountain === 'mountain' &&
+    personaCfg.engagement_strategy?.persona_axes?.spring_fall === 'spring' &&
+    personaCfg.engagement_strategy?.persona_axes?.stars_clouds === 'clouds');
+  test('Move 3: persona_axes do NOT appear in narrative copy by default',
+    (() => {
+      const all = JSON.stringify(personaCfg.narrative);
+      // The axes themselves should not leak into copy without a
+      // snippet author choosing to surface them.
+      return !/sun_moon|persona_axes|stars_clouds/.test(all);
+    })());
+  const noPersonaCfg = composeProposal({
+    client: { id: 'pc2', name: 'No Persona Co', slug: 'no-persona-co' },
+    signers: [{ id: 's1', name: 'Reagan Lee', email: 'r@nopersona.com' }],
+    products: ['web-management'],
+    product_vars: { 'web-management': { page_count: 80, site_count: 1 } },
+    engagement_strategy: {
+      sales_angles: [{ angle: 'They sell quality.', supporting_evidence: 'hero text' }],
+    },
+  });
+  test('Move 3: missing persona_axes = strategy still composes cleanly',
+    !!noPersonaCfg.engagement_strategy &&
+    (noPersonaCfg.engagement_strategy.persona_axes === undefined ||
+     noPersonaCfg.engagement_strategy.persona_axes === null));
+
+  // -------------------------------------------------------------------
   // Cross-product BuildOption -> WM effects (Raised Bar pattern).
   // Compose a WM (Eco B Better) + Build (small) proposal with 2
   // build_options:

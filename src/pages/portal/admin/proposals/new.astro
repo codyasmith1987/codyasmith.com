@@ -835,9 +835,17 @@ const todayISO = new Date().toISOString().slice(0, 10);
             const aiMsg = document.createElement('span');
             aiMsg.className = 'text-[11px] text-neutral-500 hidden';
             aiBtn.addEventListener('click', async () => {
-              const buildSize = state.product_vars['build']?.build_size;
+              // Prefer explicit legacy build_size (back-compat with older
+              // drafts); otherwise derive from build_total_pages so the
+              // page-count migration doesn't break the AI draft button.
+              const explicitSize = state.product_vars['build']?.build_size;
+              const totalPages = state.product_vars['build']?.build_total_pages;
+              let buildSize = explicitSize;
+              if (!buildSize && typeof totalPages === 'number' && totalPages > 0) {
+                buildSize = totalPages < 30 ? 'small' : (totalPages <= 150 ? 'mid' : 'large');
+              }
               if (!buildSize) {
-                aiMsg.textContent = 'Pick a build size first.';
+                aiMsg.textContent = 'Enter a total page estimate for the build first.';
                 aiMsg.className = 'text-[11px] text-red-400';
                 aiMsg.classList.remove('hidden');
                 return;
@@ -1192,14 +1200,16 @@ const todayISO = new Date().toISOString().slice(0, 10);
         // option's full build cost (base + delta = option's total).
         let baseBuildCost = 0;
         try {
-          const baseSize = state.product_vars?.build?.build_size || null;
-          const baseCount = parseInt(state.product_vars?.build?.build_count, 10) || 1;
+          // Derive base size from build_total_pages (new model). Falls
+          // back to legacy build_size if present (older drafts).
+          const explicitSize = state.product_vars?.build?.build_size || null;
+          const totalPages = state.product_vars?.build?.build_total_pages;
+          let baseSize = explicitSize;
+          if (!baseSize && typeof totalPages === 'number' && totalPages > 0) {
+            baseSize = buildSizeFromPages(totalPages);
+          }
           if (baseSize && BUILD_FEES[baseSize] != null) {
-            const baseFee = BUILD_FEES[baseSize];
-            baseBuildCost = baseFee; // first build full
-            for (let i = 1; i < baseCount; i++) {
-              baseBuildCost += baseFee * (1 - BUILD_SUBSEQUENT_DISCOUNT);
-            }
+            baseBuildCost = BUILD_FEES[baseSize]; // always 1 build at base
           }
         } catch {}
         const baseBuildCostRounded = Math.round(baseBuildCost * 100) / 100;
@@ -1713,11 +1723,12 @@ const todayISO = new Date().toISOString().slice(0, 10);
       // Refresh routing note for this product.
       const note = varsContainer.querySelector(`[data-eco-note="${pid}"]`);
       if (note) note.textContent = computeRoutingNote(pid);
-      // When the top-level Build size or count changes, every option's
-      // pricing_delta needs to recompute (the base build cost in the
-      // delta math just changed). Walk every option on the Build
-      // product and call its summary recompute if exposed.
-      if (pid === 'build' && (vid === 'build_size' || vid === 'build_count')) {
+      // When the top-level Build total pages (or legacy size/count)
+      // changes, every option's pricing_delta needs to recompute
+      // (the base build cost in the delta math just changed). Walk
+      // every option on the Build product and call its summary
+      // recompute if exposed.
+      if (pid === 'build' && (vid === 'build_total_pages' || vid === 'build_size' || vid === 'build_count')) {
         const buildOpts = (state.product_vars?.build?.build_options) || [];
         for (const o of buildOpts) {
           if (o && typeof o._recomputeSummary === 'function') {
@@ -1747,11 +1758,20 @@ const todayISO = new Date().toISOString().slice(0, 10);
         return 'Ecosystem: not yet (need revenue band)';
       }
       if (productId === 'build') {
+        // Prefer the new build_total_pages routing; fall back to the
+        // legacy build_size picker for older drafts.
+        const tp = vars.build_total_pages;
+        const pages = typeof tp === 'number' ? tp : parseInt(tp, 10);
+        if (Number.isFinite(pages) && pages > 0) {
+          if (pages < 30) return `Routes to: Small build, $5,625 (under 30 pages)`;
+          if (pages <= 150) return `Routes to: Mid build, $11,875 (30 to 150 pages)`;
+          return `Routes to: Large build, $22,500 (150 or more pages)`;
+        }
         const s = vars.build_size;
         if (s === 'small') return 'Build size: Small ($5,625)';
         if (s === 'mid') return 'Build size: Mid ($11,875)';
         if (s === 'large') return 'Build size: Large ($22,500)';
-        return 'Build size: not yet';
+        return 'Type a page count to route the build size';
       }
       if (productId === 'training') {
         const m = vars.mode;

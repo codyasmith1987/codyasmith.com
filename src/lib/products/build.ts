@@ -80,23 +80,11 @@ const SUBSEQUENT_BUILD_DISCOUNT = 0.20; // 20% off for builds 2+
 
 const VARIABLE_SCHEMA: VariableSchemaField[] = [
   {
-    id: 'build_size',
-    label: 'Build size',
-    type: 'select',
-    options: [
-      { id: 'small', label: 'Small (under 30 pages, $5,625)' },
-      { id: 'mid', label: 'Mid (30-150 pages, $11,875)' },
-      { id: 'large', label: 'Large (150 or more, $22,500)' },
-    ],
-    default: null,
-    help: 'Size band sets the fixed fee. Replaces onboarding for the site it produces.',
-  },
-  {
-    id: 'build_count',
-    label: 'Number of builds in this engagement',
+    id: 'build_total_pages',
+    label: 'Total pages for the build (estimate)',
     type: 'number',
-    default: 1,
-    help: 'Builds 2 and beyond get a 20 percent discount off the first build size.',
+    default: null,
+    help: 'Type a number. Could be 4, could be 43. Routes to the build size band: under 30 = Small ($5,625), 30-150 = Mid ($11,875), 150 or more = Large ($22,500). Used as the default 1-build size when no shape options are defined; shape options override this with their own per-site page counts.',
   },
   {
     id: 'build_description',
@@ -112,8 +100,19 @@ const VARIABLE_SCHEMA: VariableSchemaField[] = [
 // =========================================================================
 
 export function routeBuildSize(variables: ProductVariables): EcosystemId | null {
+  // Legacy explicit picker still wins if set (back-compat with older
+  // proposals saved before the page-count migration).
   const size = typeof variables.build_size === 'string' ? variables.build_size : null;
   if (size === 'small' || size === 'mid' || size === 'large') return size;
+  // Derive from total pages: under 30 = small, 30-150 = mid, 150+ = large.
+  const pages = typeof variables.build_total_pages === 'number'
+    ? variables.build_total_pages
+    : (typeof variables.build_total_pages === 'string' ? parseInt(variables.build_total_pages, 10) : NaN);
+  if (Number.isFinite(pages) && pages > 0) {
+    if (pages < 30) return 'small';
+    if (pages <= 150) return 'mid';
+    return 'large';
+  }
   return null;
 }
 
@@ -137,7 +136,6 @@ export function computeBuildTotal(size: string | null, count: number): number {
 
 function buildNarrative(ctx: ProductContext): NarrativeSnippetSet {
   const size = routeBuildSize(ctx.variables);
-  const count = numberFromVar(ctx.variables.build_count, 1);
   const desc = typeof ctx.variables.build_description === 'string' ? ctx.variables.build_description : '';
 
   const sizeLabel = size === 'small' ? 'small (under 30 pages)'
@@ -145,21 +143,16 @@ function buildNarrative(ctx: ProductContext): NarrativeSnippetSet {
     : size === 'large' ? 'large (150 or more pages)'
     : 'sized at signing';
 
-  const fee = computeBuildTotal(size, count);
+  // Always describe the base as one build at the routed size; shape
+  // options (when present) carry their own description in the
+  // rollout scenario step. The narrative here is the default copy.
+  const fee = computeBuildTotal(size, 1);
   const feeStr = fee > 0 ? `$${Math.round(fee).toLocaleString('en-US')}` : '';
 
-  const multi = count > 1 ? ` Each subsequent build in this engagement runs at 20 percent off.` : '';
-
-  const whatRecommend = count === 1
-    ? `<strong>Build work</strong> for the site${desc ? ' (' + desc + ')' : ''}. Fixed-fee project, ${sizeLabel}${feeStr ? ', total ' + feeStr : ''}. The build replaces onboarding for the site it produces; the site moves onto Web Management at launch.`
-    : `<strong>Build work</strong> for ${count} sites${desc ? ' (' + desc + ')' : ''}. Fixed-fee projects, each ${sizeLabel}${feeStr ? ', engagement total ' + feeStr : ''}.${multi} Each build replaces onboarding for its site; the sites move onto Web Management at launch.`;
+  const whatRecommend = `<strong>Build work</strong> for the site${desc ? ' (' + desc + ')' : ''}. Fixed-fee project, ${sizeLabel}${feeStr ? ', total ' + feeStr : ''}. The build replaces onboarding for the site it produces; the site moves onto Web Management at launch.`;
 
   return {
-    intro_lines: [
-      count === 1
-        ? `A net-new build is part of the engagement.`
-        : `${count} net-new builds are part of the engagement.`,
-    ],
+    intro_lines: [`A net-new build is part of the engagement.`],
     what_i_recommend_paragraphs: [whatRecommend],
   };
 }
@@ -273,8 +266,10 @@ export const buildProduct: ProductDefinition = {
 
   computePricing(ctx) {
     const size = routeBuildSize(ctx.variables);
-    const count = numberFromVar(ctx.variables.build_count, 1);
-    const baseTotal = computeBuildTotal(size, count);
+    // Base is always 1 build at the routed size. When shape options
+    // are defined, the picked option's pricing_delta carries the
+    // shape's full per-site math relative to this 1-build base.
+    const baseTotal = computeBuildTotal(size, 1);
     if (baseTotal === 0) {
       return { monthly: 0, oneTime: 0, breakdown: [], displaySummary: {} };
     }
@@ -285,16 +280,11 @@ export const buildProduct: ProductDefinition = {
       : size === 'mid' ? 'mid'
       : size === 'large' ? 'large'
       : 'unspecified size';
-    const breakdown = count === 1
-      ? [{ label: `Build, ${sizeLabel}${desc}`, amount: baseTotal }]
-      : [
-          { label: `Build, ${sizeLabel}${desc} (build 1)`, amount: BUILD_FEES[size!] },
-          { label: `Builds 2-${count}, ${sizeLabel}, 20% off each`, amount: baseTotal - BUILD_FEES[size!] },
-        ];
+    const breakdown = [{ label: `Build, ${sizeLabel}${desc}`, amount: baseTotal }];
 
-    // Apply pricing delta from picked Build option, if any. Negative
-    // deltas reduce the total; positive deltas add. Surfaces as a
-    // separate breakdown line so the prospect sees the math.
+    // Apply pricing delta from picked Build option, if any. The
+    // wizard sets this to (option's full build cost) - (1-build base
+    // cost) so the math here yields the option's full cost.
     let total = baseTotal;
     const picked = getSelectedBuildOption(ctx);
     if (picked && picked.pricing_delta) {
@@ -311,7 +301,7 @@ export const buildProduct: ProductDefinition = {
       breakdown,
       displaySummary: {
         size_label: sizeLabel,
-        count: String(count),
+        count: '1',
         picked_option_id: picked?.id || '',
       },
     };
@@ -322,11 +312,11 @@ export const buildProduct: ProductDefinition = {
     if (!size) {
       return { products_purchased: { build: false } };
     }
-    const count = numberFromVar(ctx.variables.build_count, 1);
     const desc = typeof ctx.variables.build_description === 'string' ? ctx.variables.build_description : '';
-    const itemsClause = count === 1
-      ? `Build in scope: one ${size} build${desc ? ` (${desc})` : ''}.`
-      : `Builds in scope: ${count} ${size} builds${desc ? ` (${desc})` : ''}.`;
+    // Shape options (when picked) carry their own per-site breakdown
+    // via schedule_a_note; the base SOW description here is the
+    // default 1-build case.
+    const itemsClause = `Build in scope: one ${size} build${desc ? ` (${desc})` : ''}.`;
 
     // Picked option's schedule_a_note appends to the SOW reference so
     // the contract reflects which deployment shape was chosen.

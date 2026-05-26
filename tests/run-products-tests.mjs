@@ -32,6 +32,7 @@ import { computeBuildTotal, buildProduct } from '../src/lib/products/build.ts';
 import { composeProposal } from '../src/lib/products/index.ts';
 import { computePricing } from '../src/lib/proposal-pricing.ts';
 import { buildScheduleA } from '../src/lib/contract-schedule.ts';
+import { getSnippetCandidateKeys, lookupSnippetOverride } from '../src/lib/products/narrative-snippets.ts';
 
 const results = [];
 function test(name, pass, detail = '') {
@@ -1062,6 +1063,77 @@ async function run() {
       const closer = sn1NoStrategy.narrative.sections.find(s => s.h2 === 'How this works in practice');
       if (!closer) return true;
       return !closer.paragraphs.some(p => p.includes('Your own pitch leads with this:'));
+    })());
+
+  // -------------------------------------------------------------------
+  // Move 4: snippet key gains a fourth segment for focusPrimary.
+  // 4-segment keys are tried first when focus is set; 3-segment
+  // keys (existing snippets) still match as fallback. No focus =
+  // identical candidate ladder to today.
+  // -------------------------------------------------------------------
+  const noFocusKeys = getSnippetCandidateKeys({
+    productId: 'web-management',
+    otherProductIds: [],
+    ecosystemId: 'B',
+    urgency: 'tactical',
+  });
+  test('Move 4: no focus = 6 candidates (3-segment only)',
+    noFocusKeys.length === 6, `got ${noFocusKeys.length}`);
+  test('Move 4: no focus = backward-compatible 3-segment keys present',
+    noFocusKeys.includes('web-management::B::tactical') &&
+    noFocusKeys.includes('web-management::*::*'));
+  test('Move 4: no focus = no 4-segment keys',
+    noFocusKeys.every(k => k.split('::').length === 3));
+
+  const withFocusKeys = getSnippetCandidateKeys({
+    productId: 'web-management',
+    otherProductIds: [],
+    ecosystemId: 'B',
+    urgency: 'tactical',
+    focusPrimary: 'takeover',
+  });
+  test('Move 4: with focus = 12 candidates (6 four-seg + 6 three-seg)',
+    withFocusKeys.length === 12, `got ${withFocusKeys.length}`);
+  test('Move 4: with focus = 4-seg key for primary combo comes first',
+    withFocusKeys[0] === 'web-management::B::tactical::takeover');
+  test('Move 4: with focus = 3-seg keys still in ladder for fallback',
+    withFocusKeys.includes('web-management::B::tactical') &&
+    withFocusKeys.includes('web-management::*::*'));
+  test('Move 4: 4-seg combo keys come BEFORE 3-seg combo keys',
+    withFocusKeys.indexOf('web-management::B::tactical::takeover') < withFocusKeys.indexOf('web-management::B::tactical'));
+
+  const comboFocusKeys = getSnippetCandidateKeys({
+    productId: 'web-management',
+    otherProductIds: ['marketing-consulting'],
+    ecosystemId: 'B',
+    urgency: 'growth',
+    focusPrimary: 'pre-sell',
+  });
+  test('Move 4: combo 4-seg ranks before single-product 4-seg',
+    comboFocusKeys.indexOf('marketing-consulting+web-management::B::growth::pre-sell') <
+    comboFocusKeys.indexOf('web-management::B::growth::pre-sell'));
+
+  const wmBtacticalTakeover = lookupSnippetOverride({
+    productId: 'web-management',
+    otherProductIds: [],
+    ecosystemId: 'B',
+    urgency: 'tactical',
+    focusPrimary: 'takeover',
+  });
+  test('Move 4: 4-seg lookup falls back to 3-seg snippet when no 4-seg authored',
+    typeof wmBtacticalTakeover === 'function');
+
+  const focusCompose = composeProposal({
+    client: { id: 'fc1', name: 'Focus Co', slug: 'focus-co' },
+    signers: [{ id: 's1', name: 'Tess Lee', email: 't@focus.com' }],
+    products: ['web-management'],
+    product_vars: { 'web-management': { page_count: 80, site_count: 1 } },
+    narrative_variables: { urgency: 'tactical', focus: ['takeover'] },
+  });
+  test('Move 4: compose with focus still fires existing 3-seg snippet',
+    (() => {
+      const rec = focusCompose.narrative.sections.find(s => s.h2 === 'What I recommend');
+      return !!rec && rec.paragraphs.some(p => p.includes('Predictability is the trade'));
     })());
 
   // -------------------------------------------------------------------

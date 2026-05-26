@@ -254,11 +254,18 @@ function composeNarrative(args: ComposeNarrativeArgs): {
     } else {
       lookupEco = args.contexts[primary].ecosystemId;
     }
+    // Per audit move 4: thread the wizard's first focus tag into the
+    // snippet key so focus-specific variants can fire when authored.
+    // Empty focus = falls through to 3-segment keys (existing snippets).
+    const focusPrimary = (args.narrativeVariables.focus && Array.isArray(args.narrativeVariables.focus) && args.narrativeVariables.focus.length > 0)
+      ? args.narrativeVariables.focus[0] || null
+      : null;
     const override = lookupSnippetOverride({
       productId: primary,
       otherProductIds: others,
       ecosystemId: lookupEco,
       urgency: args.narrativeVariables.urgency || null,
+      focusPrimary,
     });
     if (override) {
       // The snippet runs with the primary product's context (the

@@ -346,32 +346,70 @@ function firstSalesAngleFromCtx(ctx: ProductContext): string {
 // Lookup helpers
 // =========================================================================
 
-export function lookupSnippetOverride(args: {
+export interface SnippetLookupArgs {
   productId: ProductId;
   otherProductIds: ProductId[];
   ecosystemId: string | null;
   urgency: string | null;
-}): ((ctx: ProductContext) => NarrativeSnippetSet) | null {
+  // Per audit move 4: optional fourth segment of the snippet key.
+  // When the wizard's narrative_variables.focus[] is populated, the
+  // first focus tag is passed here so snippet authors can write
+  // focus-specific variants (e.g., web-management::B::tactical::takeover
+  // reads differently from web-management::B::tactical::pre-sell).
+  // 4-segment keys are tried first; 3-segment keys (existing snippets)
+  // still match as the fallback.
+  focusPrimary?: string | null;
+}
+
+// Build the ordered candidate-key list for a lookup. Exposed so tests
+// (and the snippet matrix editor) can verify the ladder without going
+// through the full lookup. Order: most-specific to least-specific.
+// Combo keys beat single-product keys at every specificity level
+// (combo content describes the actual sale better than single-product
+// content does when multiple products are in scope). 4-segment keys
+// (focus-specific) beat 3-segment keys (no focus) at each level.
+export function getSnippetCandidateKeys(args: SnippetLookupArgs): string[] {
   const products = [args.productId, ...args.otherProductIds].sort().join('+');
   const eco = args.ecosystemId || '*';
   const urgency = args.urgency || '*';
+  const focus = (args.focusPrimary && args.focusPrimary.trim()) || null;
 
-  // Try keys most-specific to least-specific. Combo keys win at every
-  // specificity level: a combo's catch-all beats a single-product's
-  // exact match. The reason is content fidelity: a WM-only snippet
-  // describes one product; when WM+MC is in scope, the combo's
-  // catch-all (even with no ecosystem/urgency match) is closer to the
-  // actual sale than the single-product copy.
-  const candidates = [
+  const candidates: string[] = [];
+
+  // Combo, 4-segment focus-specific (highest specificity).
+  if (focus) {
+    candidates.push(
+      `${products}::${eco}::${urgency}::${focus}`,
+      `${products}::${eco}::*::${focus}`,
+      `${products}::*::*::${focus}`,
+    );
+  }
+  // Combo, 3-segment (existing convention).
+  candidates.push(
     `${products}::${eco}::${urgency}`,
     `${products}::${eco}::*`,
     `${products}::*::*`,
+  );
+  // Single-product, 4-segment focus-specific.
+  if (focus) {
+    candidates.push(
+      `${args.productId}::${eco}::${urgency}::${focus}`,
+      `${args.productId}::${eco}::*::${focus}`,
+      `${args.productId}::*::*::${focus}`,
+    );
+  }
+  // Single-product, 3-segment (existing convention).
+  candidates.push(
     `${args.productId}::${eco}::${urgency}`,
     `${args.productId}::${eco}::*`,
     `${args.productId}::*::*`,
-  ];
+  );
 
-  for (const key of candidates) {
+  return candidates;
+}
+
+export function lookupSnippetOverride(args: SnippetLookupArgs): ((ctx: ProductContext) => NarrativeSnippetSet) | null {
+  for (const key of getSnippetCandidateKeys(args)) {
     // DB overrides win over the baked-in file registry. The override
     // cache is populated by /portal/api/admin/proposals/snippets/save
     // and refreshed at lookup time. Falls through to the file

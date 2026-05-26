@@ -68,53 +68,93 @@ export const GET: APIRoute = async ({ locals }) => {
 
   const fileKeys = new Set(Object.keys(SNIPPET_REGISTRY));
 
-  // Pull all DB overrides.
+  // Pull all DB overrides. Per audit move 7: each row is now scoped
+  // by (key, client_id). client_id = '*' = global. Editor renders one
+  // card per (key, client_id) pair.
   let dbRows: any[] = [];
   try {
     const res = await turso.execute({
-      sql: `SELECT key, intro_lines, what_i_see_paragraphs, what_i_recommend_paragraphs, updated_at, notes
+      sql: `SELECT key, client_id, intro_lines, what_i_see_paragraphs, what_i_recommend_paragraphs, updated_at, notes
             FROM snippet_overrides
-            ORDER BY key`,
+            ORDER BY key, client_id`,
     });
     dbRows = res.rows as any[];
   } catch (err: any) {
     return json({ error: err?.message || 'Failed to load snippet overrides' }, 500);
   }
 
-  const dbByKey = new Map<string, any>();
-  for (const row of dbRows) {
-    dbByKey.set(String(row[0]), {
-      intro_lines: parseJsonArray(row[1]),
-      what_i_see_paragraphs: parseJsonArray(row[2]),
-      what_i_recommend_paragraphs: parseJsonArray(row[3]),
-      updated_at: row[4] ? String(row[4]) : null,
-      notes: row[5] ? String(row[5]) : null,
-    });
+  // (key, client_id) -> entry. The same key can have multiple entries
+  // (one global + one per scoped client).
+  type DbEntry = {
+    key: string;
+    client_id: string;
+    intro_lines: string[];
+    what_i_see_paragraphs: string[];
+    what_i_recommend_paragraphs: string[];
+    updated_at: string | null;
+    notes: string | null;
+  };
+  const dbEntries: DbEntry[] = dbRows.map(row => ({
+    key: String(row[0]),
+    client_id: row[1] ? String(row[1]) : '*',
+    intro_lines: parseJsonArray(row[2]),
+    what_i_see_paragraphs: parseJsonArray(row[3]),
+    what_i_recommend_paragraphs: parseJsonArray(row[4]),
+    updated_at: row[5] ? String(row[5]) : null,
+    notes: row[6] ? String(row[6]) : null,
+  }));
+  const dbGlobalByKey = new Map<string, DbEntry>();
+  for (const entry of dbEntries) {
+    if (entry.client_id === '*') dbGlobalByKey.set(entry.key, entry);
   }
 
-  const allKeys = new Set<string>([...fileKeys, ...dbByKey.keys()]);
-  const snippets = [];
+  const snippets: any[] = [];
+  const seenFileKeys = new Set<string>();
 
-  for (const key of [...allKeys].sort()) {
-    const inFile = fileKeys.has(key);
-    const inDb = dbByKey.has(key);
-    const dbEntry = dbByKey.get(key);
-    let source: 'file' | 'db' | 'both' = inFile && inDb ? 'both' : inFile ? 'file' : 'db';
+  // Emit one row per DB entry. Global rows show alongside the
+  // matching file baseline (if any) so the editor can flag overrides
+  // visually; client-scoped rows show as separate cards.
+  for (const entry of dbEntries) {
+    const isGlobal = entry.client_id === '*';
+    const inFile = fileKeys.has(entry.key);
+    const source: 'file' | 'db' | 'both' = isGlobal && inFile ? 'both' : 'db';
+    snippets.push({
+      key: entry.key,
+      client_id: entry.client_id,
+      source,
+      intro_lines: entry.intro_lines,
+      what_i_see_paragraphs: entry.what_i_see_paragraphs,
+      what_i_recommend_paragraphs: entry.what_i_recommend_paragraphs,
+      updated_at: entry.updated_at,
+      notes: entry.notes,
+    });
+    if (isGlobal) seenFileKeys.add(entry.key);
+  }
 
-    // DB takes precedence at compose time, so the editor shows the
-    // DB version when both exist. File version is implicit fallback.
-    const content = inDb ? dbEntry : renderFileSnippet(key, SNIPPET_REGISTRY[key]);
-
+  // File-baseline snippets without any DB row get rendered too so
+  // admin sees the full registry.
+  for (const key of [...fileKeys].sort()) {
+    if (seenFileKeys.has(key)) continue;
+    const content = renderFileSnippet(key, SNIPPET_REGISTRY[key]);
     snippets.push({
       key,
-      source,
+      client_id: '*',
+      source: 'file' as const,
       intro_lines: content.intro_lines,
       what_i_see_paragraphs: content.what_i_see_paragraphs,
       what_i_recommend_paragraphs: content.what_i_recommend_paragraphs,
-      updated_at: dbEntry?.updated_at || null,
-      notes: dbEntry?.notes || null,
+      updated_at: null,
+      notes: null,
     });
   }
+
+  // Stable sort: by key, then global before client-scoped.
+  snippets.sort((a, b) => {
+    if (a.key !== b.key) return a.key.localeCompare(b.key);
+    if (a.client_id === '*' && b.client_id !== '*') return -1;
+    if (b.client_id === '*' && a.client_id !== '*') return 1;
+    return a.client_id.localeCompare(b.client_id);
+  });
 
   return json({ snippets });
 };

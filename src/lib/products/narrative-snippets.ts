@@ -359,6 +359,11 @@ export interface SnippetLookupArgs {
   // 4-segment keys are tried first; 3-segment keys (existing snippets)
   // still match as the fallback.
   focusPrimary?: string | null;
+  // Per audit move 7: when the proposal is being composed for a
+  // specific client, snippet overrides stored at (key, client_id)
+  // win over global overrides at (key, '*'). When omitted or
+  // undefined, only global overrides match (legacy behavior).
+  clientId?: string | null;
 }
 
 // Build the ordered candidate-key list for a lookup. Exposed so tests
@@ -409,13 +414,19 @@ export function getSnippetCandidateKeys(args: SnippetLookupArgs): string[] {
 }
 
 export function lookupSnippetOverride(args: SnippetLookupArgs): ((ctx: ProductContext) => NarrativeSnippetSet) | null {
+  const clientId = (args.clientId && args.clientId.trim()) || null;
   for (const key of getSnippetCandidateKeys(args)) {
-    // DB overrides win over the baked-in file registry. The override
-    // cache is populated by /portal/api/admin/proposals/snippets/save
-    // and refreshed at lookup time. Falls through to the file
-    // registry when no DB entry exists.
-    const dbEntry = lookupDbOverride(key);
-    if (dbEntry) return dbEntry;
+    // Per audit move 7: client-scoped DB override wins first, then
+    // global DB override, then file registry. The scope ladder runs
+    // INSIDE each key (so a client-scoped 3-seg key still beats a
+    // global 4-seg key, because the loop goes most-specific key first
+    // and within that key tries client-scoped before global).
+    if (clientId) {
+      const clientScoped = lookupDbOverride(key, clientId);
+      if (clientScoped) return clientScoped;
+    }
+    const dbGlobal = lookupDbOverride(key, null);
+    if (dbGlobal) return dbGlobal;
     const entry = SNIPPET_REGISTRY[key];
     if (entry) return entry;
   }
@@ -429,18 +440,29 @@ export function lookupSnippetOverride(args: SnippetLookupArgs): ((ctx: ProductCo
 // request without a redeploy.
 // -----------------------------------------------------------------
 
-type DbOverride = { key: string; snippet: (ctx: ProductContext) => NarrativeSnippetSet };
-let dbOverrideCache: Map<string, DbOverride> | null = null;
+type DbOverride = { key: string; clientId: string; snippet: (ctx: ProductContext) => NarrativeSnippetSet };
+// Outer key: snippet key. Inner key: client_id ('*' = global; any
+// other string = client-specific). Per audit move 7.
+let dbOverrideCache: Map<string, Map<string, DbOverride>> | null = null;
 let dbOverrideCacheExpiresAt = 0;
 const DB_CACHE_TTL_MS = 60_000;
 
-function lookupDbOverride(key: string): ((ctx: ProductContext) => NarrativeSnippetSet) | null {
+// lookupDbOverride takes the snippet key plus an optional client_id.
+// When clientId is non-null, returns the client-scoped snippet for
+// that key (does NOT fall back to global — the global fallback is
+// the caller's responsibility in lookupSnippetOverride). When
+// clientId is null, returns the global snippet for that key, or
+// null if none.
+function lookupDbOverride(key: string, clientId: string | null): ((ctx: ProductContext) => NarrativeSnippetSet) | null {
   if (!dbOverrideCache) return null;
   if (Date.now() > dbOverrideCacheExpiresAt) {
     dbOverrideCache = null;
     return null;
   }
-  const hit = dbOverrideCache.get(key);
+  const byClient = dbOverrideCache.get(key);
+  if (!byClient) return null;
+  const scopeKey = clientId || '*';
+  const hit = byClient.get(scopeKey);
   return hit ? hit.snippet : null;
 }
 
@@ -451,16 +473,19 @@ export async function primeSnippetOverrides(): Promise<void> {
   try {
     const { default: turso } = await import('../turso');
     const res = await turso.execute({
-      sql: `SELECT key, intro_lines, what_i_see_paragraphs, what_i_recommend_paragraphs FROM snippet_overrides`,
+      sql: `SELECT key, client_id, intro_lines, what_i_see_paragraphs, what_i_recommend_paragraphs FROM snippet_overrides`,
     });
-    const next = new Map<string, DbOverride>();
+    const next = new Map<string, Map<string, DbOverride>>();
     for (const row of res.rows as any[]) {
       const key = String(row[0]);
-      const intro = parseJsonArrayOrNull(row[1]);
-      const whatISee = parseJsonArrayOrNull(row[2]);
-      const whatIRecommend = parseJsonArrayOrNull(row[3]);
-      next.set(key, {
+      const clientId = row[1] ? String(row[1]) : '*';
+      const intro = parseJsonArrayOrNull(row[2]);
+      const whatISee = parseJsonArrayOrNull(row[3]);
+      const whatIRecommend = parseJsonArrayOrNull(row[4]);
+      if (!next.has(key)) next.set(key, new Map());
+      next.get(key)!.set(clientId, {
         key,
+        clientId,
         snippet: () => ({
           intro_lines: intro || [],
           what_i_see_paragraphs: whatISee || [],

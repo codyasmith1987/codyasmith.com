@@ -48,6 +48,23 @@ export const POST: APIRoute = async ({ locals, request }) => {
     }, 400);
   }
 
+  // Per audit move 7: optional client_id scopes the snippet to one
+  // client. Empty / missing / '*' = global (the historical default).
+  // Validate that the client exists when a specific id is given so we
+  // don't silently store orphan-scoped snippets.
+  const rawClientId = (body?.client_id ?? '').toString().trim();
+  let clientId = '*';
+  if (rawClientId && rawClientId !== '*') {
+    const clientRow = await turso.execute({
+      sql: 'SELECT id FROM clients WHERE id = ? LIMIT 1',
+      args: [rawClientId],
+    });
+    if (clientRow.rows.length === 0) {
+      return json({ error: `Unknown client_id: ${rawClientId}` }, 400);
+    }
+    clientId = rawClientId;
+  }
+
   const intro_lines = sanitizeArray(body.intro_lines);
   const what_i_see_paragraphs = sanitizeArray(body.what_i_see_paragraphs);
   const what_i_recommend_paragraphs = sanitizeArray(body.what_i_recommend_paragraphs);
@@ -89,10 +106,10 @@ export const POST: APIRoute = async ({ locals, request }) => {
   try {
     await turso.execute({
       sql: `INSERT INTO snippet_overrides
-              (id, key, intro_lines, what_i_see_paragraphs, what_i_recommend_paragraphs,
+              (id, key, client_id, intro_lines, what_i_see_paragraphs, what_i_recommend_paragraphs,
                notes, created_by, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-            ON CONFLICT(key) DO UPDATE SET
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            ON CONFLICT(key, client_id) DO UPDATE SET
               intro_lines = excluded.intro_lines,
               what_i_see_paragraphs = excluded.what_i_see_paragraphs,
               what_i_recommend_paragraphs = excluded.what_i_recommend_paragraphs,
@@ -101,6 +118,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       args: [
         nanoid(),
         key,
+        clientId,
         JSON.stringify(intro_lines),
         JSON.stringify(what_i_see_paragraphs),
         JSON.stringify(what_i_recommend_paragraphs),
@@ -115,15 +133,16 @@ export const POST: APIRoute = async ({ locals, request }) => {
   // Force the composer to reload overrides on the next compose.
   invalidateSnippetOverrideCache();
 
+  const scopeNote = clientId === '*' ? 'global' : `client ${clientId}`;
   await logActivity({
     userId: locals.user!.id,
     action: 'saved',
     entityType: 'snippet_override',
-    entityId: key,
-    summary: `${locals.user!.name} saved snippet override "${key}" (${totalLen} total lines/paragraphs)`,
+    entityId: `${key}::${clientId}`,
+    summary: `${locals.user!.name} saved snippet override "${key}" (${scopeNote}; ${totalLen} total lines/paragraphs)`,
   });
 
-  return json({ ok: true, key });
+  return json({ ok: true, key, client_id: clientId });
 };
 
 export const DELETE: APIRoute = async ({ locals, request }) => {
@@ -132,18 +151,24 @@ export const DELETE: APIRoute = async ({ locals, request }) => {
   try { body = await request.json(); } catch { /* empty */ }
   const key = body?.key ? String(body.key).trim() : '';
   if (!key) return json({ error: 'key is required' }, 400);
+  // Per audit move 7: delete is scoped to (key, client_id). Without
+  // an explicit client_id we default to global ('*') so the legacy
+  // delete call (no client_id) still targets the global snippet.
+  const rawClientId = (body?.client_id ?? '').toString().trim();
+  const clientId = (rawClientId && rawClientId !== '*') ? rawClientId : '*';
 
   await turso.execute({
-    sql: `DELETE FROM snippet_overrides WHERE key = ?`,
-    args: [key],
+    sql: `DELETE FROM snippet_overrides WHERE key = ? AND client_id = ?`,
+    args: [key, clientId],
   });
   invalidateSnippetOverrideCache();
+  const scopeNote = clientId === '*' ? 'global' : `client ${clientId}`;
   await logActivity({
     userId: locals.user!.id,
     action: 'deleted',
     entityType: 'snippet_override',
-    entityId: key,
-    summary: `${locals.user!.name} deleted snippet override "${key}"`,
+    entityId: `${key}::${clientId}`,
+    summary: `${locals.user!.name} deleted snippet override "${key}" (${scopeNote})`,
   });
   return json({ ok: true });
 };

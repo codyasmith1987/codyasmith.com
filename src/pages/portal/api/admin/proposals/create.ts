@@ -131,6 +131,10 @@ export const POST: APIRoute = async ({ locals, request }) => {
     let engagement_strategy: any = null;
     if (c.engagement_strategy && typeof c.engagement_strategy === 'object') {
       const es = c.engagement_strategy as Record<string, unknown>;
+      // Per audit move 9: carry product_implication through so the
+      // composer can thread each angle into the matching in-scope
+      // product's section. Validate against the closed product set.
+      const angleProductSet = new Set(['web_management', 'marketing_consulting', 'build', 'training', 'none']);
       const sales_angles = Array.isArray(es.sales_angles)
         ? es.sales_angles
             .filter((a: any) => a && typeof a === 'object' && typeof a.angle === 'string')
@@ -139,6 +143,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
               supporting_evidence: typeof a.supporting_evidence === 'string'
                 ? a.supporting_evidence.trim()
                 : '',
+              product_implication: angleProductSet.has(a.product_implication) ? a.product_implication : undefined,
             }))
             .filter((a: any) => a.angle.length > 0)
         : [];

@@ -63,6 +63,7 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
     const clientName = clientNameFromCtx(ctx);
     const ecoBand = ctx.ecosystemId ? '30 to 150 pages' : 'the working middle';
     const pageCount = pageCountFromCtx(ctx);
+    const angle = firstSalesAngleFromCtx(ctx);
     return {
       intro_lines: [
         `You have a real site. A specific problem you want fixed. The right answer is steady ownership from here.`,
@@ -75,6 +76,9 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
         `I recommend <strong>Web Management</strong> on a monthly basis for the ${clientName} site. The monthly fee covers hosting, daily backups, security and uptime monitoring, and software updates on the contracted cadence. A pool of hands-on hours sits ready every month for active work: edits, page builds, small fixes, content updates, the running list of things the site actually needs. I am the one whose week it sits inside.`,
         `The trade is worth naming plainly. The monthly is predictable. The hours are use-it-or-lose-it. A month with light work does not roll its hours into a heavier month later. That is how the math holds. You get a known number every month, a known cadence of work, a known response window. I get a steady relationship instead of a string of one-off estimates. Predictability is the trade.`,
       ],
+      closer_tie_back: angle
+        ? `Your own pitch leads with this: ${angle} Steady ownership is what keeps a promise like that from quietly going stale across the months. Predictability for you is what predictability lets me deliver.`
+        : '',
     };
   },
 
@@ -87,6 +91,7 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
   'marketing-consulting+web-management::B::growth': (ctx) => {
     const clientName = clientNameFromCtx(ctx);
     const industry = industryFromCtx(ctx);
+    const angle = firstSalesAngleFromCtx(ctx);
     return {
       intro_lines: [
         `You are not asking for one thing.`,
@@ -101,6 +106,9 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
         `I recommend <strong>Marketing Consulting</strong> as the strategic layer applied to the whole business, not just the site. Scope is marketing, search and content strategy, brand positioning, plus adjacent advisory like operations or hiring guidance for marketing or web roles when you want outside thinking on the questions that fall outside the day-to-day. The engagement opens with a research-grade audit and runs on an ongoing cadence of strategy work after that. Sold once for the whole business. Never multiplied across sites or entities.`,
         `<strong>Marketing Consulting</strong> is advice. That is the format and it is what makes it work. The fee buys attention and research, not unlimited production. When consulting work needs to be executed on the site, those hours come out of the <strong>Web Management</strong> pool. When it needs to be executed off the site, it gets a separate statement of work. Strategy is named in one place. Executed somewhere else. The boundary is what keeps either one from getting watered down.`,
       ],
+      closer_tie_back: angle
+        ? `Your own pitch leads with this: ${angle} The engagement runs in two layers because a promise like that gets executed in two places: in the site customers see, and in the decisions that shape what they see next.`
+        : '',
     };
   },
 
@@ -114,6 +122,7 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
     const clientName = clientNameFromCtx(ctx);
     const ecoBand = ctx.ecosystemId ? '30 to 150 pages' : 'the working middle';
     const pageCount = pageCountFromCtx(ctx);
+    const angle = firstSalesAngleFromCtx(ctx);
     return {
       intro_lines: [
         `This is the version where nothing is on fire. The goal is keeping it that way.`,
@@ -125,6 +134,9 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
         `I recommend <strong>Web Management</strong> on a monthly basis for the ${clientName} site. The monthly fee covers hosting, daily backups, security and uptime monitoring, and software updates on the contracted cadence. Those four lines run in the background every day. They are how a site this size stays running while nobody is looking at it, and they are also how it stays out of the moments where one missed update turns into a recovery weekend.`,
         `A pool of hands-on hours sits ready every month for active work. A monthly health report comes with it, so you can see what was touched, what was found, and what is coming. A known cadence. A known number. A known place to send things when they come up. Nothing about this is reactive. It is the version of the relationship where the site stops being a thing you have to remember to think about.`,
       ],
+      closer_tie_back: angle
+        ? `Your own pitch leads with this: ${angle} Slow erosion is what undoes a claim like that. Ongoing attention is what keeps it true.`
+        : '',
     };
   },
 
@@ -136,11 +148,15 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
   // what_i_see falls back to per-product inline defaults.
   'marketing-consulting+web-management::*::*': (ctx) => {
     const clientName = clientNameFromCtx(ctx);
+    const angle = firstSalesAngleFromCtx(ctx);
     return {
       what_i_recommend_paragraphs: [
         `I recommend <strong>Web Management</strong> as the execution layer for the ${clientName} site. The monthly fee covers hosting, daily backups, security and uptime monitoring, and software updates on the contracted cadence. A monthly pool of hands-on hours covers active site work. The site runs and improves every month on a known cadence, not as a string of one-off estimates.`,
         `I recommend <strong>Marketing Consulting</strong> as the strategic layer for the business as a whole. Scope is marketing, search and content strategy, brand positioning, plus adjacent advisory when you want outside thinking on operations, hiring, or vendor selection. The format is what makes it work. <strong>Marketing Consulting</strong> is advice. Execution on the site comes out of <strong>Web Management</strong> hours. Execution off the site gets its own statement of work.`,
       ],
+      closer_tie_back: angle
+        ? `Your own pitch leads with this: ${angle} The engagement protects a promise like that in two places: the site that shows it, and the strategy that keeps deciding what to show.`
+        : '',
     };
   },
 
@@ -153,6 +169,7 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
     const clientName = clientNameFromCtx(ctx);
     const industry = industryFromCtx(ctx);
     const urgency = urgencyFromCtx(ctx);
+    const angle = firstSalesAngleFromCtx(ctx);
     return {
       intro_lines: [
         `This engagement starts with a one-time build and ends in an ongoing relationship.`,
@@ -183,6 +200,9 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
           html: `From launch forward, the site sits inside the standard <strong>Web Management</strong> cadence: hosting, daily backups, security and uptime monitoring, and software updates on the contracted cadence. A pool of hands-on hours every month covers active work. Edits, page additions, content updates, small fixes all draw from that pool. There is no second onboarding.`,
         },
       ],
+      closer_tie_back: angle
+        ? `Your own pitch leads with this: ${angle} The site I build is what makes that promise visible online. The management I run after launch is what keeps it visible.`
+        : '',
     };
   },
 
@@ -193,6 +213,7 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
   // any urgency. The thinking-partner subscription shape.
   'marketing-consulting::B::*': (ctx) => {
     const clientName = clientNameFromCtx(ctx);
+    const angle = firstSalesAngleFromCtx(ctx);
     return {
       intro_lines: [
         `You are looking for someone to think with you on the questions that sit above the day-to-day.`,
@@ -204,6 +225,9 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
         `I recommend <strong>Marketing Consulting</strong> as a thinking-partner subscription for the business. The engagement opens with a research-grade audit: competitors, search and keyword landscape, content gaps, brand positioning, the state of the in-room strategy as it actually exists today. After the audit, the engagement runs on an ongoing cadence of strategy work, with the rhythm and depth set in the agreement. Sold once for the whole business. Not per site. Not per entity.`,
         `<strong>Marketing Consulting</strong> is advice. That is the format. It is also the value. The fee buys attention and research, not unlimited production. When a recommendation needs to be implemented, the implementation routes through a separate statement of work. Not through the consulting fee. You are paying for a thinker who is in the work with you. Not a vendor who will quietly absorb scope until the engagement loses its shape.`,
       ],
+      closer_tie_back: angle
+        ? `Your own pitch leads with this: ${angle} Thinking-partner work is how a promise like that stays sharp as the market keeps moving.`
+        : '',
     };
   },
 
@@ -216,6 +240,7 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
     const clientName = clientNameFromCtx(ctx);
     const ecoBand = '150 or more pages';
     const pageCount = pageCountFromCtx(ctx);
+    const angle = firstSalesAngleFromCtx(ctx);
     return {
       intro_lines: [
         `A site of this depth is operating infrastructure. The engagement should be sized to that reality.`,
@@ -227,6 +252,9 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
         `I recommend <strong>Web Management</strong> on a monthly basis for the ${clientName} site, at the higher hours pool a larger footprint requires. The monthly fee covers hosting, daily backups, security and uptime monitoring, and software updates on the contracted cadence. The hours pool is sized to the site itself. More updates to vet before they ship. More pages to keep current. More places to check when something upstream has shifted. The hours match the site, not the average.`,
         `The monthly health report and the maintenance cadence run as an operational rhythm, not a reactive one. You see what was touched. What was found. What is queued for the next cycle. What is being watched. What is being deferred, and why. A site this size goes off the rails when nobody is paying attention. It stays running when someone is paying attention every week. The shape of the engagement is what holds that posture in place.`,
       ],
+      closer_tie_back: angle
+        ? `Your own pitch leads with this: ${angle} A site this size goes quiet about a promise like that the moment nobody is paying attention to it. The engagement is how someone keeps paying attention.`
+        : '',
     };
   },
 
@@ -238,6 +266,7 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
   'web-management::A::*': (ctx) => {
     const clientName = clientNameFromCtx(ctx);
     const pageCount = pageCountFromCtx(ctx);
+    const angle = firstSalesAngleFromCtx(ctx);
     return {
       intro_lines: [
         `A small site is the right shape for what the business needs. The engagement should match it, not pad it out.`,
@@ -248,6 +277,9 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
       what_i_recommend_paragraphs: [
         `I recommend <strong>Web Management</strong> on a monthly basis for the ${clientName} site, sized to the site itself. The monthly fee covers hosting, daily backups, security and uptime monitoring, and monthly software updates. A small but real pool of hands-on hours covers active work: edits, small fixes, content updates, the things a working site picks up across a month. The shape of the engagement matches the shape of the site. Nothing about that is a compromise.`,
       ],
+      closer_tie_back: angle
+        ? `Your own pitch leads with this: ${angle} A small site managed honestly is the shape that promise takes online without padding around it.`
+        : '',
     };
   },
 
@@ -292,6 +324,22 @@ function urgencyFromCtx(ctx: ProductContext): string {
   const v = ctx.variables['urgency'];
   if (typeof v === 'string' && v.trim()) return v.trim();
   return 'time-sensitive';
+}
+
+// Pulls the first sales angle from the engagement strategy synthesis
+// and normalizes it for inline use in a closer_tie_back paragraph.
+// Returns an empty string when no angle is present so the snippet's
+// tie-back gracefully no-ops.
+function firstSalesAngleFromCtx(ctx: ProductContext): string {
+  const strategy = ctx.engagementStrategy;
+  if (!strategy) return '';
+  const angles = strategy.sales_angles;
+  if (!Array.isArray(angles) || angles.length === 0) return '';
+  const first = angles[0];
+  if (!first || typeof first.angle !== 'string') return '';
+  const trimmed = first.angle.trim();
+  if (!trimmed) return '';
+  return /[.!?]$/.test(trimmed) ? trimmed : trimmed + '.';
 }
 
 // =========================================================================

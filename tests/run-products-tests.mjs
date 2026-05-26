@@ -988,6 +988,83 @@ async function run() {
     fallbackCfg.products?.length === 1 && fallbackCfg.products[0] === 'training');
 
   // -------------------------------------------------------------------
+  // Move 2: closer_tie_back wired in all 8 existing snippets.
+  // Each snippet's tie-back fires only when sales_angles[0] is present
+  // and renders as the closer's final paragraph using the prospect's
+  // own value prop.
+  // -------------------------------------------------------------------
+  const tieBackAngle = "Quality engineered solutions delivered fast.";
+
+  // Sample each of the 8 keys with a representative compose and a
+  // strategy that carries one sales angle. The closer should end with
+  // the tie-back paragraph that contains the angle text verbatim.
+  const tieBackCases = [
+    { name: 'snippet 1 (WM B tactical)', combo: ['web-management'],
+      vars: { 'web-management': { page_count: 80, site_count: 1 } },
+      nv: { urgency: 'tactical' } },
+    { name: 'snippet 2 (WM+MC B growth)', combo: ['web-management', 'marketing-consulting'],
+      vars: { 'web-management': { page_count: 80, site_count: 1 }, 'marketing-consulting': { revenue_band: '1m-to-10m' } },
+      nv: { urgency: 'growth', industry: 'professional-services' } },
+    { name: 'snippet 3 (WM B *)', combo: ['web-management'],
+      vars: { 'web-management': { page_count: 80, site_count: 1 } },
+      nv: { urgency: 'growth' } },
+    { name: 'snippet 4 (WM+MC catch-all)', combo: ['web-management', 'marketing-consulting'],
+      vars: { 'web-management': { page_count: 15, site_count: 1 }, 'marketing-consulting': { revenue_band: 'under-1m' } },
+      nv: { urgency: 'maintenance' } },
+    { name: 'snippet 5 (Build+WM)', combo: ['web-management', 'build'],
+      vars: { 'web-management': { page_count: 80, site_count: 1 }, 'build': { build_size: 'small', build_count: 1, build_description: 'A new marketing site' } },
+      nv: { urgency: 'tactical' } },
+    { name: 'snippet 6 (MC B)', combo: ['marketing-consulting'],
+      vars: { 'marketing-consulting': { revenue_band: '1m-to-10m' } },
+      nv: { urgency: 'growth' } },
+    { name: 'snippet 7 (WM C)', combo: ['web-management'],
+      vars: { 'web-management': { page_count: 200, site_count: 1 } },
+      nv: { urgency: 'tactical' } },
+    { name: 'snippet 8 (WM A)', combo: ['web-management'],
+      vars: { 'web-management': { page_count: 15, site_count: 1 } },
+      nv: { urgency: 'tactical' } },
+  ];
+
+  for (const tc of tieBackCases) {
+    const cfg = composeProposal({
+      client: { id: 'tb-' + tc.name, name: 'Tie Back Co', slug: 'tie-back-co' },
+      signers: [{ id: 's1', name: 'Sam Tester', email: 'sam@tb.com' }],
+      products: tc.combo,
+      product_vars: tc.vars,
+      narrative_variables: tc.nv,
+      engagement_strategy: {
+        sales_angles: [{ angle: tieBackAngle, supporting_evidence: 'hero text' }],
+      },
+    });
+    const closer = cfg.narrative.sections.find(s => s.h2 === 'How this works in practice');
+    test(`Move 2: ${tc.name} closer_tie_back fires when sales_angles[0] present`,
+      !!closer && closer.paragraphs.some(p => p.includes(tieBackAngle)));
+    test(`Move 2: ${tc.name} tie-back is the closer's final paragraph`,
+      !!closer && closer.paragraphs.length > 0 && closer.paragraphs[closer.paragraphs.length - 1].includes(tieBackAngle));
+    test(`Move 2: ${tc.name} no em or en dashes in tie-back`,
+      (() => {
+        if (!closer) return true;
+        const last = closer.paragraphs[closer.paragraphs.length - 1] || '';
+        return !/[–—]/.test(last);
+      })());
+  }
+
+  // Snippet 1 without sales_angles = no tie-back appended.
+  const sn1NoStrategy = composeProposal({
+    client: { id: 'tb-empty', name: 'No Strategy Co', slug: 'no-strategy-co' },
+    signers: [{ id: 's1', name: 'Cal Tester', email: 'cal@ns.com' }],
+    products: ['web-management'],
+    product_vars: { 'web-management': { page_count: 80, site_count: 1 } },
+    narrative_variables: { urgency: 'tactical' },
+  });
+  test('Move 2: no sales_angles = no tie-back in closer',
+    (() => {
+      const closer = sn1NoStrategy.narrative.sections.find(s => s.h2 === 'How this works in practice');
+      if (!closer) return true;
+      return !closer.paragraphs.some(p => p.includes('Your own pitch leads with this:'));
+    })());
+
+  // -------------------------------------------------------------------
   // Cross-product BuildOption -> WM effects (Raised Bar pattern).
   // Compose a WM (Eco B Better) + Build (small) proposal with 2
   // build_options:

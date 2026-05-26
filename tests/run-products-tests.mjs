@@ -1066,6 +1066,67 @@ async function run() {
     })());
 
   // -------------------------------------------------------------------
+  // Move 9: per-product sales-angle line prepended to "What I
+  // recommend" from sales_angles[].product_implication.
+  // -------------------------------------------------------------------
+  const angleCfg = composeProposal({
+    client: { id: 'ag1', name: 'Angle Co', slug: 'angle-co' },
+    signers: [{ id: 's1', name: 'Sy Lee', email: 's@ag.com' }],
+    products: ['web-management', 'marketing-consulting'],
+    product_vars: {
+      'web-management': { page_count: 80, site_count: 1 },
+      'marketing-consulting': { revenue_band: '1m-to-10m' },
+    },
+    engagement_strategy: {
+      sales_angles: [
+        { angle: 'Quality is our priority', supporting_evidence: 'hero', product_implication: 'web_management' },
+        { angle: 'Personalized engineering at every step', supporting_evidence: 'about page', product_implication: 'marketing_consulting' },
+        { angle: 'Designed faster than the industry average', supporting_evidence: 'about page', product_implication: 'build' },
+        { angle: 'Generic angle', supporting_evidence: 'somewhere', product_implication: 'none' },
+      ],
+    },
+  });
+  const angleRecSection = angleCfg.narrative.sections.find(s => s.h2 === 'What I recommend');
+  test('Move 9: per-product sales-angle line appears for WM',
+    !!angleRecSection && angleRecSection.paragraphs.some(p =>
+      p.includes('<strong>Web Management</strong> carries your own line forward:') &&
+      p.includes('Quality is our priority')));
+  test('Move 9: per-product sales-angle line appears for MC',
+    !!angleRecSection && angleRecSection.paragraphs.some(p =>
+      p.includes('<strong>Marketing Consulting</strong> carries your own line forward:') &&
+      p.includes('Personalized engineering')));
+  test('Move 9: angle for out-of-scope product (Build) is NOT included',
+    !!angleRecSection && !angleRecSection.paragraphs.some(p =>
+      p.includes('<strong>Build</strong> carries your own line forward:')));
+  test('Move 9: generic angle (product_implication=none) is NOT surfaced per-product',
+    !!angleRecSection && !angleRecSection.paragraphs.some(p =>
+      p.includes('Generic angle')));
+  test('Move 9: angle lines come BEFORE the inline product pitch paragraphs',
+    (() => {
+      if (!angleRecSection) return false;
+      const angleIdx = angleRecSection.paragraphs.findIndex(p => p.includes('carries your own line forward'));
+      const inlineIdx = angleRecSection.paragraphs.findIndex(p =>
+        p.startsWith('I recommend') || p.includes('I recommend <strong>'));
+      return angleIdx >= 0 && (inlineIdx === -1 || angleIdx < inlineIdx);
+    })());
+
+  const noImplCfg = composeProposal({
+    client: { id: 'ag2', name: 'No Impl Co', slug: 'no-impl-co' },
+    signers: [{ id: 's1', name: 'Sy Lee', email: 's@ni.com' }],
+    products: ['web-management'],
+    product_vars: { 'web-management': { page_count: 80, site_count: 1 } },
+    engagement_strategy: {
+      sales_angles: [
+        { angle: 'Generic A', supporting_evidence: 'x' },
+        { angle: 'Generic B', supporting_evidence: 'y', product_implication: 'none' },
+      ],
+    },
+  });
+  const noImplRec = noImplCfg.narrative.sections.find(s => s.h2 === 'What I recommend');
+  test('Move 9: no product_implication = no angle lines',
+    !!noImplRec && !noImplRec.paragraphs.some(p => p.includes('carries your own line forward')));
+
+  // -------------------------------------------------------------------
   // Move 8: per-product rationale appended to "What I recommend" from
   // engagement_strategy.recommended_product_mix.
   // -------------------------------------------------------------------

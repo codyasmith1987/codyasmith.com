@@ -341,8 +341,21 @@ function composeNarrative(args: ComposeNarrativeArgs): {
     orderedProducts: args.orderedProducts,
   });
   // "What I recommend" h2 with paragraphs.
-  const recommendParagraphs = contributions.flatMap(c => c.set.what_i_recommend_paragraphs || []);
-  // Per audit move 8: append per-product "Why I'm pitching X here"
+  const recommendParagraphs: string[] = [];
+  // Per audit move 9: PREPEND per-product sales-angle lines so the
+  // section opens with the prospect's own pitch reflected back at
+  // them, before Cody's product pitch lands. One short line per
+  // in-scope product that has a matching angle.
+  const salesAngleLines = composeSalesAnglesPerProduct({
+    engagementStrategy: args.engagementStrategy,
+    orderedProducts: args.orderedProducts,
+  });
+  for (const p of salesAngleLines) recommendParagraphs.push(p);
+  // Per-product inline contributions (default pitch paragraphs).
+  for (const p of contributions.flatMap(c => c.set.what_i_recommend_paragraphs || [])) {
+    recommendParagraphs.push(p);
+  }
+  // Per audit move 8: APPEND per-product "Why I'm pitching X here"
   // paragraphs from engagement_strategy.recommended_product_mix.
   // Surfaces the AI's reasoning to the buyer instead of keeping it
   // admin-only. Confidence stays admin-side; only rationale ships.
@@ -466,6 +479,60 @@ function composeSituationOpener(args: {
     ? `One thing stood out looking at ${args.clientName}.`
     : `A few things stood out looking at ${args.clientName}.`;
   return [`${leadIn} ${angles.join(' ')}`];
+}
+
+// =========================================================================
+// Per-product sales-angle lines from synthesis sales_angles
+// =========================================================================
+//
+// Each sales angle the prospect tells their own customers can carry
+// a product_implication tag (web_management / marketing_consulting /
+// build / training) when the synthesis sees a clear mapping. This
+// pulls the FIRST angle whose product_implication matches each
+// in-scope product and renders it as a one-line opener in "What I
+// recommend." Threads the prospect's own pitch into each product's
+// section, so the buyer reads their own language reflected back at
+// them before Cody's pitch lands.
+//
+// Per audit move 9.
+function composeSalesAnglesPerProduct(args: {
+  engagementStrategy?: EngagementStrategy | null;
+  orderedProducts: ProductId[];
+}): string[] {
+  const strategy = args.engagementStrategy;
+  if (!strategy || !Array.isArray(strategy.sales_angles) || strategy.sales_angles.length === 0) return [];
+  const synthToShortName: Record<string, string> = {
+    web_management: 'Web Management',
+    marketing_consulting: 'Marketing Consulting',
+    build: 'Build',
+    training: 'Training',
+  };
+  const wizardToSynth: Record<string, string> = {
+    'web-management': 'web_management',
+    'marketing-consulting': 'marketing_consulting',
+    'build': 'build',
+    'training': 'training',
+  };
+  const out: string[] = [];
+  const usedAngles = new Set<string>();
+  for (const wizardId of args.orderedProducts) {
+    const synthId = wizardToSynth[wizardId];
+    if (!synthId) continue;
+    const name = synthToShortName[synthId];
+    if (!name) continue;
+    // First angle whose product_implication matches AND we haven't
+    // surfaced yet (no double-attribution to the same product).
+    const match = strategy.sales_angles.find(a =>
+      a && typeof a.angle === 'string' && a.angle.trim().length > 0
+      && a.product_implication === synthId
+      && !usedAngles.has(a.angle.trim().toLowerCase())
+    );
+    if (!match) continue;
+    usedAngles.add(match.angle.trim().toLowerCase());
+    const angleClean = match.angle.trim().replace(/[.!?]+$/, '');
+    out.push(`<strong>${name}</strong> carries your own line forward: "${angleClean}."`);
+  }
+  return out;
 }
 
 // =========================================================================

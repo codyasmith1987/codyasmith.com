@@ -281,6 +281,11 @@ export interface ProductScheduleAContribution {
 export interface EngagementStrategySalesAngle {
   angle: string;
   supporting_evidence: string;
+  // Per audit move 9: which of Cody's products amplifies or supports
+  // this prospect-stated value prop. Composer reads this to thread
+  // the prospect's own pitch into each in-scope product's section
+  // ("Web Management carries forward what you said about quality").
+  product_implication?: EngagementStrategySynthProductId | 'none';
 }
 // AI's per-prospect tier recommendation per product. Keys are the
 // synthesis product ids (underscored: web_management,

@@ -153,6 +153,7 @@ export function composeProposal(args: ComposeArgs): ProposalConfig {
     orderedProducts,
     contexts,
     clientName: args.client.name,
+    clientId: args.client.id,
     narrativeVariables: args.narrative_variables || {},
     engagementStrategy,
   });
@@ -221,6 +222,9 @@ interface ComposeNarrativeArgs {
   orderedProducts: ProductId[];
   contexts: Record<ProductId, ProductContext>;
   clientName: string;
+  // Per audit move 7: snippet lookup uses this to prefer
+  // client-scoped overrides over global ones at the same key.
+  clientId?: string;
   narrativeVariables: { industry?: string; urgency?: string; focus?: string[] };
   engagementStrategy?: EngagementStrategy | null;
 }
@@ -260,12 +264,15 @@ function composeNarrative(args: ComposeNarrativeArgs): {
     const focusPrimary = (args.narrativeVariables.focus && Array.isArray(args.narrativeVariables.focus) && args.narrativeVariables.focus.length > 0)
       ? args.narrativeVariables.focus[0] || null
       : null;
+    // Per audit move 7: thread the client id so client-scoped
+    // overrides can win over global overrides at the same key.
     const override = lookupSnippetOverride({
       productId: primary,
       otherProductIds: others,
       ecosystemId: lookupEco,
       urgency: args.narrativeVariables.urgency || null,
       focusPrimary,
+      clientId: args.clientId || null,
     });
     if (override) {
       // The snippet runs with the primary product's context (the

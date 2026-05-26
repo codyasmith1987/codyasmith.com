@@ -44,6 +44,14 @@ export const prerender = false;
             Format: <span class="font-mono">product_combo::ecosystem::urgency</span>. Product combo is alphabetized, joined with <span class="font-mono">+</span> (e.g., <span class="font-mono">marketing-consulting+web-management</span>). Ecosystem is A, B, C, or <span class="font-mono">*</span>. Urgency is tactical, growth, maintenance, or <span class="font-mono">*</span>.
           </p>
         </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Scope</label>
+          <input type="text" id="new-client-id" placeholder="leave empty for Global; or paste a client_id to scope this snippet to one client"
+            class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
+          <p class="text-[11px] text-neutral-500 mt-2 leading-relaxed">
+            Empty (or <span class="font-mono">*</span>) = Global. Any other value = scoped to that specific client only. Client-scoped overrides win over Global at the same key. Find client ids on the Clients admin page.
+          </p>
+        </div>
         <button type="button" id="new-snippet-create"
           class="px-4 py-2 bg-amber-500 text-neutral-950 text-xs font-medium rounded hover:bg-amber-400 transition-colors">
           Create empty snippet
@@ -116,6 +124,7 @@ export const prerender = false;
 
     let currentKey = null;
     let currentSnippet = null;
+    let currentClientId = '*';
 
     function esc(s) {
       return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -169,21 +178,28 @@ export const prerender = false;
           listEl.innerHTML = '<p class="text-sm text-neutral-500">No snippets yet. Use the form above to add one.</p>';
           return;
         }
-        listEl.innerHTML = snippets.map(s => {
+        listEl.innerHTML = snippets.map((s, idx) => {
           const totalLines = (s.intro_lines?.length || 0) + (s.what_i_see_paragraphs?.length || 0) + (s.what_i_recommend_paragraphs?.length || 0);
           const sourceBadge = s.source === 'db'
             ? '<span class="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-600 uppercase tracking-wide">DB only</span>'
             : s.source === 'both'
               ? '<span class="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-600 uppercase tracking-wide">DB overrides file</span>'
               : '<span class="text-[10px] font-mono px-2 py-0.5 rounded bg-neutral-900 border border-white/10 text-neutral-400 uppercase tracking-wide" title="No DB override. Composer reads this snippet from the version-controlled file registry.">File only</span>';
+          // Per audit move 7: scope badge shows whether this snippet
+          // is global or client-scoped. Client-scoped beats global at
+          // the same key during compose.
+          const cid = (s.client_id || '*');
+          const scopeBadge = cid === '*'
+            ? '<span class="text-[10px] font-mono px-2 py-0.5 rounded bg-neutral-900 border border-white/10 text-neutral-400 uppercase tracking-wide" title="Used for every client unless a client-scoped snippet exists for the same key.">Global</span>'
+            : `<span class="text-[10px] font-mono px-2 py-0.5 rounded bg-sepia-500/10 border border-amber-500/30 text-amber-700 uppercase tracking-wide" title="Used only for this specific client. Beats Global at the same key.">Client: ${esc(cid)}</span>`;
           return `
             <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5">
               <div class="flex items-center justify-between gap-4 flex-wrap">
                 <div class="flex-1 min-w-0">
                   <p class="text-sm font-mono text-neutral-200 break-all">${esc(s.key)}</p>
-                  <p class="text-[11px] text-neutral-500 mt-1">${totalLines} lines/paragraphs · ${sourceBadge}${s.updated_at ? ` · saved ${esc(s.updated_at)}` : ''}</p>
+                  <p class="text-[11px] text-neutral-500 mt-1">${totalLines} lines/paragraphs · ${sourceBadge} · ${scopeBadge}${s.updated_at ? ` · saved ${esc(s.updated_at)}` : ''}</p>
                 </div>
-                <button type="button" data-edit-key="${esc(s.key)}"
+                <button type="button" data-edit-idx="${idx}"
                   class="px-3 py-1.5 border border-white/10 text-neutral-300 text-xs rounded hover:border-amber-500/30 hover:text-amber-600 transition-colors">
                   Edit
                 </button>
@@ -191,10 +207,10 @@ export const prerender = false;
             </div>
           `;
         }).join('');
-        listEl.querySelectorAll('[data-edit-key]').forEach(btn => {
+        listEl.querySelectorAll('[data-edit-idx]').forEach(btn => {
           btn.addEventListener('click', () => {
-            const key = btn.getAttribute('data-edit-key');
-            const snippet = snippets.find(s => s.key === key);
+            const idx = parseInt(btn.getAttribute('data-edit-idx'), 10);
+            const snippet = snippets[idx];
             if (snippet) openEditor(snippet);
           });
         });
@@ -206,7 +222,10 @@ export const prerender = false;
     function openEditor(snippet) {
       currentKey = snippet.key;
       currentSnippet = snippet;
-      titleEl.textContent = snippet.key;
+      // Per audit move 7: keep client_id pinned per snippet so saves
+      // target the right (key, client_id) row.
+      currentClientId = snippet.client_id || '*';
+      titleEl.textContent = snippet.key + (currentClientId === '*' ? '' : ` · client: ${currentClientId}`);
       introEl.value = joinLines(snippet.intro_lines);
       seeEl.value = joinParagraphs(snippet.what_i_see_paragraphs);
       recommendEl.value = joinParagraphs(snippet.what_i_recommend_paragraphs);
@@ -284,6 +303,7 @@ export const prerender = false;
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
           body: JSON.stringify({
             key: currentKey,
+            client_id: currentClientId || '*',
             intro_lines: splitLines(introEl.value),
             what_i_see_paragraphs: splitParagraphs(seeEl.value),
             what_i_recommend_paragraphs: splitParagraphs(recommendEl.value),
@@ -312,13 +332,14 @@ export const prerender = false;
 
     deleteBtn.addEventListener('click', async () => {
       if (!currentKey) return;
-      if (!confirm(`Delete DB override for ${currentKey}? File registry baseline (if any) stays.`)) return;
+      const scopeNote = (currentClientId === '*') ? 'Global' : `client ${currentClientId}`;
+      if (!confirm(`Delete DB override for ${currentKey} (${scopeNote})? File registry baseline (if any) stays.`)) return;
       setStatus('Deleting…');
       try {
         const res = await fetch('/portal/api/admin/proposals/snippets/save', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify({ key: currentKey }),
+          body: JSON.stringify({ key: currentKey, client_id: currentClientId || '*' }),
         });
         if (res.ok) {
           setStatus('Deleted.', 'ok');
@@ -344,8 +365,11 @@ export const prerender = false;
 
     document.getElementById('new-snippet-create').addEventListener('click', async () => {
       const keyInput = document.getElementById('new-key');
+      const clientIdInput = document.getElementById('new-client-id');
       const statusInput = document.getElementById('new-snippet-status');
       const key = (keyInput.value || '').trim();
+      const rawClientId = (clientIdInput.value || '').trim();
+      const clientId = (rawClientId && rawClientId !== '*') ? rawClientId : '*';
       if (!key) {
         statusInput.textContent = 'Key required.';
         statusInput.className = 'text-[11px] font-mono ml-3 text-red-400';
@@ -357,9 +381,11 @@ export const prerender = false;
         return;
       }
       // Open the editor with the new key and empty buckets. Save
-      // upserts when the admin clicks Save inside the modal.
+      // upserts when the admin clicks Save inside the modal. Scope
+      // (client_id) is captured here and threaded through.
       openEditor({
         key,
+        client_id: clientId,
         source: 'db',
         intro_lines: [],
         what_i_see_paragraphs: [],
@@ -368,6 +394,7 @@ export const prerender = false;
         updated_at: null,
       });
       keyInput.value = '';
+      clientIdInput.value = '';
       statusInput.textContent = '';
     });
 

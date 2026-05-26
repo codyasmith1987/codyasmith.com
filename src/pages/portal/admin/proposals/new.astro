@@ -384,6 +384,168 @@ const todayISO = new Date().toISOString().slice(0, 10);
 
   <script is:inline define:vars={{ todayLong, productManifest, usersByClient, latestTotalUrls, clientSitesByClient, wmEcosystemPricing, WM_MULTI_SITE_DISCOUNT, BUILD_FEES, BUILD_SUBSEQUENT_DISCOUNT }}>
     // =========================================================================
+    // Standard-option dropdowns
+    // =========================================================================
+    //
+    // Each free-text field that has canonical phrasings (sourced from
+    // business-design-v2.docx, Jason's Raised Bar proposal, and the
+    // Cody voice memory) gets a small dropdown above the input. Pick
+    // an option to populate the input with that template; placeholders
+    // like {client}, {existing_domain}, {vertical} get auto-filled
+    // from wizard state where known, the rest stay as {placeholder}
+    // text for the admin to fill in. Pick the blank to type freely.
+    const STANDARD_OPTIONS = {
+      build_description: [
+        "A new marketing site for {client}",
+        "A brand-led redesign of the {client} primary site",
+        "A new sub-brand microsite under the {client} parent",
+        "A pre-sell microsite for {client} on its own URL",
+        "A net-new site for {client} with focused sections for the brand and the pre-sell",
+        "A takeover and rebuild of {client}'s existing site",
+        "Page expansion at {existing_domain} for the new {vertical} content",
+        "Content additions to {existing_domain} for the {vertical} category",
+        "A focused section added to {client}'s existing site for the new {vertical}",
+      ],
+      option_name: [
+        "Option 1: Single unified site",
+        "Option 2: Split setup",
+        "Option 1: One bigger site with a focused section inside",
+        "Option 2: Two sites, primary plus standalone microsite",
+        "Option 1: Brand-led primary site",
+        "Option 2: Sub-brand microsite on its own URL",
+        "Option 1: Build out the current site",
+        "Option 2: Build a new microsite alongside",
+        "Option 1: Expand the existing site",
+        "Option 2: Add a standalone site",
+        "Option 1: Keep one site and add the new content",
+        "Option 2: Split into two sites for better focus",
+      ],
+      option_pitch: [
+        "One site with a focused section for the pre-sell.",
+        "Two focused sites, each with its own messaging and growth path.",
+        "Keep authority in one place. One launch, one cadence to manage.",
+        "One site built bigger means less management overhead and one URL to promote.",
+        "Splitting means each audience gets its own clean message.",
+        "Before another build, the right move is to look at what {existing_domain} is already doing for you. Adding the new section inside the site you already own is faster to launch, keeps your existing search authority on one URL, and means one site to manage instead of two.",
+        "A new site is a new search history, a new analytics start, a new everything. Expanding {existing_domain} carries the URL, the backlinks, and the traffic patterns you already have, and the build cost is a fraction of standing up a second site from scratch. The trade is worth naming plainly: less brand separation, more compounding.",
+        "{existing_domain} is already carrying the company's story. The work is to extend it, not replace it. I expand the site with the new section, tighten what is already there in the same pass, and the whole thing moves onto Web Management at launch.",
+        "You asked about a separate site. The cleaner answer for where {client} is right now is the opposite. Fold the new section into {existing_domain} as a focused area, keep one URL working for the business, and revisit the standalone site later if the section earns the case for it.",
+        "{existing_domain} has work to do on it before it gets any bigger. I tighten what is already broken or stale, add the new content in the same pass, and the site comes out of this engagement working better than it went in. One bill, one launch, one site under management.",
+      ],
+      option_schedule_a: [
+        "Single site build covering both the brand and the pre-sell section.",
+        "Two site builds: the primary brand site, plus a standalone microsite for the new section.",
+        "One site build with the new section launching first as a focused subsection.",
+        "Brand-led rebuild plus a separate microsite build for the new section.",
+        "Site expansion at {existing_domain} to incorporate the new section.",
+        "Page additions to {existing_domain} for the new content.",
+      ],
+      rollout_phase_header: [
+        "The unified primary site, new section first",
+        "The standalone microsite",
+        "Brand-led rebuild of the primary site",
+        "Launch the microsite first",
+        "Discovery and content inventory",
+        "Design and content production",
+        "Pre-launch QA and stakeholder review",
+        "Launch and handoff to Web Management",
+        "Soft launch with limited audience",
+        "Full public launch",
+      ],
+      rollout_phase_body: [
+        "I build the primary site with the new section completed first so it launches while the rest of the build is still being finished. The site moves onto Web Management at launch.",
+        "I take over the existing site, fix what's broken, and tighten the site inside your monthly pooled hours. The site joins the management pool.",
+        "The microsite launches first on its own URL, focused entirely on the new section. Signage, ads, and direct outreach point at this site. Lean, focused, fast to launch.",
+        "I build the primary site without the new section. This becomes the primary brand site. The site moves onto Web Management at launch.",
+      ],
+      wm_sites_added_label: [
+        "{vertical} microsite",
+        "{client} primary site",
+        "{client} takeover",
+        "{vertical} category site",
+      ],
+      other_sow_title: [
+        "Content production sprint",
+        "Ad creative for launch campaign",
+        "Brand asset production",
+        "Campaign setup and launch",
+        "Research production",
+        "Copy production at scale",
+        "Marketing automation setup",
+        "Email campaign series production",
+        "SEO content production",
+        "Lead magnet production",
+        "Sales collateral redesign",
+        "Photography or video production",
+        "Email newsletter design",
+        "Brand strategy intensive",
+        "Sales playbook production",
+      ],
+      title: [
+        "Engagement Proposal for {client}",
+        "Engagement Proposal for {signers}",
+        "Web Management Proposal for {client}",
+        "Marketing Consulting Proposal for {client}",
+        "{client}: Engagement Proposal",
+      ],
+    };
+
+    // Substitution map. Auto-fills the placeholders the wizard knows
+    // values for; leaves unknown placeholders as literal text so the
+    // admin can spot and edit them.
+    function buildSubstitutionMap() {
+      const primarySite = (clientSitesCache[state.client_id] || []).find(s => s.is_primary);
+      const signerFirstNames = (state.signers || []).map(s => (s.name || '').split(' ')[0]).filter(Boolean);
+      const signersJoined = signerFirstNames.length === 0
+        ? state.client_name || ''
+        : signerFirstNames.length === 1
+          ? signerFirstNames[0]
+          : signerFirstNames.length === 2
+            ? signerFirstNames.join(' and ')
+            : signerFirstNames.slice(0, -1).join(', ') + ', and ' + signerFirstNames[signerFirstNames.length - 1];
+      return {
+        client: state.client_name || '',
+        brand: state.client_name || '',
+        primary_domain: state.client_domain || (primarySite ? primarySite.domain : ''),
+        existing_domain: (primarySite ? primarySite.domain : state.client_domain || ''),
+        signers: signersJoined,
+      };
+    }
+
+    // Attach a standard-options dropdown above an existing text input
+    // or textarea. On pick, populate the input with the template (with
+    // known placeholders substituted), dispatch an input event so any
+    // existing listener runs, then reset the dropdown to blank.
+    function attachStandardDropdown(input, optionsKey) {
+      const options = STANDARD_OPTIONS[optionsKey];
+      if (!Array.isArray(options) || options.length === 0) return;
+      const select = document.createElement('select');
+      select.className = 'mb-1 w-full px-2 py-1 bg-neutral-900/30 border border-amber-500/20 rounded text-amber-700 text-[10px] font-mono cursor-pointer hover:border-amber-500/40 transition-colors';
+      const blank = document.createElement('option');
+      blank.value = '';
+      blank.textContent = '— pick a starting point, or type your own below —';
+      select.appendChild(blank);
+      for (const tpl of options) {
+        const o = document.createElement('option');
+        o.value = tpl;
+        o.textContent = tpl.length > 90 ? tpl.slice(0, 87) + '…' : tpl;
+        select.appendChild(o);
+      }
+      select.addEventListener('change', () => {
+        if (!select.value) return;
+        let text = select.value;
+        const subs = buildSubstitutionMap();
+        for (const [k, v] of Object.entries(subs)) {
+          if (v) text = text.split('{' + k + '}').join(v);
+        }
+        input.value = text;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        select.value = '';
+      });
+      if (input.parentNode) input.parentNode.insertBefore(select, input);
+    }
+
+    // =========================================================================
     // Wizard state
     // =========================================================================
     const state = {
@@ -814,6 +976,15 @@ const todayISO = new Date().toISOString().slice(0, 10);
           input.addEventListener('change', onVarChange);
           wrap.appendChild(input);
 
+          // Standard-options dropdown for canonical free-text fields.
+          // The select renders ABOVE the input via attachStandardDropdown.
+          if (id === 'build' && field.id === 'build_description') {
+            attachStandardDropdown(input, 'build_description');
+          }
+          if (id === 'other-sow' && field.id === 'title') {
+            attachStandardDropdown(input, 'other_sow_title');
+          }
+
           if (field.help) {
             const help = document.createElement('p');
             help.className = 'text-[10px] text-neutral-500 mt-1';
@@ -1041,6 +1212,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
       nameInput.placeholder = 'Option 1: One bigger site';
       nameInput.addEventListener('input', () => { opt.name = nameInput.value; });
       nameWrap.appendChild(nameInput);
+      attachStandardDropdown(nameInput, 'option_name');
       card.appendChild(nameWrap);
 
       const pitchWrap = document.createElement('div');
@@ -1053,6 +1225,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
       pitchInput.placeholder = 'One site with a focused section for the pre-sell.';
       pitchInput.addEventListener('input', () => { opt.pitch = pitchInput.value; });
       pitchWrap.appendChild(pitchInput);
+      attachStandardDropdown(pitchInput, 'option_pitch');
       card.appendChild(pitchWrap);
 
       const grid = document.createElement('div');
@@ -1083,6 +1256,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
       sowInput.placeholder = 'Single site build covering both the brand and the pre-sell section.';
       sowInput.addEventListener('input', () => { opt.schedule_a_note = sowInput.value; });
       sowWrap.appendChild(sowInput);
+      attachStandardDropdown(sowInput, 'option_schedule_a');
       card.appendChild(sowWrap);
 
       // Cross-product WM impact subsection. Lets the option add
@@ -1357,6 +1531,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           labelInput.placeholder = 'Tailwater micro-site';
           labelInput.addEventListener('input', () => { site.label = labelInput.value; if (opt._recomputeSummary) opt._recomputeSummary(); });
           labelCol.appendChild(labelInput);
+          attachStandardDropdown(labelInput, 'wm_sites_added_label');
           const pagesInput = document.createElement('input');
           pagesInput.type = 'number';
           pagesInput.min = '0';
@@ -1558,6 +1733,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
             phase.phase_num = `Phase ${pIdx + 1}`;
           });
           row.appendChild(h3Input);
+          attachStandardDropdown(h3Input, 'rollout_phase_header');
           const htmlInput = document.createElement('textarea');
           htmlInput.rows = 2;
           htmlInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
@@ -1565,6 +1741,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           htmlInput.placeholder = 'Phase description (HTML allowed).';
           htmlInput.addEventListener('input', () => { phase.html = htmlInput.value; });
           row.appendChild(htmlInput);
+          attachStandardDropdown(htmlInput, 'rollout_phase_body');
           phasesList.appendChild(row);
         });
       };
@@ -1855,6 +2032,13 @@ const todayISO = new Date().toISOString().slice(0, 10);
     // =========================================================================
     // Header overrides
     // =========================================================================
+    // Standard-options dropdown for the title override. Slug and
+    // prepared_for stay free-text (auto-derived; no canonical menu).
+    (function attachTitleDropdown() {
+      const titleEl = document.getElementById('title');
+      if (titleEl) attachStandardDropdown(titleEl, 'title');
+    })();
+
     function syncOverrides() {
       const title = document.getElementById('title').value.trim();
       const slug = document.getElementById('slug').value.trim();

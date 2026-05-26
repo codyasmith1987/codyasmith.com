@@ -120,6 +120,14 @@ const wmEcosystemPricing = Object.fromEntries(
 );
 const WM_MULTI_SITE_DISCOUNT = 0.80;
 
+// Build product fees + subsequent-build discount, mirrored client-side
+// so the BuildOption editor can auto-compute the build cost added by
+// a picked option. The composer's source of truth is
+// src/lib/products/build.ts BUILD_FEES + SUBSEQUENT_BUILD_DISCOUNT;
+// these values must stay in sync.
+const BUILD_FEES = { small: 5625, mid: 11875, large: 22500 };
+const BUILD_SUBSEQUENT_DISCOUNT = 0.20;
+
 const todayLong = new Date().toLocaleDateString('en-US', {
   year: 'numeric', month: 'long', day: 'numeric',
 });
@@ -374,7 +382,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
     </form>
   </div>
 
-  <script is:inline define:vars={{ todayLong, productManifest, usersByClient, latestTotalUrls, clientSitesByClient, wmEcosystemPricing, WM_MULTI_SITE_DISCOUNT }}>
+  <script is:inline define:vars={{ todayLong, productManifest, usersByClient, latestTotalUrls, clientSitesByClient, wmEcosystemPricing, WM_MULTI_SITE_DISCOUNT, BUILD_FEES, BUILD_SUBSEQUENT_DISCOUNT }}>
     // =========================================================================
     // Wizard state
     // =========================================================================
@@ -1040,20 +1048,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
       card.appendChild(pitchWrap);
 
       const grid = document.createElement('div');
-      grid.className = 'mb-2 grid grid-cols-2 gap-3';
-      const deltaCol = document.createElement('div');
-      deltaCol.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Build cost difference vs the other option ($, can be negative; 0 if same price)</label>`;
-      const deltaInput = document.createElement('input');
-      deltaInput.type = 'number';
-      deltaInput.step = '1';
-      deltaInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
-      deltaInput.value = opt.pricing_delta != null ? String(opt.pricing_delta) : '0';
-      deltaInput.addEventListener('input', () => {
-        const n = parseFloat(deltaInput.value);
-        opt.pricing_delta = Number.isFinite(n) ? n : 0;
-      });
-      deltaCol.appendChild(deltaInput);
-      grid.appendChild(deltaCol);
+      grid.className = 'mb-2 grid grid-cols-1 gap-3';
 
       const idCol = document.createElement('div');
       idCol.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Internal id (leave as-is unless you have a reason)</label>`;
@@ -1099,33 +1094,42 @@ const todayISO = new Date().toISOString().slice(0, 10);
       wrap.className = 'mt-3 pl-3 border-l-2 border-amber-500/30';
       const label = document.createElement('p');
       label.className = 'text-[10px] font-mono text-neutral-500 mb-2 uppercase tracking-wide';
-      label.textContent = 'What changes for ongoing Web Management if this option is picked';
+      label.textContent = 'What this option adds or changes';
       wrap.appendChild(label);
       const help = document.createElement('p');
       help.className = 'text-[11px] text-neutral-400 mb-3 leading-relaxed';
-      help.textContent = 'New sites I build only add to the Web Management monthly fee. The one-time setup is already covered by the build cost. Changing an existing site’s page count may bump it to a different tier. Click Calculate and the dollar fields below fill in automatically.';
+      help.textContent = 'Pick the structural changes this option makes (new sites it builds, existing sites whose page count grows). The wizard computes every dollar amount from the rules in the code.';
       wrap.appendChild(help);
 
-      // Auto-calculate button: sums each added site's contribution at
-      // the picked tier × 0.80 (multi-site additional factor) and
-      // writes the result into the monthly + onboarding inputs.
-      // Saves admin from doing the math by hand and stops them from
-      // typing a number that disagrees with the locked formula.
-      const calcWrap = document.createElement('div');
-      calcWrap.className = 'mb-3 flex items-center gap-3 flex-wrap';
+      // Tier picker for the auto-calculation. Defaults to Better
+      // since that's recommended for most clients. Recalculates on
+      // change so the summary stays live.
+      const tierRow = document.createElement('div');
+      tierRow.className = 'mb-3 flex items-center gap-2';
+      const tierLabel = document.createElement('span');
+      tierLabel.className = 'text-[10px] font-mono text-neutral-500 uppercase tracking-wide';
+      tierLabel.textContent = 'Compute at tier:';
       const calcTierSel = document.createElement('select');
       calcTierSel.className = 'px-2 py-1 bg-neutral-900/50 border border-white/10 rounded text-neutral-200 text-xs';
       calcTierSel.innerHTML = '<option value="good">Good</option><option value="better" selected>Better</option><option value="best">Best</option>';
-      const calcBtn = document.createElement('button');
-      calcBtn.type = 'button';
-      calcBtn.className = 'text-[11px] px-3 py-1 bg-neutral-800 border border-white/10 rounded text-amber-600 hover:border-amber-500/40 transition-colors';
-      calcBtn.textContent = 'Calculate the monthly + setup fees';
-      const calcStatus = document.createElement('span');
-      calcStatus.className = 'text-[11px] font-mono text-neutral-500';
-      calcWrap.appendChild(calcTierSel);
-      calcWrap.appendChild(calcBtn);
-      calcWrap.appendChild(calcStatus);
-      wrap.appendChild(calcWrap);
+      tierRow.appendChild(tierLabel);
+      tierRow.appendChild(calcTierSel);
+      wrap.appendChild(tierRow);
+
+      // Computed summary box. Read-only. Updates live whenever any
+      // structural input below changes (sites added, modifications,
+      // tier select). The admin never types a dollar amount.
+      const summary = document.createElement('div');
+      summary.className = 'mb-3 p-3 bg-neutral-900/40 border border-amber-500/20 rounded';
+      const summaryTitle = document.createElement('p');
+      summaryTitle.className = 'text-[10px] font-mono text-amber-700 uppercase tracking-wide mb-1';
+      summaryTitle.textContent = 'If client picks this option';
+      const summaryBody = document.createElement('p');
+      summaryBody.className = 'text-[12px] text-neutral-200 leading-relaxed';
+      summaryBody.textContent = 'Add a new site or a modification below to see the impact.';
+      summary.appendChild(summaryTitle);
+      summary.appendChild(summaryBody);
+      wrap.appendChild(summary);
 
       function routeWmEcoFromPages(pages) {
         if (pages == null || !Number.isFinite(pages)) return null;
@@ -1133,107 +1137,147 @@ const todayISO = new Date().toISOString().slice(0, 10);
         if (pages <= 150) return 'B';
         return 'C';
       }
-      calcBtn.addEventListener('click', () => {
+
+      // Map a site's page count to the build size band. Mirrors the
+      // BUILD_SIZES routing in src/lib/products/build.ts.
+      function buildSizeFromPages(pages) {
+        if (pages == null || !Number.isFinite(pages)) return null;
+        if (pages < 30) return 'small';
+        if (pages <= 150) return 'mid';
+        return 'large';
+      }
+
+      // Single source of truth for the computed delta. Called on
+      // every structural change. Writes the computed values onto opt
+      // (so the saved JSON carries them) AND renders the summary.
+      function recompute() {
         const addedArr = Array.isArray(opt.wm_sites_added) ? opt.wm_sites_added : [];
         const modArr = Array.isArray(opt.wm_site_modifications) ? opt.wm_site_modifications : [];
-        if (addedArr.length === 0 && modArr.length === 0) {
-          calcStatus.textContent = 'Nothing to calculate yet. Add a new site or a modification first.';
-          calcStatus.className = 'text-[11px] font-mono text-amber-700';
-          return;
-        }
         const tierId = calcTierSel.value;
-        // New build sites contribute monthly only. Build product covers
-        // their WM onboarding ("Replaces onboarding for the site it
-        // produces"), so onb stays at 0 from added sites.
+        const tierLabelText = tierId.charAt(0).toUpperCase() + tierId.slice(1);
+
+        // Compute Build cost added by the option. Each new site
+        // becomes an additional build; build product applies the
+        // subsequent-build discount in production but here we just
+        // sum at full fee per added site (the engagement's base
+        // build_count covers the first one; added sites are extras
+        // and assumed to take the subsequent discount). Apply 20%
+        // off each added site to match the product's pricing rule.
+        let buildCostAdded = 0;
+        let buildSkipped = 0;
+        const buildBreakdownParts = [];
+        for (const site of addedArr) {
+          const pages = typeof site.page_count_estimate === 'number' ? site.page_count_estimate : null;
+          const sizeId = buildSizeFromPages(pages);
+          if (!sizeId || BUILD_FEES[sizeId] == null) {
+            buildSkipped++;
+            continue;
+          }
+          // Subsequent-build discount (matches build.ts SUBSEQUENT_BUILD_DISCOUNT).
+          const fee = BUILD_FEES[sizeId] * (1 - BUILD_SUBSEQUENT_DISCOUNT);
+          buildCostAdded += fee;
+          const labelText = site.label || site.domain || '(new site)';
+          buildBreakdownParts.push(`${labelText} ${sizeId} build $${Math.round(fee).toLocaleString()}`);
+        }
+        const buildCostRounded = Math.round(buildCostAdded * 100) / 100;
+
+        // Compute WM monthly + onboarding delta from added sites.
+        // Build covers onboarding for sites it produces, so onb=0.
         let monthlySum = 0;
-        let skipped = 0;
+        let wmAddedSkipped = 0;
+        const wmAddedParts = [];
         for (const site of addedArr) {
           const pages = typeof site.page_count_estimate === 'number' ? site.page_count_estimate : null;
           const eco = routeWmEcoFromPages(pages);
           if (!eco || !wmEcosystemPricing[eco] || !wmEcosystemPricing[eco][tierId]) {
-            skipped++;
+            wmAddedSkipped++;
             continue;
           }
           const tierPricing = wmEcosystemPricing[eco][tierId];
-          monthlySum += tierPricing.monthly * WM_MULTI_SITE_DISCOUNT;
+          const contribution = tierPricing.monthly * WM_MULTI_SITE_DISCOUNT;
+          monthlySum += contribution;
+          const labelText = site.label || site.domain || '(new site)';
+          wmAddedParts.push(`${labelText} +$${Math.round(contribution).toLocaleString()}/mo`);
         }
-        opt.wm_monthly_delta = Math.round(monthlySum * 100) / 100;
-        opt.wm_onboarding_delta = 0;
-        monthlyInput.value = String(opt.wm_monthly_delta);
-        onbInput.value = '0';
-        // Modifications apply automatically via the composer (it
-        // mutates managedSites before pricing), so they do NOT add to
-        // wm_monthly_delta or wm_onboarding_delta. Surface the impact
-        // in the status line so the admin can confirm the picture.
-        let modImpactParts = [];
+        const monthlyDelta = Math.round(monthlySum * 100) / 100;
+
+        // Compute WM modification impact. Modifications apply via
+        // the composer (mutates managedSites before pricing), so we
+        // don't write to wm_monthly_delta — we just describe them
+        // here so the admin sees what the change does to the bill.
+        const modParts = [];
         let modSkipped = 0;
+        let modMonthly = 0;
+        let modOnb = 0;
+        const managedNow = (clientSitesCache[state.client_id] || []).filter(s => s.is_managed);
         for (const mod of modArr) {
           const domain = (mod && typeof mod.site_domain === 'string') ? mod.site_domain : '';
           const newPages = (mod && typeof mod.new_page_count === 'number') ? mod.new_page_count : null;
           if (!domain || newPages == null) { modSkipped++; continue; }
-          const managedNow = (clientSitesCache[state.client_id] || []).filter(s => s.is_managed);
           const existing = managedNow.find(s => (s.domain || '').toLowerCase() === domain.toLowerCase());
           if (!existing) { modSkipped++; continue; }
-          const oldPages = existing.page_count;
-          const oldEco = routeWmEcoFromPages(oldPages);
+          const oldEco = routeWmEcoFromPages(existing.page_count);
           const newEco = routeWmEcoFromPages(newPages);
           if (!oldEco || !newEco || !wmEcosystemPricing[oldEco]?.[tierId] || !wmEcosystemPricing[newEco]?.[tierId]) {
             modSkipped++;
             continue;
           }
           if (oldEco === newEco) {
-            modImpactParts.push(`${domain} stays at Eco ${newEco} (no tier change)`);
+            modParts.push(`${domain} stays at Eco ${newEco} (no tier change)`);
             continue;
           }
           const oldP = wmEcosystemPricing[oldEco][tierId];
           const newP = wmEcosystemPricing[newEco][tierId];
           const dMonthly = Math.round((newP.monthly - oldP.monthly) * 100) / 100;
           const dOnb = Math.round((newP.onb - oldP.onb) * 100) / 100;
-          modImpactParts.push(`${domain} bumps from Eco ${oldEco} to Eco ${newEco} (+$${dMonthly} per month, +$${dOnb} one-time setup)`);
+          modMonthly += dMonthly;
+          modOnb += dOnb;
+          modParts.push(`${domain} bumps from Eco ${oldEco} to Eco ${newEco} (+$${dMonthly}/mo, +$${dOnb} one-time)`);
         }
-        const tierLabel = tierId.charAt(0).toUpperCase() + tierId.slice(1);
-        const skippedNote = skipped > 0 ? ` (${skipped} new site(s) skipped — missing page count)` : '';
-        const modSkippedNote = modSkipped > 0 ? ` (${modSkipped} modification(s) skipped — site not in managed list, or page count missing)` : '';
-        const baseLine = addedArr.length > 0
-          ? `At ${tierLabel} tier: +$${opt.wm_monthly_delta} per month, +$0 one-time setup (build fee covers new site setup)`
-          : `No new sites`;
-        const modLine = modImpactParts.length > 0
-          ? ` · Existing site changes (applied automatically): ${modImpactParts.join('; ')}`
-          : '';
-        calcStatus.textContent = `${baseLine}${modLine}${skippedNote}${modSkippedNote}`;
-        calcStatus.className = 'text-[11px] font-mono text-emerald-400';
-      });
+        const totalMonthly = monthlyDelta + modMonthly;
+        const totalOnb = modOnb; // build covers all added-site onboarding
 
-      const grid = document.createElement('div');
-      grid.className = 'grid grid-cols-2 gap-3 mb-3';
-      const monthlyCol = document.createElement('div');
-      monthlyCol.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Web Management monthly added or removed ($) — Calculate fills this</label>`;
-      const monthlyInput = document.createElement('input');
-      monthlyInput.type = 'number';
-      monthlyInput.step = '0.01';
-      monthlyInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
-      monthlyInput.value = opt.wm_monthly_delta != null ? String(opt.wm_monthly_delta) : '0';
-      monthlyInput.addEventListener('input', () => {
-        const n = parseFloat(monthlyInput.value);
-        opt.wm_monthly_delta = Number.isFinite(n) ? n : 0;
-      });
-      monthlyCol.appendChild(monthlyInput);
-      grid.appendChild(monthlyCol);
+        // Write the computed values back to opt so they save and
+        // flow into the composer / proposal page / Schedule A.
+        opt.pricing_delta = buildCostRounded;
+        opt.wm_monthly_delta = monthlyDelta;
+        opt.wm_onboarding_delta = 0;
 
-      const onbCol = document.createElement('div');
-      onbCol.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Web Management one-time setup added or removed ($) — Calculate fills this</label>`;
-      const onbInput = document.createElement('input');
-      onbInput.type = 'number';
-      onbInput.step = '0.01';
-      onbInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
-      onbInput.value = opt.wm_onboarding_delta != null ? String(opt.wm_onboarding_delta) : '0';
-      onbInput.addEventListener('input', () => {
-        const n = parseFloat(onbInput.value);
-        opt.wm_onboarding_delta = Number.isFinite(n) ? n : 0;
-      });
-      onbCol.appendChild(onbInput);
-      grid.appendChild(onbCol);
-      wrap.appendChild(grid);
+        // Render summary
+        if (addedArr.length === 0 && modArr.length === 0) {
+          summaryBody.textContent = 'Add a new site or a modification below to see the impact.';
+          return;
+        }
+        const lines = [];
+        if (buildCostRounded > 0) {
+          lines.push(`Build cost added: <strong>+$${buildCostRounded.toLocaleString()}</strong> (${buildBreakdownParts.join(', ')})`);
+        }
+        if (totalMonthly !== 0 || totalOnb !== 0) {
+          const monthlyPart = totalMonthly !== 0 ? `+$${totalMonthly.toLocaleString()}/month` : '$0/month';
+          const onbPart = totalOnb !== 0 ? `, +$${totalOnb.toLocaleString()} one-time setup` : '';
+          lines.push(`Web Management at ${tierLabelText}: <strong>${monthlyPart}${onbPart}</strong>`);
+        } else if (addedArr.length > 0 || modArr.length > 0) {
+          lines.push(`Web Management at ${tierLabelText}: no change`);
+        }
+        if (wmAddedParts.length > 0) {
+          lines.push(`<span class="text-neutral-400 text-[11px]">New sites: ${wmAddedParts.join(', ')}</span>`);
+        }
+        if (modParts.length > 0) {
+          lines.push(`<span class="text-neutral-400 text-[11px]">Modifications: ${modParts.join('; ')}</span>`);
+        }
+        const skips = [];
+        if (buildSkipped > 0) skips.push(`${buildSkipped} new site(s) missing page count`);
+        if (modSkipped > 0) skips.push(`${modSkipped} modification(s) missing site or page count`);
+        if (skips.length > 0) {
+          lines.push(`<span class="text-amber-700 text-[11px]">Skipped: ${skips.join('; ')}</span>`);
+        }
+        summaryBody.innerHTML = lines.join('<br>');
+      }
+
+      // Expose recompute so the sites + modifications subsections
+      // can trigger it whenever their inputs change.
+      opt._recomputeSummary = recompute;
+      calcTierSel.addEventListener('change', recompute);
 
       const sitesLabel = document.createElement('p');
       sitesLabel.className = 'text-[10px] font-mono text-neutral-500 mb-2 uppercase tracking-wide';
@@ -1264,14 +1308,14 @@ const todayISO = new Date().toISOString().slice(0, 10);
           domainInput.className = 'w-full px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono';
           domainInput.value = site.domain || '';
           domainInput.placeholder = 'tailwater-micro.com';
-          domainInput.addEventListener('input', () => { site.domain = domainInput.value.trim().toLowerCase(); });
+          domainInput.addEventListener('input', () => { site.domain = domainInput.value.trim().toLowerCase(); if (opt._recomputeSummary) opt._recomputeSummary(); });
           domainCol.appendChild(domainInput);
           const labelInput = document.createElement('input');
           labelInput.type = 'text';
           labelInput.className = 'w-full px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs';
           labelInput.value = site.label || '';
           labelInput.placeholder = 'Tailwater micro-site';
-          labelInput.addEventListener('input', () => { site.label = labelInput.value; });
+          labelInput.addEventListener('input', () => { site.label = labelInput.value; if (opt._recomputeSummary) opt._recomputeSummary(); });
           labelCol.appendChild(labelInput);
           const pagesInput = document.createElement('input');
           pagesInput.type = 'number';
@@ -1281,6 +1325,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           pagesInput.addEventListener('input', () => {
             const n = parseInt(pagesInput.value, 10);
             site.page_count_estimate = Number.isFinite(n) ? n : undefined;
+            if (opt._recomputeSummary) opt._recomputeSummary();
           });
           pagesCol.appendChild(pagesInput);
           const rmBtn = document.createElement('button');
@@ -1291,6 +1336,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           rmBtn.addEventListener('click', () => {
             opt.wm_sites_added.splice(idx, 1);
             renderSites();
+            if (opt._recomputeSummary) opt._recomputeSummary();
           });
           rmCol.appendChild(rmBtn);
           sitesList.appendChild(row);
@@ -1306,6 +1352,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
         if (!Array.isArray(opt.wm_sites_added)) opt.wm_sites_added = [];
         opt.wm_sites_added.push({ domain: '', label: '', page_count_estimate: undefined });
         renderSites();
+        if (opt._recomputeSummary) opt._recomputeSummary();
       });
       wrap.appendChild(addSiteBtn);
 
@@ -1366,7 +1413,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
             siteSel.appendChild(opt2);
           }
           siteSel.value = mod.site_domain || '';
-          siteSel.addEventListener('change', () => { mod.site_domain = siteSel.value; });
+          siteSel.addEventListener('change', () => { mod.site_domain = siteSel.value; if (opt._recomputeSummary) opt._recomputeSummary(); });
           siteCol.appendChild(siteSel);
 
           const pagesInput = document.createElement('input');
@@ -1378,6 +1425,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           pagesInput.addEventListener('input', () => {
             const n = parseInt(pagesInput.value, 10);
             mod.new_page_count = Number.isFinite(n) ? n : undefined;
+            if (opt._recomputeSummary) opt._recomputeSummary();
           });
           pagesCol.appendChild(pagesInput);
 
@@ -1397,6 +1445,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           rmBtn.addEventListener('click', () => {
             opt.wm_site_modifications.splice(idx, 1);
             renderMods();
+            if (opt._recomputeSummary) opt._recomputeSummary();
           });
           rmCol.appendChild(rmBtn);
           modsList.appendChild(row);
@@ -1412,8 +1461,14 @@ const todayISO = new Date().toISOString().slice(0, 10);
         if (!Array.isArray(opt.wm_site_modifications)) opt.wm_site_modifications = [];
         opt.wm_site_modifications.push({ site_domain: '', new_page_count: undefined, note: '' });
         renderMods();
+        if (opt._recomputeSummary) opt._recomputeSummary();
       });
       wrap.appendChild(addModBtn);
+
+      // Initial summary render — covers draft proposals that already
+      // have saved sites or modifications so the admin sees the
+      // current math, not the empty-state placeholder.
+      recompute();
 
       return wrap;
     }

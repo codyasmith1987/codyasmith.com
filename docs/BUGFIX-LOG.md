@@ -8,6 +8,20 @@ When working on the portal, **check this file before guessing at any auth, redir
 
 ---
 
+## 2026-05-25 — CSV folder uploads return HTTP 524 even though data lands in DB
+
+**Symptom.** Uploading a full Screaming Frog export folder (~150 CSVs) at `/portal/admin/csv` returns HTTP 524 on every file in most batches. The 524 response body is a Cloudflare gateway-timeout HTML page. Looking at "Recent uploads" on the same page shows many of the failed-batch files actually did land in the DB. The client UI displays the CF HTML as raw text for each file ("HTTP 524: <!DOCTYPE html>..."), making it look like total failure.
+
+**Root cause.** Cloudflare's 100-second cap on origin response time. The CSV upload endpoint was processing each batch's files **sequentially** in a `for...of` loop. A batch of 25 mostly-small CSVs would usually finish in time, but SF folders contain 4-5 large link CSVs (e.g., `internal_success_(2xx)_inlinks.csv` at 6000+ rows) where each one takes 15-30 seconds of parsing + Turso writes + supersede sweep. Sequential processing meant batch wall time was the SUM of every file's time, easily 120+ seconds for a typical SF batch. Cloudflare gave up at 100s and returned its 524 page, even though the origin kept processing and most files did finish writing.
+
+**Fix.** Two-part fix across two PRs. PR #156 added a 25-file count cap on top of the existing 8MB byte cap (file-count alone wasn't enough). PR #157 switched server-side processing from `for...of` to `Promise.allSettled` so batch wall time is roughly the slowest file, not the sum. Also dropped client batch to 10 files for additional headroom, and rewrote the 524 error message in the UI to say "Server response timed out at Cloudflare (524). Data likely landed — check Recent uploads below in 10-20 seconds before retrying" instead of dumping the CF block HTML.
+
+**Watch for.** If CSV uploads start returning 524s on full SF folders again, check: (1) is the client batch size still small enough? (2) is server-side processing still parallel? (3) has Turso latency spiked making even parallel batches slow? The supersede logic dedupes on retry, so 524'd files that did land won't double-write — but the UI will show errors. Telling Cody to "just retry" creates supersede churn even when retries are safe. Better to wait for the original batch's deferred completion to show up in Recent uploads.
+
+Related: when an upload-like endpoint must process N items, default to `Promise.allSettled` over sequential unless the items contend on the same row in Turso (rare). Cloudflare's 100s cap is hard.
+
+---
+
 ## 2026-05-25 — Cloudflare API calls fail intermittently with "Cannot use the access token from location: <IP>"
 
 **Symptom.** A portal endpoint that calls the Cloudflare API (via the `listZones` / `fetchTrafficDaily` / `fetchSecurityDaily` helpers in `src/lib/cloudflare.ts`) starts failing with CF API error code 9109: `Cannot use the access token from location: <some IP>`. The same code path worked moments earlier. The IP in the error message is a DigitalOcean App Platform container egress IP. May surface as a CF 504 HTML page reaching the browser because Cloudflare in front of `codyasmith.com` transforms 5xx origin responses to its own gateway-timeout page, swallowing the JSON error body. The endpoint's own logs in DO show the actual 403 from CF.

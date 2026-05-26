@@ -277,6 +277,13 @@ function composeNarrative(args: ComposeNarrativeArgs): {
           || inlineContributions.find(c => c.set.rollout_scenarios)?.set.rollout_scenarios,
         rollout_scenario_step: snippetSet.rollout_scenario_step
           || inlineContributions.find(c => c.set.rollout_scenario_step)?.set.rollout_scenario_step,
+        // closer_tie_back: snippet wins if it set one; falls back to
+        // the first non-empty inline tie-back otherwise. Per audit
+        // move 2, the field needed to be in this merge object —
+        // without it, snippet-authored tie-backs were silently dropped.
+        closer_tie_back: snippetSet.closer_tie_back !== undefined
+          ? snippetSet.closer_tie_back
+          : inlineContributions.map(c => c.set.closer_tie_back).find(p => typeof p === 'string' && p.trim().length > 0),
       };
       contributions = [{ id: primary, set: merged }];
     }

@@ -155,6 +155,13 @@ export interface ProposalStepOption {
   tagline?: string;
   html?: string;
   recommended?: boolean;
+  // Per audit move 5: when the AI's per-prospect tier recommendation
+  // is the reason this option is flagged recommended (not the
+  // product's static default), the rationale string from the
+  // synthesis surfaces here. Renderer shows it as a small sub-line
+  // under the Recommended pill so the buyer reads "why this one fits"
+  // instead of an unexplained label.
+  recommended_rationale?: string;
   price_label?: string;
   price_suffix?: string;
   price_subline?: string;

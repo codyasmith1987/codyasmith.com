@@ -594,6 +594,15 @@ const clientConfig = {
     margin: 0 0 6px;
     color: #1d2c3a;
   }
+  .recommended-rationale {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 11px;
+    color: #6b6359;
+    font-style: italic;
+    line-height: 1.5;
+    margin: 8px 0 14px;
+    padding: 0 4px;
+  }
   .tagline {
     font-size: 14px;
     color: #6b6359;
@@ -882,6 +891,9 @@ const clientConfig = {
             aria-label={`${opt.name}${opt.recommended ? ', recommended' : ''}${opt.price_label ? `, ${opt.price_label}${opt.price_suffix || ''}` : ''}`}
           >
             {opt.recommended && <div class="pill">Recommended</div>}
+            {opt.recommended && opt.recommended_rationale && (
+              <div class="recommended-rationale">{opt.recommended_rationale}</div>
+            )}
             <h3>{opt.name}</h3>
             {opt.tagline && <div class="tagline">{opt.tagline}</div>}
             {opt.price_label && (

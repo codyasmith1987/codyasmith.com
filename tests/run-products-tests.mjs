@@ -1066,6 +1066,62 @@ async function run() {
     })());
 
   // -------------------------------------------------------------------
+  // Move 5: AI rationale surfaces under Recommended pill on tier cards.
+  // -------------------------------------------------------------------
+  const rationaleCfg = composeProposal({
+    client: { id: 'rc1', name: 'Rationale Co', slug: 'rationale-co' },
+    signers: [{ id: 's1', name: 'Vi Lee', email: 'v@rc.com' }],
+    products: ['web-management'],
+    product_vars: { 'web-management': { page_count: 80, site_count: 1 } },
+    engagement_strategy: {
+      sales_angles: [],
+      recommended_tier_per_product: {
+        web_management: {
+          tier: 'best',
+          rationale: 'Best fits the active growth posture and the multi-site footprint coming online next quarter.',
+        },
+      },
+    },
+  });
+  const wmStep = rationaleCfg.steps.find(s => s.id === 'wm_tier');
+  const bestOpt = wmStep?.options.find(o => o.id === 'best');
+  const betterOpt = wmStep?.options.find(o => o.id === 'better');
+  test('Move 5: AI rationale appears on the recommended tier card',
+    !!bestOpt && bestOpt.recommended === true && typeof bestOpt.recommended_rationale === 'string' && bestOpt.recommended_rationale.includes('active growth'));
+  test('Move 5: non-recommended tier cards have no rationale',
+    !!betterOpt && !betterOpt.recommended_rationale);
+
+  const defaultRecCfg = composeProposal({
+    client: { id: 'rc2', name: 'Default Co', slug: 'default-co' },
+    signers: [{ id: 's1', name: 'Vi Lee', email: 'v@dc.com' }],
+    products: ['web-management'],
+    product_vars: { 'web-management': { page_count: 80, site_count: 1 } },
+  });
+  const defaultBetter = defaultRecCfg.steps.find(s => s.id === 'wm_tier')?.options.find(o => o.id === 'better');
+  test('Move 5: no AI rationale = no rationale on default-recommended card',
+    !!defaultBetter && defaultBetter.recommended === true && !defaultBetter.recommended_rationale);
+
+  const mcRationaleCfg = composeProposal({
+    client: { id: 'rc3', name: 'MC Rationale Co', slug: 'mc-rationale-co' },
+    signers: [{ id: 's1', name: 'Vi Lee', email: 'v@mc.com' }],
+    products: ['marketing-consulting'],
+    product_vars: { 'marketing-consulting': { revenue_band: '1m-to-10m' } },
+    engagement_strategy: {
+      sales_angles: [],
+      recommended_tier_per_product: {
+        marketing_consulting: {
+          tier: 'good',
+          rationale: 'Good fits the budget for an audit-first start; can step up after the first cycle.',
+        },
+      },
+    },
+  });
+  const mcStep = mcRationaleCfg.steps.find(s => s.id === 'mc_tier');
+  const mcGood = mcStep?.options.find(o => o.id === 'good');
+  test('Move 5: MC tier card surfaces AI rationale',
+    !!mcGood && mcGood.recommended === true && typeof mcGood.recommended_rationale === 'string' && mcGood.recommended_rationale.includes('audit-first'));
+
+  // -------------------------------------------------------------------
   // Move 4: snippet key gains a fourth segment for focusPrimary.
   // 4-segment keys are tried first when focus is set; 3-segment
   // keys (existing snippets) still match as fallback. No focus =

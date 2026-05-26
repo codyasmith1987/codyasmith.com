@@ -374,6 +374,11 @@ function buildTierOption(args: {
   ecosystem: Ecosystem;
   sites: number;
   aiRecommendedTier?: TierId | null;
+  // Per audit move 5: the AI's reason for recommending this tier
+  // surfaces as a sub-line under the Recommended pill. Only set when
+  // the tier is the AI-recommended one (skipped for non-matching
+  // tiers and for product-default recommendations).
+  aiRecommendedRationale?: string;
   // Optional managed sites array. When present and >= 2 sites, the
   // tier card pricing reflects per-site ecosystem routing instead of
   // priming everything off the primary's ecosystem. The features list
@@ -435,11 +440,20 @@ function buildTierOption(args: {
     features.push(perSiteBreakdown);
   }
 
+  // Surface the AI rationale only when THIS tier is the AI-recommended
+  // one AND the rationale string is non-empty. Skipped for non-
+  // recommended tiers and when the recommendation came from the
+  // product's static default (no AI rationale exists in that case).
+  const showRationale = args.aiRecommendedTier
+    && args.aiRecommendedTier === args.tierId
+    && typeof args.aiRecommendedRationale === 'string'
+    && args.aiRecommendedRationale.trim().length > 0;
   return {
     id: args.tierId,
     name: tier.name,
     tagline: tier.tagline,
     recommended,
+    recommended_rationale: showRationale ? args.aiRecommendedRationale!.trim() : undefined,
     price_label: formatMoney(monthly),
     price_suffix: '/ month',
     price_subline: args.sites > 1
@@ -538,6 +552,9 @@ export const webManagementProduct: ProductDefinition = {
     const aiRecommendedTier = aiTier === 'good' || aiTier === 'better' || aiTier === 'best'
       ? aiTier as TierId
       : null;
+    // Per audit move 5: also pull the rationale so the recommended
+    // tier card can show "why this one fits."
+    const aiRecommendedRationale = ctx.engagementStrategy?.recommended_tier_per_product?.web_management?.rationale;
     // Thread managedSites into buildTierOption so per-site monthly
     // and the per-site breakdown line render correctly when multi-site.
     const managedSites = ctx.managedSites;
@@ -547,9 +564,9 @@ export const webManagementProduct: ProductDefinition = {
       h2: 'Pick a Web Management level',
       prompt: `Good, Better, or Best for Web Management. The level sets how often I update your sites, how fast I respond when something breaks, and how many hands-on hours per month sit in your pool.`,
       options: [
-        buildTierOption({ tierId: 'good', ecosystem: eco, sites, aiRecommendedTier, managedSites }),
-        buildTierOption({ tierId: 'better', ecosystem: eco, sites, aiRecommendedTier, managedSites }),
-        buildTierOption({ tierId: 'best', ecosystem: eco, sites, aiRecommendedTier, managedSites }),
+        buildTierOption({ tierId: 'good', ecosystem: eco, sites, aiRecommendedTier, aiRecommendedRationale, managedSites }),
+        buildTierOption({ tierId: 'better', ecosystem: eco, sites, aiRecommendedTier, aiRecommendedRationale, managedSites }),
+        buildTierOption({ tierId: 'best', ecosystem: eco, sites, aiRecommendedTier, aiRecommendedRationale, managedSites }),
       ],
     };
     return [step];

@@ -1156,16 +1156,16 @@ const todayISO = new Date().toISOString().slice(0, 10);
         const tierId = calcTierSel.value;
         const tierLabelText = tierId.charAt(0).toUpperCase() + tierId.slice(1);
 
-        // Compute Build cost added by the option. Each new site
-        // becomes an additional build; build product applies the
-        // subsequent-build discount in production but here we just
-        // sum at full fee per added site (the engagement's base
-        // build_count covers the first one; added sites are extras
-        // and assumed to take the subsequent discount). Apply 20%
-        // off each added site to match the product's pricing rule.
-        let buildCostAdded = 0;
+        // Compute the FULL build cost for this option. Each option
+        // is treated as fully self-contained: the option's sites
+        // define the entire build for that option, not extras on
+        // top of a base. First site = full BUILD_FEES[size]; each
+        // subsequent site = × 0.80 (subsequent-build discount,
+        // matches src/lib/products/build.ts SUBSEQUENT_BUILD_DISCOUNT).
+        let optionBuildCost = 0;
         let buildSkipped = 0;
         const buildBreakdownParts = [];
+        let buildIdx = 0;
         for (const site of addedArr) {
           const pages = typeof site.page_count_estimate === 'number' ? site.page_count_estimate : null;
           const sizeId = buildSizeFromPages(pages);
@@ -1173,13 +1173,39 @@ const todayISO = new Date().toISOString().slice(0, 10);
             buildSkipped++;
             continue;
           }
-          // Subsequent-build discount (matches build.ts SUBSEQUENT_BUILD_DISCOUNT).
-          const fee = BUILD_FEES[sizeId] * (1 - BUILD_SUBSEQUENT_DISCOUNT);
-          buildCostAdded += fee;
+          // First valid site = full fee. Each subsequent = × 0.80.
+          const fee = buildIdx === 0
+            ? BUILD_FEES[sizeId]
+            : BUILD_FEES[sizeId] * (1 - BUILD_SUBSEQUENT_DISCOUNT);
+          optionBuildCost += fee;
           const labelText = site.label || site.domain || '(new site)';
-          buildBreakdownParts.push(`${labelText} ${sizeId} build $${Math.round(fee).toLocaleString()}`);
+          const tag = buildIdx === 0 ? 'first build' : 'subsequent (-20%)';
+          buildBreakdownParts.push(`${labelText} ${sizeId} build $${Math.round(fee).toLocaleString()} ${tag}`);
+          buildIdx++;
         }
-        const buildCostRounded = Math.round(buildCostAdded * 100) / 100;
+        const optionBuildCostRounded = Math.round(optionBuildCost * 100) / 100;
+
+        // Compute the BASE build cost from the top-level build_size +
+        // build_count. The composer adds pricing_delta to this base,
+        // so we set pricing_delta = optionBuildCost - baseBuildCost.
+        // When the option is picked, the composer's total becomes the
+        // option's full build cost (base + delta = option's total).
+        let baseBuildCost = 0;
+        try {
+          const baseSize = state.product_vars?.build?.build_size || null;
+          const baseCount = parseInt(state.product_vars?.build?.build_count, 10) || 1;
+          if (baseSize && BUILD_FEES[baseSize] != null) {
+            const baseFee = BUILD_FEES[baseSize];
+            baseBuildCost = baseFee; // first build full
+            for (let i = 1; i < baseCount; i++) {
+              baseBuildCost += baseFee * (1 - BUILD_SUBSEQUENT_DISCOUNT);
+            }
+          }
+        } catch {}
+        const baseBuildCostRounded = Math.round(baseBuildCost * 100) / 100;
+        const buildCostDelta = optionBuildCostRounded > 0
+          ? Math.round((optionBuildCostRounded - baseBuildCostRounded) * 100) / 100
+          : 0;
 
         // Compute WM monthly + onboarding delta from added sites.
         // Build covers onboarding for sites it produces, so onb=0.
@@ -1239,7 +1265,11 @@ const todayISO = new Date().toISOString().slice(0, 10);
 
         // Write the computed values back to opt so they save and
         // flow into the composer / proposal page / Schedule A.
-        opt.pricing_delta = buildCostRounded;
+        // pricing_delta nets out the top-level base build cost
+        // (which the composer always adds) and applies the option's
+        // own per-site build cost on top, so the final total ends
+        // up at the option's optionBuildCost.
+        opt.pricing_delta = buildCostDelta;
         opt.wm_monthly_delta = monthlyDelta;
         opt.wm_onboarding_delta = 0;
 
@@ -1249,8 +1279,8 @@ const todayISO = new Date().toISOString().slice(0, 10);
           return;
         }
         const lines = [];
-        if (buildCostRounded > 0) {
-          lines.push(`Build cost added: <strong>+$${buildCostRounded.toLocaleString()}</strong> (${buildBreakdownParts.join(', ')})`);
+        if (optionBuildCostRounded > 0) {
+          lines.push(`Build cost: <strong>$${optionBuildCostRounded.toLocaleString()}</strong> (${buildBreakdownParts.join(', ')})`);
         }
         if (totalMonthly !== 0 || totalOnb !== 0) {
           const monthlyPart = totalMonthly !== 0 ? `+$${totalMonthly.toLocaleString()}/month` : '$0/month';
@@ -1683,6 +1713,18 @@ const todayISO = new Date().toISOString().slice(0, 10);
       // Refresh routing note for this product.
       const note = varsContainer.querySelector(`[data-eco-note="${pid}"]`);
       if (note) note.textContent = computeRoutingNote(pid);
+      // When the top-level Build size or count changes, every option's
+      // pricing_delta needs to recompute (the base build cost in the
+      // delta math just changed). Walk every option on the Build
+      // product and call its summary recompute if exposed.
+      if (pid === 'build' && (vid === 'build_size' || vid === 'build_count')) {
+        const buildOpts = (state.product_vars?.build?.build_options) || [];
+        for (const o of buildOpts) {
+          if (o && typeof o._recomputeSummary === 'function') {
+            try { o._recomputeSummary(); } catch {}
+          }
+        }
+      }
     }
 
     function computeRoutingNote(productId) {

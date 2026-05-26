@@ -512,6 +512,83 @@ const todayISO = new Date().toISOString().slice(0, 10);
       };
     }
 
+    // Reusable AI-draft button for any wizard input. Mirrors the
+    // build_description pattern: click POSTs to an endpoint with
+    // payload built by the caller, applies the response back to the
+    // input, surfaces voice-lint violations inline.
+    //
+    // opts:
+    //   endpoint: API route to POST to
+    //   buildPayload: () => object | string. Return a payload object
+    //     to POST, or a string error message to surface without
+    //     calling the endpoint (e.g., "Set the option name first.")
+    //   applyResponse: (data, input) => void. Populates the input
+    //     from the response and dispatches an input event so any
+    //     existing listener runs.
+    function attachAiDraftButton(opts) {
+      const row = document.createElement('div');
+      row.className = 'mt-1 flex items-center gap-2 flex-wrap';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'px-2 py-1 text-[10px] rounded bg-amber-500/10 border border-amber-500/30 text-amber-700 hover:bg-amber-500/20 transition-colors';
+      btn.textContent = 'AI draft this';
+      const msg = document.createElement('span');
+      msg.className = 'text-[10px] text-neutral-500 hidden';
+      btn.addEventListener('click', async () => {
+        if (!state.client_id) {
+          msg.textContent = 'Pick a client first.';
+          msg.className = 'text-[10px] text-red-400';
+          msg.classList.remove('hidden');
+          return;
+        }
+        const payloadOrError = opts.buildPayload();
+        if (typeof payloadOrError === 'string') {
+          msg.textContent = payloadOrError;
+          msg.className = 'text-[10px] text-red-400';
+          msg.classList.remove('hidden');
+          return;
+        }
+        btn.disabled = true;
+        msg.textContent = 'Drafting...';
+        msg.className = 'text-[10px] text-neutral-400';
+        msg.classList.remove('hidden');
+        let res;
+        try {
+          res = await fetch(opts.endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify(payloadOrError),
+          });
+        } catch (err) {
+          msg.textContent = `Network error: ${err && err.message ? err.message : 'fetch failed'}`;
+          msg.className = 'text-[10px] text-red-400';
+          btn.disabled = false;
+          return;
+        }
+        const rawText = await res.text();
+        let data = null;
+        try { data = rawText ? JSON.parse(rawText) : null; } catch {}
+        if (res.ok && data && data.ok) {
+          opts.applyResponse(data);
+          const violations = (data.voice_violations && data.voice_violations.length)
+            ? ` (voice warnings: ${data.voice_violations.map(v => v.rule).join(', ')})`
+            : '';
+          msg.textContent = `Drafted${violations}. Edit as needed.`;
+          msg.className = 'text-[10px] text-emerald-400/80';
+        } else {
+          const errMsg = (data && data.error)
+            ? data.error
+            : `HTTP ${res.status}${rawText ? ': ' + rawText.slice(0, 120) : ''}`;
+          msg.textContent = errMsg;
+          msg.className = 'text-[10px] text-red-400';
+        }
+        btn.disabled = false;
+      });
+      row.appendChild(btn);
+      row.appendChild(msg);
+      return row;
+    }
+
     // Attach a standard-options dropdown above an existing text input
     // or textarea. On pick, populate the input with the template (with
     // known placeholders substituted), dispatch an input event so any
@@ -1226,6 +1303,31 @@ const todayISO = new Date().toISOString().slice(0, 10);
       pitchInput.addEventListener('input', () => { opt.pitch = pitchInput.value; });
       pitchWrap.appendChild(pitchInput);
       attachStandardDropdown(pitchInput, 'option_pitch');
+      // Per audit move 6: AI-draft button for the option pitch.
+      // Endpoint contrasts THIS option against the OTHER option's
+      // pitch so the two cards differentiate cleanly.
+      pitchWrap.appendChild(attachAiDraftButton({
+        endpoint: '/portal/api/admin/proposals/ai/option-pitch',
+        buildPayload: () => {
+          if (!opt.name) return 'Set the option name first.';
+          const allOpts = state.product_vars && state.product_vars['build'] && state.product_vars['build'].build_options
+            ? state.product_vars['build'].build_options : [];
+          const other = allOpts.find((_o, i) => i !== index);
+          return {
+            client_id: state.client_id,
+            option_name: opt.name,
+            other_option_name: (other && other.name) || null,
+            other_option_pitch: (other && other.pitch) || null,
+            build_description: (state.product_vars && state.product_vars['build'] && state.product_vars['build'].build_description) || null,
+            inferred_industry: (state.narrative_variables && state.narrative_variables.industry) || null,
+            admin_hint: pitchInput.value || null,
+          };
+        },
+        applyResponse: (data) => {
+          pitchInput.value = data.sentence;
+          pitchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        },
+      }));
       card.appendChild(pitchWrap);
 
       const grid = document.createElement('div');
@@ -1742,6 +1844,30 @@ const todayISO = new Date().toISOString().slice(0, 10);
           htmlInput.addEventListener('input', () => { phase.html = htmlInput.value; });
           row.appendChild(htmlInput);
           attachStandardDropdown(htmlInput, 'rollout_phase_body');
+          // Per audit move 6: AI-draft button for the phase body.
+          // Pulls phase index/total + parent option context so the
+          // drafter can render last-phase handoff language correctly.
+          row.appendChild(attachAiDraftButton({
+            endpoint: '/portal/api/admin/proposals/ai/phase-body',
+            buildPayload: () => {
+              if (!phase.h3) return 'Set the phase header first.';
+              return {
+                client_id: state.client_id,
+                phase_header: phase.h3,
+                phase_index: pIdx + 1,
+                total_phases: (Array.isArray(opt.rollout_phases) ? opt.rollout_phases.length : 1),
+                option_name: opt.name || null,
+                option_pitch: opt.pitch || null,
+                build_description: (state.product_vars && state.product_vars['build'] && state.product_vars['build'].build_description) || null,
+                web_management_in_scope: Array.isArray(state.products) && state.products.indexOf('web-management') >= 0,
+                admin_hint: htmlInput.value || null,
+              };
+            },
+            applyResponse: (data) => {
+              htmlInput.value = data.html;
+              htmlInput.dispatchEvent(new Event('input', { bubbles: true }));
+            },
+          }));
           phasesList.appendChild(row);
         });
       };

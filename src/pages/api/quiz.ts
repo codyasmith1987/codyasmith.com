@@ -5,6 +5,7 @@ import { rateLimit } from '../../lib/rate-limit';
 import { logger } from '../../lib/logger';
 import { buildQuizConfirmationEmail } from '../../lib/funnel-emails';
 import { escapeHtml, stripCRLF } from '../../lib/email-safety';
+import turso from '../../lib/turso';
 
 export const POST: APIRoute = async ({ request, clientAddress }) => {
   const ip = clientAddress || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
@@ -53,6 +54,49 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
     const q2 = labels[answers?.['2']] || '?';
     const q3 = labels[answers?.['3']] || '?';
     const q4 = labels[answers?.['4']] || '?';
+
+    // Persist persona axes per audit move 3. UPSERT keyed on email so
+    // a prospect retaking the quiz updates instead of duplicating;
+    // most recent pick wins. Non-blocking: an axis storage failure
+    // shouldn't break the email send or hurt the visitor's experience.
+    // Validate values against the closed set of axis answers so we
+    // never store junk from a malformed POST.
+    try {
+      const validSunMoon = new Set(['sun', 'moon']);
+      const validBeachMountain = new Set(['beach', 'mountain']);
+      const validSpringFall = new Set(['spring', 'fall']);
+      const validStarsClouds = new Set(['stars', 'clouds']);
+      const sun_moon = validSunMoon.has(answers?.['1']) ? answers['1'] : null;
+      const beach_mountain = validBeachMountain.has(answers?.['2']) ? answers['2'] : null;
+      const spring_fall = validSpringFall.has(answers?.['3']) ? answers['3'] : null;
+      const stars_clouds = validStarsClouds.has(answers?.['4']) ? answers['4'] : null;
+      const normalizedEmail = email.trim().toLowerCase();
+      await turso.execute({
+        sql: `
+          INSERT INTO lead_personas (email, name, sun_moon, beach_mountain, spring_fall, stars_clouds, theme, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+          ON CONFLICT(email) DO UPDATE SET
+            name = excluded.name,
+            sun_moon = excluded.sun_moon,
+            beach_mountain = excluded.beach_mountain,
+            spring_fall = excluded.spring_fall,
+            stars_clouds = excluded.stars_clouds,
+            theme = excluded.theme,
+            updated_at = datetime('now')
+        `,
+        args: [
+          normalizedEmail,
+          name.trim(),
+          sun_moon,
+          beach_mountain,
+          spring_fall,
+          stars_clouds,
+          theme || null,
+        ],
+      });
+    } catch (err) {
+      logger.error('Quiz persona persist failed', err);
+    }
 
     await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',

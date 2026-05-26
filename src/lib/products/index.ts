@@ -202,6 +202,14 @@ export function composeProposal(args: ComposeArgs): ProposalConfig {
     product_vars: args.product_vars,
     narrative_variables: args.narrative_variables,
     overrides,
+    // Persist the engagement strategy alongside the composed config so
+    // downstream consumers (proposal page renderer, future
+    // persona-aware variants, admin re-render, analytics) can read
+    // the structured per-prospect signals that drove this proposal:
+    // sales_angles, internal_gaps, recommended_tier_per_product,
+    // persona_axes (from move 3 lead_personas join), and the like.
+    // Per audit move 3.
+    engagement_strategy: engagementStrategy || undefined,
   };
 }
 

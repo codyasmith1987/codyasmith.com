@@ -303,12 +303,29 @@ export interface EngagementStrategyInternalGap {
   product_implication?: EngagementStrategySynthProductId | 'none';
 }
 
+// Personalization quiz axes for a prospect (or signer) who took the
+// quiz at /quiz. Joined from the lead_personas table by signer email
+// at composeProposal time. Per audit move 3 — closes the loop from
+// quiz-personalization-of-site to quiz-personalization-of-proposal.
+// Snippets and future narrative branches can read these to shape
+// voice (mountain = denser hierarchy, clouds = shorter sentences,
+// sun = brighter framing, etc.).
+export interface EngagementStrategyPersonaAxes {
+  email?: string;
+  name?: string | null;
+  sun_moon?: 'sun' | 'moon' | null;
+  beach_mountain?: 'beach' | 'mountain' | null;
+  spring_fall?: 'spring' | 'fall' | null;
+  stars_clouds?: 'stars' | 'clouds' | null;
+}
+
 export interface EngagementStrategy {
   sales_angles: EngagementStrategySalesAngle[];
   clv_horizon?: 'long-term-stable' | 'medium-term' | 'churn-risk' | 'unknown' | null;
   cody_time_intensity?: 'low' | 'medium' | 'high' | null;
   recommended_tier_per_product?: Partial<Record<EngagementStrategySynthProductId, EngagementStrategyTierRec>>;
   internal_gaps?: EngagementStrategyInternalGap[];
+  persona_axes?: EngagementStrategyPersonaAxes | null;
 }
 
 export interface ProductContext {
@@ -433,6 +450,11 @@ export interface ProposalConfig {
   product_vars?: Record<ProductId, ProductVariables>;
   narrative_variables?: NarrativeVariables;
   overrides?: ProposalOverrides;
+  // Per audit move 3: persist the engagement strategy alongside the
+  // composed config so downstream readers (proposal page renderer,
+  // persona-aware variants, admin re-render) can access the
+  // structured per-prospect signals that drove this proposal.
+  engagement_strategy?: EngagementStrategy | null;
 }
 
 export interface NarrativeVariables {

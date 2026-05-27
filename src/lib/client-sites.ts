@@ -143,13 +143,13 @@ export async function syncDetectedDomains(clientId: string): Promise<number> {
   // primary. If existing rows are present and one is already
   // primary, leave that alone.
   const hasExistingPrimary = existing.some(s => s.is_primary);
+  const existingPrimary = existing.find(s => s.is_primary)?.domain || null;
+  const primaryCandidate = !hasExistingPrimary ? (derived[0]?.domain || null) : null;
 
   let inserted = 0;
-  let isFirstNew = true;
   for (const d of derived) {
     if (existingDomains.has(d.domain)) continue;
-    const isPrimary = !hasExistingPrimary && isFirstNew ? 1 : 0;
-    if (isPrimary) isFirstNew = false;
+    const isPrimary = primaryCandidate === d.domain ? 1 : 0;
     try {
       await turso.execute({
         sql: `INSERT OR IGNORE INTO client_sites
@@ -163,16 +163,22 @@ export async function syncDetectedDomains(clientId: string): Promise<number> {
     }
   }
 
-  // If we just promoted a new primary AND clients.domain is empty,
-  // sync the cache.
-  if (!hasExistingPrimary && inserted > 0) {
-    const primaryDomain = derived.find(d => !existingDomains.has(d.domain))?.domain || null;
-    if (primaryDomain) {
+  // Backfill's core job: bind the client to its primary detected
+  // site URL. Keep clients.domain in sync even when the site row
+  // already existed, and repair historical rows that were inserted
+  // without a primary flag.
+  const primaryDomain = existingPrimary || primaryCandidate;
+  if (primaryDomain) {
+    if (!hasExistingPrimary && existingDomains.has(primaryDomain)) {
       await turso.execute({
-        sql: 'UPDATE clients SET domain = ? WHERE id = ? AND (domain IS NULL OR domain = "")',
-        args: [primaryDomain, clientId],
+        sql: 'UPDATE client_sites SET is_primary = 1 WHERE client_id = ? AND domain = ?',
+        args: [clientId, primaryDomain],
       });
     }
+    await turso.execute({
+      sql: 'UPDATE clients SET domain = ? WHERE id = ? AND (domain IS NULL OR domain = "")',
+      args: [primaryDomain, clientId],
+    });
   }
 
   return inserted;
@@ -223,10 +229,11 @@ export async function setSiteManaged(clientId: string, siteId: string, isManaged
 export async function setSitePageCount(clientId: string, siteId: string, pageCount: number | null): Promise<void> {
   const safe = pageCount === null || pageCount === undefined
     ? null
-    : Math.max(0, Math.floor(Number(pageCount)));
+    : Math.floor(Number(pageCount));
+  const normalized = safe !== null && Number.isFinite(safe) && safe > 0 ? safe : null;
   await turso.execute({
     sql: 'UPDATE client_sites SET page_count = ? WHERE id = ? AND client_id = ?',
-    args: [safe, siteId, clientId],
+    args: [normalized, siteId, clientId],
   });
 }
 
@@ -264,6 +271,7 @@ export async function syncPerSitePageCounts(clientId: string): Promise<number> {
               AND domain = ?
               AND (
                 page_count IS NULL
+                OR page_count = 0
                 OR (
                   page_count > ?
                   AND page_count >= ? * 2

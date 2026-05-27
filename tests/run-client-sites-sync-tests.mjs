@@ -12,6 +12,7 @@ import {
   syncPerSitePageCounts,
   setSitePageCount,
 } from '../src/lib/client-sites.ts';
+import { readFileSync } from 'node:fs';
 
 const results = [];
 function test(name, pass, detail = '') {
@@ -37,6 +38,11 @@ async function run() {
   // override per feedback_connect_to_data).
   test('setSitePageCount still exported',
     typeof setSitePageCount === 'function');
+
+  const clientSitesSource = readFileSync(new URL('../src/lib/client-sites.ts', import.meta.url), 'utf8');
+  test('client_sites sync SQL does not use double-quoted empty strings',
+    !clientSitesSource.includes('domain = ""'),
+    'LibSQL treats "" as an empty identifier, causing "no such column:" during post-ingest sync');
 
   const passed = results.filter(r => r.pass).length;
   const failed = results.filter(r => !r.pass);

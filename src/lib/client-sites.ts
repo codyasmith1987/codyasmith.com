@@ -176,7 +176,7 @@ export async function syncDetectedDomains(clientId: string): Promise<number> {
       });
     }
     await turso.execute({
-      sql: 'UPDATE clients SET domain = ? WHERE id = ? AND (domain IS NULL OR domain = "")',
+      sql: "UPDATE clients SET domain = ? WHERE id = ? AND (domain IS NULL OR domain = '')",
       args: [primaryDomain, clientId],
     });
   }

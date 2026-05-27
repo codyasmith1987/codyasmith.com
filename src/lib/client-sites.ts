@@ -197,6 +197,44 @@ export async function setSitePageCount(clientId: string, siteId: string, pageCou
   });
 }
 
+// Auto-bind per-site page_count from uploaded crawl data. Groups
+// crawl_urls by hostname and writes the count to each matching
+// client_sites row whose page_count is currently NULL. Admin
+// overrides set via setSitePageCount persist; this only fills the
+// blanks. Returns the number of rows actually updated.
+export async function syncPerSitePageCounts(clientId: string): Promise<number> {
+  let counts: Array<{ hostname: string; count: number }>;
+  try {
+    const result = await turso.execute({
+      sql: `SELECT hostname, COUNT(*) as cnt
+            FROM crawl_urls
+            WHERE client_id = ?
+            GROUP BY hostname`,
+      args: [clientId],
+    });
+    counts = (result.rows as any[]).map(row => ({
+      hostname: String(row[0] || ''),
+      count: Number(row[1] || 0),
+    })).filter(c => c.hostname);
+  } catch {
+    // crawl_urls table may not exist on stale databases; treat as empty.
+    return 0;
+  }
+  if (counts.length === 0) return 0;
+
+  let updated = 0;
+  for (const c of counts) {
+    const result = await turso.execute({
+      sql: `UPDATE client_sites
+            SET page_count = ?
+            WHERE client_id = ? AND domain = ? AND page_count IS NULL`,
+      args: [c.count, clientId, c.hostname],
+    });
+    if (result.rowsAffected && result.rowsAffected > 0) updated++;
+  }
+  return updated;
+}
+
 // Mark a site live (or clear the live timestamp). When the site is
 // under management, the went_live_at date drives first-period
 // proration on the next invoice. Accepts ISO date 'YYYY-MM-DD' or

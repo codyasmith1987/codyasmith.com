@@ -19,6 +19,7 @@ import JSZip from 'jszip';
 import { ingestCSV } from '../../../../lib/csv/index';
 import { logger } from '../../../../lib/logger';
 import { logActivity } from '../../../../lib/activity';
+import { syncDetectedDomains, syncPerSitePageCounts } from '../../../../lib/client-sites';
 
 export const prerender = false;
 
@@ -216,6 +217,23 @@ export const POST: APIRoute = async ({ locals, request }) => {
           error: s.reason?.message || 'processing failed',
         });
       }
+    }
+
+    // Auto-bind detected domains + per-site page counts to
+    // client_sites. The data has already landed in crawl_urls and
+    // keyword_rankings; this propagates that into the canonical
+    // sites table so the proposal wizard, Schedule A, and pricing
+    // pipeline see a populated record without requiring a wizard
+    // visit to trigger sync. Runs once per batch.
+    //
+    // Wrapped in try/catch so a sync failure never breaks the
+    // upload response — the data is already saved and the user
+    // sees their chips. Errors logged for diagnosis.
+    try {
+      await syncDetectedDomains(clientId);
+      await syncPerSitePageCounts(clientId);
+    } catch (err) {
+      logger.error('post-upload client_sites sync failed', err);
     }
 
     // Backward compat: when only one file was sent via legacy 'file'

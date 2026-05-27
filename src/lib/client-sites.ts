@@ -236,6 +236,7 @@ export async function setSitePageCount(clientId: string, siteId: string, pageCou
 // overrides set via setSitePageCount persist; this only fills the
 // blanks. Returns the number of rows actually updated.
 export async function syncPerSitePageCounts(clientId: string): Promise<number> {
+  let updated = 0;
   let counts: Array<{ hostname: string; count: number }>;
   try {
     const result = await turso.execute({
@@ -251,11 +252,9 @@ export async function syncPerSitePageCounts(clientId: string): Promise<number> {
     })).filter(c => c.hostname);
   } catch {
     // crawl_urls table may not exist on stale databases; treat as empty.
-    return 0;
+    counts = [];
   }
-  if (counts.length === 0) return 0;
 
-  let updated = 0;
   for (const c of counts) {
     const result = await turso.execute({
       sql: `UPDATE client_sites
@@ -265,6 +264,46 @@ export async function syncPerSitePageCounts(clientId: string): Promise<number> {
     });
     if (result.rowsAffected && result.rowsAffected > 0) updated++;
   }
+
+  // Fallback for Screaming Frog bundles where the Crawl Overview is
+  // available but no canonical Internal HTML rows landed in crawl_urls
+  // yet. The wizard already uses metrics.crawl.total_urls as the
+  // single-site page-count hint; mirror that into the primary/first
+  // client_site when it is still blank so the client page and pricing
+  // path do not disagree.
+  try {
+    const total = await turso.execute({
+      sql: `SELECT metric_value
+            FROM metrics
+            WHERE client_id = ?
+              AND category = 'crawl'
+              AND metric_key = 'total_urls'
+            ORDER BY month DESC
+            LIMIT 1`,
+      args: [clientId],
+    });
+    const totalUrls = Math.max(0, Math.floor(Number(total.rows[0]?.[0] || 0)));
+    if (totalUrls > 0) {
+      const result = await turso.execute({
+        sql: `UPDATE client_sites
+              SET page_count = ?
+              WHERE client_id = ?
+                AND page_count IS NULL
+                AND id = (
+                  SELECT id FROM client_sites
+                  WHERE client_id = ?
+                  ORDER BY is_primary DESC, sort_order ASC, domain ASC
+                  LIMIT 1
+                )`,
+        args: [totalUrls, clientId, clientId],
+      });
+      if (result.rowsAffected && result.rowsAffected > 0) updated++;
+    }
+  } catch {
+    // metrics may not exist on stale databases; typed crawl counts
+    // above remain the source of truth when present.
+  }
+
   return updated;
 }
 

@@ -93,6 +93,11 @@ async function run() {
   const internalHtmlBomCsv = '\uFEFF"Address","Status Code","Indexability","Title 1","Word Count"\n"https://www.example.com/","200","Indexable","Hello","100"\n';
   test('detector: internal_html with BOM as crawl_internal',
     detectFormat(internalHtmlBomCsv, 'internal_html.csv').format === 'crawl_internal');
+  const pageTitlesCsv = '"Address","Status Code","Indexability","Title 1","Title 1 Length"\n"https://a.com/","200","Indexable","Hello","5"\n';
+  test('detector: SF subreports with crawl-ish columns do not become crawl_internal',
+    detectFormat(pageTitlesCsv, 'page_titles_all.csv').format !== 'crawl_internal');
+  test('detector: search_console_all no longer replaces canonical crawl_urls',
+    detectFormat(pageTitlesCsv, 'search_console_all.csv').format !== 'crawl_internal');
 
   const redirectsCsv = '"Chain Type","Number of Redirects","Loop","Source","Final Address"\n"HTTP Redirect","1","false","https://a.com/old","https://a.com/new"\n';
   test('detector: redirects.csv as redirects',

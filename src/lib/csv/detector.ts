@@ -130,6 +130,11 @@ const SIGNATURES: FormatSignature[] = [
   },
 ];
 
+function isAuthoritativeCrawlInternalFilename(filename: string): boolean {
+  const base = filename.toLowerCase().replace(/^.*[\\/]/, '');
+  return base === 'internal_html.csv' || base === 'internal_all.csv';
+}
+
 export function detectFormat(raw: string, filename: string): { format: CsvFormat; headers: string[] } {
   // Check for crawl_overview: starts with metadata like "Site Crawled,"
   const firstLine = raw.split('\n')[0].trim().toLowerCase();
@@ -172,22 +177,6 @@ export function detectFormat(raw: string, filename: string): { format: CsvFormat
     case 'search appearance.csv':  return { format: 'gsc_search_appearance', headers: [] };
     case 'chart.csv':              return { format: 'gsc_chart', headers: [] };
     case 'filters.csv':            return { format: 'gsc_filters', headers: [] };
-  }
-
-  // Screaming Frog search_console_all.csv. When SF's GSC API
-  // integration is connected the file adds Clicks/Impressions/CTR/
-  // Position columns; when it's not, the file is identical to the
-  // Internal HTML export (Address + Status Code + Title 1 +
-  // Indexability + Indexability Status). Either way we route it to
-  // the crawl_internal parser — the columns above are a strict
-  // subset of crawl_internal's hot columns, and any extra GSC
-  // metrics fall into raw_json for later extraction. Filename
-  // detection comes BEFORE the column-signature check so the file
-  // doesn't get false-mislabeled as 'crawl_internal' via the
-  // signature path (it routes there explicitly with the right
-  // label).
-  if (normalizedName === 'search_console_all.csv') {
-    return { format: 'crawl_internal', headers: [] };
   }
 
   // Screaming Frog link-relationship exports. All share the same
@@ -233,6 +222,15 @@ export function detectFormat(raw: string, filename: string): { format: CsvFormat
 
   // Check each signature
   for (const sig of SIGNATURES) {
+    // Many Screaming Frog subreports include Address + Status Code +
+    // Indexability + Title 1 columns, but only the Internal HTML/All
+    // export is the canonical one-row-per-page crawl. Routing every
+    // matching subreport to crawl_internal makes uploads fight over
+    // crawl_urls and can leave the client with zero per-page rows if
+    // the last matching file is a filtered/empty report.
+    if (sig.format === 'crawl_internal' && !isAuthoritativeCrawlInternalFilename(normalizedName)) {
+      continue;
+    }
     const allMatch = sig.requiredColumns.every(req =>
       headers.some(h => h === req)
     );

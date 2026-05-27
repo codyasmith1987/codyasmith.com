@@ -52,5 +52,51 @@ export const GET: APIRoute = async ({ locals }) => {
     result._migrations = { error: err?.message || 'query failed' };
   }
 
+  // Per-client row counts: tells us if the backfill found nothing
+  // because there's no data to find, vs because the sync function
+  // has a bug.
+  const counts: any[] = [];
+  try {
+    const clients = await turso.execute('SELECT id, name FROM clients ORDER BY name');
+    for (const row of clients.rows as any[]) {
+      const id = row[0] as string;
+      const name = row[1] as string;
+      const stats: any = { client: name, client_id: id };
+      try {
+        const crawl = await turso.execute({
+          sql: 'SELECT COUNT(*) as total, COUNT(DISTINCT hostname) as hosts FROM crawl_urls WHERE client_id = ?',
+          args: [id],
+        });
+        stats.crawl_urls_total = crawl.rows[0]?.[0];
+        stats.crawl_urls_distinct_hosts = crawl.rows[0]?.[1];
+      } catch (e: any) { stats.crawl_urls_error = e?.message; }
+      try {
+        const kw = await turso.execute({
+          sql: 'SELECT COUNT(*) as total FROM keyword_rankings WHERE client_id = ?',
+          args: [id],
+        });
+        stats.keyword_rankings_total = kw.rows[0]?.[0];
+      } catch (e: any) { stats.keyword_rankings_error = e?.message; }
+      try {
+        const sites = await turso.execute({
+          sql: 'SELECT COUNT(*) as total FROM client_sites WHERE client_id = ?',
+          args: [id],
+        });
+        stats.client_sites_total = sites.rows[0]?.[0];
+      } catch (e: any) { stats.client_sites_error = e?.message; }
+      try {
+        const hostList = await turso.execute({
+          sql: 'SELECT DISTINCT hostname FROM crawl_urls WHERE client_id = ? LIMIT 10',
+          args: [id],
+        });
+        stats.detected_hostnames = (hostList.rows as any[]).map(r => r[0]);
+      } catch (e: any) { stats.hostnames_error = e?.message; }
+      counts.push(stats);
+    }
+  } catch (e: any) {
+    result._counts_error = e?.message;
+  }
+  result._per_client_counts = counts;
+
   return json({ ok: true, schema: result });
 };

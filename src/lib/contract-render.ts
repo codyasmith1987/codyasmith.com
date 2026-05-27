@@ -220,6 +220,12 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
     if (wm.response_time) parts.push(`<li>Response time: ${escapeHtml(wm.response_time)}</li>`);
     if (wm.quarterly_training_sessions != null) parts.push(`<li>Quarterly staff training: ${wm.quarterly_training_sessions ? `${wm.quarterly_training_sessions} sessions` : 'not included'}</li>`);
     parts.push('</ul>');
+    // Per Cody operating rule (2026-05-26): single billing cadence
+    // across all sites under one agreement; first invoice prorated
+    // from each site's go-live. Render the policy note when present.
+    if (wm.billing_cadence_note) {
+      parts.push(`<p class="billing-cadence-note"><em>${escapeHtml(wm.billing_cadence_note)}</em></p>`);
+    }
   }
 
   if (pp.marketing_consulting && scheduleA.marketing_consulting) {

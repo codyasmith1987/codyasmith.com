@@ -773,6 +773,9 @@ export const webManagementProduct: ProductDefinition = {
         update_cadence: tier.update_cadence || 'monthly',
         response_time: tier.response_time || 'standard tier response window',
         quarterly_training_sessions: tier.training_sessions ?? null,
+        // Per Cody operating rule (2026-05-26): single billing
+        // cadence across all sites under one agreement.
+        billing_cadence_note: 'Per-site Web Management monthly fees are prorated at each site\'s go-live date to align with this engagement\'s monthly billing cadence. All sites under this agreement bill on the same monthly date thereafter, on one consolidated invoice.',
       },
       hours_addendum: { included_hours: tier.hours || 0 },
       pass_through_items: siteRows.map(site => ({

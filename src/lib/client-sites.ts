@@ -37,6 +37,11 @@ export interface ClientSite {
   cloudflare_zone_id: string | null;
   cloudflare_token_set: boolean;
   cloudflare_last_synced_at: string | null;
+  // Per Cody operating rule (2026-05-26): when this site goes live
+  // under management, this timestamp is the input the proration
+  // calculator uses to compute the first-period invoice. Null = not
+  // live yet (build in progress, takeover not started).
+  went_live_at: string | null;
 }
 
 function rowToSite(row: any): ClientSite {
@@ -53,10 +58,11 @@ function rowToSite(row: any): ClientSite {
     cloudflare_zone_id: (row[9] as string | null) ?? null,
     cloudflare_token_set: !!(row[10] as string | null),
     cloudflare_last_synced_at: (row[11] as string | null) ?? null,
+    went_live_at: (row[12] as string | null) ?? null,
   };
 }
 
-const SELECT_COLS = 'id, client_id, domain, is_primary, is_managed, label, sort_order, notes, page_count, cloudflare_zone_id, cloudflare_api_token, cloudflare_last_synced_at';
+const SELECT_COLS = 'id, client_id, domain, is_primary, is_managed, label, sort_order, notes, page_count, cloudflare_zone_id, cloudflare_api_token, cloudflare_last_synced_at, went_live_at';
 
 export async function listClientSites(clientId: string): Promise<ClientSite[]> {
   const result = await turso.execute({
@@ -188,6 +194,27 @@ export async function setSitePageCount(clientId: string, siteId: string, pageCou
   await turso.execute({
     sql: 'UPDATE client_sites SET page_count = ? WHERE id = ? AND client_id = ?',
     args: [safe, siteId, clientId],
+  });
+}
+
+// Mark a site live (or clear the live timestamp). When the site is
+// under management, the went_live_at date drives first-period
+// proration on the next invoice. Accepts ISO date 'YYYY-MM-DD' or
+// full ISO timestamp; stored as TEXT. Null clears.
+//
+// Per Cody operating rule (2026-05-26): all sites under one agreement
+// converge to the same monthly billing cadence. went_live_at is the
+// input the proration calculator uses to compute the first-period fee.
+export async function setSiteWentLive(clientId: string, siteId: string, wentLiveAt: string | null): Promise<void> {
+  if (wentLiveAt !== null && wentLiveAt !== undefined) {
+    // Light validation: require ISO-ish prefix so we don't store junk
+    if (!/^\d{4}-\d{2}-\d{2}/.test(wentLiveAt)) {
+      throw new Error('went_live_at must be YYYY-MM-DD or full ISO datetime');
+    }
+  }
+  await turso.execute({
+    sql: 'UPDATE client_sites SET went_live_at = ? WHERE id = ? AND client_id = ?',
+    args: [wentLiveAt ?? null, siteId, clientId],
   });
 }
 

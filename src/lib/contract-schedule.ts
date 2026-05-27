@@ -106,6 +106,13 @@ export interface WebManagementSection {
   update_cadence: string;
   response_time: string;
   quarterly_training_sessions: number | null;
+  // Per Cody operating rule (2026-05-26): all sites under one
+  // agreement bill on the same monthly cadence. When a site goes
+  // live mid-cycle, its first invoice is prorated from go-live to
+  // the next anchor day, then standard monthly thereafter. This
+  // note states the policy in the contract so the buyer reads it
+  // alongside the per-site fee rows.
+  billing_cadence_note: string;
 }
 
 export interface MarketingConsultingSection {
@@ -260,6 +267,7 @@ function buildScheduleAForRaisedBarV1(ctx: ScheduleAContext): ScheduleA {
     update_cadence: wmTierDefaults.update_cadence,
     response_time: wmTierDefaults.response_time,
     quarterly_training_sessions: wmTierDefaults.training_sessions,
+    billing_cadence_note: BILLING_CADENCE_NOTE,
   };
 
   const marketingConsulting: MarketingConsultingSection | null = mcTierDefaults && pricing

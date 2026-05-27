@@ -105,6 +105,24 @@ export async function getPrimarySite(clientId: string): Promise<ClientSite | nul
   return rowToSite(result.rows[0] as any);
 }
 
+async function listClientSiteSyncState(clientId: string): Promise<Array<{ domain: string; is_primary: boolean }>> {
+  const result = await turso.execute({
+    // Keep the auto-sync path schema-minimal. Backfill and post-ingest
+    // only need domain/is_primary; selecting optional admin columns here
+    // has repeatedly made a data sync fail because one historical prod
+    // schema detail was off.
+    sql: `SELECT domain, is_primary
+          FROM client_sites
+          WHERE client_id = ?
+          ORDER BY is_primary DESC, sort_order ASC, domain ASC`,
+    args: [clientId],
+  });
+  return (result.rows as any[]).map(row => ({
+    domain: row[0] as string,
+    is_primary: !!(row[1] as number),
+  }));
+}
+
 // Auto-sync: for each detected hostname, INSERT OR IGNORE so existing
 // admin edits (is_managed=0 toggles, custom labels) persist across
 // re-uploads. Newly-detected hostnames land as is_managed=1 by
@@ -117,7 +135,7 @@ export async function syncDetectedDomains(clientId: string): Promise<number> {
   if (derived.length === 0) return 0;
 
   // Check what already exists so we know which inserts will be new.
-  const existing = await listClientSites(clientId);
+  const existing = await listClientSiteSyncState(clientId);
   const existingDomains = new Set(existing.map(s => s.domain));
 
   // If there's no primary yet AND no existing rows, the first
@@ -148,11 +166,11 @@ export async function syncDetectedDomains(clientId: string): Promise<number> {
   // If we just promoted a new primary AND clients.domain is empty,
   // sync the cache.
   if (!hasExistingPrimary && inserted > 0) {
-    const newPrimary = await getPrimarySite(clientId);
-    if (newPrimary) {
+    const primaryDomain = derived.find(d => !existingDomains.has(d.domain))?.domain || null;
+    if (primaryDomain) {
       await turso.execute({
         sql: 'UPDATE clients SET domain = ? WHERE id = ? AND (domain IS NULL OR domain = "")',
-        args: [newPrimary.domain, clientId],
+        args: [primaryDomain, clientId],
       });
     }
   }

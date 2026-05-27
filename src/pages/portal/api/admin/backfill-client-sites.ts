@@ -41,24 +41,41 @@ export const GET: APIRoute = async ({ locals }) => {
       const name = row[1] as string;
       const domainBefore = (row[2] as string | null) ?? null;
 
-      const inserted = await syncDetectedDomains(id);
-      const updated = await syncPerSitePageCounts(id);
-      totalSites += inserted;
-      totalCounts += updated;
+      // Per-client try/catch: one bad client must NOT kill the
+      // whole batch. Without this, an exception on (say) client #3
+      // bails the outer handler with 500 and discards results from
+      // clients #1 and #2. The admin sees nothing and has no idea
+      // which client failed.
+      try {
+        const inserted = await syncDetectedDomains(id);
+        const updated = await syncPerSitePageCounts(id);
+        totalSites += inserted;
+        totalCounts += updated;
 
-      const afterRes = await turso.execute({
-        sql: 'SELECT domain FROM clients WHERE id = ?',
-        args: [id],
-      });
-      const domainAfter = ((afterRes.rows[0]?.[0] as string | null) ?? null);
+        const afterRes = await turso.execute({
+          sql: 'SELECT domain FROM clients WHERE id = ?',
+          args: [id],
+        });
+        const domainAfter = ((afterRes.rows[0]?.[0] as string | null) ?? null);
 
-      results.push({
-        client: name,
-        sites_inserted: inserted,
-        page_counts_filled: updated,
-        domain_before: domainBefore,
-        domain_after: domainAfter,
-      });
+        results.push({
+          client: name,
+          sites_inserted: inserted,
+          page_counts_filled: updated,
+          domain_before: domainBefore,
+          domain_after: domainAfter,
+        });
+      } catch (perClientErr: any) {
+        logger.error(`backfill-client-sites failed for client ${name}`, perClientErr);
+        results.push({
+          client: name,
+          sites_inserted: 0,
+          page_counts_filled: 0,
+          domain_before: domainBefore,
+          domain_after: domainBefore,
+          error: perClientErr?.message || 'failed',
+        } as any);
+      }
     }
 
     return json({

@@ -68,7 +68,14 @@ const draft = await getDraft(proposalRow.client_id, proposalSlug);
 const selections = draft?.selections || {};
 
 // Compute pricing (returns null if selections incomplete).
-const pricing = computePricing(proposalRow.config?.pricing_formula || '', selections);
+// product_driven_v1 requires the third config arg to read product_vars;
+// without it, computePricing returns null and buildScheduleA later
+// crashes on Math.round(pricing.monthly) inside the WM contribution.
+const pricing = computePricing(
+  proposalRow.config?.pricing_formula || '',
+  selections,
+  proposalRow.config,
+);
 
 // Managed sites from client_sites table feed Schedule A's WM site
 // rows. Empty list falls back to placeholder rows derived from

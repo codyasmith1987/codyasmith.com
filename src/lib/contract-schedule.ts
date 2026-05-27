@@ -242,7 +242,57 @@ function buildScheduleAForProductDrivenV1(ctx: ScheduleAContext): ScheduleA {
   }
   composed.day_one_access.required_by = ctx.effectiveDate;
 
+  // Apply client-level discount_rate to every monetary field on
+  // Schedule A. composePricing in products/index.ts applies the same
+  // discount uniformly across line items + totals; without this
+  // mirror, Schedule A's monthly_total / per-site contributions are
+  // pre-discount while the proposal page total is post-discount —
+  // they disagree for any client with discount_rate > 0 (e.g. a 100%
+  // discount on the proposal page shows $0 but Schedule A would show
+  // full price). The signed contract gets the wrong number. Clamped
+  // to [0, 1] so a bad value cannot flip a number negative.
+  const discount = typeof config?.discount_rate === 'number'
+    ? Math.max(0, Math.min(1, config.discount_rate))
+    : 0;
+  if (discount > 0) {
+    applyDiscountToScheduleA(composed, discount);
+  }
+
   return composed;
+}
+
+// Walks a composed Schedule A and applies a client-level discount
+// (0-1) to every monetary field. Mirrors the uniform-discount
+// semantics composePricing uses so proposal page and Schedule A
+// agree post-discount. Per-site override amounts are also discounted
+// because client-level discount applies uniformly per the model in
+// products/index.ts and the documented operating rule.
+function applyDiscountToScheduleA(s: ScheduleA, discount: number): void {
+  const keep = 1 - discount;
+  const discountAmount = (n: number | null | undefined): number =>
+    typeof n === 'number' ? Math.round(n * keep * 100) / 100 : 0;
+  if (s.web_management) {
+    s.web_management.monthly_base = discountAmount(s.web_management.monthly_base);
+    s.web_management.monthly_total = discountAmount(s.web_management.monthly_total);
+    s.web_management.onboarding_fee = discountAmount(s.web_management.onboarding_fee);
+    if (typeof (s.web_management as any).onboarding_total === 'number') {
+      (s.web_management as any).onboarding_total = discountAmount((s.web_management as any).onboarding_total);
+    }
+    if (Array.isArray(s.web_management.sites)) {
+      for (const site of s.web_management.sites) {
+        if (typeof site.monthly_contribution === 'number') {
+          site.monthly_contribution = discountAmount(site.monthly_contribution);
+        }
+        if (typeof site.onboarding_contribution === 'number') {
+          site.onboarding_contribution = discountAmount(site.onboarding_contribution);
+        }
+      }
+    }
+  }
+  if (s.marketing_consulting) {
+    s.marketing_consulting.monthly_retainer = discountAmount(s.marketing_consulting.monthly_retainer);
+    s.marketing_consulting.initial_audit_fee = discountAmount(s.marketing_consulting.initial_audit_fee);
+  }
 }
 
 // Raised Bar v1: two products (Web Management + optional Marketing

@@ -111,14 +111,51 @@ export async function getPrimarySite(clientId: string): Promise<ClientSite | nul
 // default because their presence in uploaded data implies the admin
 // is tracking them.
 //
+// Also seeds a primary row from clients.domain when:
+//   1. clients.domain is set
+//   2. no client_sites rows exist for this client
+//   3. clients.domain hasn't already been detected by crawl/keyword data
+// This catches clients added via the admin UI after migration 033's
+// initial backfill ran — they have a clients.domain but no
+// client_sites row, and no crawl data either.
+//
 // Returns the number of new rows actually inserted.
 export async function syncDetectedDomains(clientId: string): Promise<number> {
   const derived = await getClientDomainsFromData(clientId);
-  if (derived.length === 0) return 0;
 
   // Check what already exists so we know which inserts will be new.
   const existing = await listClientSites(clientId);
   const existingDomains = new Set(existing.map(s => s.domain));
+
+  // Fallback: seed from clients.domain when no derived data and no
+  // existing rows. Without this, a client created via the admin UI
+  // with only clients.domain set never gets a client_sites row.
+  if (derived.length === 0 && existing.length === 0) {
+    const clientRow = await turso.execute({
+      sql: 'SELECT domain FROM clients WHERE id = ? AND domain IS NOT NULL AND domain != ""',
+      args: [clientId],
+    });
+    const fallbackDomain = clientRow.rows[0]?.[0] as string | undefined;
+    const normalized = fallbackDomain
+      ? fallbackDomain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, '').replace(/^www\./, '')
+      : null;
+    if (normalized && /^[a-z0-9.-]+\.[a-z]{2,}$/.test(normalized)) {
+      try {
+        await turso.execute({
+          sql: `INSERT OR IGNORE INTO client_sites
+                (id, client_id, domain, is_primary, is_managed, label, sort_order)
+                VALUES (?, ?, ?, 1, 1, ?, 0)`,
+          args: [nanoid(), clientId, normalized, normalized],
+        });
+        return 1;
+      } catch {
+        return 0;
+      }
+    }
+    return 0;
+  }
+
+  if (derived.length === 0) return 0;
 
   // If there's no primary yet AND no existing rows, the first
   // detected domain (highest URL count from crawl_urls) becomes the

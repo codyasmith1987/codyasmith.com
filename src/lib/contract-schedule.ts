@@ -13,6 +13,16 @@
 
 import { PRODUCT_REGISTRY, buildContextForProduct } from './products';
 
+// Standing language for Schedule A's WM section describing the
+// single-cadence billing policy. Threaded into WebManagementSection
+// so the contract renderer can italicize it under the WM heading.
+// Per Cody operating rule (2026-05-26) and 07v3 Section 5.3.
+export const BILLING_CADENCE_NOTE =
+  'All sites on this agreement bill on the same monthly cadence. ' +
+  'The first invoice for any site is prorated from its go-live date ' +
+  'to the next billing anchor day; from there forward the site bills ' +
+  'with all others on the agreement on a single monthly close.';
+
 export interface ScheduleAContext {
   proposalConfig: any;
   draftSelections: Record<string, string | null>;

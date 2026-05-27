@@ -436,7 +436,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
             </table>
             <p style="font-size: 12px; color: #6b6359; margin: 18px 0 6px; letter-spacing: 0.06em; text-transform: uppercase;">Monthly recurring</p>
             <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px;">
-              <tr><td style="padding: 4px 0; color: #6b6359;">Web Management (${escapeHtml(pricing?.mgmtTierName || '?')}, ${draft.selections.site_setup === 'o2' || draft.selections.tailwater_addon === 'yes' ? '3' : '2'} sites)</td><td style="padding: 4px 0; text-align: right; color: #1a1814;">${escapeHtml(money(pricing?.mgmtMonthly || 0))}</td></tr>
+              <tr><td style="padding: 4px 0; color: #6b6359;">Web Management (${escapeHtml(pricing?.mgmtTierName || '?')}, ${draft.selections.site_setup === 'o2' ? '3' : '2'} sites)</td><td style="padding: 4px 0; text-align: right; color: #1a1814;">${escapeHtml(money(pricing?.mgmtMonthly || 0))}</td></tr>
               ${pricing && pricing.consultingMonthly > 0 ? `<tr><td style="padding: 4px 0; color: #6b6359;">Marketing Consulting (${escapeHtml(pricing.consultingTierName)})</td><td style="padding: 4px 0; text-align: right; color: #1a1814;">${escapeHtml(money(pricing.consultingMonthly))}</td></tr>` : ''}
               <tr><td style="padding: 8px 0 0; border-top: 1px solid #d4cdc0; font-weight: 600;">Total</td><td style="padding: 8px 0 0; text-align: right; border-top: 1px solid #d4cdc0; font-weight: 600;">${escapeHtml(money(monthly))}</td></tr>
             </table>

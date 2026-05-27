@@ -88,34 +88,6 @@ export function computeRaisedBarV1(selections: Record<string, string | null>): P
   };
 }
 
-// raised_bar_v2 -------------------------------------------------------
-//
-// Post-5/22 Fit Analysis architecture: buyer picks one bundled
-// Good/Better/Best tier (covering WM tier, MC tier, and the standard
-// 2-site setup of Builders + F3) plus one optional Tailwater
-// micro-site add-on. Under the hood the math is the same as v1, so
-// this is a thin wrapper that maps the new selection names back to
-// the v1 shape and delegates. Keeps the locked v1 pricing + tests
-// untouched.
-//
-// Selection mapping:
-//   tier            -> mgmt_tier AND consulting_tier (same level)
-//   tailwater_addon -> site_setup ('yes' = 'o2' (3 sites), 'no' = 'o1' (2 sites))
-//   consulting is always 'yes' in v2 (the tier is bundled)
-
-export function computeRaisedBarV2(selections: Record<string, string | null>): PricingResult | null {
-  const tier = (selections.tier || '') as RbMgmtTier;
-  const addon = (selections.tailwater_addon || '') as 'yes' | 'no' | '';
-  if (!(tier in RB_MGMT_TIERS)) return null;
-  if (addon !== 'yes' && addon !== 'no') return null;
-  return computeRaisedBarV1({
-    mgmt_tier: tier,
-    site_setup: addon === 'yes' ? 'o2' : 'o1',
-    consulting: 'yes',
-    consulting_tier: tier,
-  });
-}
-
 // product_driven_v1 -----------------------------------------------------
 
 // composePricing lives in the products registry; importing it as a
@@ -146,7 +118,6 @@ export function computePricing(
   config?: any,
 ): PricingResult | null {
   if (formula === 'raised_bar_v1') return computeRaisedBarV1(selections);
-  if (formula === 'raised_bar_v2') return computeRaisedBarV2(selections);
   if (formula === 'product_driven_v1') {
     if (!config) return null;
     return computeProductDrivenV1(selections, config);

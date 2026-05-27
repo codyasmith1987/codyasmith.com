@@ -1101,20 +1101,6 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
     return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   }
 
-  // raised_bar_v2 selections (tier + tailwater_addon) are mirrored
-  // into the v1 selection names (mgmt_tier, site_setup, consulting,
-  // consulting_tier) so the rest of the optimistic pricing math
-  // works unchanged. Called at the top of update().
-  function mirrorV2Selections() {
-    if (PRICING_FORMULA !== 'raised_bar_v2') return;
-    var t = state.selections.tier || null;
-    var addon = state.selections.tailwater_addon || null;
-    state.selections.mgmt_tier = t;
-    state.selections.consulting = t ? 'yes' : null;
-    state.selections.consulting_tier = t;
-    state.selections.site_setup = addon === 'yes' ? 'o2' : (addon === 'no' ? 'o1' : null);
-  }
-
   function rbMgmtMonthly(tier, option) {
     if (!tier || !RB_MGMT_TIERS[tier]) return 0;
     var base = RB_MGMT_TIERS[tier].base;
@@ -1260,11 +1246,6 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
   }
 
   function update() {
-    // raised_bar_v2 mirrors tier + tailwater_addon to the legacy v1
-    // selection names so the optimistic pricing math reuses unchanged.
-    // No-op on other formulas.
-    mirrorV2Selections();
-
     // Highlight selected cards across all steps.
     for (var i = 0; i < STEPS.length; i++) {
       var step = STEPS[i];
@@ -1423,12 +1404,8 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
       setSummary('summary-' + s.id, labelText, sel);
     }
 
-    // Totals (raised_bar_v1 / raised_bar_v2 use the same math; others
-    // fall back to em dash until POST). v2 selections were mirrored
-    // to v1 names at the top of update(), so the existing helpers
-    // produce the right totals regardless.
-    var rbFormula = PRICING_FORMULA === 'raised_bar_v1' || PRICING_FORMULA === 'raised_bar_v2';
-    if (rbFormula && selectionsComplete()) {
+    // Totals (raised_bar_v1 only — others fall back to em dash until POST).
+    if (PRICING_FORMULA === 'raised_bar_v1' && selectionsComplete()) {
       setSummary('summary-onetime', moneyInt(rbOneTimeTotal()), true);
       setSummary('summary-monthly', money(rbMonthlyTotal()) + ' / month', true);
     } else {

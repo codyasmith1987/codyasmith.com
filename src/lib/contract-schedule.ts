@@ -173,36 +173,10 @@ function clampBillingAnchorDay(input: number | undefined | null): number {
 }
 
 // Dispatcher. New pricing formulas add a branch here.
-//
-// raised_bar_v2: same Schedule A shape as v1, fed with selections
-// translated from the new bundled tier + add-on shape. The contract
-// math and the rendered A.4 / A.5 sections are identical because the
-// underlying engagement is identical; only the buyer-facing picker
-// changed.
 export function buildScheduleA(ctx: ScheduleAContext): ScheduleA {
   const formula = ctx.proposalConfig?.pricing_formula;
   let schedule: ScheduleA;
   if (formula === 'raised_bar_v1') schedule = buildScheduleAForRaisedBarV1(ctx);
-  else if (formula === 'raised_bar_v2') {
-    const v2 = ctx.draftSelections || {};
-    const tier = v2.tier || '';
-    const addon = v2.tailwater_addon || '';
-    const mappedSelections: Record<string, string | null> = {
-      mgmt_tier: tier,
-      site_setup: addon === 'yes' ? 'o2' : 'o1',
-      consulting: 'yes',
-      consulting_tier: tier,
-      // Domain picks: deferred to the contract conversation per the
-      // 5/22 HTML, no buyer-facing pickers in v2. The v1 builder falls
-      // back to placeholders when these are absent.
-      builders_domain: v2.builders_domain || '',
-      tailwater_domain: v2.tailwater_domain || '',
-    };
-    schedule = buildScheduleAForRaisedBarV1({
-      ...ctx,
-      draftSelections: mappedSelections,
-    });
-  }
   else if (formula === 'product_driven_v1') schedule = buildScheduleAForProductDrivenV1(ctx);
   else schedule = emptyScheduleA(ctx.effectiveDate);
   schedule.hours_and_rates.billing_anchor_day = clampBillingAnchorDay(ctx.billingAnchorDay);

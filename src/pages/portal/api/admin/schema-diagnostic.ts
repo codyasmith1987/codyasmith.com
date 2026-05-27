@@ -134,6 +134,37 @@ export const GET: APIRoute = async ({ locals }) => {
         stats.client_sites_total = sites.rows[0]?.[0];
       } catch (e: any) { stats.client_sites_error = e?.message; }
       try {
+        const siteRows = await turso.execute({
+          sql: `SELECT domain, is_primary, is_managed, page_count
+                FROM client_sites
+                WHERE client_id = ?
+                ORDER BY is_primary DESC, sort_order ASC, domain ASC
+                LIMIT 20`,
+          args: [id],
+        });
+        stats.client_sites = (siteRows.rows as any[]).map(r => ({
+          domain: r[0],
+          is_primary: !!r[1],
+          is_managed: !!r[2],
+          page_count: r[3],
+        }));
+      } catch (e: any) { stats.client_sites_detail_error = e?.message; }
+      try {
+        const totalUrls = await turso.execute({
+          sql: `SELECT month, metric_value
+                FROM metrics
+                WHERE client_id = ?
+                  AND category = 'crawl'
+                  AND metric_key = 'total_urls'
+                ORDER BY month DESC
+                LIMIT 1`,
+          args: [id],
+        });
+        stats.latest_crawl_total_urls = totalUrls.rows.length
+          ? { month: totalUrls.rows[0]?.[0], value: totalUrls.rows[0]?.[1] }
+          : null;
+      } catch (e: any) { stats.latest_crawl_total_urls_error = e?.message; }
+      try {
         const hostList = await turso.execute({
           sql: 'SELECT DISTINCT hostname FROM crawl_urls WHERE client_id = ? LIMIT 10',
           args: [id],

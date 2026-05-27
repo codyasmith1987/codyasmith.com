@@ -20,9 +20,10 @@ const run: APIRoute = async ({ locals, url }) => {
 
   const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10) || 0);
   const limit = Math.max(1, Math.min(100, parseInt(url.searchParams.get('limit') || '100', 10) || 100));
+  const force = url.searchParams.get('force') === '1' || url.searchParams.get('force') === 'true';
 
   try {
-    const { summary, results } = await ingestRaisedBarF3CsvChunk({ offset, limit });
+    const { summary, results } = await ingestRaisedBarF3CsvChunk({ offset, limit, force });
 
     let sitesInserted = 0;
     let pageCountsFilled = 0;
@@ -38,7 +39,7 @@ const run: APIRoute = async ({ locals, url }) => {
         results,
         next_url: summary.next_offset == null
           ? null
-          : `/portal/api/admin/raised-bar-f3-ingest?offset=${summary.next_offset}&limit=${summary.limit}`,
+          : `/portal/api/admin/raised-bar-f3-ingest?offset=${summary.next_offset}&limit=${summary.limit}${force ? '&force=1' : ''}`,
       });
     }
 
@@ -47,9 +48,10 @@ const run: APIRoute = async ({ locals, url }) => {
       summary,
       sites_inserted_after_chunk: sitesInserted,
       page_counts_filled_after_chunk: pageCountsFilled,
+      force,
       next_url: summary.next_offset == null
         ? null
-        : `/portal/api/admin/raised-bar-f3-ingest?offset=${summary.next_offset}&limit=${summary.limit}`,
+        : `/portal/api/admin/raised-bar-f3-ingest?offset=${summary.next_offset}&limit=${summary.limit}${force ? '&force=1' : ''}`,
       results,
     });
   } catch (err: any) {

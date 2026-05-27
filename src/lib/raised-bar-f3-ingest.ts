@@ -43,9 +43,11 @@ export function getRaisedBarF3BundleFileCount(): number {
 export async function ingestRaisedBarF3CsvChunk(args: {
   offset?: number;
   limit?: number;
+  force?: boolean;
 } = {}): Promise<{ summary: RaisedBarF3IngestSummary; results: RaisedBarF3IngestResult[] }> {
   const offset = Math.max(0, Number.isFinite(args.offset) ? Math.floor(args.offset || 0) : 0);
   const limit = Math.max(1, Math.min(100, Number.isFinite(args.limit) ? Math.floor(args.limit || 40) : 40));
+  const force = args.force === true;
 
   const client = await getClientBySlug(RAISED_BAR_F3_CLIENT_SLUG);
   if (!client) throw new Error(`Client '${RAISED_BAR_F3_CLIENT_SLUG}' not found; run migration 014 first`);
@@ -68,7 +70,7 @@ export async function ingestRaisedBarF3CsvChunk(args: {
       sql: 'SELECT id, error FROM csv_uploads WHERE client_id = ? AND month = ? AND original_name = ? AND (error IS NULL OR error = ?)',
       args: [client.id, RAISED_BAR_F3_MONTH, fileName, ''],
     });
-    if (existing.rows.length > 0) {
+    if (!force && existing.rows.length > 0) {
       results.push({ file: fileName, format: 'cached', rows: 0, skipped: true });
       continue;
     }

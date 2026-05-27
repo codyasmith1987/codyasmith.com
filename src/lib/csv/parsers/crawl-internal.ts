@@ -26,7 +26,7 @@ const BATCH_SIZE = 50;
 function findHeaderIndex(headers: string[], wanted: string): number {
   const w = wanted.toLowerCase();
   for (let i = 0; i < headers.length; i++) {
-    const h = (headers[i] || '').toLowerCase().trim();
+    const h = (headers[i] || '').replace(/^\uFEFF/, '').toLowerCase().trim();
     if (h === w) return i;
     if (h === `${w} 1`) return i;
     if (h.startsWith(`${w}-1`)) return i;

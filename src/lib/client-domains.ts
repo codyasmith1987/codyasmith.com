@@ -17,8 +17,9 @@
 // falls back to the manual single-domain input in that case.
 
 import turso from './turso';
+import Papa from 'papaparse';
 
-export type ClientDomainSource = 'crawl_urls' | 'keyword_rankings';
+export type ClientDomainSource = 'crawl_urls' | 'raw_csv_data' | 'keyword_rankings';
 
 export interface DerivedClientDomain {
   domain: string;
@@ -39,6 +40,10 @@ function normalizeHostname(host: string): string | null {
   return h;
 }
 
+function normalizeHeader(header: string): string {
+  return (header || '').replace(/^\uFEFF/, '').trim().toLowerCase();
+}
+
 function extractHostnameFromUrl(raw: string): string | null {
   if (!raw) return null;
   const trimmed = raw.trim();
@@ -49,6 +54,53 @@ function extractHostnameFromUrl(raw: string): string | null {
   } catch {
     return null;
   }
+}
+
+const RAW_URL_COLUMNS = [
+  'address',
+  'url',
+  'ranking url',
+  'landing page',
+];
+
+function pickRawUrlColumn(headers: string[]): number {
+  const normalized = headers.map(normalizeHeader);
+  for (const wanted of RAW_URL_COLUMNS) {
+    const idx = normalized.indexOf(wanted);
+    if (idx >= 0) return idx;
+  }
+  return -1;
+}
+
+export function deriveDomainsFromRawCsvText(raw: string, opts: { sampleLimit?: number } = {}): DerivedClientDomain[] {
+  const sampleLimit = opts.sampleLimit ?? 50000;
+  const parsed = Papa.parse(raw, { header: false, skipEmptyLines: true });
+  const rows = parsed.data as string[][];
+  if (!Array.isArray(rows) || rows.length < 2) return [];
+
+  const headers = (rows[0] || []).map(v => String(v || ''));
+  const urlIdx = pickRawUrlColumn(headers);
+  if (urlIdx < 0) return [];
+
+  const counts = new Map<string, { sample: string; count: number }>();
+  for (const row of rows.slice(1, sampleLimit + 1)) {
+    const rawUrl = String(row?.[urlIdx] || '');
+    const host = extractHostnameFromUrl(rawUrl);
+    if (!host) continue;
+    const existing = counts.get(host);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      counts.set(host, { sample: rawUrl, count: 1 });
+    }
+  }
+
+  return Array.from(counts.entries()).map(([domain, info]) => ({
+    domain,
+    source: 'raw_csv_data' as const,
+    url_sample: info.sample,
+    url_count: info.count,
+  }));
 }
 
 export async function getClientDomainsFromData(clientId: string, opts: { sampleLimit?: number } = {}): Promise<DerivedClientDomain[]> {
@@ -84,7 +136,54 @@ export async function getClientDomainsFromData(clientId: string, opts: { sampleL
     // Table may not exist yet on stale databases; treat as empty.
   }
 
-  // Source 2: keyword_rankings.url. Read a bounded slice and extract
+  // Source 2: raw_csv_data. Unknown/stored CSVs may still contain the
+  // canonical per-URL crawl rows (for example if a BOM or header
+  // variation made the detector miss crawl_internal). Backfill should
+  // be able to derive hostnames from the client data that was accepted
+  // and stored, even when no typed parser wrote crawl_urls.
+  try {
+    const rawRows = await turso.execute({
+      sql: `SELECT raw_text
+            FROM raw_csv_data
+            WHERE client_id = ?
+            ORDER BY
+              CASE
+                WHEN lower(filename) LIKE '%internal%' THEN 0
+                WHEN lower(filename) LIKE '%crawl%' THEN 1
+                WHEN headers LIKE '%Address%' THEN 2
+                WHEN headers LIKE '%URL%' THEN 3
+                ELSE 4
+              END,
+              created_at DESC
+            LIMIT 100`,
+      args: [clientId],
+    });
+    const rawCounts = new Map<string, { sample: string; count: number }>();
+    for (const row of rawRows.rows as any[]) {
+      const raw = String(row[0] || '');
+      for (const derived of deriveDomainsFromRawCsvText(raw, { sampleLimit: 50000 })) {
+        const existing = rawCounts.get(derived.domain);
+        if (existing) {
+          existing.count += derived.url_count;
+        } else {
+          rawCounts.set(derived.domain, { sample: derived.url_sample, count: derived.url_count });
+        }
+      }
+    }
+    for (const [host, info] of rawCounts.entries()) {
+      if (byDomain.has(host)) continue; // typed crawl data wins
+      byDomain.set(host, {
+        domain: host,
+        source: 'raw_csv_data',
+        url_sample: info.sample,
+        url_count: info.count,
+      });
+    }
+  } catch {
+    // raw_csv_data may not exist on stale databases; treat as empty.
+  }
+
+  // Source 3: keyword_rankings.url. Read a bounded slice and extract
   // hostnames at read time. Counts are within the sampled slice, not
   // the full table; that's fine for ordering, not for analytics.
   try {
@@ -119,9 +218,11 @@ export async function getClientDomainsFromData(clientId: string, opts: { sampleL
     // Table missing or query fails: ignore this source.
   }
 
-  // Order: crawl_urls first (by URL count desc), then keyword_rankings.
+  // Order: typed crawl data first, then raw stored CSV fallback, then
+  // keyword rankings. Within the same source, larger URL count wins.
   return Array.from(byDomain.values()).sort((a, b) => {
-    if (a.source !== b.source) return a.source === 'crawl_urls' ? -1 : 1;
+    const weight = { crawl_urls: 0, raw_csv_data: 1, keyword_rankings: 2 } as const;
+    if (a.source !== b.source) return weight[a.source] - weight[b.source];
     if (a.url_count !== b.url_count) return b.url_count - a.url_count;
     return a.domain.localeCompare(b.domain);
   });

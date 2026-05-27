@@ -18,6 +18,7 @@ import {
   computeMultiSiteMonthly,
   computeMultiSiteOnboarding,
   computeMultiSiteSum,
+  computeMultiSiteSumWithOverrides,
   buildPerSiteBases,
   applyBuildOptionSiteModifications,
   MULTI_SITE_DISCOUNT,
@@ -77,6 +78,63 @@ async function run() {
   test('WM sum: mixed-eco [797, 497, 1497] = 2392.2',
     computeMultiSiteSum([797, 497, 1497]) === 2392.2,
     `got ${computeMultiSiteSum([797, 497, 1497])}`);
+
+  // -------------------------------------------------------------------
+  // Per-site override sum: pro-bono ($0) and grandfathered carve-outs.
+  // Primary always gets full base. Additional sites get 0.80x UNLESS
+  // isOverride is true, in which case they get full base because the
+  // override IS the price.
+  // -------------------------------------------------------------------
+  test('override sum: empty = 0',
+    computeMultiSiteSumWithOverrides([]) === 0);
+  test('override sum: single formula site = full base',
+    computeMultiSiteSumWithOverrides([{ base: 797, isOverride: false }]) === 797);
+  test('override sum: 2 formula sites = primary + 0.80x additional',
+    computeMultiSiteSumWithOverrides([
+      { base: 797, isOverride: false },
+      { base: 797, isOverride: false },
+    ]) === 1434.6);
+  test('override sum: pro-bono ($0) additional contributes nothing',
+    computeMultiSiteSumWithOverrides([
+      { base: 797, isOverride: false },
+      { base: 0, isOverride: true },
+    ]) === 797);
+  test('override sum: grandfathered $500 additional skips 0.80 multiplier',
+    computeMultiSiteSumWithOverrides([
+      { base: 797, isOverride: false },
+      { base: 500, isOverride: true },
+    ]) === 1297,
+    `got ${computeMultiSiteSumWithOverrides([{ base: 797, isOverride: false }, { base: 500, isOverride: true }])}`);
+  test('override sum: mixed formula + override + pro-bono',
+    computeMultiSiteSumWithOverrides([
+      { base: 797, isOverride: false },  // primary, formula: 797
+      { base: 497, isOverride: false },  // additional formula: 497 * 0.8 = 397.6
+      { base: 500, isOverride: true },   // grandfathered: 500 (no 0.80)
+      { base: 0,   isOverride: true },   // pro-bono: 0
+    ]) === 1694.6,
+    `got ${computeMultiSiteSumWithOverrides([{base:797,isOverride:false},{base:497,isOverride:false},{base:500,isOverride:true},{base:0,isOverride:true}])}`);
+  test('override sum: primary as override still gets full base (idx 0 always full)',
+    computeMultiSiteSumWithOverrides([{ base: 1000, isOverride: true }]) === 1000);
+
+  // buildPerSiteBases now returns BOTH the legacy bases arrays AND
+  // the override-aware perSite arrays. Confirm both shapes are populated.
+  const overrideBases = buildPerSiteBases({
+    managedSites: [
+      { is_primary: true, page_count: 50, monthly_override: null, onboarding_override: null },
+      { is_primary: false, page_count: 50, monthly_override: 200, onboarding_override: 0 },
+    ],
+    tierId: 'better',
+    primaryEcosystemId: 'B',
+  });
+  test('buildPerSiteBases: primary site monthlyPerSite isOverride=false',
+    overrideBases.monthlyPerSite[0].isOverride === false);
+  test('buildPerSiteBases: site with monthly_override flags isOverride=true',
+    overrideBases.monthlyPerSite[1].isOverride === true);
+  test('buildPerSiteBases: site with monthly_override uses override value as base',
+    overrideBases.monthlyPerSite[1].base === 200);
+  test('buildPerSiteBases: site with onboarding_override=0 (pro-bono) uses 0 as base',
+    overrideBases.onboardingPerSite[1].base === 0
+    && overrideBases.onboardingPerSite[1].isOverride === true);
 
   // Legacy single-ecosystem helpers (still used for fallback when no
   // per-site page counts are available). Should yield the same result
@@ -1697,6 +1755,76 @@ async function run() {
     `got ${mo1Schedule.web_management?.monthly_total}`);
   test('modification mo1: input managedSites are not mutated (page_count still 21)',
     modManagedSites[0].page_count === 21);
+
+  // -------------------------------------------------------------------
+  // Schedule A with per-site monthly_override / onboarding_override.
+  // Pro-bono ($0) and grandfathered ($500-ish dollar amount) cases.
+  // Override skips the multi-site 0.80 multiplier AND bypasses
+  // ecosystem routing for that site's per-site contribution.
+  // -------------------------------------------------------------------
+  const overrideCfg = composeProposal({
+    client: { id: 'or-client', name: 'Override Test Client', slug: 'override-test' },
+    signers: [{ name: 'Test Signer', email: 'test@example.com', role: 'Owner' }],
+    products: ['web-management'],
+    product_vars: {
+      'web-management': { page_count: 50, site_count: 3 },
+    },
+    narrative_variables: {},
+    managedSites: [
+      // Primary: formula
+      { domain: 'primary.com', label: 'Primary', is_primary: true, page_count: 50 },
+      // Pro-bono: $0 override on both monthly and onboarding
+      { domain: 'charity.org', label: 'Charity', is_primary: false, page_count: 50,
+        monthly_override: 0, onboarding_override: 0 },
+      // Grandfathered: $500 monthly, $0 onboarding (legacy ZKH-style)
+      { domain: 'legacy.com', label: 'Legacy', is_primary: false, page_count: 50,
+        monthly_override: 500, onboarding_override: 0 },
+    ],
+  });
+  const overrideSchedule = buildScheduleA({
+    proposalConfig: overrideCfg,
+    draftSelections: { wm_tier: 'better' },
+    pricing: null,
+    clientMetadata: {
+      legal_entity_name: 'Override Test Client',
+      entity_type: 'limited liability company',
+      state_of_organization: 'Utah',
+      primary_contact_name: 'Test Signer',
+      primary_contact_email: 'test@example.com',
+      primary_contact_role: 'Owner',
+      principal_office_address: '1 Test St, Test City, UT 84720',
+    },
+    effectiveDate: '2026-05-26',
+    managedSites: overrideCfg.managed_sites,
+  });
+  const overrideRows = overrideSchedule.web_management?.sites || [];
+  const charityRow = overrideRows.find(s => (s.domain || '').includes('charity.org'));
+  const legacyRow = overrideRows.find(s => (s.domain || '').includes('legacy.com'));
+  const primaryRow = overrideRows.find(s => (s.domain || '').includes('primary.com'));
+
+  test('override schedule A: primary site contribution unaffected (797)',
+    primaryRow?.monthly_contribution === 797,
+    `got ${primaryRow?.monthly_contribution}`);
+  test('override schedule A: pro-bono site contributes $0 monthly',
+    charityRow?.monthly_contribution === 0,
+    `got ${charityRow?.monthly_contribution}`);
+  test('override schedule A: pro-bono site contributes $0 onboarding',
+    charityRow?.onboarding_contribution === 0,
+    `got ${charityRow?.onboarding_contribution}`);
+  test('override schedule A: grandfathered site contributes $500 monthly (no 0.80x)',
+    legacyRow?.monthly_contribution === 500,
+    `got ${legacyRow?.monthly_contribution}`);
+  test('override schedule A: grandfathered site contributes $0 onboarding (override)',
+    legacyRow?.onboarding_contribution === 0,
+    `got ${legacyRow?.onboarding_contribution}`);
+  // Total = 797 (primary) + 0 (pro-bono) + 500 (grandfathered) = 1297
+  test('override schedule A: WM monthly_total = 1297 (primary + pro-bono + grandfathered)',
+    overrideSchedule.web_management?.monthly_total === 1297,
+    `got ${overrideSchedule.web_management?.monthly_total}`);
+  // Onboarding total = 1200 (primary Eco B Better) + 0 + 0 = 1200
+  test('override schedule A: WM onboarding_total = 1200 (only primary contributes)',
+    overrideSchedule.web_management?.onboarding_total === 1200,
+    `got ${overrideSchedule.web_management?.onboarding_total}`);
 
   // -------------------------------------------------------------------
   // Summary

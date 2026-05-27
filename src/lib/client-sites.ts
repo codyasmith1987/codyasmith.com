@@ -42,6 +42,15 @@ export interface ClientSite {
   // calculator uses to compute the first-period invoice. Null = not
   // live yet (build in progress, takeover not started).
   went_live_at: string | null;
+  // Per-site pricing overrides. NULL = use the formula. Any non-null
+  // value (including 0) = use that exact amount as the per-site
+  // contribution; the multi-site 0.80 multiplier is skipped for this
+  // site because the override IS the price. Use cases: pro-bono ($0),
+  // grandfathered legacy rates, per-site sweetheart deals. Client-
+  // level discount_rate still applies uniformly per existing pricing
+  // pipeline behavior.
+  monthly_override: number | null;
+  onboarding_override: number | null;
 }
 
 function rowToSite(row: any): ClientSite {
@@ -59,10 +68,12 @@ function rowToSite(row: any): ClientSite {
     cloudflare_token_set: !!(row[10] as string | null),
     cloudflare_last_synced_at: (row[11] as string | null) ?? null,
     went_live_at: (row[12] as string | null) ?? null,
+    monthly_override: (row[13] as number | null) ?? null,
+    onboarding_override: (row[14] as number | null) ?? null,
   };
 }
 
-const SELECT_COLS = 'id, client_id, domain, is_primary, is_managed, label, sort_order, notes, page_count, cloudflare_zone_id, cloudflare_api_token, cloudflare_last_synced_at, went_live_at';
+const SELECT_COLS = 'id, client_id, domain, is_primary, is_managed, label, sort_order, notes, page_count, cloudflare_zone_id, cloudflare_api_token, cloudflare_last_synced_at, went_live_at, monthly_override, onboarding_override';
 
 export async function listClientSites(clientId: string): Promise<ClientSite[]> {
   const result = await turso.execute({
@@ -253,6 +264,37 @@ export async function setSiteWentLive(clientId: string, siteId: string, wentLive
   await turso.execute({
     sql: 'UPDATE client_sites SET went_live_at = ? WHERE id = ? AND client_id = ?',
     args: [wentLiveAt ?? null, siteId, clientId],
+  });
+}
+
+// Per-site pricing override setters. Pass null to clear (site falls
+// back to formula pricing). Any non-null number (including 0) sets
+// the override as that site's exact per-site contribution. Negatives
+// rejected because a negative monthly is never the right answer for
+// a pro-bono or grandfathered carve-out.
+export async function setSiteMonthlyOverride(clientId: string, siteId: string, amount: number | null): Promise<void> {
+  const safe = amount === null || amount === undefined
+    ? null
+    : (Number.isFinite(amount) && amount >= 0 ? Math.round(amount * 100) / 100 : null);
+  if (amount !== null && amount !== undefined && safe === null) {
+    throw new Error('monthly_override must be a non-negative number or null');
+  }
+  await turso.execute({
+    sql: 'UPDATE client_sites SET monthly_override = ? WHERE id = ? AND client_id = ?',
+    args: [safe, siteId, clientId],
+  });
+}
+
+export async function setSiteOnboardingOverride(clientId: string, siteId: string, amount: number | null): Promise<void> {
+  const safe = amount === null || amount === undefined
+    ? null
+    : (Number.isFinite(amount) && amount >= 0 ? Math.round(amount * 100) / 100 : null);
+  if (amount !== null && amount !== undefined && safe === null) {
+    throw new Error('onboarding_override must be a non-negative number or null');
+  }
+  await turso.execute({
+    sql: 'UPDATE client_sites SET onboarding_override = ? WHERE id = ? AND client_id = ?',
+    args: [safe, siteId, clientId],
   });
 }
 

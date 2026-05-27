@@ -377,6 +377,12 @@ export interface ProductContext {
     label?: string | null;
     is_primary?: boolean;
     page_count?: number | null;
+    // Per-site overrides. NULL = use formula. Non-null (including 0)
+    // = use this exact amount; multi-site 0.80 multiplier is skipped
+    // for this site because the override IS the price. Pro-bono and
+    // grandfathered carve-outs.
+    monthly_override?: number | null;
+    onboarding_override?: number | null;
   }>;
   // Prospect's interactive selections, keyed by step id. Lets a
   // product introspect picks it doesn't own (e.g., Build reads its
@@ -489,6 +495,8 @@ export interface ProposalConfig {
     label?: string | null;
     is_primary?: boolean;
     page_count?: number | null;
+    monthly_override?: number | null;
+    onboarding_override?: number | null;
   }>;
 }
 
@@ -553,6 +561,12 @@ export interface ComposeArgs {
     label?: string | null;
     is_primary?: boolean;
     page_count?: number | null;
+    // Per-site overrides. NULL = use formula. Non-null (including 0)
+    // = use this exact amount; multi-site 0.80 multiplier is skipped
+    // for this site because the override IS the price. Pro-bono and
+    // grandfathered carve-outs.
+    monthly_override?: number | null;
+    onboarding_override?: number | null;
   }>;
 }
 

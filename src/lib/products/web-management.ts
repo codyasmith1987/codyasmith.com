@@ -276,6 +276,25 @@ export function computeMultiSiteSum(perSiteBases: number[]): number {
   return Math.round((primary + discountedSum) * 100) / 100;
 }
 
+// Override-aware sum. Per-site shape: { base, isOverride }. Primary
+// (index 0) always gets full base. Additional sites get 0.80x UNLESS
+// isOverride is true, in which case they get full base because the
+// override IS the price (no multi-site discount on top of a
+// grandfathered or pro-bono carve-out). Used by the WM pricing
+// pipeline when managedSites carry monthly_override / onboarding_override.
+export type PerSiteBase = { base: number; isOverride: boolean };
+
+export function computeMultiSiteSumWithOverrides(perSite: PerSiteBase[]): number {
+  if (perSite.length === 0) return 0;
+  let sum = 0;
+  for (let i = 0; i < perSite.length; i++) {
+    const { base, isOverride } = perSite[i];
+    const factor = (i === 0 || isOverride) ? 1 : MULTI_SITE_DISCOUNT;
+    sum += Math.round(base * factor * 100) / 100;
+  }
+  return Math.round(sum * 100) / 100;
+}
+
 // Legacy single-ecosystem helpers. Retained for callsites that have
 // NOT been migrated to pass per-site arrays yet, AND for the fallback
 // path when no per-site page counts exist (the primary's ecosystem
@@ -304,10 +323,20 @@ export function computeMultiSiteOnboarding(base: number, sites: number): number 
 // ecosystem flow). This function is only relevant when managedSites
 // is populated.
 export function buildPerSiteBases(args: {
-  managedSites: Array<{ is_primary?: boolean; page_count?: number | null }>;
+  managedSites: Array<{
+    is_primary?: boolean;
+    page_count?: number | null;
+    monthly_override?: number | null;
+    onboarding_override?: number | null;
+  }>;
   tierId: TierId;
   primaryEcosystemId: EcosystemId;
-}): { monthlyBases: number[]; onboardingBases: number[] } {
+}): {
+  monthlyBases: number[];
+  onboardingBases: number[];
+  monthlyPerSite: PerSiteBase[];
+  onboardingPerSite: PerSiteBase[];
+} {
   // Sort so primary is first; the discount applies to the rest.
   const sorted = [...args.managedSites].sort((a, b) => {
     if (!!a.is_primary === !!b.is_primary) return 0;
@@ -315,16 +344,29 @@ export function buildPerSiteBases(args: {
   });
   const monthlyBases: number[] = [];
   const onboardingBases: number[] = [];
+  const monthlyPerSite: PerSiteBase[] = [];
+  const onboardingPerSite: PerSiteBase[] = [];
   for (const site of sorted) {
     const eco = site.page_count != null
       ? (routeWebManagementEcosystem(site.page_count) || args.primaryEcosystemId)
       : args.primaryEcosystemId;
     const ecosystem = WM_ECOSYSTEMS[eco];
     const tier = ecosystem?.tiers[args.tierId];
-    monthlyBases.push(tier?.monthly || 0);
-    onboardingBases.push(tier?.onb || 0);
+    const formulaMonthly = tier?.monthly || 0;
+    const formulaOnb = tier?.onb || 0;
+    // Per-site override: NULL = use formula; any non-null value
+    // (including 0) = use the override and skip the multi-site
+    // multiplier for this site.
+    const monthlyIsOverride = site.monthly_override != null;
+    const onbIsOverride = site.onboarding_override != null;
+    const monthlyBase = monthlyIsOverride ? site.monthly_override! : formulaMonthly;
+    const onbBase = onbIsOverride ? site.onboarding_override! : formulaOnb;
+    monthlyBases.push(monthlyBase);
+    onboardingBases.push(onbBase);
+    monthlyPerSite.push({ base: monthlyBase, isOverride: monthlyIsOverride });
+    onboardingPerSite.push({ base: onbBase, isOverride: onbIsOverride });
   }
-  return { monthlyBases, onboardingBases };
+  return { monthlyBases, onboardingBases, monthlyPerSite, onboardingPerSite };
 }
 
 // Apply a picked BuildOption's wm_site_modifications to a managedSites
@@ -383,10 +425,14 @@ function buildTierOption(args: {
   // tier card pricing reflects per-site ecosystem routing instead of
   // priming everything off the primary's ecosystem. The features list
   // also gains a per-site breakdown line so the buyer sees how the
-  // total is built. Per the 2026-05-24 locked formula.
+  // total is built. Per the 2026-05-24 locked formula. Per-site
+  // monthly_override / onboarding_override (if set) bypass the
+  // multi-site multiplier for that site.
   managedSites?: Array<{
     domain: string; label?: string | null; is_primary?: boolean;
     page_count?: number | null;
+    monthly_override?: number | null;
+    onboarding_override?: number | null;
   }>;
 }): ProposalStepOption {
   const tier = args.ecosystem.tiers[args.tierId];
@@ -400,24 +446,25 @@ function buildTierOption(args: {
     && args.managedSites.length > 0
     && args.managedSites.some(s => s.page_count != null);
   if (hasPerSiteData) {
-    const { monthlyBases, onboardingBases } = buildPerSiteBases({
+    const { monthlyPerSite, onboardingPerSite } = buildPerSiteBases({
       managedSites: args.managedSites!,
       tierId: args.tierId,
       primaryEcosystemId: args.ecosystem.id,
     });
-    monthly = computeMultiSiteSum(monthlyBases);
-    onb = computeMultiSiteSum(onboardingBases);
+    monthly = computeMultiSiteSumWithOverrides(monthlyPerSite);
+    onb = computeMultiSiteSumWithOverrides(onboardingPerSite);
     // Build the per-site breakdown line for the features list.
-    // Primary's contribution + each additional site's discounted
-    // contribution, all summed.
+    // Primary's contribution + each additional site's contribution.
+    // Overridden sites contribute their override amount as-is; non-
+    // overridden additional sites get the 0.80 multi-site factor.
     const sortedSites = [...args.managedSites!].sort((a, b) => {
       if (!!a.is_primary === !!b.is_primary) return 0;
       return a.is_primary ? -1 : 1;
     });
     const breakdownParts = sortedSites.map((s, i) => {
       const label = s.label && s.label !== s.domain ? s.label : s.domain;
-      const base = monthlyBases[i];
-      const factor = i === 0 ? 1 : MULTI_SITE_DISCOUNT;
+      const { base, isOverride } = monthlyPerSite[i];
+      const factor = (i === 0 || isOverride) ? 1 : MULTI_SITE_DISCOUNT;
       const contribution = Math.round(base * factor * 100) / 100;
       return `${formatMoney(contribution)} (${label})`;
     });
@@ -610,13 +657,13 @@ export const webManagementProduct: ProductDefinition = {
     const hasPerSiteData = modifiedManagedSites && modifiedManagedSites.length > 0
       && modifiedManagedSites.some(s => s.page_count != null);
     if (hasPerSiteData) {
-      const { monthlyBases, onboardingBases } = buildPerSiteBases({
+      const { monthlyPerSite, onboardingPerSite } = buildPerSiteBases({
         managedSites: modifiedManagedSites!,
         tierId: ctx.tierId,
         primaryEcosystemId: ctx.ecosystemId,
       });
-      monthly = computeMultiSiteSum(monthlyBases);
-      onb = computeMultiSiteSum(onboardingBases);
+      monthly = computeMultiSiteSumWithOverrides(monthlyPerSite);
+      onb = computeMultiSiteSumWithOverrides(onboardingPerSite);
       sitesCount = modifiedManagedSites!.length;
     } else {
       sitesCount = numberFromVar(ctx.variables.site_count, 1);
@@ -678,23 +725,30 @@ export const webManagementProduct: ProductDefinition = {
       // Compute per-site monthly + onboarding contributions using the
       // locked formula. First site (primary) at full base; each
       // additional at base * 0.80, with base routed from that site's
-      // own page_count (or primary's ecosystem if null).
+      // own page_count (or primary's ecosystem if null). Per-site
+      // monthly_override / onboarding_override (when non-null) replace
+      // the formula base AND skip the 0.80 multiplier for that site.
       siteRows = sorted.map((s, idx) => {
         const siteEco = s.page_count != null
           ? (routeWebManagementEcosystem(s.page_count) || ctx.ecosystemId!)
           : ctx.ecosystemId!;
         const siteEcoObj = WM_ECOSYSTEMS[siteEco];
         const siteTier = siteEcoObj?.tiers[ctx.tierId!];
-        const monthlyBase = siteTier?.monthly || 0;
-        const onbBase = siteTier?.onb || 0;
-        // Primary at full base; additional at 0.80x.
-        const factor = idx === 0 ? 1 : MULTI_SITE_DISCOUNT;
+        const monthlyFormulaBase = siteTier?.monthly || 0;
+        const onbFormulaBase = siteTier?.onb || 0;
+        const monthlyIsOverride = (s as any).monthly_override != null;
+        const onbIsOverride = (s as any).onboarding_override != null;
+        const monthlyBase = monthlyIsOverride ? (s as any).monthly_override : monthlyFormulaBase;
+        const onbBase = onbIsOverride ? (s as any).onboarding_override : onbFormulaBase;
+        // Primary or overridden sites skip the multiplier.
+        const monthlyFactor = (idx === 0 || monthlyIsOverride) ? 1 : MULTI_SITE_DISCOUNT;
+        const onbFactor = (idx === 0 || onbIsOverride) ? 1 : MULTI_SITE_DISCOUNT;
         return {
           domain: s.label && s.label !== s.domain ? `${s.label} (${s.domain})` : s.domain,
           description: s.is_primary ? 'primary site' : '',
           ecosystem: siteEco,
-          monthly_contribution: Math.round(monthlyBase * factor * 100) / 100,
-          onboarding_contribution: Math.round(onbBase * factor * 100) / 100,
+          monthly_contribution: Math.round(monthlyBase * monthlyFactor * 100) / 100,
+          onboarding_contribution: Math.round(onbBase * onbFactor * 100) / 100,
           is_primary: !!s.is_primary,
         };
       });

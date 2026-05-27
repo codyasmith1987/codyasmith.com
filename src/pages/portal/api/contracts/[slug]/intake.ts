@@ -91,6 +91,8 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
       const managedSites = (await listManagedSites(agreement.client_id)).map(s => ({
         domain: s.domain, label: s.label, is_primary: s.is_primary,
         page_count: s.page_count,
+        monthly_override: s.monthly_override,
+        onboarding_override: s.onboarding_override,
       }));
       const newScheduleA = buildScheduleA({
         proposalConfig: config,

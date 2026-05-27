@@ -39,6 +39,8 @@ export interface ScheduleAContext {
     label?: string | null;
     is_primary?: boolean;
     page_count?: number | null;
+    monthly_override?: number | null;
+    onboarding_override?: number | null;
   }>;
 }
 

@@ -123,6 +123,8 @@ export const POST: APIRoute = async ({ locals, request }) => {
       const managedSites = (await listManagedSites(clientId)).map(s => ({
         domain: s.domain, label: s.label, is_primary: s.is_primary,
         page_count: s.page_count,
+        monthly_override: s.monthly_override,
+        onboarding_override: s.onboarding_override,
       }));
       scheduleA = buildScheduleA({
         proposalConfig: config,

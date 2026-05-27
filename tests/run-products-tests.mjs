@@ -1827,6 +1827,121 @@ async function run() {
     `got ${overrideSchedule.web_management?.onboarding_total}`);
 
   // -------------------------------------------------------------------
+  // Schedule A applies client-level discount_rate uniformly to every
+  // monetary field. KelseyVerse-style 100% off must show $0 across
+  // the board in Schedule A, matching the proposal page total.
+  // Pre-this-PR bug: discount only applied in composePricing, never
+  // in buildScheduleA, so the two disagreed for any non-zero discount.
+  // Bug found during the post-session audit; this test prevents
+  // regression and would have caught it pre-deploy.
+  // -------------------------------------------------------------------
+  const discountCfg = composeProposal({
+    client: { id: 'discount-test', name: 'Discount Test Client', slug: 'discount-test', discount_rate: 0.5 },
+    signers: [{ name: 'Test', email: 'test@example.com', role: 'Owner' }],
+    products: ['web-management'],
+    product_vars: { 'web-management': { page_count: 50, site_count: 1 } },
+    narrative_variables: {},
+    managedSites: [
+      { domain: 'discount-test.com', label: 'Primary', is_primary: true, page_count: 50 },
+    ],
+  });
+  const discountSchedule = buildScheduleA({
+    proposalConfig: discountCfg,
+    draftSelections: { wm_tier: 'better' },
+    pricing: null,
+    clientMetadata: {
+      legal_entity_name: 'Discount Test Client',
+      entity_type: 'limited liability company',
+      state_of_organization: 'Utah',
+      primary_contact_name: 'Test',
+      primary_contact_email: 'test@example.com',
+      primary_contact_role: 'Owner',
+      principal_office_address: '1 Test St, Test City, UT 84720',
+    },
+    effectiveDate: '2026-05-26',
+    managedSites: discountCfg.managed_sites,
+  });
+  test('Schedule A 50% discount: WM monthly_total halved (797 to 398.50)',
+    discountSchedule.web_management?.monthly_total === 398.5,
+    `got ${discountSchedule.web_management?.monthly_total}`);
+  test('Schedule A 50% discount: per-site monthly_contribution halved',
+    discountSchedule.web_management?.sites?.[0]?.monthly_contribution === 398.5,
+    `got ${discountSchedule.web_management?.sites?.[0]?.monthly_contribution}`);
+
+  // 100% discount: every monetary field must be exactly 0 (KelseyVerse).
+  const kelseyCfg = composeProposal({
+    client: { id: 'kelsey-test', name: 'KelseyVerse', slug: 'kelseyverse', discount_rate: 1.0 },
+    signers: [{ name: 'K', email: 'k@example.com', role: 'Owner' }],
+    products: ['web-management', 'marketing-consulting'],
+    product_vars: {
+      'web-management': { page_count: 50, site_count: 1 },
+      'marketing-consulting': { revenue: 500000 },
+    },
+    narrative_variables: {},
+    managedSites: [
+      { domain: 'kelseyverse.com', label: 'Primary', is_primary: true, page_count: 50 },
+    ],
+  });
+  const kelseySchedule = buildScheduleA({
+    proposalConfig: kelseyCfg,
+    draftSelections: { wm_tier: 'better', mc_tier: 'better' },
+    pricing: null,
+    clientMetadata: {
+      legal_entity_name: 'KelseyVerse',
+      entity_type: 'limited liability company',
+      state_of_organization: 'Utah',
+      primary_contact_name: 'K',
+      primary_contact_email: 'k@example.com',
+      primary_contact_role: 'Owner',
+      principal_office_address: '1 Test St, Test City, UT 84720',
+    },
+    effectiveDate: '2026-05-26',
+    managedSites: kelseyCfg.managed_sites,
+  });
+  test('Schedule A 100% discount (KelseyVerse): WM monthly_total = 0',
+    kelseySchedule.web_management?.monthly_total === 0,
+    `got ${kelseySchedule.web_management?.monthly_total}`);
+  test('Schedule A 100% discount (KelseyVerse): WM onboarding_fee = 0',
+    kelseySchedule.web_management?.onboarding_fee === 0,
+    `got ${kelseySchedule.web_management?.onboarding_fee}`);
+  test('Schedule A 100% discount (KelseyVerse): every per-site contribution = 0',
+    (kelseySchedule.web_management?.sites || []).every(s =>
+      (s.monthly_contribution === 0 || s.monthly_contribution == null) &&
+      (s.onboarding_contribution === 0 || s.onboarding_contribution == null)
+    ));
+
+  // Regression: no discount = full base (797 for Eco B Better, 1 site).
+  const noDiscountCfg = composeProposal({
+    client: { id: 'nodiscount', name: 'No Discount', slug: 'no-discount' },
+    signers: [{ name: 'X', email: 'x@example.com', role: 'Owner' }],
+    products: ['web-management'],
+    product_vars: { 'web-management': { page_count: 50, site_count: 1 } },
+    narrative_variables: {},
+    managedSites: [
+      { domain: 'nodiscount.com', is_primary: true, page_count: 50 },
+    ],
+  });
+  const noDiscountSchedule = buildScheduleA({
+    proposalConfig: noDiscountCfg,
+    draftSelections: { wm_tier: 'better' },
+    pricing: null,
+    clientMetadata: {
+      legal_entity_name: 'No Discount',
+      entity_type: 'limited liability company',
+      state_of_organization: 'Utah',
+      primary_contact_name: 'X',
+      primary_contact_email: 'x@example.com',
+      primary_contact_role: 'Owner',
+      principal_office_address: '1 Test St',
+    },
+    effectiveDate: '2026-05-26',
+    managedSites: noDiscountCfg.managed_sites,
+  });
+  test('Schedule A no discount: WM monthly_total at full base (797)',
+    noDiscountSchedule.web_management?.monthly_total === 797,
+    `got ${noDiscountSchedule.web_management?.monthly_total}`);
+
+  // -------------------------------------------------------------------
   // Summary
   // -------------------------------------------------------------------
   const passed = results.filter(r => r.pass).length;

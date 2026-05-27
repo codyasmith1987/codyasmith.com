@@ -17,6 +17,8 @@ import {
   setSiteManaged,
   setSitePageCount,
   setSiteWentLive,
+  setSiteMonthlyOverride,
+  setSiteOnboardingOverride,
   addManualSite,
   deleteClientSite,
 } from '../../../../../lib/client-sites';
@@ -161,6 +163,45 @@ export const POST: APIRoute = async ({ locals, request }) => {
         summary: wentLiveAt === null
           ? `${locals.user!.name} cleared go-live date for ${target.domain}`
           : `${locals.user!.name} marked ${target.domain} live on ${wentLiveAt}`,
+      });
+      const next = await listClientSites(clientId);
+      return json({ ok: true, sites: next });
+    }
+
+    if (action === 'set_monthly_override' || action === 'set_onboarding_override') {
+      // Per-site pricing override. null/empty value clears so the
+      // site falls back to formula pricing. Any non-null number
+      // (including 0) sets the exact per-site contribution and
+      // bypasses the multi-site 0.80 multiplier for that site.
+      // Use cases: pro-bono ($0), grandfathered legacy rates.
+      const siteId = (body?.site_id || '').toString().trim();
+      if (!siteId) return json({ error: 'site_id is required' }, 400);
+      const field = action === 'set_monthly_override' ? 'monthly_override' : 'onboarding_override';
+      const raw = body?.[field];
+      const amount = raw === null || raw === undefined || raw === ''
+        ? null
+        : Number(raw);
+      if (amount !== null && (!Number.isFinite(amount) || amount < 0)) {
+        return json({ error: `${field} must be a non-negative number or null` }, 400);
+      }
+      const sites = await listClientSites(clientId);
+      const target = sites.find(s => s.id === siteId);
+      if (!target) return json({ error: 'Site not found' }, 404);
+      try {
+        if (action === 'set_monthly_override') {
+          await setSiteMonthlyOverride(clientId, siteId, amount);
+        } else {
+          await setSiteOnboardingOverride(clientId, siteId, amount);
+        }
+      } catch (err: any) {
+        return json({ error: err?.message || 'Invalid override' }, 400);
+      }
+      await logActivity({
+        clientId, userId: locals.user!.id, action: 'updated',
+        entityType: 'client', entityId: clientId,
+        summary: amount === null
+          ? `${locals.user!.name} cleared ${field} for ${target.domain}`
+          : `${locals.user!.name} set ${target.domain} ${field} to $${amount.toFixed(2)}`,
       });
       const next = await listClientSites(clientId);
       return json({ ok: true, sites: next });

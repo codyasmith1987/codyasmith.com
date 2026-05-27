@@ -913,6 +913,11 @@ function buildContextForProduct(args: {
     label?: string | null;
     is_primary?: boolean;
     page_count?: number | null;
+    // Per-site pricing overrides; NULL = formula, non-null = exact
+    // amount with multi-site multiplier skipped. Pro-bono and
+    // grandfathered carve-outs.
+    monthly_override?: number | null;
+    onboarding_override?: number | null;
   }>;
   // Engagement strategy too — same gap (some snippets read it,
   // dispatcher path was dropping it).

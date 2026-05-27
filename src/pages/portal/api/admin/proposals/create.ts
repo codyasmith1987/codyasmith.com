@@ -285,6 +285,8 @@ export const POST: APIRoute = async ({ locals, request }) => {
     let managedSites: Array<{
       domain: string; label: string | null; is_primary: boolean;
       page_count: number | null;
+      monthly_override: number | null;
+      onboarding_override: number | null;
     }> = [];
     try {
       managedSites = (await listManagedSites(client_id)).map(s => ({
@@ -292,6 +294,8 @@ export const POST: APIRoute = async ({ locals, request }) => {
         label: s.label,
         is_primary: s.is_primary,
         page_count: s.page_count,
+        monthly_override: s.monthly_override,
+        onboarding_override: s.onboarding_override,
       }));
     } catch (err) {
       logger.warn('Failed to load managed sites for compose; proceeding with single-ecosystem fallback', err);

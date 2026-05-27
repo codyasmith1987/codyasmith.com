@@ -78,6 +78,8 @@ const managedSites = (await listManagedSites(proposalRow.client_id)).map(s => ({
   label: s.label,
   is_primary: s.is_primary,
   page_count: s.page_count,
+  monthly_override: s.monthly_override,
+  onboarding_override: s.onboarding_override,
 }));
 
 // Build Schedule A from whatever's currently selected.

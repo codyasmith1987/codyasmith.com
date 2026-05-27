@@ -228,6 +228,33 @@ function ecoChipLabel(pageCount: number | null): string {
                           <span class="text-[10px] text-neutral-500" title="When this date is set, first-period proration kicks in for the next invoice. All sites under one agreement converge to the same monthly cadence.">drives first-period proration</span>
                         </div>
                       )}
+                      {site.is_managed && (
+                        <div class="mt-1 ml-[16.67%] flex items-center gap-2 flex-wrap">
+                          <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-wide">Monthly override $:</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            data-site-monthly-override={site.id}
+                            data-client-id={client.id}
+                            value={site.monthly_override != null ? String(site.monthly_override) : ''}
+                            placeholder="formula"
+                            class="w-24 px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono focus:outline-none focus:border-amber-500/30"
+                          />
+                          <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-wide">Onboarding override $:</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            data-site-onboarding-override={site.id}
+                            data-client-id={client.id}
+                            value={site.onboarding_override != null ? String(site.onboarding_override) : ''}
+                            placeholder="formula"
+                            class="w-24 px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono focus:outline-none focus:border-amber-500/30"
+                          />
+                          <span class="text-[10px] text-neutral-500" title="Set an exact dollar amount to bypass the formula for this site. 0 = pro-bono. Use for grandfathered legacy rates. Empty = use formula.">$0 pro-bono, fixed = grandfathered</span>
+                        </div>
+                      )}
                     </>
                   ))}
                 </div>
@@ -393,6 +420,56 @@ function ecoChipLabel(pageCount: number | null): string {
         }
       });
     });
+
+    // Per-site monthly + onboarding override editors. Blur posts
+    // to the client_sites endpoint (action=set_monthly_override or
+    // set_onboarding_override). Empty value = clear override (site
+    // falls back to formula). 0 = pro-bono. Any other amount =
+    // grandfathered legacy rate. Failure reverts and toasts.
+    function wireOverrideInput(selector: string, action: string, field: string, label: string) {
+      document.querySelectorAll(selector).forEach(input => {
+        const inputEl = input as HTMLInputElement;
+        const siteId = inputEl.dataset.siteMonthlyOverride || inputEl.dataset.siteOnboardingOverride;
+        if (!siteId) return;
+        const clientId = inputEl.dataset.clientId!;
+        let priorValue = inputEl.value;
+        inputEl.addEventListener('blur', async () => {
+          if (inputEl.value === priorValue) return;
+          const raw = inputEl.value.trim();
+          const amount = raw === '' ? null : Number(raw);
+          if (raw !== '' && (!Number.isFinite(amount) || (amount as number) < 0)) {
+            inputEl.value = priorValue;
+            (window as any).__toast?.(`${label} must be a non-negative number.`, 'error');
+            return;
+          }
+          try {
+            const res = await fetch('/portal/api/admin/clients/sites', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+              body: JSON.stringify({ client_id: clientId, action, site_id: siteId, [field]: amount }),
+            });
+            if (!res.ok) {
+              const data = await res.json().catch(() => ({}));
+              (window as any).__toast?.(data.error || `Failed to save ${label.toLowerCase()}.`, 'error');
+              inputEl.value = priorValue;
+              return;
+            }
+            (window as any).__toast?.(amount === null
+              ? `Cleared ${label.toLowerCase()} (using formula).`
+              : amount === 0
+                ? `Set ${label.toLowerCase()} to $0 (pro-bono).`
+                : `Set ${label.toLowerCase()} to $${(amount as number).toFixed(2)}.`,
+              'success');
+            priorValue = inputEl.value;
+          } catch {
+            (window as any).__toast?.(`Network error saving ${label.toLowerCase()}.`, 'error');
+            inputEl.value = priorValue;
+          }
+        });
+      });
+    }
+    wireOverrideInput('[data-site-monthly-override]', 'set_monthly_override', 'monthly_override', 'Monthly override');
+    wireOverrideInput('[data-site-onboarding-override]', 'set_onboarding_override', 'onboarding_override', 'Onboarding override');
 
     // Per-site page-count editors. Blur posts to the existing
     // client_sites endpoint (action=set_page_count). Optimistic UI

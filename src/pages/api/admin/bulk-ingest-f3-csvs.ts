@@ -15,22 +15,10 @@
 // bypasses the portal session middleware.
 
 import type { APIRoute } from 'astro';
-import { ingestCSV } from '../../../lib/csv/index';
-import { getClientBySlug } from '../../../lib/auth';
+import { ingestRaisedBarF3CsvChunk } from '../../../lib/raised-bar-f3-ingest';
 import { logger } from '../../../lib/logger';
-import turso from '../../../lib/turso';
 
 export const prerender = false;
-
-// Bundle every CSV into the build as raw strings. Keyed by relative path.
-const CSV_BUNDLE = import.meta.glob('../../../data/raised-bar-f3-csvs/*.csv', {
-  query: '?raw',
-  import: 'default',
-  eager: true,
-}) as Record<string, string>;
-
-const CLIENT_SLUG = 'raised-bar-group';
-const MONTH = '2026-05';
 
 const json = (data: any, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
@@ -57,70 +45,7 @@ export const POST: APIRoute = async ({ request, url }) => {
   const limit = Math.max(1, Math.min(100, parseInt(url.searchParams.get('limit') || '40', 10) || 40));
 
   try {
-    const client = await getClientBySlug(CLIENT_SLUG);
-    if (!client) return json({ error: `Client '${CLIENT_SLUG}' not found; run migration 014 first` }, 500);
-
-    // Find an admin user for uploaded_by
-    const adminLookup = await turso.execute("SELECT id FROM users WHERE role = 'admin' ORDER BY created_at ASC LIMIT 1");
-    if (adminLookup.rows.length === 0) return json({ error: 'No admin user found' }, 500);
-    const adminUserId = adminLookup.rows[0][0] as string;
-
-    // Sorted file list so chunked offsets are stable across requests
-    const allEntries = Object.entries(CSV_BUNDLE).sort(([a], [b]) => a.localeCompare(b));
-    const total = allEntries.length;
-    const chunk = allEntries.slice(offset, offset + limit);
-
-    const results: Array<{
-      file: string;
-      format: string;
-      rows: number;
-      skipped?: boolean;
-      error?: string;
-    }> = [];
-
-    for (const [path, raw] of chunk) {
-      const fileName = path.split('/').pop()!;
-
-      // Idempotency: skip if a successful (no-error) upload already exists
-      // for this client + month + filename.
-      const existing = await turso.execute({
-        sql: 'SELECT id, error FROM csv_uploads WHERE client_id = ? AND month = ? AND original_name = ? AND (error IS NULL OR error = ?)',
-        args: [client.id, MONTH, fileName, ''],
-      });
-      if (existing.rows.length > 0) {
-        results.push({ file: fileName, format: 'cached', rows: 0, skipped: true });
-        continue;
-      }
-
-      try {
-        const result = await ingestCSV(raw, client.id, MONTH, fileName, adminUserId);
-        results.push({
-          file: fileName,
-          format: result.format,
-          rows: result.rowCount,
-          error: result.error,
-        });
-      } catch (err: any) {
-        results.push({ file: fileName, format: 'error', rows: 0, error: err?.message || String(err) });
-      }
-    }
-
-    const summary = {
-      total_files: total,
-      offset,
-      limit,
-      processed: chunk.length,
-      next_offset: offset + chunk.length < total ? offset + chunk.length : null,
-      skipped: results.filter(r => r.skipped).length,
-      succeeded: results.filter(r => !r.error && !r.skipped).length,
-      failed: results.filter(r => !!r.error).length,
-      by_format: results.reduce((acc, r) => {
-        const key = r.skipped ? 'skipped' : (r.error ? `error:${r.format}` : r.format);
-        acc[key] = (acc[key] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>),
-    };
-
+    const { summary, results } = await ingestRaisedBarF3CsvChunk({ offset, limit });
     return json({ ok: true, summary, results });
   } catch (err: any) {
     logger.error('Bulk F3 CSV ingest error', err);

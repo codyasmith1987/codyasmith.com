@@ -9,6 +9,7 @@
 import type { APIRoute } from 'astro';
 import turso from '../../../../lib/turso';
 import { getClientDomainsFromData } from '../../../../lib/client-domains';
+import { getRaisedBarF3BundleFileCount } from '../../../../lib/raised-bar-f3-ingest';
 
 export const prerender = false;
 
@@ -54,6 +55,11 @@ export const GET: APIRoute = async ({ locals }) => {
   } catch (err: any) {
     result._migrations = { error: err?.message || 'query failed' };
   }
+
+  result._raised_bar_f3_bundle = {
+    bundled_files: getRaisedBarF3BundleFileCount(),
+    ingest_url: '/portal/api/admin/raised-bar-f3-ingest?offset=0&limit=100',
+  };
 
   // Per-client row counts: tells us if the backfill found nothing
   // because there's no data to find, vs because the sync function

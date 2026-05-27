@@ -7,6 +7,7 @@ import {
   normalizeHostname,
   extractHostnameFromUrl,
   deriveDomainsFromRawCsvText,
+  isAuthoritativeRawCrawlFile,
 } from '../src/lib/client-domains.ts';
 import {
   extractHostname as extractHostnameCi,
@@ -119,15 +120,34 @@ async function run() {
 
   // ---------- raw_csv_data fallback domain derivation ----------
   const rawStoredCsv = '\uFEFFAddress,Status Code,Indexability,Title 1\nhttps://www.rawexample.com/,200,Indexable,Home\nhttps://rawexample.com/about,200,Indexable,About\nhttps://blog.rawexample.com/post,200,Indexable,Post\n';
-  const rawDerived = deriveDomainsFromRawCsvText(rawStoredCsv);
+  const rawDerived = deriveDomainsFromRawCsvText(rawStoredCsv, {
+    filename: 'internal_html.csv',
+    requireAuthoritativeFilename: true,
+  });
   const rawMain = rawDerived.find(d => d.domain === 'rawexample.com');
   const rawBlog = rawDerived.find(d => d.domain === 'blog.rawexample.com');
+  const rawOutlinkCsv = 'Address,Status Code\nhttps://www.youtube.com/embed/abc,200\nhttps://maps.google.com/example,200\nhttps://client-owned.example/page,200\n';
+  const rawOutlinkDerived = deriveDomainsFromRawCsvText(rawOutlinkCsv, {
+    filename: 'url_all.csv',
+    requireAuthoritativeFilename: true,
+  });
+  test('raw_csv_data fallback trusts internal_html.csv',
+    isAuthoritativeRawCrawlFile('internal_html.csv') === true);
+  test('raw_csv_data fallback trusts internal_all.csv',
+    isAuthoritativeRawCrawlFile('internal_all.csv') === true);
+  test('raw_csv_data fallback trusts ZIP-prefixed internal_html.csv',
+    isAuthoritativeRawCrawlFile('f3-export.zip:internal_html.csv') === true);
+  test('raw_csv_data fallback does not trust url_all.csv',
+    isAuthoritativeRawCrawlFile('url_all.csv') === false);
   test('raw_csv_data fallback derives main hostname from Address column',
     rawMain?.url_count === 2,
     JSON.stringify(rawDerived));
   test('raw_csv_data fallback keeps non-www subdomain separate',
     rawBlog?.url_count === 1,
     JSON.stringify(rawDerived));
+  test('raw_csv_data fallback refuses generic URL/outlink files',
+    rawOutlinkDerived.length === 0,
+    JSON.stringify(rawOutlinkDerived));
 
   // ---------- Summary ----------
   const passed = results.filter(r => r.pass).length;

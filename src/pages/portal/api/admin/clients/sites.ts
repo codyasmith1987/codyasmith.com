@@ -112,15 +112,16 @@ export const POST: APIRoute = async ({ locals, request }) => {
       // Set or clear per-site page count. Drives the multi-site
       // pricing pipeline (each site routes to its own ecosystem by
       // its own page count). null/empty value clears so the pricing
-      // pipeline falls back to the primary's ecosystem.
+      // pipeline falls back to the primary's ecosystem. 0 is not a
+      // valid page count; use blank/null for unknown.
       const siteId = (body?.site_id || '').toString().trim();
       if (!siteId) return json({ error: 'site_id is required' }, 400);
       const raw = body?.page_count;
       const pageCount = raw === null || raw === undefined || raw === ''
         ? null
         : Number(raw);
-      if (pageCount !== null && (!Number.isFinite(pageCount) || pageCount < 0)) {
-        return json({ error: 'page_count must be a non-negative number or null' }, 400);
+      if (pageCount !== null && (!Number.isFinite(pageCount) || pageCount <= 0)) {
+        return json({ error: 'page_count must be a positive number or blank' }, 400);
       }
       const sites = await listClientSites(clientId);
       const target = sites.find(s => s.id === siteId);

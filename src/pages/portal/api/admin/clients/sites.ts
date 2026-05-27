@@ -16,6 +16,7 @@ import {
   setPrimarySite,
   setSiteManaged,
   setSitePageCount,
+  setSiteWentLive,
   addManualSite,
   deleteClientSite,
 } from '../../../../../lib/client-sites';
@@ -129,6 +130,37 @@ export const POST: APIRoute = async ({ locals, request }) => {
         summary: pageCount === null
           ? `${locals.user!.name} cleared page count for ${target.domain}`
           : `${locals.user!.name} set ${target.domain} page count to ${pageCount}`,
+      });
+      const next = await listClientSites(clientId);
+      return json({ ok: true, sites: next });
+    }
+
+    if (action === 'set_went_live') {
+      // Mark a managed site live (or clear). Drives first-period
+      // proration on the next invoice for that site. Per Cody's
+      // operating rule: every site on this agreement bills on the
+      // same monthly cadence; first invoice prorated from this
+      // date to the next anchor day.
+      const siteId = (body?.site_id || '').toString().trim();
+      if (!siteId) return json({ error: 'site_id is required' }, 400);
+      const raw = body?.went_live_at;
+      const wentLiveAt = raw === null || raw === undefined || raw === ''
+        ? null
+        : String(raw);
+      const sites = await listClientSites(clientId);
+      const target = sites.find(s => s.id === siteId);
+      if (!target) return json({ error: 'Site not found' }, 404);
+      try {
+        await setSiteWentLive(clientId, siteId, wentLiveAt);
+      } catch (err: any) {
+        return json({ error: err?.message || 'Invalid went_live_at' }, 400);
+      }
+      await logActivity({
+        clientId, userId: locals.user!.id, action: 'updated',
+        entityType: 'client', entityId: clientId,
+        summary: wentLiveAt === null
+          ? `${locals.user!.name} cleared go-live date for ${target.domain}`
+          : `${locals.user!.name} marked ${target.domain} live on ${wentLiveAt}`,
       });
       const next = await listClientSites(clientId);
       return json({ ok: true, sites: next });

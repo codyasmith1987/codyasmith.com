@@ -192,28 +192,43 @@ function ecoChipLabel(pageCount: number | null): string {
                 <div class="mt-3 p-3 bg-neutral-900/40 border border-white/5 rounded-md space-y-2">
                   <p class="text-[11px] text-neutral-400 leading-relaxed">Each managed site routes to its own ecosystem by its own page count. Primary pays full base monthly + onboarding. Each additional site pays 0.80 of its own ecosystem's base. Empty page count falls back to the primary's ecosystem for that site.</p>
                   {sitesByClient[client.id].map(site => (
-                    <div class="grid grid-cols-12 gap-2 items-center" data-site-row={site.id}>
-                      <span class:list={[
-                        'col-span-2 text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded text-center',
-                        site.is_primary
-                          ? 'bg-amber-500/10 border border-amber-500/40 text-amber-700'
-                          : 'bg-neutral-900 border border-white/10 text-neutral-400',
-                      ]}>{site.is_primary ? 'primary' : 'site'}</span>
-                      <span class="col-span-5 text-sm text-neutral-100 truncate font-mono">{site.domain}</span>
-                      <input
-                        type="number"
-                        min="0"
-                        data-site-page-count={site.id}
-                        data-client-id={client.id}
-                        value={site.page_count != null ? String(site.page_count) : ''}
-                        placeholder="pages"
-                        class="col-span-3 px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30"
-                      />
-                      <span
-                        class="col-span-2 text-[10px] font-mono text-amber-700 text-right"
-                        data-site-eco-chip={site.id}
-                      >{ecoChipLabel(site.page_count)}</span>
-                    </div>
+                    <>
+                      <div class="grid grid-cols-12 gap-2 items-center" data-site-row={site.id}>
+                        <span class:list={[
+                          'col-span-2 text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded text-center',
+                          site.is_primary
+                            ? 'bg-amber-500/10 border border-amber-500/40 text-amber-700'
+                            : 'bg-neutral-900 border border-white/10 text-neutral-400',
+                        ]}>{site.is_primary ? 'primary' : 'site'}</span>
+                        <span class="col-span-5 text-sm text-neutral-100 truncate font-mono">{site.domain}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          data-site-page-count={site.id}
+                          data-client-id={client.id}
+                          value={site.page_count != null ? String(site.page_count) : ''}
+                          placeholder="pages"
+                          class="col-span-3 px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30"
+                        />
+                        <span
+                          class="col-span-2 text-[10px] font-mono text-amber-700 text-right"
+                          data-site-eco-chip={site.id}
+                        >{ecoChipLabel(site.page_count)}</span>
+                      </div>
+                      {site.is_managed && (
+                        <div class="mt-1 ml-[16.67%] flex items-center gap-2 flex-wrap">
+                          <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-wide">Live since:</span>
+                          <input
+                            type="date"
+                            data-site-went-live={site.id}
+                            data-client-id={client.id}
+                            value={site.went_live_at ? site.went_live_at.slice(0, 10) : ''}
+                            class="px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono focus:outline-none focus:border-amber-500/30"
+                          />
+                          <span class="text-[10px] text-neutral-500" title="When this date is set, first-period proration kicks in for the next invoice. All sites under one agreement converge to the same monthly cadence.">drives first-period proration</span>
+                        </div>
+                      )}
+                    </>
                   ))}
                 </div>
               </details>
@@ -345,6 +360,39 @@ function ecoChipLabel(pageCount: number | null): string {
 
   <script>
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    // Per-site go-live editors. Change posts to the client_sites
+    // endpoint (action=set_went_live). Drives first-period proration
+    // on the next invoice; per Cody's operating rule, every site
+    // under one agreement converges to the same monthly cadence.
+    document.querySelectorAll('[data-site-went-live]').forEach(input => {
+      const inputEl = input as HTMLInputElement;
+      const siteId = inputEl.dataset.siteWentLive!;
+      const clientId = inputEl.dataset.clientId!;
+      let priorValue = inputEl.value;
+      inputEl.addEventListener('change', async () => {
+        const raw = inputEl.value.trim();
+        const wentLiveAt = raw === '' ? null : raw;
+        try {
+          const res = await fetch('/portal/api/admin/clients/sites', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ client_id: clientId, action: 'set_went_live', site_id: siteId, went_live_at: wentLiveAt }),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            (window as any).__toast?.(data.error || 'Failed to save go-live date.', 'error');
+            inputEl.value = priorValue;
+            return;
+          }
+          (window as any).__toast?.(wentLiveAt ? `Marked live on ${wentLiveAt}.` : 'Cleared go-live date.', 'success');
+          priorValue = inputEl.value;
+        } catch {
+          (window as any).__toast?.('Network error saving go-live date.', 'error');
+          inputEl.value = priorValue;
+        }
+      });
+    });
 
     // Per-site page-count editors. Blur posts to the existing
     // client_sites endpoint (action=set_page_count). Optimistic UI

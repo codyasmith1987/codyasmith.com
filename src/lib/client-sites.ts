@@ -24,7 +24,6 @@ export interface ClientSite {
   is_managed: boolean;
   label: string | null;
   sort_order: number;
-  notes: string | null;
   // Per-site page count. Routes the site's WM ecosystem in the
   // multi-site pricing pipeline (2026-05-24 locked formula). Null
   // when no crawl data has populated it and admin has not entered
@@ -62,18 +61,23 @@ function rowToSite(row: any): ClientSite {
     is_managed: !!(row[4] as number),
     label: (row[5] as string | null) ?? null,
     sort_order: (row[6] as number) ?? 0,
-    notes: (row[7] as string | null) ?? null,
-    page_count: (row[8] as number | null) ?? null,
-    cloudflare_zone_id: (row[9] as string | null) ?? null,
-    cloudflare_token_set: !!(row[10] as string | null),
-    cloudflare_last_synced_at: (row[11] as string | null) ?? null,
-    went_live_at: (row[12] as string | null) ?? null,
-    monthly_override: (row[13] as number | null) ?? null,
-    onboarding_override: (row[14] as number | null) ?? null,
+    page_count: (row[7] as number | null) ?? null,
+    cloudflare_zone_id: (row[8] as string | null) ?? null,
+    cloudflare_token_set: !!(row[9] as string | null),
+    cloudflare_last_synced_at: (row[10] as string | null) ?? null,
+    went_live_at: (row[11] as string | null) ?? null,
+    monthly_override: (row[12] as number | null) ?? null,
+    onboarding_override: (row[13] as number | null) ?? null,
   };
 }
 
-const SELECT_COLS = 'id, client_id, domain, is_primary, is_managed, label, sort_order, notes, page_count, cloudflare_zone_id, cloudflare_api_token, cloudflare_last_synced_at, went_live_at, monthly_override, onboarding_override';
+// `notes` column omitted from SELECT_COLS: prod's client_sites table
+// was bootstrapped before migration 033 ran (older ensurePortalTables
+// path), so the IF NOT EXISTS guard left the existing table without
+// `notes`. Selecting it caused a 'no such column' parse error. The
+// field is unused anywhere in the code, so dropping it from the
+// model fixes the bug without losing functionality.
+const SELECT_COLS = 'id, client_id, domain, is_primary, is_managed, label, sort_order, page_count, cloudflare_zone_id, cloudflare_api_token, cloudflare_last_synced_at, went_live_at, monthly_override, onboarding_override';
 
 export async function listClientSites(clientId: string): Promise<ClientSite[]> {
   const result = await turso.execute({

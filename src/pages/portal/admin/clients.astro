@@ -184,6 +184,27 @@ function ecoChipLabel(pageCount: number | null): string {
                  for any client with 1+ managed sites so single-site
                  clients can use overrides (pro-bono, grandfathered)
                  even without multi-site routing. -->
+            <!-- Add managed site. Renders for every client so admin
+                 can create a site row without detouring through the
+                 wizard. New site is is_managed=1 by default; first
+                 site becomes the primary if the client has none yet. -->
+            <div class="mt-3 flex items-center gap-2 flex-wrap">
+              <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-wide">Add managed site:</span>
+              <input
+                type="text"
+                data-add-site-input={client.id}
+                placeholder="example.com (no protocol)"
+                class="flex-1 min-w-[200px] px-2 py-1 bg-neutral-900/50 border border-white/10 rounded text-neutral-200 text-xs font-mono focus:outline-none focus:border-amber-500/30"
+              />
+              <button
+                type="button"
+                data-add-site-btn={client.id}
+                class="px-3 py-1 bg-amber-500/10 border border-amber-500/40 text-amber-700 text-xs font-medium rounded hover:bg-amber-500/20 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+
             {sitesByClient[client.id] && sitesByClient[client.id].length >= 1 && (
               <details class="mt-3 group" data-sites-slot={client.id}>
                 <summary class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase cursor-pointer hover:text-amber-600 transition-colors select-none">
@@ -387,6 +408,43 @@ function ecoChipLabel(pageCount: number | null): string {
 
   <script>
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    // Add managed site inline. Posts action='add' to the existing
+    // sites endpoint; first site becomes primary automatically per
+    // syncDetectedDomains rules. Refreshes the page on success so
+    // the per-site settings section appears.
+    document.querySelectorAll('[data-add-site-btn]').forEach(btn => {
+      const btnEl = btn as HTMLButtonElement;
+      const clientId = btnEl.dataset.addSiteBtn!;
+      const input = document.querySelector(`[data-add-site-input="${clientId}"]`) as HTMLInputElement | null;
+      if (!input) return;
+      btnEl.addEventListener('click', async () => {
+        const domain = input.value.trim();
+        if (!domain) {
+          (window as any).__toast?.('Enter a domain.', 'error');
+          return;
+        }
+        btnEl.disabled = true;
+        try {
+          const res = await fetch('/portal/api/admin/clients/sites', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ client_id: clientId, action: 'add', domain }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.ok) {
+            (window as any).__toast?.(data.error || 'Failed to add site.', 'error');
+            btnEl.disabled = false;
+            return;
+          }
+          (window as any).__toast?.(`Added ${domain}.`, 'success');
+          window.location.reload();
+        } catch (err: any) {
+          (window as any).__toast?.(`Network error: ${err?.message || 'fetch failed'}`, 'error');
+          btnEl.disabled = false;
+        }
+      });
+    });
 
     // Per-site go-live editors. Change posts to the client_sites
     // endpoint (action=set_went_live). Drives first-period proration

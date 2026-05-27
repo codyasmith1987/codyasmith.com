@@ -1,10 +1,13 @@
 // Derive the set of domains under management for a client by reading
 // data the admin has already uploaded.
 //
-// Two data sources today:
+// Three data sources today:
 //   - crawl_urls: per-URL rows from Screaming Frog Internal HTML
 //     uploads. Hostname is pre-computed at parse time so the lookup
 //     is a cheap GROUP BY on an indexed column.
+//   - raw_csv_data: fallback only for authoritative internal crawl
+//     files (internal_html.csv / internal_all.csv) that were stored
+//     raw because detection missed them.
 //   - keyword_rankings.url: rank-tracking uploads (Ahrefs / SEMrush
 //     style). One row per ranking entry; hostname extracted at read
 //     time.
@@ -44,6 +47,12 @@ function normalizeHeader(header: string): string {
   return (header || '').replace(/^\uFEFF/, '').trim().toLowerCase();
 }
 
+export function isAuthoritativeRawCrawlFile(filename: string | null | undefined): boolean {
+  if (!filename) return false;
+  const base = filename.replace(/^.*[\\/]/, '').trim().toLowerCase().split(':').pop() || '';
+  return base === 'internal_html.csv' || base === 'internal_all.csv';
+}
+
 function extractHostnameFromUrl(raw: string): string | null {
   if (!raw) return null;
   const trimmed = raw.trim();
@@ -72,7 +81,17 @@ function pickRawUrlColumn(headers: string[]): number {
   return -1;
 }
 
-export function deriveDomainsFromRawCsvText(raw: string, opts: { sampleLimit?: number } = {}): DerivedClientDomain[] {
+export function deriveDomainsFromRawCsvText(
+  raw: string,
+  opts: {
+    sampleLimit?: number;
+    filename?: string | null;
+    requireAuthoritativeFilename?: boolean;
+  } = {},
+): DerivedClientDomain[] {
+  if (opts.requireAuthoritativeFilename && !isAuthoritativeRawCrawlFile(opts.filename)) {
+    return [];
+  }
   const sampleLimit = opts.sampleLimit ?? 50000;
   const parsed = Papa.parse(raw, { header: false, skipEmptyLines: true });
   const rows = parsed.data as string[][];
@@ -136,22 +155,30 @@ export async function getClientDomainsFromData(clientId: string, opts: { sampleL
     // Table may not exist yet on stale databases; treat as empty.
   }
 
-  // Source 2: raw_csv_data. Unknown/stored CSVs may still contain the
-  // canonical per-URL crawl rows (for example if a BOM or header
-  // variation made the detector miss crawl_internal). Backfill should
-  // be able to derive hostnames from the client data that was accepted
-  // and stored, even when no typed parser wrote crawl_urls.
+  // Source 2: raw_csv_data. Only trust authoritative internal crawl
+  // files. Generic URL/outlink/export tables contain third-party
+  // embeds, social profiles, analytics scripts, lenders, maps, and
+  // other external hosts. Those are useful audit data, but they are
+  // NOT client-managed sites. The prod Zip Kit backfill proved this
+  // the hard way: raw url_all/validation files yielded youtube.com,
+  // google.com, facebook.com, etc. and syncDetectedDomains inserted
+  // them as managed sites. Keep raw fallback narrow: it exists to
+  // recover Internal HTML/Internal All crawls that the typed parser
+  // missed, not to infer ownership from arbitrary URLs.
   try {
     const rawRows = await turso.execute({
-      sql: `SELECT raw_text
+      sql: `SELECT filename, raw_text
             FROM raw_csv_data
             WHERE client_id = ?
+              AND (
+                lower(filename) IN ('internal_html.csv', 'internal_all.csv')
+                OR lower(filename) LIKE '%:internal_html.csv'
+                OR lower(filename) LIKE '%:internal_all.csv'
+              )
             ORDER BY
               CASE
-                WHEN lower(filename) LIKE '%internal%' THEN 0
-                WHEN lower(filename) LIKE '%crawl%' THEN 1
-                WHEN headers LIKE '%Address%' THEN 2
-                WHEN headers LIKE '%URL%' THEN 3
+                WHEN lower(filename) = 'internal_html.csv' THEN 0
+                WHEN lower(filename) = 'internal_all.csv' THEN 1
                 ELSE 4
               END,
               created_at DESC
@@ -160,8 +187,13 @@ export async function getClientDomainsFromData(clientId: string, opts: { sampleL
     });
     const rawCounts = new Map<string, { sample: string; count: number }>();
     for (const row of rawRows.rows as any[]) {
-      const raw = String(row[0] || '');
-      for (const derived of deriveDomainsFromRawCsvText(raw, { sampleLimit: 50000 })) {
+      const filename = String(row[0] || '');
+      const raw = String(row[1] || '');
+      for (const derived of deriveDomainsFromRawCsvText(raw, {
+        sampleLimit: 50000,
+        filename,
+        requireAuthoritativeFilename: true,
+      })) {
         const existing = rawCounts.get(derived.domain);
         if (existing) {
           existing.count += derived.url_count;

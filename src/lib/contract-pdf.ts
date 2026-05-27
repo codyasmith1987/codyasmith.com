@@ -292,12 +292,22 @@ function renderScheduleAPage(doc: any, s: ScheduleA): void {
   doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.6 Hours and rates');
   doc.font('Helvetica').fontSize(10).fillColor('#222');
   const hr = s.hours_and_rates;
+  const anchorDay = typeof hr.billing_anchor_day === 'number' && hr.billing_anchor_day >= 1 && hr.billing_anchor_day <= 31
+    ? hr.billing_anchor_day
+    : 1;
+  const anchorOrdinalPdf = (() => {
+    const n = anchorDay;
+    const teen = n >= 11 && n <= 13;
+    const suffix = teen ? 'th' : (n % 10 === 1 ? 'st' : n % 10 === 2 ? 'nd' : n % 10 === 3 ? 'rd' : 'th');
+    return `${n}${suffix}`;
+  })();
   doc.list([
     `Web Management included hours per month: ${hr.included_hours ?? '__'}`,
     `Pre-approved overage buffer: ${hr.overage_buffer} hours per month`,
     `Overage rate beyond buffer (standard): $${hr.overage_rate}/hr`,
     `Rush rate (section 5.5): $${hr.rush_rate}/hr, two-hour minimum`,
     `Emergency rate (section 5.5): $${hr.emergency_rate}/hr, two-hour minimum`,
+    `Monthly billing anchor day (section 5.3 proration policy): ${anchorOrdinalPdf} of each month`,
   ]);
   doc.moveDown(0.5);
 

@@ -244,12 +244,22 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
 
   parts.push(`<h3>A.6 Hours and rates</h3>`);
   const hr = scheduleA.hours_and_rates || {};
+  const anchorDayValue = typeof hr.billing_anchor_day === 'number' && hr.billing_anchor_day >= 1 && hr.billing_anchor_day <= 31
+    ? hr.billing_anchor_day
+    : 1;
+  const anchorOrdinal = (() => {
+    const n = anchorDayValue;
+    const teen = n >= 11 && n <= 13;
+    const suffix = teen ? 'th' : (n % 10 === 1 ? 'st' : n % 10 === 2 ? 'nd' : n % 10 === 3 ? 'rd' : 'th');
+    return `${n}${suffix}`;
+  })();
   parts.push('<ul>');
   if (hr.included_hours != null) parts.push(`<li>Web Management included hours per month: ${hr.included_hours}</li>`);
   parts.push(`<li>Pre-approved overage buffer: 2 hours per month</li>`);
   parts.push(`<li>Overage rate beyond buffer (standard): $100/hr</li>`);
   parts.push(`<li>Rush rate (same-day, defined in section 5.5): $150/hr, two-hour minimum</li>`);
   parts.push(`<li>Emergency rate (security, outage, recovery, defined in section 5.5): $200/hr, two-hour minimum</li>`);
+  parts.push(`<li>Monthly billing anchor day (per section 5.3 proration policy): ${escapeHtml(anchorOrdinal)} of each month</li>`);
   parts.push('</ul>');
 
   parts.push(`<h3>A.7 Day-one access list</h3>`);

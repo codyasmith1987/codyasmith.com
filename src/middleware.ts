@@ -51,7 +51,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
 
   // First-party request log for the public surface. Fire and forget so the
   // response isn't blocked. Portal pages and assets are excluded.
-  if (shouldLog(context.url.pathname)) {
+  // Prerendered routes are skipped because Astro 6 warns when middleware
+  // reads request.headers during prerender build, and the captured
+  // headers there are build-time stubs anyway. SSR routes (/api/*) get
+  // the full header capture.
+  if (!context.isPrerendered && shouldLog(context.url.pathname)) {
     void logRequest({
       path: context.url.pathname,
       method: context.request.method,

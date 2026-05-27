@@ -28,8 +28,10 @@ export function maybeSweepRetention(): void {
 
 async function sweepRetention(): Promise<void> {
   // request_log uses SQLite datetime('now'); cutoff is N days ago.
+  // Column name is `timestamp` per migration 011; previous wording
+  // used `created_at` and broke retention sweeps silently.
   await turso.execute({
-    sql: `DELETE FROM request_log WHERE created_at < datetime('now', ?)`,
+    sql: `DELETE FROM request_log WHERE timestamp < datetime('now', ?)`,
     args: [`-${REQUEST_LOG_RETENTION_DAYS} days`],
   }).catch(err => {
     // request_log may not exist if migration 011 hasn't run yet; swallow.

@@ -78,6 +78,13 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const templateSlug = String(body.template_slug || 'standard').trim();
   const personalNote = body.personal_note ? String(body.personal_note).slice(0, 4000) : null;
   const signersInput: Array<{ role: string; name: string; email: string; user_id?: string }> = Array.isArray(body.signers) ? body.signers : [];
+  // 1-31; defaults to 1. Per Cody operating rule (2026-05-26): every
+  // site under this agreement bills on this day; first invoices are
+  // prorated from go-live to the next occurrence.
+  const billingAnchorDayRaw = body.billing_anchor_day;
+  const billingAnchorDay = typeof billingAnchorDayRaw === 'number' && Number.isInteger(billingAnchorDayRaw)
+    ? Math.max(1, Math.min(31, billingAnchorDayRaw))
+    : 1;
 
   if (!slug || !SLUG_RE.test(slug)) return json({ error: 'Invalid slug (lowercase letters, numbers, hyphens; not starting or ending with hyphen)' }, 400);
   if (!title) return json({ error: 'Title required' }, 400);
@@ -96,7 +103,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     products_purchased: { web_management: false, marketing_consulting: false, build: false, other_sow: false },
     web_management: null,
     marketing_consulting: null,
-    hours_and_rates: { included_hours: null, overage_buffer: 2, overage_rate: 100, rush_rate: 150, emergency_rate: 200 },
+    hours_and_rates: { included_hours: null, overage_buffer: 2, overage_rate: 100, rush_rate: 150, emergency_rate: 200, billing_anchor_day: billingAnchorDay },
     day_one_access: { required_by: null, items: [] },
     pass_through_items: [],
     build_sow_ref: null,
@@ -133,6 +140,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
         clientMetadata: {},
         effectiveDate: new Date().toISOString().slice(0, 10),
         managedSites,
+        billingAnchorDay,
       });
     }
   }
@@ -149,6 +157,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       schedule_a: scheduleA,
       personal_note: personalNote,
       created_by: user.id,
+      billing_anchor_day: billingAnchorDay,
     });
   } catch (err: any) {
     if (String(err?.message || '').includes('UNIQUE')) return json({ error: 'Slug already exists' }, 409);

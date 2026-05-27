@@ -423,7 +423,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
         const codyHtml = `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 22px; color: #1a1814; line-height: 1.55;">
             <h2 style="font-size: 22px; margin: 0 0 16px;">LOI accepted: ${escapeHtml(proposal.title)}</h2>
-            <p style="font-size: 14px; color: #4a4239; margin: 0 0 16px;">Both signers have accepted the Letter of Intent. <strong>Next step</strong>: schedule the call within 24 hours, then issue the master agreement at <a href="https://codyasmith.com/portal/admin/agreements/new?proposal=${escapeHtml(slug)}" style="color: #c47d5a;">/portal/admin/agreements/new</a>.</p>
+            <p style="font-size: 14px; color: #4a4239; margin: 0 0 16px;">Both signers have accepted the Letter of Intent. <strong>Next step</strong>: schedule the call within 24 hours, then issue the master agreement at <a href="https://codyasmith.com/portal/admin/agreements/new?proposal=${escapeHtml(proposal.id)}" style="color: #c47d5a;">/portal/admin/agreements/new</a>.</p>
             <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">
               <tr><td style="padding: 6px 0; color: #6b6359;">Web Management</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(pricing?.mgmtTierName || '?')}</td></tr>
               <tr><td style="padding: 6px 0; color: #6b6359;">Site setup</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(pricing?.siteSetupLongLabel || '?')}</td></tr>
@@ -500,6 +500,14 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
     }
 
     await markFinalized(proposal.client_id, slug);
+    // Also mark the parent proposals row finalized so the admin
+    // agreement picker (which filters on proposals.finalized_at)
+    // sees this proposal in its "From proposal" dropdown. Without
+    // this the accepted proposal never reaches the contract step.
+    await turso.execute({
+      sql: `UPDATE proposals SET finalized_at = datetime('now'), status = 'accepted' WHERE id = ? AND finalized_at IS NULL`,
+      args: [proposal.id],
+    });
     status = 'finalized';
   } else if (body && body.signature !== undefined && !isRevoke && !allSigned) {
     // First-signer notification: ping the other signer(s) that someone just signed.

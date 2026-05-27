@@ -34,6 +34,11 @@ export interface ClientAgreement {
   issued_at: string | null;
   finalized_at: string | null;
   cancelled_at: string | null;
+  // Day of month every site under this agreement bills on.
+  // Per Cody operating rule (2026-05-26): one monthly close per
+  // agreement; first invoice for any site is prorated from go-live
+  // to this anchor day. Migration 046 added the column, default 1.
+  billing_anchor_day: number;
 }
 
 export interface AgreementSigner {
@@ -67,9 +72,13 @@ function safeJsonParse<T>(raw: string | null | undefined, fallback: T): T {
   try { return JSON.parse(raw) as T; } catch { return fallback; }
 }
 
-const AGREEMENT_COLS = `id, slug, client_id, proposal_id, template_slug, template_version, title, schedule_a, document_hash, pdf_file_id, status, contract_id, personal_note, created_by, created_at, issued_at, finalized_at, cancelled_at`;
+const AGREEMENT_COLS = `id, slug, client_id, proposal_id, template_slug, template_version, title, schedule_a, document_hash, pdf_file_id, status, contract_id, personal_note, created_by, created_at, issued_at, finalized_at, cancelled_at, billing_anchor_day`;
 
 function rowToAgreement(row: any[]): ClientAgreement {
+  const rawAnchor = row[18];
+  const anchor = typeof rawAnchor === 'number' && Number.isInteger(rawAnchor) && rawAnchor >= 1 && rawAnchor <= 31
+    ? rawAnchor
+    : 1;
   return {
     id: row[0] as string,
     slug: row[1] as string,
@@ -89,6 +98,7 @@ function rowToAgreement(row: any[]): ClientAgreement {
     issued_at: (row[15] as string | null) ?? null,
     finalized_at: (row[16] as string | null) ?? null,
     cancelled_at: (row[17] as string | null) ?? null,
+    billing_anchor_day: anchor,
   };
 }
 
@@ -136,14 +146,25 @@ export interface CreateAgreementInput {
   schedule_a: any;
   personal_note?: string | null;
   created_by?: string | null;
+  // 1-31; defaults to 1 when omitted. Persisted on the agreement row
+  // and surfaced into Schedule A so the rendered contract matches.
+  billing_anchor_day?: number;
+}
+
+function clampAnchorDay(input: number | undefined): number {
+  if (typeof input !== 'number' || !Number.isInteger(input)) return 1;
+  if (input < 1) return 1;
+  if (input > 31) return 31;
+  return input;
 }
 
 export async function createAgreement(input: CreateAgreementInput): Promise<ClientAgreement> {
   const id = nanoid();
+  const anchor = clampAnchorDay(input.billing_anchor_day);
   await turso.execute({
     sql: `INSERT INTO client_agreements
-            (id, slug, client_id, proposal_id, template_slug, template_version, title, schedule_a, status, personal_note, created_by)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
+            (id, slug, client_id, proposal_id, template_slug, template_version, title, schedule_a, status, personal_note, created_by, billing_anchor_day)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)`,
     args: [
       id,
       input.slug,
@@ -155,11 +176,20 @@ export async function createAgreement(input: CreateAgreementInput): Promise<Clie
       JSON.stringify(input.schedule_a),
       input.personal_note ?? null,
       input.created_by ?? null,
+      anchor,
     ],
   });
   const agreement = await getAgreement(id);
   if (!agreement) throw new Error('Failed to create agreement');
   return agreement;
+}
+
+export async function updateAgreementBillingAnchorDay(id: string, anchorDay: number): Promise<void> {
+  const anchor = clampAnchorDay(anchorDay);
+  await turso.execute({
+    sql: `UPDATE client_agreements SET billing_anchor_day = ?, document_hash = NULL WHERE id = ?`,
+    args: [anchor, id],
+  });
 }
 
 export async function updateAgreementScheduleA(id: string, scheduleA: any): Promise<void> {

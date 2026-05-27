@@ -44,7 +44,7 @@ for (const c of clients) {
 // /portal/api/admin/clients/sites with action=sync); this pre-load
 // is just the already-saved rows so the page paints fast.
 const clientSitesRows = await turso.execute({
-  sql: `SELECT id, client_id, domain, is_primary, is_managed, label, sort_order
+  sql: `SELECT id, client_id, domain, is_primary, is_managed, label, sort_order, page_count
         FROM client_sites
         ORDER BY is_primary DESC, sort_order ASC, domain ASC`,
   args: [],
@@ -56,6 +56,7 @@ const clientSitesByClient: Record<string, Array<{
   is_managed: boolean;
   label: string | null;
   sort_order: number;
+  page_count: number | null;
 }>> = {};
 for (const row of clientSitesRows.rows as any[]) {
   const cid = row[1] as string;
@@ -67,6 +68,7 @@ for (const row of clientSitesRows.rows as any[]) {
     is_managed: !!(row[4] as number),
     label: (row[5] as string | null) ?? null,
     sort_order: (row[6] as number) ?? 0,
+    page_count: (row[7] as number | null) ?? null,
   });
 }
 
@@ -2329,6 +2331,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
             id: s.id, domain: s.domain,
             is_primary: !!s.is_primary, is_managed: !!s.is_managed,
             label: s.label || null, sort_order: s.sort_order || 0,
+            page_count: (s.page_count === null || s.page_count === undefined) ? null : Number(s.page_count),
           }));
         }
         return { ok: true, data };

@@ -42,6 +42,11 @@ export interface ScheduleAContext {
     monthly_override?: number | null;
     onboarding_override?: number | null;
   }>;
+  // 1-31 day of month every site under this agreement bills on.
+  // Omitted defaults to 1. Surfaced on Schedule A's hours_and_rates
+  // so the rendered contract states the anchor day inline with the
+  // proration rule.
+  billingAnchorDay?: number;
 }
 
 export interface PricingLike {
@@ -143,6 +148,10 @@ export interface HoursAndRates {
   overage_rate: number;
   rush_rate: number;
   emergency_rate: number;
+  // Day of month every site under this agreement bills on. 1-31.
+  // Default 1. Stated on Schedule A so the contract reflects the
+  // policy in section 5.3 (proration).
+  billing_anchor_day: number;
 }
 
 export interface DayOneAccess {
@@ -156,14 +165,22 @@ export interface PassThroughItem {
   billing_note: string;
 }
 
+function clampBillingAnchorDay(input: number | undefined | null): number {
+  if (typeof input !== 'number' || !Number.isInteger(input)) return 1;
+  if (input < 1) return 1;
+  if (input > 31) return 31;
+  return input;
+}
+
 // Dispatcher. New pricing formulas add a branch here.
 export function buildScheduleA(ctx: ScheduleAContext): ScheduleA {
   const formula = ctx.proposalConfig?.pricing_formula;
-  if (formula === 'raised_bar_v1') return buildScheduleAForRaisedBarV1(ctx);
-  if (formula === 'product_driven_v1') return buildScheduleAForProductDrivenV1(ctx);
-  // Fallback for unknown formulas: render an empty Schedule A so the
-  // contract page still loads. Admin will fill manually.
-  return emptyScheduleA(ctx.effectiveDate);
+  let schedule: ScheduleA;
+  if (formula === 'raised_bar_v1') schedule = buildScheduleAForRaisedBarV1(ctx);
+  else if (formula === 'product_driven_v1') schedule = buildScheduleAForProductDrivenV1(ctx);
+  else schedule = emptyScheduleA(ctx.effectiveDate);
+  schedule.hours_and_rates.billing_anchor_day = clampBillingAnchorDay(ctx.billingAnchorDay);
+  return schedule;
 }
 
 // product_driven_v1: walks the config's in-scope products, asks each
@@ -383,6 +400,7 @@ function buildScheduleAForRaisedBarV1(ctx: ScheduleAContext): ScheduleA {
       overage_rate: 100,
       rush_rate: 150,
       emergency_rate: 200,
+      billing_anchor_day: 1,
     },
     day_one_access: {
       required_by: ctx.effectiveDate,
@@ -522,6 +540,7 @@ function emptyScheduleA(effectiveDate: string): ScheduleA {
       overage_rate: 100,
       rush_rate: 150,
       emergency_rate: 200,
+      billing_anchor_day: 1,
     },
     day_one_access: { required_by: null, items: [] },
     pass_through_items: [],

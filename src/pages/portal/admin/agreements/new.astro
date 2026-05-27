@@ -83,6 +83,11 @@ const csrfToken = Astro.locals.csrfToken || '';
           <input type="text" id="slug-input" placeholder="client-msa-2026" class="w-full bg-neutral-950 border border-white/10 rounded-lg px-3 py-2 text-sm text-neutral-200" />
           <p class="text-xs text-neutral-400 mt-2">Lowercase letters, numbers, hyphens. This becomes /portal/contracts/[slug].</p>
         </div>
+        <div>
+          <label class="block text-xs font-mono uppercase tracking-[0.18em] text-amber-600 mb-2">Monthly billing day</label>
+          <input type="number" id="billing-anchor-input" min="1" max="31" step="1" value="1" class="w-32 bg-neutral-950 border border-white/10 rounded-lg px-3 py-2 text-sm text-neutral-200" />
+          <p class="text-xs text-neutral-400 mt-2">Day of month every site on this agreement bills on. First invoice for any site is prorated from its go-live date to this day.</p>
+        </div>
       </div>
 
       <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-6">
@@ -113,6 +118,7 @@ const csrfToken = Astro.locals.csrfToken || '';
   var clientSelect = document.getElementById('client-select');
   var titleInput = document.getElementById('title-input');
   var slugInput = document.getElementById('slug-input');
+  var billingAnchorInput = document.getElementById('billing-anchor-input');
   var signersList = document.getElementById('signers-list');
   var addSignerBtn = document.getElementById('add-signer');
   var personalNote = document.getElementById('personal-note');
@@ -173,12 +179,15 @@ const csrfToken = Astro.locals.csrfToken || '';
         email: row.querySelector('.signer-email').value.trim(),
       });
     });
+    var anchorRaw = parseInt(billingAnchorInput.value, 10);
+    var anchor = Number.isFinite(anchorRaw) ? Math.max(1, Math.min(31, anchorRaw)) : 1;
     return {
       slug: slugInput.value.trim(),
       title: titleInput.value.trim(),
       client_id: clientSelect.value,
       proposal_id: proposalSelect.value || null,
       personal_note: personalNote.value,
+      billing_anchor_day: anchor,
       signers: signers,
     };
   }

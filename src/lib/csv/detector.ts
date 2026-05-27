@@ -55,6 +55,10 @@ interface FormatSignature {
   requiredColumns: string[];
 }
 
+function cleanHeader(raw: string | undefined): string {
+  return (raw || '').replace(/^\uFEFF/, '').trim().toLowerCase();
+}
+
 const SIGNATURES: FormatSignature[] = [
   {
     format: 'position_tracking',
@@ -225,7 +229,7 @@ export function detectFormat(raw: string, filename: string): { format: CsvFormat
     return { format: 'unknown', headers: [] };
   }
 
-  const headers = (preview.data[0] as string[]).map(h => h?.trim().toLowerCase() || '');
+  const headers = (preview.data[0] as string[]).map(h => cleanHeader(h));
 
   // Check each signature
   for (const sig of SIGNATURES) {

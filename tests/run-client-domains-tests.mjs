@@ -6,6 +6,7 @@
 import {
   normalizeHostname,
   extractHostnameFromUrl,
+  deriveDomainsFromRawCsvText,
 } from '../src/lib/client-domains.ts';
 import {
   extractHostname as extractHostnameCi,
@@ -88,6 +89,9 @@ async function run() {
   const internalHtmlCsv = '"Address","Status Code","Indexability","Title 1","Word Count"\n"https://a.com/","200","Indexable","Hello","100"\n';
   test('detector: internal_html as crawl_internal',
     detectFormat(internalHtmlCsv, 'internal_html.csv').format === 'crawl_internal');
+  const internalHtmlBomCsv = '\uFEFF"Address","Status Code","Indexability","Title 1","Word Count"\n"https://www.example.com/","200","Indexable","Hello","100"\n';
+  test('detector: internal_html with BOM as crawl_internal',
+    detectFormat(internalHtmlBomCsv, 'internal_html.csv').format === 'crawl_internal');
 
   const redirectsCsv = '"Chain Type","Number of Redirects","Loop","Source","Final Address"\n"HTTP Redirect","1","false","https://a.com/old","https://a.com/new"\n';
   test('detector: redirects.csv as redirects',
@@ -112,6 +116,18 @@ async function run() {
   const structuredCsv = '"Address","Errors","Warnings","Rich Result Errors","Rich Result Warnings","Total Types","Unique Types"\n"https://a.com/","0","1","0","0","2","2"\n';
   test('detector: structured_data_all.csv as structured_data_urls',
     detectFormat(structuredCsv, 'structured_data_all.csv').format === 'structured_data_urls');
+
+  // ---------- raw_csv_data fallback domain derivation ----------
+  const rawStoredCsv = '\uFEFFAddress,Status Code,Indexability,Title 1\nhttps://www.rawexample.com/,200,Indexable,Home\nhttps://rawexample.com/about,200,Indexable,About\nhttps://blog.rawexample.com/post,200,Indexable,Post\n';
+  const rawDerived = deriveDomainsFromRawCsvText(rawStoredCsv);
+  const rawMain = rawDerived.find(d => d.domain === 'rawexample.com');
+  const rawBlog = rawDerived.find(d => d.domain === 'blog.rawexample.com');
+  test('raw_csv_data fallback derives main hostname from Address column',
+    rawMain?.url_count === 2,
+    JSON.stringify(rawDerived));
+  test('raw_csv_data fallback keeps non-www subdomain separate',
+    rawBlog?.url_count === 1,
+    JSON.stringify(rawDerived));
 
   // ---------- Summary ----------
   const passed = results.filter(r => r.pass).length;

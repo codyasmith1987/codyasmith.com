@@ -8,6 +8,7 @@
 
 import type { APIRoute } from 'astro';
 import turso from '../../../../lib/turso';
+import { getClientDomainsFromData } from '../../../../lib/client-domains';
 
 export const prerender = false;
 
@@ -21,6 +22,8 @@ const TABLES = [
   'snippet_overrides',
   'snippet_overrides_v2',
   'lead_personas',
+  'csv_uploads',
+  'raw_csv_data',
   'crawl_urls',
   'keyword_rankings',
 ];
@@ -63,6 +66,46 @@ export const GET: APIRoute = async ({ locals }) => {
       const name = row[1] as string;
       const stats: any = { client: name, client_id: id };
       try {
+        const uploads = await turso.execute({
+          sql: 'SELECT COUNT(*) FROM csv_uploads WHERE client_id = ?',
+          args: [id],
+        });
+        stats.csv_uploads_total = uploads.rows[0]?.[0];
+      } catch (e: any) { stats.csv_uploads_error = e?.message; }
+      try {
+        const formats = await turso.execute({
+          sql: `SELECT detected_format, COUNT(*) FROM csv_uploads
+                WHERE client_id = ?
+                GROUP BY detected_format
+                ORDER BY COUNT(*) DESC`,
+          args: [id],
+        });
+        stats.csv_uploads_by_format = (formats.rows as any[]).map(r => ({
+          format: r[0],
+          count: r[1],
+        }));
+      } catch (e: any) { stats.csv_formats_error = e?.message; }
+      try {
+        const raw = await turso.execute({
+          sql: 'SELECT COUNT(*) FROM raw_csv_data WHERE client_id = ?',
+          args: [id],
+        });
+        stats.raw_csv_data_total = raw.rows[0]?.[0];
+      } catch (e: any) { stats.raw_csv_data_error = e?.message; }
+      try {
+        const rawFiles = await turso.execute({
+          sql: `SELECT filename, row_count FROM raw_csv_data
+                WHERE client_id = ?
+                ORDER BY created_at DESC
+                LIMIT 10`,
+          args: [id],
+        });
+        stats.raw_csv_sample_files = (rawFiles.rows as any[]).map(r => ({
+          filename: r[0],
+          row_count: r[1],
+        }));
+      } catch (e: any) { stats.raw_csv_files_error = e?.message; }
+      try {
         const crawl = await turso.execute({
           sql: 'SELECT COUNT(*) as total, COUNT(DISTINCT hostname) as hosts FROM crawl_urls WHERE client_id = ?',
           args: [id],
@@ -91,6 +134,9 @@ export const GET: APIRoute = async ({ locals }) => {
         });
         stats.detected_hostnames = (hostList.rows as any[]).map(r => r[0]);
       } catch (e: any) { stats.hostnames_error = e?.message; }
+      try {
+        stats.derived_domains = await getClientDomainsFromData(id);
+      } catch (e: any) { stats.derived_domains_error = e?.message; }
       counts.push(stats);
     }
   } catch (e: any) {

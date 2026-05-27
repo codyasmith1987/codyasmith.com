@@ -119,7 +119,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       }
       const draft = await getDraft(proposalClientId, proposalSlug);
       const selections = draft?.selections || {};
-      const pricing = computePricing(config?.pricing_formula || '', selections);
+      const pricing = computePricing(config?.pricing_formula || '', selections, config);
       const managedSites = (await listManagedSites(clientId)).map(s => ({
         domain: s.domain, label: s.label, is_primary: s.is_primary,
         page_count: s.page_count,

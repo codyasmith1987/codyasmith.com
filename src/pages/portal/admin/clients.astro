@@ -73,6 +73,24 @@ function ecoChipLabel(pageCount: number | null): string {
       <p id="client-msg" class="mt-4 text-sm hidden"></p>
     </form>
 
+    {/* Bulk actions across all clients. Backfill re-runs the post-
+        upload auto-bind logic against every client so historical
+        crawl data populates client_sites + page_count for clients
+        whose data was uploaded before the auto-bind shipped. */}
+    <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-6 mb-10">
+      <div class="flex flex-wrap items-center gap-4 justify-between">
+        <div>
+          <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-1">Bulk: sync sites from uploaded data</p>
+          <p class="text-[11px] text-neutral-500 leading-relaxed">Re-runs the auto-bind for every client. Inserts any detected hostnames as managed sites, picks a primary if none is set, fills NULL page counts from crawls. Idempotent — safe to run anytime.</p>
+        </div>
+        <button type="button" id="backfill-btn"
+          class="px-4 py-2 bg-amber-500/10 border border-amber-500/40 text-amber-700 text-xs font-medium rounded hover:bg-amber-500/20 transition-colors whitespace-nowrap">
+          Run backfill
+        </button>
+      </div>
+      <div id="backfill-result" class="hidden mt-4 pt-4 border-t border-white/5"></div>
+    </div>
+
     {/* Cloudflare account token. One token scoped to "All zones in
         account, Analytics: Read" lets the portal auto-resolve a
         zone ID for any client site whose hostname matches a zone in
@@ -387,6 +405,46 @@ function ecoChipLabel(pageCount: number | null): string {
 
   <script>
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    // Bulk backfill button. Hits the admin endpoint that re-runs
+    // syncDetectedDomains + syncPerSitePageCounts against every
+    // client. Surfaces per-client results inline so admin sees what
+    // changed without leaving the page or opening a JSON tab.
+    const backfillBtn = document.getElementById('backfill-btn') as HTMLButtonElement | null;
+    const backfillResult = document.getElementById('backfill-result') as HTMLDivElement | null;
+    if (backfillBtn && backfillResult) {
+      backfillBtn.addEventListener('click', async () => {
+        backfillBtn.disabled = true;
+        backfillBtn.textContent = 'Running...';
+        backfillResult.classList.add('hidden');
+        try {
+          const res = await fetch('/portal/api/admin/backfill-client-sites');
+          const data = await res.json();
+          if (!res.ok || !data.ok) {
+            backfillResult.innerHTML = `<p class="text-[11px] text-red-400">${data.error || 'Backfill failed'}</p>`;
+          } else {
+            const rows = (data.results as Array<any>).map(r => {
+              const changed = r.sites_inserted > 0 || r.page_counts_filled > 0 || r.domain_before !== r.domain_after;
+              const domainShift = r.domain_before !== r.domain_after
+                ? ` <span class="text-amber-700">[domain: ${r.domain_before || '(empty)'} → ${r.domain_after || '(empty)'}]</span>`
+                : '';
+              return `<div class="text-[11px] font-mono ${changed ? 'text-neutral-200' : 'text-neutral-500'}">${r.client}: +${r.sites_inserted} sites, +${r.page_counts_filled} page counts${domainShift}</div>`;
+            }).join('');
+            backfillResult.innerHTML = `
+              <p class="text-[11px] font-mono text-amber-700 tracking-wide uppercase mb-2">${data.total_clients} clients processed: +${data.total_sites_inserted} sites, +${data.total_page_counts_filled} page counts</p>
+              <div class="space-y-1">${rows}</div>
+            `;
+          }
+          backfillResult.classList.remove('hidden');
+          (window as any).__toast?.(`Backfill done: +${data.total_sites_inserted || 0} sites, +${data.total_page_counts_filled || 0} page counts.`, 'success');
+        } catch (err: any) {
+          backfillResult.innerHTML = `<p class="text-[11px] text-red-400">Network error: ${err?.message || 'fetch failed'}</p>`;
+          backfillResult.classList.remove('hidden');
+        }
+        backfillBtn.disabled = false;
+        backfillBtn.textContent = 'Run backfill';
+      });
+    }
 
     // Per-site go-live editors. Change posts to the client_sites
     // endpoint (action=set_went_live). Drives first-period proration

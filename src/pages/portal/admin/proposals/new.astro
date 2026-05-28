@@ -397,16 +397,14 @@ const todayISO = new Date().toISOString().slice(0, 10);
     // from wizard state where known, the rest stay as {placeholder}
     // text for the admin to fill in. Pick the blank to type freely.
     const STANDARD_OPTIONS = {
+      // Main Build scope only. This field names the base build type;
+      // option architecture (unified site vs split microsite, pre-sell
+      // section vs standalone URL, launch order, etc.) belongs in the
+      // Build Options fields below.
       build_description: [
-        "A new marketing site for {client}",
-        "A brand-led redesign of the {client} primary site",
-        "A new sub-brand microsite under the {client} parent",
-        "A pre-sell microsite for {client} on its own URL",
-        "A net-new site for {client} with focused sections for the brand and the pre-sell",
-        "A takeover and rebuild of {client}'s existing site",
-        "Page expansion at {existing_domain} for the new {vertical} content",
-        "Content additions to {existing_domain} for the {vertical} category",
-        "A focused section added to {client}'s existing site for the new {vertical}",
+        "A new site for {client}",
+        "A new microsite for {client}",
+        "A redesign of {client}'s existing site",
       ],
       option_name: [
         "Option 1: Single unified site",

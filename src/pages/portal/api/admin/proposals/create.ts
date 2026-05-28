@@ -26,6 +26,7 @@ import turso from '../../../../../lib/turso';
 import { logActivity } from '../../../../../lib/activity';
 import { logger } from '../../../../../lib/logger';
 import { composeProposal } from '../../../../../lib/products';
+import { computeBuildTotal, routeBuildSize } from '../../../../../lib/products/build';
 import { listManagedSites } from '../../../../../lib/client-sites';
 
 export const prerender = false;
@@ -35,9 +36,22 @@ const json = (data: any, status = 200) =>
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+function computeOptionBuildCost(sites: Array<{ page_count_estimate: number }>): number {
+  if (sites.length === 0) return 0;
+  let total = 0;
+  for (let i = 0; i < sites.length; i++) {
+    const size = routeBuildSize({ build_total_pages: sites[i].page_count_estimate });
+    const siteCost = computeBuildTotal(size, 1);
+    total += i === 0 ? siteCost : siteCost * 0.80;
+  }
+  return Math.round(total * 100) / 100;
+}
+
 function normalizeBuildOptions(productVars: Record<string, any>): string | null {
   const buildVars = productVars['build'];
   if (!buildVars || !Array.isArray(buildVars.build_options)) return null;
+  const baseSize = routeBuildSize(buildVars);
+  const baseBuildCost = computeBuildTotal(baseSize, 1);
   for (const opt of buildVars.build_options) {
     if (!opt || typeof opt !== 'object') continue;
     delete opt.wm_monthly_delta;
@@ -63,6 +77,10 @@ function normalizeBuildOptions(productVars: Record<string, any>): string | null 
       cleanedSites.push({ domain, label, page_count_estimate: pages });
     }
     opt.wm_sites_added = cleanedSites;
+    const optionBuildCost = cleanedSites.length > 0
+      ? computeOptionBuildCost(cleanedSites)
+      : baseBuildCost;
+    opt.pricing_delta = Math.round((optionBuildCost - baseBuildCost) * 100) / 100;
 
     const cleanedMods: Array<{ site_domain: string; new_page_count: number; note?: string }> = [];
     const rawMods = Array.isArray(opt.wm_site_modifications) ? opt.wm_site_modifications : [];

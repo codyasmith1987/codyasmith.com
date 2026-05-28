@@ -368,20 +368,51 @@ function describeSigners(config: any, draft: ProposalDraft | null) {
 
 // Build the per-row HTML used inside an email summary table. Keeps
 // the look-and-feel identical to the legacy emails.
-function summaryRowsHtml(pricing: PricingResult | null, selections: Record<string, string | null>): string {
-  const mgmtName = pricing?.mgmtTierName || (selections.mgmt_tier || '?');
-  const siteLabel = pricing?.siteSetupShortLabel || (selections.site_setup === 'o1' ? 'Option 1: Single unified site' : selections.site_setup === 'o2' ? 'Option 2: Split (with micro-site)' : '?');
-  const consulting = selections.consulting;
-  const consultingLabel = consulting === 'yes' && pricing?.consultingTierName
-    ? pricing.consultingTierName
-    : consulting === 'yes'
-      ? '(level pending)'
-      : 'Skipped';
-  return `
-    <tr><td style="padding: 6px 0; color: #6b6359;">Web Management</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(mgmtName)}</td></tr>
-    <tr><td style="padding: 6px 0; color: #6b6359;">Site setup</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(siteLabel)}</td></tr>
-    <tr><td style="padding: 6px 0; color: #6b6359;">Marketing Consulting</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(consultingLabel)}</td></tr>
-  `;
+function stripStepPrefix(label: string): string {
+  return label.replace(/^step\s+\d+\s*:\s*/i, '').trim();
+}
+
+function labelForStep(step: any): string {
+  const id = String(step?.id || '');
+  if (id === 'wm_tier') return 'Web Management';
+  if (id === 'mc_yes_no') return 'Marketing Consulting';
+  if (id === 'mc_tier') return 'Marketing Consulting level';
+  if (id === 'build_options') return 'Build option';
+  if (id === 'site_setup') return 'Site setup';
+  if (id === 'consulting') return 'Marketing Consulting';
+  if (id === 'consulting_tier') return 'Marketing Consulting level';
+  const heading = typeof step?.h2 === 'string' ? stripStepPrefix(step.h2) : '';
+  return heading || id.replace(/_/g, ' ') || 'Selection';
+}
+
+function selectedOptionName(step: any, value: string | null): string {
+  if (!value) return 'Pending';
+  const options = Array.isArray(step?.options) ? step.options : [];
+  const option = options.find((o: any) => String(o?.id || '') === value);
+  return String(option?.name || option?.label || value);
+}
+
+function stepIsActive(step: any, selections: Record<string, string | null>): boolean {
+  if (!step?.show_when) return true;
+  const [whenKey, whenVal] = Object.entries(step.show_when)[0] as [string, string];
+  return selections[whenKey] === whenVal;
+}
+
+function summaryRowsHtml(config: any, selections: Record<string, string | null>): string {
+  const steps = Array.isArray(config?.steps) ? config.steps : [];
+  const rows: string[] = [];
+  for (const step of steps) {
+    if (!step?.id || !stepIsActive(step, selections)) continue;
+    const value = selections[step.id] ?? null;
+    rows.push(`<tr><td style="padding: 6px 0; color: #6b6359;">${escapeHtml(labelForStep(step))}</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(selectedOptionName(step, value))}</td></tr>`);
+  }
+  return rows.join('');
+}
+
+function selectionLabelForStep(config: any, stepId: string): string {
+  const steps = Array.isArray(config?.steps) ? config.steps : [];
+  const step = steps.find((s: any) => String(s?.id || '') === stepId);
+  return labelForStep(step || { id: stepId });
 }
 
 // ============================================================
@@ -535,11 +566,9 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
     const oldVal = existingDraft?.selections?.[stepId] ?? null;
     return oldVal !== selectionsPatch[stepId];
   }
-  const changedStepLabels: string[] = [];
-  if (selectionChanged('mgmt_tier')) changedStepLabels.push('Web Management level');
-  if (selectionChanged('site_setup')) changedStepLabels.push('Site setup');
-  if (selectionChanged('consulting')) changedStepLabels.push('Marketing Consulting yes/no');
-  if (selectionChanged('consulting_tier')) changedStepLabels.push('Marketing Consulting level');
+  const changedStepLabels = Object.keys(selectionsPatch)
+    .filter(selectionChanged)
+    .map(stepId => selectionLabelForStep(proposal.config, stepId));
 
   // Apply the upsert with both selections and signatures patches.
   let draft = await upsertDraftGeneric(proposal.client_id, slug, {
@@ -620,11 +649,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 22px; color: #1a1814; line-height: 1.55;">
             <h2 style="font-size: 22px; margin: 0 0 16px;">LOI accepted: ${escapeHtml(proposal.title)}</h2>
             <p style="font-size: 14px; color: #4a4239; margin: 0 0 16px;">Both signers have accepted the Letter of Intent. <strong>Next step</strong>: schedule the call within 24 hours, review the prepared draft agreement, then issue it at <a href="https://codyasmith.com/portal/admin/agreements/${escapeHtml(agreement.id)}" style="color: #c47d5a;">/portal/admin/agreements/${escapeHtml(agreement.id)}</a>.</p>
-            <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">
-              <tr><td style="padding: 6px 0; color: #6b6359;">Web Management</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(pricing?.mgmtTierName || '?')}</td></tr>
-              <tr><td style="padding: 6px 0; color: #6b6359;">Site setup</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(pricing?.siteSetupLongLabel || '?')}</td></tr>
-              <tr><td style="padding: 6px 0; color: #6b6359;">Marketing Consulting</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(pricing?.consultingTierName || 'Skipped')}</td></tr>
-            </table>
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">${summaryRowsHtml(proposal.config, draft.selections)}</table>
             <p style="font-size: 12px; color: #6b6359; margin: 0 0 6px; letter-spacing: 0.06em; text-transform: uppercase;">One-time at signing</p>
             <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px;">
               ${breakdownTable}
@@ -632,7 +657,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
             </table>
             <p style="font-size: 12px; color: #6b6359; margin: 18px 0 6px; letter-spacing: 0.06em; text-transform: uppercase;">Monthly recurring</p>
             <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px;">
-              <tr><td style="padding: 4px 0; color: #6b6359;">Web Management (${escapeHtml(pricing?.mgmtTierName || '?')}, ${draft.selections.site_setup === 'o2' ? '3' : '2'} sites)</td><td style="padding: 4px 0; text-align: right; color: #1a1814;">${escapeHtml(money(pricing?.mgmtMonthly || 0))}</td></tr>
+              <tr><td style="padding: 4px 0; color: #6b6359;">Web Management (${escapeHtml(pricing?.mgmtTierName || 'selected tier')})</td><td style="padding: 4px 0; text-align: right; color: #1a1814;">${escapeHtml(money(pricing?.mgmtMonthly || 0))}</td></tr>
               ${pricing && pricing.consultingMonthly > 0 ? `<tr><td style="padding: 4px 0; color: #6b6359;">Marketing Consulting (${escapeHtml(pricing.consultingTierName)})</td><td style="padding: 4px 0; text-align: right; color: #1a1814;">${escapeHtml(money(pricing.consultingMonthly))}</td></tr>` : ''}
               <tr><td style="padding: 8px 0 0; border-top: 1px solid #d4cdc0; font-weight: 600;">Total</td><td style="padding: 8px 0 0; text-align: right; border-top: 1px solid #d4cdc0; font-weight: 600;">${escapeHtml(money(monthly))}</td></tr>
             </table>
@@ -665,9 +690,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
               <h2 style="font-size: 22px; margin: 0 0 16px;">${escapeHtml(proposal.title)} confirmed</h2>
               <p style="font-size: 15px; color: #4a4239; margin: 0 0 16px;">Hey ${escapeHtml(signerFirstName)}, both confirmations are in. This is a Letter of Intent, not a contract yet. Here is what you both picked:</p>
               <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">
-                <tr><td style="padding: 6px 0; color: #6b6359;">Web Management</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(pricing?.mgmtTierName || '?')}</td></tr>
-                <tr><td style="padding: 6px 0; color: #6b6359;">Site setup</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(pricing?.siteSetupShortLabel || '?')}</td></tr>
-                <tr><td style="padding: 6px 0; color: #6b6359;">Marketing Consulting</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(pricing?.consultingTierName || 'Skipped')}</td></tr>
+                ${summaryRowsHtml(proposal.config, draft.selections)}
                 <tr><td style="padding: 6px 0; color: #6b6359; border-top: 1px solid #e6ddd0;">One-time at signing</td><td style="padding: 6px 0; text-align: right; font-weight: 600; border-top: 1px solid #e6ddd0;">${escapeHtml(moneyInt(oneTime))}</td></tr>
                 <tr><td style="padding: 6px 0; color: #6b6359;">Monthly recurring</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(money(monthly))}</td></tr>
               </table>
@@ -713,7 +736,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
       const others = signersWithState.filter(s => s.id !== signer.id);
       const justSignedName = signer.name?.split(' ')[0] || signer.name || signer.id;
       const pricing = computePricing(proposal.config?.pricing_formula || '', draft.selections, proposal.config);
-      const summaryRows = summaryRowsHtml(pricing, draft.selections);
+      const summaryRows = summaryRowsHtml(proposal.config, draft.selections);
       for (const other of others) {
         const otherFirst = other.name?.split(' ')[0] || other.name || other.id;
         try {
@@ -755,7 +778,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
     const changerFirst = signer.name?.split(' ')[0] || signer.name || signer.id;
     const partnerFirst = partnerToNotify.name?.split(' ')[0] || partnerToNotify.name || partnerToNotify.id;
     const pricing = computePricing(proposal.config?.pricing_formula || '', draft.selections, proposal.config);
-    const summaryRows = summaryRowsHtml(pricing, draft.selections);
+    const summaryRows = summaryRowsHtml(proposal.config, draft.selections);
     try {
       await fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',

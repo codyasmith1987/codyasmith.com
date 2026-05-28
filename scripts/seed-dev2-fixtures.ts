@@ -96,6 +96,19 @@ async function ensurePasswordColumn(): Promise<void> {
   }
 }
 
+async function clearLoginRateLimits(): Promise<void> {
+  try {
+    await turso.execute({
+      sql: "DELETE FROM portal_rate_limits WHERE key LIKE 'login:%'",
+      args: [],
+    });
+  } catch (e: any) {
+    if (!/no such table/i.test(String(e?.message || ''))) {
+      throw e;
+    }
+  }
+}
+
 async function main(): Promise<void> {
   if (!process.env.TURSO_DATABASE_URL) {
     console.error('TURSO_DATABASE_URL is required. Point .env at file:./data/dev2.db before running.');
@@ -110,8 +123,9 @@ async function main(): Promise<void> {
   await ensureUser('admin@dev2.test', 'DEV2 Test Admin', 'admin', null, TEST_PASSWORD);
   await ensureUser('testuser@dev2.test', 'DEV2 Test Client A User', 'client', clientAId, TEST_PASSWORD);
   await ensureUser('clientb@dev2.test', 'DEV2 Test Client B User', 'client', clientBId, TEST_PASSWORD);
+  await clearLoginRateLimits();
 
-  console.log('\nDone. Test users seeded; password "testpass123" set for all three.');
+  console.log('\nDone. Test users seeded; password "testpass123" set for all three; login rate limits cleared.');
 }
 
 main().catch((err) => {

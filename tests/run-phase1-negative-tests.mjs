@@ -4,6 +4,18 @@
 
 const BASE = 'http://localhost:4322';
 
+function route(path) {
+  return path.replace(/\/(\?|$)/, '$1');
+}
+
+async function clearLoginRateLimits() {
+  const { createClient } = await import('@libsql/client');
+  const db = createClient({ url: 'file:./data/dev2.db' });
+  await db.execute("DELETE FROM portal_rate_limits WHERE key LIKE 'login:%'").catch(err => {
+    if (!/no such table/i.test(String(err?.message || ''))) throw err;
+  });
+}
+
 // ============ Test runner ============
 const results = [];
 function test(name, pass, detail) {
@@ -45,7 +57,7 @@ async function api(method, path, body, session, csrf) {
   if (csrf) headers['X-CSRF-Token'] = csrf;
   const opts = { method, headers, redirect: 'manual' };
   if (body && method !== 'GET') opts.body = typeof body === 'string' ? body : JSON.stringify(body);
-  const res = await fetch(`${BASE}${path}`, opts);
+  const res = await fetch(`${BASE}${route(path)}`, opts);
   const text = await res.text();
   let json;
   try { json = JSON.parse(text); } catch { json = text; }
@@ -53,6 +65,7 @@ async function api(method, path, body, session, csrf) {
 }
 
 async function run() {
+  await clearLoginRateLimits();
   // ============ Bootstrap users ============
   console.log('Bootstrapping test data...\n');
 

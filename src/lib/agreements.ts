@@ -457,55 +457,35 @@ export interface UpsertClientMetadataInput {
 }
 
 export async function upsertClientMetadata(input: UpsertClientMetadataInput): Promise<ClientMetadata> {
-  const existing = await getClientMetadata(input.client_id);
-  if (existing) {
-    await turso.execute({
-      sql: `UPDATE client_metadata SET
-              legal_entity_name = COALESCE(?, legal_entity_name),
-              entity_type = COALESCE(?, entity_type),
-              state_of_organization = COALESCE(?, state_of_organization),
-              ein = COALESCE(?, ein),
-              principal_address = COALESCE(?, principal_address),
-              notice_address = COALESCE(?, notice_address),
-              primary_contact_name = COALESCE(?, primary_contact_name),
-              primary_contact_title = COALESCE(?, primary_contact_title),
-              primary_contact_email = COALESCE(?, primary_contact_email),
-              primary_contact_phone = COALESCE(?, primary_contact_phone),
-              updated_at = datetime('now')
-            WHERE client_id = ?`,
-      args: [
-        input.legal_entity_name ?? null,
-        input.entity_type ?? null,
-        input.state_of_organization ?? null,
-        input.ein ?? null,
-        input.principal_address ?? null,
-        input.notice_address ?? null,
-        input.primary_contact_name ?? null,
-        input.primary_contact_title ?? null,
-        input.primary_contact_email ?? null,
-        input.primary_contact_phone ?? null,
-        input.client_id,
-      ],
-    });
-  } else {
-    await turso.execute({
-      sql: `INSERT INTO client_metadata (${CLIENT_METADATA_COLS})
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [
-        input.client_id,
-        input.legal_entity_name ?? null,
-        input.entity_type ?? null,
-        input.state_of_organization ?? null,
-        input.ein ?? null,
-        input.principal_address ?? null,
-        input.notice_address ?? null,
-        input.primary_contact_name ?? null,
-        input.primary_contact_title ?? null,
-        input.primary_contact_email ?? null,
-        input.primary_contact_phone ?? null,
-      ],
-    });
-  }
+  await turso.execute({
+    sql: `INSERT INTO client_metadata (${CLIENT_METADATA_COLS})
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(client_id) DO UPDATE SET
+            legal_entity_name = COALESCE(excluded.legal_entity_name, client_metadata.legal_entity_name),
+            entity_type = COALESCE(excluded.entity_type, client_metadata.entity_type),
+            state_of_organization = COALESCE(excluded.state_of_organization, client_metadata.state_of_organization),
+            ein = COALESCE(excluded.ein, client_metadata.ein),
+            principal_address = COALESCE(excluded.principal_address, client_metadata.principal_address),
+            notice_address = COALESCE(excluded.notice_address, client_metadata.notice_address),
+            primary_contact_name = COALESCE(excluded.primary_contact_name, client_metadata.primary_contact_name),
+            primary_contact_title = COALESCE(excluded.primary_contact_title, client_metadata.primary_contact_title),
+            primary_contact_email = COALESCE(excluded.primary_contact_email, client_metadata.primary_contact_email),
+            primary_contact_phone = COALESCE(excluded.primary_contact_phone, client_metadata.primary_contact_phone),
+            updated_at = datetime('now')`,
+    args: [
+      input.client_id,
+      input.legal_entity_name ?? null,
+      input.entity_type ?? null,
+      input.state_of_organization ?? null,
+      input.ein ?? null,
+      input.principal_address ?? null,
+      input.notice_address ?? null,
+      input.primary_contact_name ?? null,
+      input.primary_contact_title ?? null,
+      input.primary_contact_email ?? null,
+      input.primary_contact_phone ?? null,
+    ],
+  });
   const meta = await getClientMetadata(input.client_id);
   if (!meta) throw new Error('Failed to upsert client metadata');
   return meta;

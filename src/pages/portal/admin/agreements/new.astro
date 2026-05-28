@@ -1,6 +1,6 @@
 ---
 // Admin: create a new agreement, optionally pre-filled from a finalized
-// proposal. The form posts to /portal/api/admin/agreements/ which
+// proposal. The form posts to /portal/api/admin/agreements which
 // builds the schedule_a using the proposal's pricing formula + draft
 // selections.
 
@@ -210,7 +210,7 @@ const csrfToken = Astro.locals.csrfToken || '';
       }
       seen[e] = true;
     }
-    fetch('/portal/api/admin/agreements/', {
+    fetch('/portal/api/admin/agreements', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-csrf-token': csrf },
       body: JSON.stringify(payload),

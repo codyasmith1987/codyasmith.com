@@ -123,6 +123,16 @@ function pickPublicDraft(draft: ProposalDraft | null) {
   };
 }
 
+function pickPublicPricing(config: any, draft: ProposalDraft | null) {
+  if (!draft) return null;
+  const pricing = computePricing(config?.pricing_formula || '', draft.selections || {}, config);
+  if (!pricing) return null;
+  return {
+    oneTime: pricing.oneTime,
+    monthly: pricing.monthly,
+  };
+}
+
 // Build a flat map of valid option ids per step id from the config so
 // we can validate incoming selections.
 function buildOptionIndex(config: any): Record<string, Set<string>> {
@@ -233,6 +243,7 @@ export const GET: APIRoute = async ({ locals, params }) => {
   // null branch keeps the page resilient).
   return json({
     draft: pickPublicDraft(draft),
+    pricing: pickPublicPricing(proposal.config, draft),
     signer: matched,
     config: proposal.config,
   });
@@ -272,6 +283,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
       ok: true,
       status: 'finalized',
       draft: pickPublicDraft(existingDraft),
+      pricing: pickPublicPricing(proposal.config, existingDraft),
       signer,
       confirmation_emails: '',
     });
@@ -632,6 +644,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
     ok: true,
     status,
     draft: pickPublicDraft(draft),
+    pricing: pickPublicPricing(proposal.config, draft),
     signer,
     confirmation_emails: confirmationEmails.join(', '),
   });

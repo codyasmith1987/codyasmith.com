@@ -1091,6 +1091,7 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
   var state = {
     selections: {},     // { mgmt_tier: 'better', site_setup: 'o1', ... }
     signatures: {},     // { jason: { signature: '...', signed_at: '...' }, ... }
+    pricing: null,      // server-computed totals for product_driven_v1 and other non-RB formulas
     finalizedAt: null
   };
 
@@ -1222,11 +1223,30 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
     if (state.selections.consulting_tier == null && draft.consulting_tier) state.selections.consulting_tier = draft.consulting_tier;
   }
 
+  function applyResponsePricing(data) {
+    if (!data || !data.pricing) return;
+    state.pricing = data.pricing;
+  }
+
   function setSummary(id, text, isSelected) {
     var el = document.getElementById(id);
     if (!el) return;
     el.textContent = text;
     el.classList.toggle('selected', !!isSelected);
+  }
+
+  function acceptedTotalsHtml() {
+    var oneTime = null;
+    var monthly = null;
+    if (PRICING_FORMULA === 'raised_bar_v1' && selectionsComplete()) {
+      oneTime = rbOneTimeTotal();
+      monthly = rbMonthlyTotal();
+    } else if (selectionsComplete() && state.pricing && typeof state.pricing.oneTime === 'number' && typeof state.pricing.monthly === 'number') {
+      oneTime = state.pricing.oneTime;
+      monthly = state.pricing.monthly;
+    }
+    if (typeof oneTime !== 'number' || typeof monthly !== 'number') return '';
+    return '<p class="success-note">Accepted totals: ' + moneyInt(oneTime) + ' at signing; ' + money(monthly) + ' / month.</p>';
   }
 
   // Resolve a human-readable summary string for a step's current
@@ -1404,10 +1424,16 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
       setSummary('summary-' + s.id, labelText, sel);
     }
 
-    // Totals (raised_bar_v1 only — others fall back to em dash until POST).
+    // Totals. Raised Bar still has page-side optimistic math. Product-
+    // driven proposals use server-computed totals returned by the
+    // accept endpoint, because their product mix can include arbitrary
+    // product definitions and build-shape pricing.
     if (PRICING_FORMULA === 'raised_bar_v1' && selectionsComplete()) {
       setSummary('summary-onetime', moneyInt(rbOneTimeTotal()), true);
       setSummary('summary-monthly', money(rbMonthlyTotal()) + ' / month', true);
+    } else if (selectionsComplete() && state.pricing && typeof state.pricing.oneTime === 'number' && typeof state.pricing.monthly === 'number') {
+      setSummary('summary-onetime', moneyInt(state.pricing.oneTime), true);
+      setSummary('summary-monthly', money(state.pricing.monthly) + ' / month', true);
     } else {
       setSummary('summary-onetime', '—', false);
       setSummary('summary-monthly', '—', false);
@@ -1576,7 +1602,13 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
     if (!isReal) return;
     // Send the full selections object. The server merges, validates,
     // and re-emits authoritative draft state on the response.
-    saveDraft({ selections: state.selections }).catch(function() { /* silent — UI is optimistic */ });
+    saveDraft({ selections: state.selections }).then(function(result) {
+      if (result.ok && result.data) {
+        if (result.data.draft) applyDraftToState(result.data.draft);
+        applyResponsePricing(result.data);
+        update();
+      }
+    }).catch(function() { /* silent — UI is optimistic */ });
   }
 
   // Wire up step cards. One click handler per option-id; each click
@@ -1594,6 +1626,7 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
         var optId = card.getAttribute('data-option-id');
         if (!stepId || !optId) return;
         state.selections[stepId] = optId;
+        if (PRICING_FORMULA !== 'raised_bar_v1') state.pricing = null;
         // Switching consulting to 'no' clears the dependent tier so
         // the UI doesn't show a stale 'Yes, <tier>' summary.
         if (stepId === 'consulting' && optId === 'no') {
@@ -1661,16 +1694,19 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
         }
         if (result.data && result.data.draft) {
           applyDraftToState(result.data.draft);
+          applyResponsePricing(result.data);
           if (result.data.status === 'finalized') state.finalizedAt = state.finalizedAt || new Date().toISOString();
         }
         if (result.data && result.data.status === 'finalized') {
           var container = document.getElementById('proposal-form-container');
           var emails = (result.data && result.data.confirmation_emails) || (isSoleSigner ? 'you and Cody' : 'you both and Cody');
           var headline = isSoleSigner ? "You're in." : "You're both in.";
+          var totalsHtml = acceptedTotalsHtml();
           container.innerHTML =
             '<div class="success-message">' +
               '<h3>' + headline + '</h3>' +
               '<p>This is a Letter of Intent, not a contract yet. Cody reaches out within twenty-four hours to schedule the call. After that call, your engagement agreement is issued in the portal for signature. It is already drafted from your selections; the link is at the bottom of this page if you want to start reading now.</p>' +
+              totalsHtml +
               '<p>Reach Cody at <a href="mailto:cody@codyasmith.com">cody@codyasmith.com</a> any time with questions.</p>' +
               '<p class="success-note">Confirmation sent to ' + emails + '.</p>' +
               '<button type="button" id="revert-acceptance" class="revoke-link">Revert my acceptance and edit selections</button>' +
@@ -1704,7 +1740,10 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
           revokeBtn.textContent = 'Revoke my acceptance';
           return;
         }
-        if (result.data && result.data.draft) applyDraftToState(result.data.draft);
+        if (result.data && result.data.draft) {
+          applyDraftToState(result.data.draft);
+          applyResponsePricing(result.data);
+        }
         revokeBtn.disabled = false;
         revokeBtn.textContent = 'Revoke my acceptance';
         update();
@@ -1720,16 +1759,19 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
   loadDraft().then(function(result) {
     if (result.ok && result.data && result.data.draft) {
       applyDraftToState(result.data.draft);
+      applyResponsePricing(result.data);
     }
     update();
     if (state.finalizedAt) {
       var container = document.getElementById('proposal-form-container');
       if (container) {
         var headline2 = (SIGNERS && SIGNERS.length === 1) ? "You're in." : "You're both in.";
+        var totalsHtml2 = acceptedTotalsHtml();
         container.innerHTML =
           '<div class="success-message">' +
             '<h3>' + headline2 + '</h3>' +
             '<p>This is a Letter of Intent, not a contract yet. Cody is in touch to schedule the call; your engagement agreement goes into the portal for signature after that.</p>' +
+            totalsHtml2 +
             '<button type="button" id="revert-acceptance" class="revoke-link">Revert my acceptance and edit selections</button>' +
           '</div>';
         wireRevertButton();

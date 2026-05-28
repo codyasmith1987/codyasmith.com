@@ -13,7 +13,7 @@
 //   - No AI-template language
 //   - Full brand names
 
-export const PROMPT_VERSION = 'build-description-v3';
+export const PROMPT_VERSION = 'build-description-v4';
 
 export const SYSTEM_PROMPT = `You are a research assistant for Cody A Smith LLC. The practice sells three products (Web Management, Marketing Consulting, Training) plus separately-scoped Build work that produces a new site or system. Cody asks you to draft a one-sentence description of a Build engagement that will appear on the prospect's proposal and on Schedule A of the eventual contract.
 
@@ -46,6 +46,7 @@ Format rules.
 
 Content rules.
 - Name what is being built specifically. Common framings: a new marketing site, a brand-led redesign of the existing site, a property-or-product showcase site, a careers or about-the-team site, a sub-brand site under a parent company (when the scraped content makes that pattern obvious).
+- Treat the listed current client sites as already existing. Do not say Cody will build one of those existing sites unless the admin hint explicitly says redesign, rebuild, expansion, or takeover for that site. If the work is a new product line, microsite, sub-brand, or section, name that new thing instead of implying the existing primary site is not built.
 - Do not promise downstream business outcomes. No "to drive conversions", "to grow revenue", "to win more leads", "to outrank competitors". Stick to what the build IS, not what it allegedly will achieve.
 - Stack: do NOT promise a specific stack in the sentence unless the prospect has already chosen one. The practice's default is WordPress on a managed host but stack belongs in the Build Statement of Work, not the proposal description.
 - If the build size is large, scope cues are fine (multi-section, depth of content, custom interactions) without overclaiming.
@@ -62,6 +63,7 @@ export interface UserPromptInput {
   inferred_industry?: string | null;
   inferred_urgency?: string | null;
   admin_hint?: string | null;    // any free-text typed into build_description before the click
+  current_sites?: Array<{ domain: string; label?: string | null; is_primary?: boolean; is_managed?: boolean; page_count?: number | null }>;
   scraped_excerpts: Array<{ url: string; text: string }>;
 }
 
@@ -70,6 +72,18 @@ export function buildUserPrompt(input: UserPromptInput): string {
   lines.push(`Primary domain: ${input.domain}`);
   lines.push(`CLIENT_NAME (database label, may not be the real entity name): ${input.client_name}`);
   lines.push(`Build size: ${input.build_size}`);
+  if (input.current_sites && input.current_sites.length > 0) {
+    lines.push('Current client sites already known to the portal:');
+    for (const site of input.current_sites.slice(0, 8)) {
+      const flags = [
+        site.is_primary ? 'primary' : null,
+        site.is_managed ? 'managed' : null,
+        site.page_count != null ? `${site.page_count} pages` : null,
+      ].filter(Boolean).join(', ');
+      lines.push(`- ${site.domain}${site.label ? ` (${site.label})` : ''}${flags ? `: ${flags}` : ''}`);
+    }
+    lines.push('Do not describe these current sites as net-new builds unless the admin hint says this is a redesign, rebuild, expansion, or takeover.');
+  }
   if (input.inferred_industry) lines.push(`Inferred industry: ${input.inferred_industry}`);
   if (input.inferred_urgency) lines.push(`Inferred urgency: ${input.inferred_urgency}`);
   if (input.admin_hint && input.admin_hint.trim()) {

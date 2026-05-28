@@ -28,6 +28,7 @@ export interface DraftBuildDescriptionArgs {
   inferredIndustry?: string | null;
   inferredUrgency?: string | null;
   adminHint?: string | null;
+  currentSites?: Array<{ domain: string; label?: string | null; is_primary?: boolean; is_managed?: boolean; page_count?: number | null }>;
   cacheTtlDays?: number;
 }
 
@@ -67,6 +68,7 @@ export async function draftBuildDescription(
       args.buildSize,
       (args.inferredIndustry || '').toLowerCase(),
       (args.inferredUrgency || '').toLowerCase(),
+      (args.currentSites || []).map(s => `${s.domain}:${s.is_primary ? 'p' : ''}:${s.is_managed ? 'm' : ''}:${s.page_count ?? ''}`).join(','),
     ].join('|'),
   });
 
@@ -101,6 +103,7 @@ export async function draftBuildDescription(
     inferred_industry: args.inferredIndustry ?? null,
     inferred_urgency: args.inferredUrgency ?? null,
     admin_hint: args.adminHint ?? null,
+    current_sites: args.currentSites ?? [],
     scraped_excerpts: scraped,
   };
   const userPrompt = buildUserPrompt(promptInput);

@@ -4,8 +4,8 @@
 // Asserts:
 //   - WM ecosystem routing thresholds (page count bands).
 //   - WM multi-site monthly formula.
-//   - WM multi-site onboarding is per-site at FULL ecosystem base
-//     (the gotcha per 05 Section 4; NOT the multi-site discount).
+//   - WM multi-site onboarding follows the same 0.80 additional-site
+//     formula, except built sites carry $0 WM onboarding.
 //   - MC ecosystem routing thresholds (revenue bands).
 //   - Build subsequent-build discount math (20% off each subsequent).
 //   - End-to-end product_driven_v1 pricing matches expected totals.
@@ -1492,9 +1492,10 @@ async function run() {
   // Compose a WM (Eco B Better) + Build (small) proposal with 2
   // build_options:
   //   o1: no WM delta, no extra sites
-  //   o2: +$200 monthly, +$500 onboarding, +1 added site
+  //   o2: +1 added build site, priced dynamically from the buyer's
+  //       selected WM tier; no WM onboarding on the built site
   // Pricing changes with the picked option; Schedule A WM site rows
-  // grow accordingly. Audit 2026-05-25 cross-product extension.
+  // grow accordingly.
   // -------------------------------------------------------------------
   const jasonCfg = composeProposal({
     client: { id: 'jr1', name: 'Jason Roth Practice', slug: 'jr-practice' },
@@ -1512,8 +1513,6 @@ async function run() {
             name: 'Option 1: Single site',
             pitch: 'Just the one site.',
             pricing_delta: 0,
-            wm_monthly_delta: 0,
-            wm_onboarding_delta: 0,
             wm_sites_added: [],
           },
           {
@@ -1521,8 +1520,6 @@ async function run() {
             name: 'Option 2: Split setup',
             pitch: 'Adds a micro-site.',
             pricing_delta: 4500,
-            wm_monthly_delta: 200,
-            wm_onboarding_delta: 500,
             wm_sites_added: [
               { domain: 'micro.example.com', label: 'Micro-site', page_count_estimate: 10 },
             ],
@@ -1544,23 +1541,21 @@ async function run() {
   test('cross-product o1: oneTime = 1200 + 5625 = 6825 (no Build/WM delta)',
     o1Pricing.oneTime === 6825, `got ${o1Pricing?.oneTime}`);
 
-  // Pricing on o2: WM base 797 + delta 200 = 997; Build base 5625 +
-  // pricing_delta 4500 = 10125; WM onboarding 1200 + delta 500 = 1700;
-  // total oneTime = 10125 + 1700 = 11825
+  // Pricing on o2: WM base 797 + added Eco A Better site at 0.80
+  // (497 * .80 = 397.60) = 1194.60; Build base 5625 +
+  // pricing_delta 4500 = 10125; WM onboarding remains 1200 because
+  // the build fee replaces WM onboarding for the built micro-site.
   const o2Pricing = computePricing(
     jasonCfg.pricing_formula,
     { wm_tier: 'better', build_options: 'o2' },
     jasonCfg,
   );
-  test('cross-product o2: monthly = 997 (WM +200)',
-    o2Pricing.monthly === 997, `got ${o2Pricing?.monthly}`);
-  test('cross-product o2: oneTime = 1200 + 500 + 5625 + 4500 = 11825 (WM onb +500, Build +4500)',
-    o2Pricing.oneTime === 11825, `got ${o2Pricing?.oneTime}`);
-  test('cross-product o2: breakdown includes WM monthly adjustment line',
-    o2Pricing.breakdown.some(b => b.label.includes('Web Management adjustment') && b.amount === 200),
-    JSON.stringify(o2Pricing.breakdown));
-  test('cross-product o2: breakdown includes WM onboarding adjustment line',
-    o2Pricing.breakdown.some(b => b.label.includes('Web Management onboarding adjustment') && b.amount === 500),
+  test('cross-product o2: monthly = 1194.6 (WM tier-selected dynamic added site)',
+    o2Pricing.monthly === 1194.6, `got ${o2Pricing?.monthly}`);
+  test('cross-product o2: oneTime = 1200 + 5625 + 4500 = 11325 (build replaces added-site WM onboarding)',
+    o2Pricing.oneTime === 11325, `got ${o2Pricing?.oneTime}`);
+  test('cross-product o2: breakdown does not include legacy static WM adjustment lines',
+    !o2Pricing.breakdown.some(b => b.label.includes('Web Management adjustment')),
     JSON.stringify(o2Pricing.breakdown));
 
   // Schedule A on o2: WM section's sites array gets the added micro-site row.
@@ -1586,6 +1581,13 @@ async function run() {
   test('cross-product o2: Schedule A WM site_count reflects added site',
     o2Schedule.web_management?.site_count >= 2,
     `got ${o2Schedule.web_management?.site_count}`);
+  const microRow = o2WmSites.find(s => (s.domain || '').includes('micro.example.com'));
+  test('cross-product o2: added build site has dynamic monthly contribution at selected tier',
+    microRow?.monthly_contribution === 397.6,
+    `got ${JSON.stringify(microRow)}`);
+  test('cross-product o2: added build site has zero WM onboarding contribution',
+    microRow?.onboarding_contribution === 0,
+    `got ${JSON.stringify(microRow)}`);
 
   // Schedule A on o1: no added rows.
   const o1Schedule = buildScheduleA({

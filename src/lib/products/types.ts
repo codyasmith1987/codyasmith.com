@@ -97,22 +97,17 @@ export interface BuildOption {
   rollout_outro_html?: string;  // Shown below the phases.
   schedule_a_note?: string;     // Free-text note added to Schedule A's build_sow_ref when picked.
 
-  // Cross-product effects on Web Management. Lets a Build option
-  // change the WM monthly + onboarding when it's picked — the Raised
-  // Bar pattern where Option 2 ("split setup") adds a Tailwater
-  // micro-site that becomes a managed site. Admin pre-computes the
-  // deltas at compose time (the wizard helps); pricing dispatcher
-  // applies them additively to the picked option.
-  //
-  // wm_sites_added is display-only on the proposal page + appended
-  // to Schedule A's WM section so the contract reflects the picked
-  // shape.
-  wm_monthly_delta?: number;    // Added to WM monthly when picked (already accounts for multi-site discount).
-  wm_onboarding_delta?: number; // Added to WM onboarding total when picked.
+  // Cross-product effects on Web Management. These are structural,
+  // not pre-priced: the buyer picks the WM tier on the proposal page,
+  // then WM computes the selected option's added/modified sites at
+  // that tier using the canonical per-site formula. Legacy proposals
+  // may still carry wm_*_delta fields; new wizard output should not.
+  wm_monthly_delta?: number;    // Legacy static delta only.
+  wm_onboarding_delta?: number; // Legacy static delta only.
   wm_sites_added?: Array<{
-    domain: string;             // Placeholder OK ("tailwater-micro.com"); admin replaces on the live proposal.
+    domain: string;             // Actual domain if known; blank allowed until signing.
     label: string;              // Display label for the site row.
-    page_count_estimate?: number; // Routes ecosystem; the wizard uses this to compute the delta.
+    page_count_estimate?: number; // Routes ecosystem and build fee by formula.
   }>;
   // Modifications to existing managed sites when this option is picked.
   // Lets an option express "the existing site grows to N pages" which

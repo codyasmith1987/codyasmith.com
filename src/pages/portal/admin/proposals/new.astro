@@ -104,24 +104,6 @@ const productManifest = PRODUCT_ORDER.map(id => {
   };
 });
 
-// WM-specific pricing exposed for the BuildOption WM impact "calculate
-// for me" button. Per-tier monthly + onboarding bases per ecosystem
-// so the client-side calculator can apply the 2026-05-24 locked
-// 0.80 multi-site formula. Routing helper (page_count to ecosystem)
-// mirrored client-side. Future products can extend this pattern.
-const wmEcosystemPricing = Object.fromEntries(
-  Object.entries(PRODUCT_REGISTRY['web-management'].ecosystems).map(([eid, eco]: any) => [
-    eid,
-    Object.fromEntries(
-      Object.entries(eco.tiers).map(([tid, tier]: any) => [
-        tid,
-        { monthly: tier.monthly ?? 0, onb: tier.onb ?? 0, label: tier.name },
-      ])
-    ),
-  ])
-);
-const WM_MULTI_SITE_DISCOUNT = 0.80;
-
 // Build product fees + subsequent-build discount, mirrored client-side
 // so the BuildOption editor can auto-compute the build cost added by
 // a picked option. The composer's source of truth is
@@ -384,7 +366,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
     </form>
   </div>
 
-  <script is:inline define:vars={{ todayLong, productManifest, usersByClient, latestTotalUrls, clientSitesByClient, wmEcosystemPricing, WM_MULTI_SITE_DISCOUNT, BUILD_FEES, BUILD_SUBSEQUENT_DISCOUNT }}>
+  <script is:inline define:vars={{ todayLong, productManifest, usersByClient, latestTotalUrls, clientSitesByClient, BUILD_FEES, BUILD_SUBSEQUENT_DISCOUNT }}>
     // =========================================================================
     // Standard-option dropdowns
     // =========================================================================
@@ -408,39 +390,30 @@ const todayISO = new Date().toISOString().slice(0, 10);
       ],
       option_name_unified: [
         "Single unified site",
-        "One bigger site with a focused section inside",
+        "One site with a focused section",
         "Brand-led primary site",
-        "Build out the current site",
-        "Expand the existing site",
-        "Keep one site and add the new content",
-        "New site with a focused pre-sell section",
+        "Existing site expansion",
+        "Existing site redesign",
+        "Keep one site and add the new content there",
       ],
       option_name_split: [
         "Split setup",
-        "Two sites, primary plus standalone microsite",
-        "Sub-brand microsite on its own URL",
-        "Build a new microsite alongside",
-        "Add a standalone site",
-        "Split into two sites for better focus",
-        "Main site plus standalone pre-sell microsite",
+        "Primary site plus standalone microsite",
+        "Standalone microsite option",
+        "Separate launch site",
+        "Two-site rollout",
       ],
       option_pitch: [
-        "One site with a focused section for the pre-sell.",
-        "Two focused sites, each with its own messaging and growth path.",
-        "Keep authority in one place. One launch, one cadence to manage.",
-        "One site built bigger means less management overhead and one URL to promote.",
-        "Splitting means each audience gets its own clean message.",
-        "Before another build, the right move is to look at what {existing_domain} is already doing for you. Adding the new section inside the site you already own is faster to launch, keeps your existing search authority on one URL, and means one site to manage instead of two.",
-        "A new site is a new search history, a new analytics start, a new everything. Expanding {existing_domain} carries the URL, the backlinks, and the traffic patterns you already have, and the build cost is a fraction of standing up a second site from scratch. The trade is worth naming plainly: less brand separation, more compounding.",
-        "{existing_domain} is already carrying the company's story. The work is to extend it, not replace it. I expand the site with the new section, tighten what is already there in the same pass, and the whole thing moves onto Web Management at launch.",
-        "You asked about a separate site. The cleaner answer for where {client} is right now is the opposite. Fold the new section into {existing_domain} as a focused area, keep one URL working for the business, and revisit the standalone site later if the section earns the case for it.",
-        "{existing_domain} has work to do on it before it gets any bigger. I tighten what is already broken or stale, add the new content in the same pass, and the site comes out of this engagement working better than it went in. One bill, one launch, one site under management.",
+        "One site carries the main brand and the focused section. Less to manage, one URL to promote.",
+        "Two sites: one primary site and one standalone microsite. Cleaner separation, more to launch and manage.",
+        "Use the existing site and add the new section there. Faster to launch, with the current URL still doing the work.",
+        "Build the standalone microsite when the offer needs its own URL, its own message, and a cleaner handoff later.",
       ],
       option_schedule_a: [
-        "Single site build covering both the brand and the pre-sell section.",
-        "Two site builds: the primary brand site, plus a standalone microsite for the new section.",
-        "One site build with the new section launching first as a focused subsection.",
-        "Brand-led rebuild plus a separate microsite build for the new section.",
+        "Single site build covering the primary site and focused section.",
+        "Two site builds: the primary site plus a standalone microsite.",
+        "Existing site expansion with the new section added to the managed site.",
+        "Existing site redesign with the new section included in the scope.",
         "Site expansion at {existing_domain} to incorporate the new section.",
         "Page additions to {existing_domain} for the new content.",
       ],
@@ -457,16 +430,17 @@ const todayISO = new Date().toISOString().slice(0, 10);
         "Full public launch",
       ],
       rollout_phase_body: [
-        "I build the primary site with the new section completed first so it launches while the rest of the build is still being finished. The site moves onto Web Management at launch.",
+        "I build the primary site with the focused section completed first so it launches while the rest of the build is still being finished. The site moves onto Web Management at launch.",
         "I take over the existing site, fix what's broken, and tighten the site inside your monthly pooled hours. The site joins the management pool.",
-        "The microsite launches first on its own URL, focused entirely on the new section. Signage, ads, and direct outreach point at this site. Lean, focused, fast to launch.",
+        "The microsite launches first on its own URL, focused entirely on the new offer or section. Signage, ads, and direct outreach point at this site. Lean, focused, fast to launch.",
         "I build the primary site without the new section. This becomes the primary brand site. The site moves onto Web Management at launch.",
       ],
       wm_sites_added_label: [
-        "{vertical} microsite",
+        "Standalone microsite",
+        "Product-line microsite",
+        "New managed site",
         "{client} primary site",
-        "{client} takeover",
-        "{vertical} category site",
+        "{client} secondary site",
       ],
       other_sow_title: [
         "Content production sprint",
@@ -608,6 +582,11 @@ const todayISO = new Date().toISOString().slice(0, 10);
       blank.value = '';
       blank.textContent = '— pick a starting point, or type your own below —';
       select.appendChild(blank);
+      const custom = document.createElement('option');
+      custom.value = '__custom__';
+      custom.textContent = 'Custom text entered below';
+      custom.disabled = true;
+      select.appendChild(custom);
       for (const tpl of options) {
         const o = document.createElement('option');
         o.value = tpl;
@@ -615,13 +594,32 @@ const todayISO = new Date().toISOString().slice(0, 10);
         select.appendChild(o);
       }
       let lastApplied = '';
+      function syncSelectToInput() {
+        const value = input.value || '';
+        if (!value.trim()) {
+          select.value = '';
+          return;
+        }
+        const subs = buildSubstitutionMap();
+        for (const tpl of options) {
+          let text = tpl;
+          for (const [k, v] of Object.entries(subs)) {
+            if (v) text = text.split('{' + k + '}').join(v);
+          }
+          if (value === text || value === tpl) {
+            select.value = tpl;
+            return;
+          }
+        }
+        select.value = '__custom__';
+      }
       input.addEventListener('input', () => {
         if (lastApplied && input.value === lastApplied) return;
         lastApplied = '';
-        select.value = '';
+        syncSelectToInput();
       });
       select.addEventListener('change', () => {
-        if (!select.value) return;
+        if (!select.value || select.value === '__custom__') return;
         let text = select.value;
         const subs = buildSubstitutionMap();
         for (const [k, v] of Object.entries(subs)) {
@@ -631,6 +629,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
         lastApplied = text;
         input.dispatchEvent(new Event('input', { bubbles: true }));
       });
+      syncSelectToInput();
       if (input.parentNode) input.parentNode.insertBefore(select, input);
     }
 
@@ -1131,6 +1130,13 @@ const todayISO = new Date().toISOString().slice(0, 10);
                     admin_hint: input.value || null,
                     inferred_industry: state.narrative_variables.industry || null,
                     inferred_urgency: state.narrative_variables.urgency || null,
+                    current_sites: (clientSitesCache[state.client_id] || []).map(s => ({
+                      domain: s.domain,
+                      label: s.label || null,
+                      is_primary: !!s.is_primary,
+                      is_managed: !!s.is_managed,
+                      page_count: s.page_count ?? null,
+                    })),
                   }),
                 });
               } catch (err) {
@@ -1218,7 +1224,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
       wrap.appendChild(header);
       const desc = document.createElement('p');
       desc.className = 'text-[11px] text-neutral-400 mb-3 leading-relaxed';
-      desc.textContent = 'Use this when the build could be done as one bigger site OR as a split into two sites (or any similar fork). Add two options to give the client a side-by-side choice card on the proposal page. Leave empty if there is only one shape.';
+      desc.textContent = 'Use this only when the client should choose between build shapes for the same scope: for example, one site with a focused section versus a primary site plus standalone microsite. Each option carries its own new-site rows, page counts, rollout, and contract sentence.';
       wrap.appendChild(desc);
       const list = document.createElement('div');
       list.className = 'space-y-3';
@@ -1316,7 +1322,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
       pitchInput.rows = 3;
       pitchInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
       pitchInput.value = opt.pitch || '';
-      pitchInput.placeholder = 'One site with a focused section for the pre-sell.';
+      pitchInput.placeholder = 'One site with a focused section.';
       pitchInput.addEventListener('input', () => { opt.pitch = pitchInput.value; });
       pitchWrap.appendChild(pitchInput);
       attachStandardDropdown(pitchInput, 'option_pitch');
@@ -1338,6 +1344,13 @@ const todayISO = new Date().toISOString().slice(0, 10);
             build_description: (state.product_vars && state.product_vars['build'] && state.product_vars['build'].build_description) || null,
             inferred_industry: (state.narrative_variables && state.narrative_variables.industry) || null,
             admin_hint: pitchInput.value || null,
+            current_sites: (clientSitesCache[state.client_id] || []).map(s => ({
+              domain: s.domain,
+              label: s.label || null,
+              is_primary: !!s.is_primary,
+              is_managed: !!s.is_managed,
+              page_count: s.page_count ?? null,
+            })),
           };
         },
         applyResponse: (data) => {
@@ -1372,18 +1385,15 @@ const todayISO = new Date().toISOString().slice(0, 10);
       sowInput.rows = 2;
       sowInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
       sowInput.value = opt.schedule_a_note || '';
-      sowInput.placeholder = 'Single site build covering both the brand and the pre-sell section.';
+      sowInput.placeholder = 'Single site build covering the primary site and focused section.';
       sowInput.addEventListener('input', () => { opt.schedule_a_note = sowInput.value; });
       sowWrap.appendChild(sowInput);
       attachStandardDropdown(sowInput, 'option_schedule_a');
       card.appendChild(sowWrap);
 
-      // Cross-product WM impact subsection. Lets the option add
-      // managed sites + pre-computed pricing deltas to WM when the
-      // prospect picks this option (the Raised Bar pattern). The
-      // composer applies wm_monthly_delta + wm_onboarding_delta
-      // additively; wm_sites_added rows append to Schedule A's WM
-      // section.
+      // Cross-product WM impact subsection. Options carry structural
+      // changes only: added build sites and existing-site page-count
+      // changes. WM prices them later at the buyer's selected tier.
       card.appendChild(buildWmImpactEditor(opt));
 
       card.appendChild(buildPhasesEditor(opt));
@@ -1399,27 +1409,12 @@ const todayISO = new Date().toISOString().slice(0, 10);
       wrap.appendChild(label);
       const help = document.createElement('p');
       help.className = 'text-[11px] text-neutral-400 mb-3 leading-relaxed';
-      help.textContent = 'Pick the structural changes this option makes (new sites it builds, existing sites whose page count grows). The wizard computes every dollar amount from the rules in the code.';
+      help.textContent = 'Pick the structural changes this option makes. Build fees route by these page counts now. Web Management monthly is calculated later from the tier the client picks on the proposal page.';
       wrap.appendChild(help);
 
-      // Tier picker for the auto-calculation. Defaults to Better
-      // since that's recommended for most clients. Recalculates on
-      // change so the summary stays live.
-      const tierRow = document.createElement('div');
-      tierRow.className = 'mb-3 flex items-center gap-2';
-      const tierLabel = document.createElement('span');
-      tierLabel.className = 'text-[10px] font-mono text-neutral-500 uppercase tracking-wide';
-      tierLabel.textContent = 'Compute at tier:';
-      const calcTierSel = document.createElement('select');
-      calcTierSel.className = 'px-2 py-1 bg-neutral-900/50 border border-white/10 rounded text-neutral-200 text-xs';
-      calcTierSel.innerHTML = '<option value="good">Good</option><option value="better" selected>Better</option><option value="best">Best</option>';
-      tierRow.appendChild(tierLabel);
-      tierRow.appendChild(calcTierSel);
-      wrap.appendChild(tierRow);
-
       // Computed summary box. Read-only. Updates live whenever any
-      // structural input below changes (sites added, modifications,
-      // tier select). The admin never types a dollar amount.
+      // structural input below changes. The admin never types a WM
+      // dollar amount; buyer tier selection owns that math.
       const summary = document.createElement('div');
       summary.className = 'mb-3 p-3 bg-neutral-900/40 border border-amber-500/20 rounded';
       const summaryTitle = document.createElement('p');
@@ -1448,14 +1443,13 @@ const todayISO = new Date().toISOString().slice(0, 10);
         return 'large';
       }
 
-      // Single source of truth for the computed delta. Called on
-      // every structural change. Writes the computed values onto opt
-      // (so the saved JSON carries them) AND renders the summary.
+      // Single source of truth for option structure. Called on every
+      // structural change. Writes only Build's fixed-fee delta onto
+      // opt; WM monthly/onboarding are computed later at the buyer's
+      // selected tier by the Web Management product itself.
       function recompute() {
         const addedArr = Array.isArray(opt.wm_sites_added) ? opt.wm_sites_added : [];
         const modArr = Array.isArray(opt.wm_site_modifications) ? opt.wm_site_modifications : [];
-        const tierId = calcTierSel.value;
-        const tierLabelText = tierId.charAt(0).toUpperCase() + tierId.slice(1);
 
         // Compute the FULL build cost for this option. Each option
         // is treated as fully self-contained: the option's sites
@@ -1510,34 +1504,27 @@ const todayISO = new Date().toISOString().slice(0, 10);
           ? Math.round((optionBuildCostRounded - baseBuildCostRounded) * 100) / 100
           : 0;
 
-        // Compute WM monthly + onboarding delta from added sites.
-        // Build covers onboarding for sites it produces, so onb=0.
-        let monthlySum = 0;
+        // Describe WM impact structurally. Dollar amounts are not
+        // computed here because the buyer's picked wm_tier owns that
+        // math on the proposal page and in Schedule A.
         let wmAddedSkipped = 0;
         const wmAddedParts = [];
         for (const site of addedArr) {
           const pages = typeof site.page_count_estimate === 'number' ? site.page_count_estimate : null;
           const eco = routeWmEcoFromPages(pages);
-          if (!eco || !wmEcosystemPricing[eco] || !wmEcosystemPricing[eco][tierId]) {
+          if (!eco) {
             wmAddedSkipped++;
             continue;
           }
-          const tierPricing = wmEcosystemPricing[eco][tierId];
-          const contribution = tierPricing.monthly * WM_MULTI_SITE_DISCOUNT;
-          monthlySum += contribution;
           const labelText = site.label || site.domain || '(new site)';
-          wmAddedParts.push(`${labelText} +$${Math.round(contribution).toLocaleString()}/mo`);
+          wmAddedParts.push(`${labelText}: ${pages} pages, Eco ${eco}, priced at the client-picked WM tier; build covers WM onboarding for this site`);
         }
-        const monthlyDelta = Math.round(monthlySum * 100) / 100;
 
-        // Compute WM modification impact. Modifications apply via
-        // the composer (mutates managedSites before pricing), so we
-        // don't write to wm_monthly_delta — we just describe them
-        // here so the admin sees what the change does to the bill.
+        // Compute WM modification impact structurally. Modifications
+        // apply before pricing, so we describe the route change without
+        // pre-pricing a tier here.
         const modParts = [];
         let modSkipped = 0;
-        let modMonthly = 0;
-        let modOnb = 0;
         const managedNow = (clientSitesCache[state.client_id] || []).filter(s => s.is_managed);
         for (const mod of modArr) {
           const domain = (mod && typeof mod.site_domain === 'string') ? mod.site_domain : '';
@@ -1547,34 +1534,22 @@ const todayISO = new Date().toISOString().slice(0, 10);
           if (!existing) { modSkipped++; continue; }
           const oldEco = routeWmEcoFromPages(existing.page_count);
           const newEco = routeWmEcoFromPages(newPages);
-          if (!oldEco || !newEco || !wmEcosystemPricing[oldEco]?.[tierId] || !wmEcosystemPricing[newEco]?.[tierId]) {
+          if (!oldEco || !newEco) {
             modSkipped++;
             continue;
           }
           if (oldEco === newEco) {
-            modParts.push(`${domain} stays at Eco ${newEco} (no tier change)`);
+            modParts.push(`${domain}: ${newPages} pages, stays Eco ${newEco}`);
             continue;
           }
-          const oldP = wmEcosystemPricing[oldEco][tierId];
-          const newP = wmEcosystemPricing[newEco][tierId];
-          const dMonthly = Math.round((newP.monthly - oldP.monthly) * 100) / 100;
-          const dOnb = Math.round((newP.onb - oldP.onb) * 100) / 100;
-          modMonthly += dMonthly;
-          modOnb += dOnb;
-          modParts.push(`${domain} bumps from Eco ${oldEco} to Eco ${newEco} (+$${dMonthly}/mo, +$${dOnb} one-time)`);
+          modParts.push(`${domain}: ${existing.page_count ?? '?'} pages Eco ${oldEco} -> ${newPages} pages Eco ${newEco}; priced at the client-picked WM tier`);
         }
-        const totalMonthly = monthlyDelta + modMonthly;
-        const totalOnb = modOnb; // build covers all added-site onboarding
 
-        // Write the computed values back to opt so they save and
-        // flow into the composer / proposal page / Schedule A.
-        // pricing_delta nets out the top-level base build cost
-        // (which the composer always adds) and applies the option's
-        // own per-site build cost on top, so the final total ends
-        // up at the option's optionBuildCost.
+        // Write only the build fixed-fee delta. Stale static WM deltas
+        // from older drafts are removed so they cannot double-count.
         opt.pricing_delta = buildCostDelta;
-        opt.wm_monthly_delta = monthlyDelta;
-        opt.wm_onboarding_delta = 0;
+        delete opt.wm_monthly_delta;
+        delete opt.wm_onboarding_delta;
 
         // Render summary
         if (addedArr.length === 0 && modArr.length === 0) {
@@ -1585,12 +1560,8 @@ const todayISO = new Date().toISOString().slice(0, 10);
         if (optionBuildCostRounded > 0) {
           lines.push(`Build cost: <strong>$${optionBuildCostRounded.toLocaleString()}</strong> (${buildBreakdownParts.join(', ')})`);
         }
-        if (totalMonthly !== 0 || totalOnb !== 0) {
-          const monthlyPart = totalMonthly !== 0 ? `+$${totalMonthly.toLocaleString()}/month` : '$0/month';
-          const onbPart = totalOnb !== 0 ? `, +$${totalOnb.toLocaleString()} one-time setup` : '';
-          lines.push(`Web Management at ${tierLabelText}: <strong>${monthlyPart}${onbPart}</strong>`);
-        } else if (addedArr.length > 0 || modArr.length > 0) {
-          lines.push(`Web Management at ${tierLabelText}: no change`);
+        if (addedArr.length > 0 || modArr.length > 0) {
+          lines.push(`Web Management: <strong>computed from the tier the client picks on the proposal page</strong>`);
         }
         if (wmAddedParts.length > 0) {
           lines.push(`<span class="text-neutral-400 text-[11px]">New sites: ${wmAddedParts.join(', ')}</span>`);
@@ -1610,12 +1581,15 @@ const todayISO = new Date().toISOString().slice(0, 10);
       // Expose recompute so the sites + modifications subsections
       // can trigger it whenever their inputs change.
       opt._recomputeSummary = recompute;
-      calcTierSel.addEventListener('change', recompute);
 
       const sitesLabel = document.createElement('p');
       sitesLabel.className = 'text-[10px] font-mono text-neutral-500 mb-2 uppercase tracking-wide';
-      sitesLabel.textContent = 'New sites this option builds (added to the contract’s site list)';
+      sitesLabel.textContent = 'New sites this option builds';
       wrap.appendChild(sitesLabel);
+      const sitesHelp = document.createElement('p');
+      sitesHelp.className = 'text-[11px] text-neutral-400 mb-2 leading-relaxed';
+      sitesHelp.textContent = 'Add one row per net-new site or microsite. Page count routes both the fixed Build fee and the future Web Management formula. Domain can wait if it is not decided yet.';
+      wrap.appendChild(sitesHelp);
 
       const sitesList = document.createElement('div');
       sitesList.className = 'space-y-2';
@@ -1628,7 +1602,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           const row = document.createElement('div');
           row.className = 'grid grid-cols-12 gap-2 items-end p-2 bg-neutral-900/40 border border-white/5 rounded';
           row.innerHTML =
-            '<div class="col-span-5"><label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Domain</label></div>' +
+            '<div class="col-span-5"><label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Domain, if known</label></div>' +
             '<div class="col-span-4"><label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Display label</label></div>' +
             '<div class="col-span-2"><label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Pages (est)</label></div>' +
             '<div class="col-span-1"></div>';
@@ -1640,14 +1614,14 @@ const todayISO = new Date().toISOString().slice(0, 10);
           domainInput.type = 'text';
           domainInput.className = 'w-full px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono';
           domainInput.value = site.domain || '';
-          domainInput.placeholder = 'tailwater-micro.com';
+          domainInput.placeholder = 'new-site.com';
           domainInput.addEventListener('input', () => { site.domain = domainInput.value.trim().toLowerCase(); if (opt._recomputeSummary) opt._recomputeSummary(); });
           domainCol.appendChild(domainInput);
           const labelInput = document.createElement('input');
           labelInput.type = 'text';
           labelInput.className = 'w-full px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs';
           labelInput.value = site.label || '';
-          labelInput.placeholder = 'Tailwater micro-site';
+          labelInput.placeholder = 'Product-line microsite';
           labelInput.addEventListener('input', () => { site.label = labelInput.value; if (opt._recomputeSummary) opt._recomputeSummary(); });
           labelCol.appendChild(labelInput);
           attachStandardDropdown(labelInput, 'wm_sites_added_label');
@@ -1705,7 +1679,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
       wrap.appendChild(modsLabel);
       const modsHelp = document.createElement('p');
       modsHelp.className = 'text-[11px] text-neutral-400 mb-2 leading-relaxed';
-      modsHelp.textContent = 'Use this when the build adds pages to a site I already manage (e.g., 21-page site grows to 31 pages). If the new total bumps the site into a different Web Management tier, the pricing updates automatically.';
+      modsHelp.textContent = 'Use this when the build adds pages to a site I already manage. If the new page count moves the site to a different ecosystem, pricing updates from the client-picked Web Management tier.';
       wrap.appendChild(modsHelp);
 
       const modsList = document.createElement('div');
@@ -1878,6 +1852,13 @@ const todayISO = new Date().toISOString().slice(0, 10);
                 build_description: (state.product_vars && state.product_vars['build'] && state.product_vars['build'].build_description) || null,
                 web_management_in_scope: Array.isArray(state.products) && state.products.indexOf('web-management') >= 0,
                 admin_hint: htmlInput.value || null,
+                current_sites: (clientSitesCache[state.client_id] || []).map(s => ({
+                  domain: s.domain,
+                  label: s.label || null,
+                  is_primary: !!s.is_primary,
+                  is_managed: !!s.is_managed,
+                  page_count: s.page_count ?? null,
+                })),
               };
             },
             applyResponse: (data) => {
@@ -2205,6 +2186,51 @@ const todayISO = new Date().toISOString().slice(0, 10);
     // =========================================================================
     // Submit
     // =========================================================================
+    function normalizeBuildOptionsForSubmit() {
+      const vars = state.product_vars?.build;
+      if (!vars || !Array.isArray(vars.build_options)) return null;
+      for (const opt of vars.build_options) {
+        if (!opt || typeof opt !== 'object') continue;
+        delete opt.wm_monthly_delta;
+        delete opt.wm_onboarding_delta;
+
+        const rawSites = Array.isArray(opt.wm_sites_added) ? opt.wm_sites_added : [];
+        const cleanedSites = [];
+        for (const site of rawSites) {
+          const domain = typeof site?.domain === 'string' ? site.domain.trim().toLowerCase() : '';
+          const label = typeof site?.label === 'string' ? site.label.trim() : '';
+          const pages = typeof site?.page_count_estimate === 'number' && Number.isFinite(site.page_count_estimate)
+            ? site.page_count_estimate
+            : null;
+          const hasAny = !!domain || !!label || pages !== null;
+          if (!hasAny) continue;
+          if (pages === null || pages < 1) {
+            return `${opt.name || 'A build option'} has a new site without a page estimate.`;
+          }
+          cleanedSites.push({ domain, label, page_count_estimate: pages });
+        }
+        opt.wm_sites_added = cleanedSites;
+
+        const rawMods = Array.isArray(opt.wm_site_modifications) ? opt.wm_site_modifications : [];
+        const cleanedMods = [];
+        for (const mod of rawMods) {
+          const siteDomain = typeof mod?.site_domain === 'string' ? mod.site_domain.trim().toLowerCase() : '';
+          const pages = typeof mod?.new_page_count === 'number' && Number.isFinite(mod.new_page_count)
+            ? mod.new_page_count
+            : null;
+          const note = typeof mod?.note === 'string' ? mod.note.trim() : '';
+          const hasAny = !!siteDomain || pages !== null || !!note;
+          if (!hasAny) continue;
+          if (!siteDomain || pages === null || pages < 1) {
+            return `${opt.name || 'A build option'} has an existing-site change without both site and new page count.`;
+          }
+          cleanedMods.push({ site_domain: siteDomain, new_page_count: pages, note });
+        }
+        opt.wm_site_modifications = cleanedMods;
+      }
+      return null;
+    }
+
     async function submitProposal(status) {
       syncOverrides();
       syncSigners();
@@ -2218,6 +2244,8 @@ const todayISO = new Date().toISOString().slice(0, 10);
           return;
         }
       }
+      const buildOptionsError = normalizeBuildOptionsForSubmit();
+      if (buildOptionsError) { showMsg(buildOptionsError, 'error'); return; }
 
       const draftBtn = document.getElementById('save-draft-btn');
       const pubBtn = document.getElementById('publish-btn');

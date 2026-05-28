@@ -210,6 +210,9 @@ function buildScheduleAForProductDrivenV1(ctx: ScheduleAContext): ScheduleA {
   };
 
   const productVars = config?.product_vars || {};
+  const managedSites = ctx.managedSites && ctx.managedSites.length > 0
+    ? ctx.managedSites
+    : (Array.isArray(config?.managed_sites) ? config.managed_sites : undefined);
   const composed: ScheduleA = {
     ...base,
     pass_through_items: [],
@@ -224,13 +227,8 @@ function buildScheduleAForProductDrivenV1(ctx: ScheduleAContext): ScheduleA {
       selections: ctx.draftSelections,
       productVars,
       products,
+      managedSites,
     });
-    // Inject managedSites so WM (and any future product that cares)
-    // can render real domain rows on Schedule A instead of falling
-    // back to "(primary domain confirmed at signing)" placeholders.
-    if (ctx.managedSites && ctx.managedSites.length > 0) {
-      (productCtx as any).managedSites = ctx.managedSites;
-    }
     const pricing = product.computePricing(productCtx);
     const contribution = product.buildScheduleAContribution(productCtx, pricing);
 

@@ -2,9 +2,10 @@
 //
 // Encodes business-design-v2 Section 3: three ecosystems (A small, B
 // mid, C large) routed by page count, three tiers (Good / Better /
-// Best) per ecosystem, multi-site formula. Per 05 Section 4, takeover
-// onboarding is per-site at full ecosystem base (NOT the multi-site
-// discount); this is the trap and the unit tests guard it.
+// Best) per ecosystem, multi-site formula. Build-produced sites skip
+// WM onboarding because the Build fee covers standing them up; takeover
+// sites still pay WM onboarding because inheriting prior work is its own
+// activity.
 
 import type {
   ProductDefinition,
@@ -284,6 +285,26 @@ export function computeMultiSiteSum(perSiteBases: number[]): number {
 // pipeline when managedSites carry monthly_override / onboarding_override.
 export type PerSiteBase = { base: number; isOverride: boolean };
 
+type ManagedSiteForPricing = {
+  domain: string;
+  label?: string | null;
+  is_primary?: boolean;
+  page_count?: number | null;
+  monthly_override?: number | null;
+  onboarding_override?: number | null;
+};
+
+function selectedBuildOption(args: {
+  allProductVars?: Record<string, any>;
+  selections?: Record<string, any>;
+}): any | null {
+  const productVars = args.allProductVars || {};
+  const buildOptionsArr = productVars['build']?.build_options;
+  const pickedBuildOptionId = args.selections?.['build_options'];
+  if (!Array.isArray(buildOptionsArr) || !pickedBuildOptionId) return null;
+  return buildOptionsArr.find((o: any) => o && o.id === pickedBuildOptionId) || null;
+}
+
 export function computeMultiSiteSumWithOverrides(perSite: PerSiteBase[]): number {
   if (perSite.length === 0) return 0;
   let sum = 0;
@@ -388,11 +409,7 @@ export function applyBuildOptionSiteModifications<
   allProductVars?: Record<string, any>;
   selections?: Record<string, any>;
 }): S[] {
-  const productVars = args.allProductVars || {};
-  const buildOptionsArr = productVars['build']?.build_options;
-  const pickedBuildOptionId = args.selections?.['build_options'];
-  if (!Array.isArray(buildOptionsArr) || !pickedBuildOptionId) return args.managedSites;
-  const pickedOption = buildOptionsArr.find((o: any) => o && o.id === pickedBuildOptionId);
+  const pickedOption = selectedBuildOption(args);
   if (!pickedOption || !Array.isArray(pickedOption.wm_site_modifications)) return args.managedSites;
   const modMap: Record<string, number> = {};
   for (const mod of pickedOption.wm_site_modifications) {
@@ -405,6 +422,87 @@ export function applyBuildOptionSiteModifications<
     const key = s.domain.toLowerCase();
     return modMap[key] != null ? { ...s, page_count: modMap[key] } : s;
   });
+}
+
+// Apply the full BuildOption -> WM structural change. Modifications
+// re-route existing sites. Added build sites become managed sites for
+// pricing at the buyer's selected WM tier, but carry onboarding_override
+// = 0 because the build fee replaces WM onboarding for the site it
+// produces. This is the proposal-wide source of truth used by both WM
+// pricing and Schedule A.
+export function applyBuildOptionManagedSiteChanges<
+  S extends ManagedSiteForPricing
+>(args: {
+  managedSites: S[];
+  allProductVars?: Record<string, any>;
+  selections?: Record<string, any>;
+}): S[] {
+  const pickedOption = selectedBuildOption(args);
+  if (!pickedOption) return args.managedSites;
+
+  const withMods = applyBuildOptionSiteModifications({
+    managedSites: args.managedSites,
+    allProductVars: args.allProductVars,
+    selections: args.selections,
+  });
+
+  const added = Array.isArray(pickedOption.wm_sites_added)
+    ? pickedOption.wm_sites_added
+    : [];
+  const validAdded = added.filter((site: any) =>
+    site
+    && (typeof site.domain === 'string' || typeof site.label === 'string')
+    && typeof site.page_count_estimate === 'number'
+    && Number.isFinite(site.page_count_estimate)
+  );
+  if (validAdded.length === 0) return withMods;
+
+  const next: S[] = withMods === args.managedSites ? [...args.managedSites] : [...withMods];
+  const existingDomains = new Set(
+    next
+      .map(s => (s.domain || '').trim().toLowerCase())
+      .filter(Boolean)
+  );
+  for (const site of validAdded) {
+    const domain = typeof site.domain === 'string' ? site.domain.trim().toLowerCase() : '';
+    if (domain && existingDomains.has(domain)) continue;
+    if (domain) existingDomains.add(domain);
+    const label = typeof site.label === 'string' && site.label.trim()
+      ? site.label.trim()
+      : null;
+    const isFirstSite = next.length === 0;
+    next.push({
+      domain: domain || '(domain confirmed at signing)',
+      label,
+      is_primary: isFirstSite,
+      page_count: site.page_count_estimate,
+      monthly_override: null,
+      onboarding_override: 0,
+    } as S);
+  }
+  return next;
+}
+
+function baseManagedSitesForBuildOption(args: ProductContext): ManagedSiteForPricing[] {
+  if (args.managedSites && args.managedSites.length > 0) return args.managedSites;
+  const pickedOption = selectedBuildOption({
+    allProductVars: args.allProductVars,
+    selections: args.selections,
+  });
+  const hasStructuralWmPayload = pickedOption && (
+    (Array.isArray(pickedOption.wm_sites_added) && pickedOption.wm_sites_added.length > 0)
+    || (Array.isArray(pickedOption.wm_site_modifications) && pickedOption.wm_site_modifications.length > 0)
+  );
+  if (!hasStructuralWmPayload) return [];
+  const sites = numberFromVar(args.variables.site_count, 1);
+  return Array.from({ length: Math.max(1, sites) }, (_, i) => ({
+    domain: i === 0 ? '(primary domain confirmed at signing)' : `(additional site ${i + 1} domain confirmed at signing)`,
+    label: null,
+    is_primary: i === 0,
+    page_count: null,
+    monthly_override: null,
+    onboarding_override: null,
+  }));
 }
 
 // =========================================================================
@@ -645,15 +743,15 @@ export const webManagementProduct: ProductDefinition = {
     let monthly: number;
     let onb: number;
     let sitesCount: number;
-    // Apply BuildOption modifications first so the WM monthly/onboarding
-    // line reflects the post-option page counts (matches Schedule A).
-    const modifiedManagedSites = ctx.managedSites && ctx.managedSites.length > 0
-      ? applyBuildOptionSiteModifications({
-          managedSites: ctx.managedSites,
-          allProductVars: ctx.allProductVars,
-          selections: ctx.selections,
-        })
-      : ctx.managedSites;
+    // Apply BuildOption structural changes first so the WM monthly /
+    // onboarding line reflects the buyer's selected build shape at the
+    // buyer's selected WM tier. Build-produced sites are included here
+    // with onboarding_override = 0.
+    const modifiedManagedSites = applyBuildOptionManagedSiteChanges({
+      managedSites: baseManagedSitesForBuildOption(ctx),
+      allProductVars: ctx.allProductVars,
+      selections: ctx.selections,
+    });
     const hasPerSiteData = modifiedManagedSites && modifiedManagedSites.length > 0
       && modifiedManagedSites.some(s => s.page_count != null);
     if (hasPerSiteData) {
@@ -707,18 +805,17 @@ export const webManagementProduct: ProductDefinition = {
     };
     let siteRows: SiteRow[];
     let sites: number;
-    if (ctx.managedSites && ctx.managedSites.length > 0) {
-      // Apply BuildOption wm_site_modifications BEFORE pricing so any
-      // changes to existing site page counts re-route the site's
-      // ecosystem in the Schedule A render. WM monthly/onboarding line
-      // (in computePricing) and Schedule A both call the same helper,
-      // so the post-option state is the single source of truth.
-      const mutated = applyBuildOptionSiteModifications({
-        managedSites: ctx.managedSites,
-        allProductVars: ctx.allProductVars,
-        selections: ctx.selections,
-      });
-      const sorted = [...mutated].sort((a, b) => {
+    const effectiveManagedSites = applyBuildOptionManagedSiteChanges({
+      managedSites: baseManagedSitesForBuildOption(ctx),
+      allProductVars: ctx.allProductVars,
+      selections: ctx.selections,
+    });
+    if (effectiveManagedSites.length > 0) {
+      // Apply BuildOption structural changes BEFORE pricing so any
+      // option-added build sites and existing-site page-count changes
+      // are rendered from the same effective site list used by WM
+      // computePricing.
+      const sorted = [...effectiveManagedSites].sort((a, b) => {
         if (!!a.is_primary === !!b.is_primary) return a.domain.localeCompare(b.domain);
         return a.is_primary ? -1 : 1;
       });
@@ -770,49 +867,6 @@ export const webManagementProduct: ProductDefinition = {
         };
       });
     }
-    // Cross-product effect from a picked Build option (Raised Bar
-    // pattern). If a build_options pick adds sites via wm_sites_added,
-    // append placeholder rows to the WM Schedule A section so the
-    // executed contract reflects the picked shape. The pricing was
-    // already adjusted via wm_monthly_delta + wm_onboarding_delta at
-    // the dispatcher; here we just surface the rows.
-    try {
-      const productVars = ctx.allProductVars || {};
-      const buildOptionsArr = productVars['build']?.build_options;
-      const pickedBuildOptionId = ctx.selections?.['build_options'];
-      if (Array.isArray(buildOptionsArr) && pickedBuildOptionId) {
-        const pickedOption = buildOptionsArr.find((o: any) => o && o.id === pickedBuildOptionId);
-        if (pickedOption && Array.isArray(pickedOption.wm_sites_added)) {
-          for (const addedSite of pickedOption.wm_sites_added) {
-            if (!addedSite || !addedSite.domain) continue;
-            const pageCount = addedSite.page_count_estimate;
-            const siteEco = pageCount != null
-              ? (routeWebManagementEcosystem(pageCount) || ctx.ecosystemId!)
-              : ctx.ecosystemId!;
-            const siteEcoObj = WM_ECOSYSTEMS[siteEco];
-            const siteTier = siteEcoObj?.tiers[ctx.tierId!];
-            const monthlyBase = siteTier?.monthly || 0;
-            const onbBase = siteTier?.onb || 0;
-            siteRows.push({
-              domain: addedSite.label && addedSite.label !== addedSite.domain
-                ? `${addedSite.label} (${addedSite.domain})`
-                : addedSite.domain,
-              description: `added when prospect picked "${pickedOption.name}"`,
-              ecosystem: siteEco,
-              monthly_contribution: Math.round(monthlyBase * MULTI_SITE_DISCOUNT * 100) / 100,
-              onboarding_contribution: Math.round(onbBase * MULTI_SITE_DISCOUNT * 100) / 100,
-              is_primary: false,
-            });
-            sites++;
-          }
-        }
-      }
-    } catch {
-      // Defensive: cross-product Schedule A augmentation should never
-      // crash WM's own Schedule A build. Skip silently if shape is
-      // wrong.
-    }
-
     return {
       products_purchased: { web_management: true },
       web_management: {

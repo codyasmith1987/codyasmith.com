@@ -6,6 +6,7 @@
 //
 // Wipes:
 //   - proposal_drafts row for the cody-test proposal
+//   - accepted/finalized state on the preserved cody-test proposal row
 //   - client_agreements rows for the cody-test client (cascades to
 //     agreement_signers + agreement_signatures via FK ON DELETE CASCADE)
 //   - client_metadata row for the cody-test client
@@ -45,6 +46,19 @@ export const POST: APIRoute = async ({ locals }) => {
   // Clear proposal_drafts for the cody-test proposal.
   await turso.execute({
     sql: 'DELETE FROM proposal_drafts WHERE client_id = ? AND slug = ?',
+    args: [clientId, PROPOSAL_SLUG],
+  });
+
+  // Keep the proposal row itself, but reset any accepted/finalized state
+  // from a prior rehearsal. Otherwise a fresh Cody Test run can start
+  // from a stale "accepted" proposal even after drafts/agreements were
+  // cleared.
+  await turso.execute({
+    sql: `UPDATE proposals
+             SET status = 'published',
+                 finalized_at = NULL
+           WHERE client_id = ?
+             AND slug = ?`,
     args: [clientId, PROPOSAL_SLUG],
   });
 

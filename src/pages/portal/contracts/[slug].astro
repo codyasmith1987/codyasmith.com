@@ -32,6 +32,9 @@ const isAdmin = user.role === 'admin';
 if (!isAdmin && user.client_id !== agreement.client_id) {
   return Astro.redirect('/portal/dashboard');
 }
+if (!isAdmin && agreement.status === 'draft') {
+  return Astro.redirect('/portal/dashboard');
+}
 
 // Load supporting data.
 const template = await getContractTemplate(agreement.template_slug, agreement.template_version);

@@ -59,6 +59,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
     return json({ error: 'Admin preview mode. The contract must be signed by an authorized signer.' }, 403);
   }
   if (user.client_id !== agreement.client_id) return json({ error: 'Forbidden' }, 403);
+  if (agreement.status === 'draft') return json({ error: 'Agreement has not been issued yet' }, 409);
   if (agreement.status === 'voided') return json({ error: 'Agreement is voided' }, 409);
   if (agreement.status === 'executed') return json({ error: 'Already executed' }, 409);
 

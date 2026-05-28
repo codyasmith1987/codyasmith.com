@@ -73,15 +73,23 @@ export interface Invoice {
 
 export async function generateInvoiceNumber(): Promise<string> {
   const year = new Date().getFullYear();
-  const row = await queryOne(
-    "SELECT COUNT(*) as cnt FROM invoices WHERE invoice_number LIKE ?",
-    [`INV-${year}-%`]
-  );
-  const seq = ((row?.cnt ?? 0) + 1).toString().padStart(4, '0');
+  const result = await turso.execute({
+    sql: 'SELECT invoice_number FROM invoices WHERE invoice_number LIKE ?',
+    args: [`INV-${year}-%`],
+  });
+  let maxSeq = 0;
+  const re = new RegExp(`^INV-${year}-(\\d+)$`);
+  for (const row of result.rows as any[]) {
+    const match = String(row[0] || '').match(re);
+    if (!match) continue;
+    const n = Number.parseInt(match[1], 10);
+    if (Number.isFinite(n) && n > maxSeq) maxSeq = n;
+  }
+  const seq = (maxSeq + 1).toString().padStart(4, '0');
   return `INV-${year}-${seq}`;
 }
 
-export async function createInvoice(data: {
+export interface CreateInvoiceInput {
   contract_id: string;
   client_id: string;
   milestone_id?: string;
@@ -89,7 +97,22 @@ export async function createInvoice(data: {
   due_date?: string;
   notes?: string;
   created_by: string;
-}): Promise<string> {
+}
+
+function isInvoiceNumberCollision(err: any): boolean {
+  const message = String(err?.message || err || '');
+  return /UNIQUE/i.test(message) && /invoice/i.test(message);
+}
+
+function isDatabaseBusy(err: any): boolean {
+  return /SQLITE_BUSY|database is locked/i.test(String(err?.message || err || ''));
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export async function createInvoice(data: CreateInvoiceInput): Promise<string> {
   const id = nanoid();
   await turso.execute({
     sql: `INSERT INTO invoices (id, contract_id, client_id, milestone_id, invoice_number, due_date, notes, created_by)
@@ -101,6 +124,24 @@ export async function createInvoice(data: {
     ],
   });
   return id;
+}
+
+export async function createInvoiceWithGeneratedNumber(
+  data: Omit<CreateInvoiceInput, 'invoice_number'>,
+): Promise<{ id: string; invoice_number: string }> {
+  let lastErr: any;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const invoice_number = await generateInvoiceNumber();
+      const id = await createInvoice({ ...data, invoice_number });
+      return { id, invoice_number };
+    } catch (err: any) {
+      lastErr = err;
+      if (!isInvoiceNumberCollision(err) && !isDatabaseBusy(err)) throw err;
+      await delay(50 * (attempt + 1));
+    }
+  }
+  throw lastErr;
 }
 
 export async function getInvoice(id: string): Promise<Invoice | undefined> {

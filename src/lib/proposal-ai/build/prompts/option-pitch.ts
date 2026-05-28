@@ -5,7 +5,7 @@
 // This drafts the pitch in Cody-voice, with the other option's
 // pitch in scope for contrast so the two cards differentiate.
 
-export const PROMPT_VERSION = 'option-pitch-v1';
+export const PROMPT_VERSION = 'option-pitch-v2';
 
 export const SYSTEM_PROMPT = `You are a research assistant for Cody A Smith LLC. Cody is drafting a short pitch for a Build option that will appear on the prospect's proposal page.
 
@@ -19,6 +19,7 @@ About the practice's voice.
 - No em dashes. No en dashes. Plain hyphens allowed.
 - No outcome overclaim. The pitch describes what the prospect gets, not what it will earn. No "drive conversions", "grow revenue", "win leads", "outrank competitors".
 - Lead with what they get.
+- Treat listed current client sites as already existing. Do not write as if Cody is building the current primary site from scratch unless the option name, overall build description, or admin hint explicitly says redesign, rebuild, expansion, or takeover.
 - Stacked fragments are allowed at moments of weight. "One site. One launch. One thing to manage."
 - Name the trade plainly. The pitch helps the buyer decide; it does not pretend both options are equally easy.
 - Full brand names. Use the actual client name; do not write {client} or any placeholder.
@@ -42,12 +43,25 @@ export interface UserPromptInput {
   build_description?: string | null;
   inferred_industry?: string | null;
   admin_hint?: string | null;
+  current_sites?: Array<{ domain: string; label?: string | null; is_primary?: boolean; is_managed?: boolean; page_count?: number | null }>;
 }
 
 export function buildUserPrompt(input: UserPromptInput): string {
   const lines: string[] = [];
   lines.push(`Primary domain: ${input.domain}`);
   lines.push(`Client name: ${input.client_name}`);
+  if (input.current_sites && input.current_sites.length > 0) {
+    lines.push('Current client sites already known to the portal:');
+    for (const site of input.current_sites.slice(0, 8)) {
+      const flags = [
+        site.is_primary ? 'primary' : null,
+        site.is_managed ? 'managed' : null,
+        site.page_count != null ? `${site.page_count} pages` : null,
+      ].filter(Boolean).join(', ');
+      lines.push(`- ${site.domain}${site.label ? ` (${site.label})` : ''}${flags ? `: ${flags}` : ''}`);
+    }
+    lines.push('These sites already exist. Do not describe them as being built from scratch unless the option explicitly says redesign/rebuild/expansion/takeover.');
+  }
   lines.push(`THIS option name: ${input.option_name}`);
   if (input.other_option_name) {
     lines.push(`Other option name (for contrast): ${input.other_option_name}`);

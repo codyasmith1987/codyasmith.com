@@ -27,6 +27,7 @@ export interface DraftOptionPitchArgs {
   buildDescription?: string | null;
   inferredIndustry?: string | null;
   adminHint?: string | null;
+  currentSites?: Array<{ domain: string; label?: string | null; is_primary?: boolean; is_managed?: boolean; page_count?: number | null }>;
   cacheTtlDays?: number;
 }
 
@@ -66,6 +67,7 @@ export async function draftOptionPitch(
       (args.otherOptionPitch || '').toLowerCase().trim(),
       (args.buildDescription || '').toLowerCase().trim(),
       (args.inferredIndustry || '').toLowerCase(),
+      (args.currentSites || []).map(s => `${s.domain}:${s.is_primary ? 'p' : ''}:${s.is_managed ? 'm' : ''}:${s.page_count ?? ''}`).join(','),
     ].join('|'),
   });
 
@@ -87,6 +89,7 @@ export async function draftOptionPitch(
     build_description: args.buildDescription ?? null,
     inferred_industry: args.inferredIndustry ?? null,
     admin_hint: args.adminHint ?? null,
+    current_sites: args.currentSites ?? [],
   };
   const userPrompt = buildUserPrompt(promptInput);
 

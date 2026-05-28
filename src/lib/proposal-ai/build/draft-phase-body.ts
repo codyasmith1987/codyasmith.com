@@ -24,6 +24,7 @@ export interface DraftPhaseBodyArgs {
   buildDescription?: string | null;
   webManagementInScope?: boolean;
   adminHint?: string | null;
+  currentSites?: Array<{ domain: string; label?: string | null; is_primary?: boolean; is_managed?: boolean; page_count?: number | null }>;
   cacheTtlDays?: number;
 }
 
@@ -61,6 +62,7 @@ export async function draftPhaseBody(
       (args.optionPitch || '').toLowerCase().trim(),
       (args.buildDescription || '').toLowerCase().trim(),
       String(!!args.webManagementInScope),
+      (args.currentSites || []).map(s => `${s.domain}:${s.is_primary ? 'p' : ''}:${s.is_managed ? 'm' : ''}:${s.page_count ?? ''}`).join(','),
     ].join('|'),
   });
 
@@ -84,6 +86,7 @@ export async function draftPhaseBody(
     build_description: args.buildDescription ?? null,
     web_management_in_scope: args.webManagementInScope,
     admin_hint: args.adminHint ?? null,
+    current_sites: args.currentSites ?? [],
   };
   const userPrompt = buildUserPrompt(promptInput);
 

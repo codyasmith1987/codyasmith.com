@@ -35,6 +35,55 @@ const json = (data: any, status = 200) =>
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+function normalizeBuildOptions(productVars: Record<string, any>): string | null {
+  const buildVars = productVars['build'];
+  if (!buildVars || !Array.isArray(buildVars.build_options)) return null;
+  for (const opt of buildVars.build_options) {
+    if (!opt || typeof opt !== 'object') continue;
+    delete opt.wm_monthly_delta;
+    delete opt.wm_onboarding_delta;
+
+    const optionName = typeof opt.name === 'string' && opt.name.trim()
+      ? opt.name.trim()
+      : 'A build option';
+
+    const cleanedSites: Array<{ domain: string; label: string; page_count_estimate: number }> = [];
+    const rawSites = Array.isArray(opt.wm_sites_added) ? opt.wm_sites_added : [];
+    for (const site of rawSites) {
+      const domain = typeof site?.domain === 'string' ? site.domain.trim().toLowerCase() : '';
+      const label = typeof site?.label === 'string' ? site.label.trim() : '';
+      const pages = typeof site?.page_count_estimate === 'number' && Number.isFinite(site.page_count_estimate)
+        ? site.page_count_estimate
+        : null;
+      const hasAny = !!domain || !!label || pages !== null;
+      if (!hasAny) continue;
+      if (pages === null || pages < 1) {
+        return `${optionName} has a new site without a page estimate.`;
+      }
+      cleanedSites.push({ domain, label, page_count_estimate: pages });
+    }
+    opt.wm_sites_added = cleanedSites;
+
+    const cleanedMods: Array<{ site_domain: string; new_page_count: number; note?: string }> = [];
+    const rawMods = Array.isArray(opt.wm_site_modifications) ? opt.wm_site_modifications : [];
+    for (const mod of rawMods) {
+      const siteDomain = typeof mod?.site_domain === 'string' ? mod.site_domain.trim().toLowerCase() : '';
+      const pages = typeof mod?.new_page_count === 'number' && Number.isFinite(mod.new_page_count)
+        ? mod.new_page_count
+        : null;
+      const note = typeof mod?.note === 'string' ? mod.note.trim() : '';
+      const hasAny = !!siteDomain || pages !== null || !!note;
+      if (!hasAny) continue;
+      if (!siteDomain || pages === null || pages < 1) {
+        return `${optionName} has an existing-site change without both site and new page count.`;
+      }
+      cleanedMods.push({ site_domain: siteDomain, new_page_count: pages, note });
+    }
+    opt.wm_site_modifications = cleanedMods;
+  }
+  return null;
+}
+
 export const POST: APIRoute = async ({ locals, request }) => {
   if (locals.user?.role !== 'admin') return json({ error: 'Forbidden' }, 403);
 
@@ -75,6 +124,8 @@ export const POST: APIRoute = async ({ locals, request }) => {
       return json({ error: 'At least one product is required' }, 400);
     }
     const product_vars = (c.product_vars && typeof c.product_vars === 'object') ? c.product_vars : {};
+    const buildOptionError = normalizeBuildOptions(product_vars);
+    if (buildOptionError) return json({ error: buildOptionError }, 400);
     const narrative_variables = (c.narrative_variables && typeof c.narrative_variables === 'object') ? c.narrative_variables : {};
     const rawSigners = Array.isArray(c.signers) ? c.signers : [];
     if (rawSigners.length === 0) {

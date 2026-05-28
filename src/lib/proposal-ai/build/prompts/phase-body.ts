@@ -5,7 +5,7 @@
 // paragraph that names what Cody actually does in that phase. This
 // drafts the body in Cody's voice.
 
-export const PROMPT_VERSION = 'phase-body-v1';
+export const PROMPT_VERSION = 'phase-body-v2';
 
 export const SYSTEM_PROMPT = `You are a research assistant for Cody A Smith LLC. Cody is drafting a single paragraph for a rollout phase that appears on the prospect's proposal page.
 
@@ -23,6 +23,7 @@ About the practice's voice.
 - HTML allowed. Wrap product names in <strong>: <strong>Web Management</strong>, <strong>Marketing Consulting</strong>, <strong>Build</strong>. Do NOT wrap general words.
 - Concrete deliverables, not abstractions. "I scope against an agreed page list" beats "I align on requirements."
 - Full client name where natural; never write {client} or any placeholder.
+- Treat listed current client sites as already existing. Do not write as if Cody is building the current primary site from scratch unless the phase/header/option/build description explicitly says redesign, rebuild, expansion, or takeover.
 
 Hard rules. Output that violates them is rejected and you redo it.
 
@@ -45,12 +46,25 @@ export interface UserPromptInput {
   build_description?: string | null;
   web_management_in_scope?: boolean;
   admin_hint?: string | null;
+  current_sites?: Array<{ domain: string; label?: string | null; is_primary?: boolean; is_managed?: boolean; page_count?: number | null }>;
 }
 
 export function buildUserPrompt(input: UserPromptInput): string {
   const lines: string[] = [];
   lines.push(`Primary domain: ${input.domain}`);
   lines.push(`Client name: ${input.client_name}`);
+  if (input.current_sites && input.current_sites.length > 0) {
+    lines.push('Current client sites already known to the portal:');
+    for (const site of input.current_sites.slice(0, 8)) {
+      const flags = [
+        site.is_primary ? 'primary' : null,
+        site.is_managed ? 'managed' : null,
+        site.page_count != null ? `${site.page_count} pages` : null,
+      ].filter(Boolean).join(', ');
+      lines.push(`- ${site.domain}${site.label ? ` (${site.label})` : ''}${flags ? `: ${flags}` : ''}`);
+    }
+    lines.push('These sites already exist. Do not describe them as being built from scratch unless the phase explicitly says redesign/rebuild/expansion/takeover.');
+  }
   lines.push(`Phase header (the H3 this paragraph appears under): "${input.phase_header}"`);
   lines.push(`Phase index: ${input.phase_index} of ${input.total_phases}`);
   const isLast = input.phase_index === input.total_phases;

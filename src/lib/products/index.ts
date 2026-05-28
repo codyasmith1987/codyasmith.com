@@ -831,11 +831,11 @@ export function composePricing(args: {
     }
   }
 
-  // Cross-product effects from a picked Build option. The Raised Bar
-  // pattern: Option 2 ("split setup") adds a managed site, which
-  // bumps WM monthly + onboarding. The option carries pre-computed
-  // wm_monthly_delta + wm_onboarding_delta so the dispatcher just
-  // adds them — no multi-site recomputation at pick time.
+  // Legacy cross-product effects from pre-2026-05-28 Build options.
+  // New Build options carry structural wm_sites_added /
+  // wm_site_modifications, and Web Management prices those from the
+  // buyer's selected wm_tier. Only apply static deltas for old saved
+  // configs that have no structural WM payload at all.
   const buildVars = productVars['build'];
   const buildOptionsArr = buildVars && Array.isArray(buildVars.build_options)
     ? buildVars.build_options
@@ -844,20 +844,27 @@ export function composePricing(args: {
   if (pickedBuildOptionId && buildOptionsArr.length >= 2 && products.includes('web-management')) {
     const pickedOption = buildOptionsArr.find((o: any) => o && o.id === pickedBuildOptionId);
     if (pickedOption) {
-      if (typeof pickedOption.wm_monthly_delta === 'number' && pickedOption.wm_monthly_delta !== 0) {
-        monthly += pickedOption.wm_monthly_delta;
-        mgmtMonthly += pickedOption.wm_monthly_delta;
-        breakdown.push({
-          label: `Web Management adjustment (${pickedOption.name})`,
-          amount: pickedOption.wm_monthly_delta,
-        });
-      }
-      if (typeof pickedOption.wm_onboarding_delta === 'number' && pickedOption.wm_onboarding_delta !== 0) {
-        oneTime += pickedOption.wm_onboarding_delta;
-        breakdown.push({
-          label: `Web Management onboarding adjustment (${pickedOption.name})`,
-          amount: pickedOption.wm_onboarding_delta,
-        });
+      const hasStructuralWmPayload =
+        (Array.isArray(pickedOption.wm_sites_added) && pickedOption.wm_sites_added.length > 0)
+        || (Array.isArray(pickedOption.wm_site_modifications) && pickedOption.wm_site_modifications.length > 0);
+      if (hasStructuralWmPayload) {
+        // Already handled inside web-management.computePricing().
+      } else {
+        if (typeof pickedOption.wm_monthly_delta === 'number' && pickedOption.wm_monthly_delta !== 0) {
+          monthly += pickedOption.wm_monthly_delta;
+          mgmtMonthly += pickedOption.wm_monthly_delta;
+          breakdown.push({
+            label: `Web Management adjustment (${pickedOption.name})`,
+            amount: pickedOption.wm_monthly_delta,
+          });
+        }
+        if (typeof pickedOption.wm_onboarding_delta === 'number' && pickedOption.wm_onboarding_delta !== 0) {
+          oneTime += pickedOption.wm_onboarding_delta;
+          breakdown.push({
+            label: `Web Management onboarding adjustment (${pickedOption.name})`,
+            amount: pickedOption.wm_onboarding_delta,
+          });
+        }
       }
     }
   }

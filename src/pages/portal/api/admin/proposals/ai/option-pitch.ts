@@ -16,6 +16,7 @@ import { logger } from '../../../../../../lib/logger';
 import { createProposalGeminiClient, DEFAULT_MODEL } from '../../../../../../lib/proposal-ai/gemini-client';
 import { createProposalCacheClient } from '../../../../../../lib/proposal-ai/cache';
 import { draftOptionPitch } from '../../../../../../lib/proposal-ai/build/draft-option-pitch';
+import { listClientSites } from '../../../../../../lib/client-sites';
 
 export const prerender = false;
 
@@ -51,6 +52,19 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const storedDomain = r[2] ? String(r[2]).trim().toLowerCase() : '';
   const domain = storedDomain || `${clientSlug}.com`;
 
+  let currentSites: Array<{ domain: string; label: string | null; is_primary: boolean; is_managed: boolean; page_count: number | null }> = [];
+  try {
+    currentSites = (await listClientSites(clientId)).map(s => ({
+      domain: s.domain,
+      label: s.label,
+      is_primary: s.is_primary,
+      is_managed: s.is_managed,
+      page_count: s.page_count,
+    }));
+  } catch (err) {
+    logger.warn('option-pitch: failed to load current sites', err);
+  }
+
   const geminiKey = (import.meta.env.GEMINI_API_KEY as string | undefined) || '';
   if (!geminiKey) {
     logger.error('option-pitch: GEMINI_API_KEY missing');
@@ -68,6 +82,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
         buildDescription,
         inferredIndustry,
         adminHint,
+        currentSites,
       },
       {
         gemini: createProposalGeminiClient(geminiKey, DEFAULT_MODEL),

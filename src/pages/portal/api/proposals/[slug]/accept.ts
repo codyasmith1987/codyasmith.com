@@ -48,6 +48,16 @@ import {
   type ProposalSigner,
 } from '../../../../../lib/proposal-drafts';
 import { computePricing, type PricingResult } from '../../../../../lib/proposal-pricing';
+import {
+  addSigner,
+  createAgreement,
+  getAgreement,
+  getSignersForAgreement,
+  type ClientAgreement,
+} from '../../../../../lib/agreements';
+import { getLatestContractTemplate } from '../../../../../lib/contract-templates';
+import { buildScheduleA } from '../../../../../lib/contract-schedule';
+import { listManagedSites } from '../../../../../lib/client-sites';
 import turso from '../../../../../lib/turso';
 
 export const prerender = false;
@@ -97,6 +107,162 @@ async function authorize(user: any, slug: string): Promise<{ ok: boolean; propos
   if (user.role === 'admin') return { ok: true, proposal };
   if (user.client_id === proposal.client_id) return { ok: true, proposal };
   return { ok: false, proposal: null };
+}
+
+function normalizeSlug(input: string): string {
+  const cleaned = input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-{2,}/g, '-');
+  return cleaned || 'agreement';
+}
+
+function slugWithSuffix(base: string, suffix: string): string {
+  const maxBaseLength = Math.max(1, 64 - suffix.length);
+  return `${base.slice(0, maxBaseLength).replace(/-+$/g, '')}${suffix}`;
+}
+
+async function nextAgreementSlug(baseInput: string): Promise<string> {
+  const base = normalizeSlug(baseInput);
+  for (let i = 0; i < 100; i++) {
+    const suffix = i === 0 ? '' : `-${i + 1}`;
+    const candidate = slugWithSuffix(base, suffix);
+    const existing = await turso.execute({
+      sql: 'SELECT id FROM client_agreements WHERE slug = ? LIMIT 1',
+      args: [candidate],
+    });
+    if (existing.rows.length === 0) return candidate;
+  }
+  throw new Error(`Unable to allocate agreement slug for ${baseInput}`);
+}
+
+async function getClientName(clientId: string): Promise<string> {
+  const result = await turso.execute({
+    sql: 'SELECT name FROM clients WHERE id = ? LIMIT 1',
+    args: [clientId],
+  });
+  return String(result.rows[0]?.[0] || 'Client');
+}
+
+async function findActiveAgreementForProposal(proposalId: string): Promise<ClientAgreement | null> {
+  const result = await turso.execute({
+    sql: `SELECT id
+            FROM client_agreements
+           WHERE proposal_id = ?
+             AND status NOT IN ('voided', 'revoked')
+           ORDER BY created_at DESC
+           LIMIT 1`,
+    args: [proposalId],
+  });
+  const id = result.rows[0]?.[0] as string | undefined;
+  return id ? getAgreement(id) : null;
+}
+
+async function hasIssuedAgreementForProposal(proposalId: string): Promise<boolean> {
+  const result = await turso.execute({
+    sql: `SELECT id
+            FROM client_agreements
+           WHERE proposal_id = ?
+             AND status IN ('issued', 'partially_signed', 'executed')
+           LIMIT 1`,
+    args: [proposalId],
+  });
+  return result.rows.length > 0;
+}
+
+async function voidDraftAgreementsForProposal(proposalId: string): Promise<void> {
+  await turso.execute({
+    sql: `UPDATE client_agreements
+             SET status = 'voided',
+                 cancelled_at = datetime('now')
+           WHERE proposal_id = ?
+             AND status = 'draft'`,
+    args: [proposalId],
+  });
+}
+
+async function resolveUserIdForSigner(email: string, clientId: string): Promise<string | null> {
+  const result = await turso.execute({
+    sql: `SELECT id FROM users WHERE lower(email) = lower(?) AND client_id = ? LIMIT 1`,
+    args: [email, clientId],
+  });
+  return (result.rows[0]?.[0] as string | undefined) ?? null;
+}
+
+async function ensureDraftAgreementForAcceptedProposal(
+  proposal: ProposalRow,
+  draft: ProposalDraft,
+  pricing: PricingResult | null,
+  createdBy: string,
+): Promise<ClientAgreement> {
+  const existing = await findActiveAgreementForProposal(proposal.id);
+  if (existing) {
+    await ensureAgreementSigners(existing.id, proposal);
+    return existing;
+  }
+
+  const template = await getLatestContractTemplate('standard');
+  if (!template) throw new Error('Standard contract template not found');
+
+  const clientName = await getClientName(proposal.client_id);
+  const managedSites = (await listManagedSites(proposal.client_id)).map(s => ({
+    domain: s.domain,
+    label: s.label,
+    is_primary: s.is_primary,
+    page_count: s.page_count,
+    monthly_override: s.monthly_override,
+    onboarding_override: s.onboarding_override,
+  }));
+  const billingAnchorDay = 1;
+  const scheduleA = buildScheduleA({
+    proposalConfig: proposal.config,
+    draftSelections: draft.selections,
+    pricing,
+    clientMetadata: {},
+    effectiveDate: new Date().toISOString().slice(0, 10),
+    managedSites,
+    billingAnchorDay,
+  });
+
+  const agreement = await createAgreement({
+    slug: await nextAgreementSlug(`${proposal.slug}-msa`),
+    client_id: proposal.client_id,
+    proposal_id: proposal.id,
+    template_slug: template.slug,
+    template_version: template.version,
+    title: `Master Services Agreement - ${clientName}`,
+    schedule_a: scheduleA,
+    personal_note: null,
+    created_by: createdBy,
+    billing_anchor_day: billingAnchorDay,
+  });
+
+  await ensureAgreementSigners(agreement.id, proposal);
+
+  return agreement;
+}
+
+async function ensureAgreementSigners(agreementId: string, proposal: ProposalRow): Promise<void> {
+  const existing = await getSignersForAgreement(agreementId);
+  const existingEmails = new Set(existing.map(s => s.email_snapshot.toLowerCase()));
+  const signers = Array.isArray(proposal.config?.signers) ? proposal.config.signers : [];
+  for (let i = 0; i < signers.length; i++) {
+    const s = signers[i] || {};
+    const email = String(s.email || '').trim().toLowerCase();
+    const name = String(s.name || '').trim();
+    if (!email || !name) continue;
+    if (existingEmails.has(email)) continue;
+    await addSigner({
+      agreement_id: agreementId,
+      user_id: await resolveUserIdForSigner(email, proposal.client_id),
+      signer_role: String(s.role || (i === 0 ? 'client_primary' : 'client_secondary')).slice(0, 40),
+      name_snapshot: name.slice(0, 200),
+      email_snapshot: email.slice(0, 200),
+      order_index: i,
+    });
+    existingEmails.add(email);
+  }
 }
 
 // Trim the draft to only the public-safe fields. Legacy field names
@@ -354,6 +520,12 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
     signaturePatch[signer.id] = null;
   }
 
+  if (isRevoke && existingDraft?.finalized_at && await hasIssuedAgreementForProposal(proposal.id)) {
+    return json({
+      error: 'An agreement has already been issued for this accepted proposal. Contact Cody to revise the agreement instead of revoking the LOI.',
+    }, 409);
+  }
+
   // Detect selection changes so we can notify any partner who has
   // already signed. Signatures are NOT cleared automatically; the
   // partner stays on the hook and gets an email letting them know
@@ -381,6 +553,11 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
   // or re-accept.
   if (isRevoke && existingDraft?.finalized_at) {
     await unmarkFinalized(proposal.client_id, slug);
+    await voidDraftAgreementsForProposal(proposal.id);
+    await turso.execute({
+      sql: `UPDATE proposals SET finalized_at = NULL, status = 'published' WHERE id = ?`,
+      args: [proposal.id],
+    });
     draft = { ...draft, finalized_at: null };
   }
 
@@ -406,6 +583,13 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
 
     const oneTime = pricing?.oneTime ?? 0;
     const monthly = pricing?.monthly ?? 0;
+    let agreement: ClientAgreement;
+    try {
+      agreement = await ensureDraftAgreementForAcceptedProposal(proposal, draft, pricing, user.id);
+    } catch (err) {
+      logger.error('accepted proposal agreement preparation failed', err);
+      return json({ error: 'Proposal accepted, but the agreement could not be prepared. Please try again.' }, 500);
+    }
 
     // Activity log. Mirror the legacy summary so historical scans
     // looking for "Raised Bar accepted:" continue to find the row.
@@ -435,7 +619,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
         const codyHtml = `
           <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 22px; color: #1a1814; line-height: 1.55;">
             <h2 style="font-size: 22px; margin: 0 0 16px;">LOI accepted: ${escapeHtml(proposal.title)}</h2>
-            <p style="font-size: 14px; color: #4a4239; margin: 0 0 16px;">Both signers have accepted the Letter of Intent. <strong>Next step</strong>: schedule the call within 24 hours, then issue the master agreement at <a href="https://codyasmith.com/portal/admin/agreements/new?proposal=${escapeHtml(proposal.id)}" style="color: #c47d5a;">/portal/admin/agreements/new</a>.</p>
+            <p style="font-size: 14px; color: #4a4239; margin: 0 0 16px;">Both signers have accepted the Letter of Intent. <strong>Next step</strong>: schedule the call within 24 hours, review the prepared draft agreement, then issue it at <a href="https://codyasmith.com/portal/admin/agreements/${escapeHtml(agreement.id)}" style="color: #c47d5a;">/portal/admin/agreements/${escapeHtml(agreement.id)}</a>.</p>
             <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">
               <tr><td style="padding: 6px 0; color: #6b6359;">Web Management</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(pricing?.mgmtTierName || '?')}</td></tr>
               <tr><td style="padding: 6px 0; color: #6b6359;">Site setup</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(pricing?.siteSetupLongLabel || '?')}</td></tr>

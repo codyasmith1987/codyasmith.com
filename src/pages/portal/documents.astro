@@ -21,15 +21,17 @@ let proposals: Array<{ slug: string; title: string; finalized_at: string | null;
 
 if (clientId) {
   const list = await listAgreementsForClient(clientId);
-  agreements = list.map(a => ({
-    slug: a.slug,
-    title: a.title,
-    status: a.status,
-    finalized_at: a.finalized_at,
-    issued_at: a.issued_at,
-    created_at: a.created_at,
-    pdf_file_id: a.pdf_file_id,
-  }));
+  agreements = list
+    .filter(a => ['issued', 'partially_signed', 'executed'].includes(a.status))
+    .map(a => ({
+      slug: a.slug,
+      title: a.title,
+      status: a.status,
+      finalized_at: a.finalized_at,
+      issued_at: a.issued_at,
+      created_at: a.created_at,
+      pdf_file_id: a.pdf_file_id,
+    }));
   const proposalsResult = await turso.execute({
     sql: `SELECT slug, title, finalized_at, status FROM proposals WHERE client_id = ? AND finalized_at IS NOT NULL ORDER BY finalized_at DESC`,
     args: [clientId],

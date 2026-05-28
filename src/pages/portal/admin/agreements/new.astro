@@ -20,6 +20,12 @@ const proposalsResult = await turso.execute(`
   FROM proposals p
   JOIN clients c ON c.id = p.client_id
   WHERE p.finalized_at IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1
+      FROM client_agreements a
+      WHERE a.proposal_id = p.id
+        AND a.status NOT IN ('voided', 'revoked')
+    )
   ORDER BY p.finalized_at DESC
 `);
 const proposals = (proposalsResult.rows as any[]).map(r => {

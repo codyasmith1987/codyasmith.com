@@ -45,7 +45,11 @@ const clientById: Record<string, string> = {};
 for (const row of clientRows.rows as any[]) clientById[row[0]] = row[1];
 
 // Available proposals to issue from (finalized, not already issued).
-const existingProposalIds = new Set(agreements.filter(a => a.proposal_id).map(a => a.proposal_id));
+const existingProposalIds = new Set(
+  agreements
+    .filter(a => a.proposal_id && a.status !== 'voided' && a.status !== 'revoked')
+    .map(a => a.proposal_id),
+);
 const proposalsResult = await turso.execute(`
   SELECT id, slug, title, client_id, finalized_at
   FROM proposals

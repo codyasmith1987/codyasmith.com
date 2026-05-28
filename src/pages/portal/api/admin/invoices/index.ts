@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import {
-  createInvoice, generateInvoiceNumber, getInvoicesByClient, getInvoicesByContract,
+  createInvoiceWithGeneratedNumber, getInvoicesByClient, getInvoicesByContract,
 } from '../../../../../lib/invoices';
 import { logActivity } from '../../../../../lib/activity';
 import { logger } from '../../../../../lib/logger';
@@ -36,12 +36,10 @@ export const POST: APIRoute = async ({ locals, request }) => {
       return json({ error: 'contract_id and client_id are required' }, 400);
     }
 
-    const invoiceNumber = await generateInvoiceNumber();
-    const id = await createInvoice({
+    const { id, invoice_number: invoiceNumber } = await createInvoiceWithGeneratedNumber({
       contract_id: contract_id.trim(),
       client_id: client_id.trim(),
       milestone_id: milestone_id || undefined,
-      invoice_number: invoiceNumber,
       due_date: due_date || undefined,
       notes: notes?.trim() || undefined,
       created_by: locals.user!.id,

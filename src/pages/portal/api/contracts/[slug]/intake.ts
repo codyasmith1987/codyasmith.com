@@ -101,6 +101,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
         clientMetadata: metadata,
         effectiveDate: agreement.schedule_a?.effective_date || new Date().toISOString().slice(0, 10),
         managedSites,
+        billingAnchorDay: agreement.billing_anchor_day,
       });
       await updateAgreementScheduleA(agreement.id, newScheduleA);
       scheduleARebuilt = true;

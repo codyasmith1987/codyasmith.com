@@ -3,7 +3,7 @@
 import { nanoid } from 'nanoid';
 import turso from './turso';
 import { getAllContracts, getContract, type Contract } from './contracts';
-import { createInvoice, generateInvoiceNumber, addInvoiceItem, getInvoice, updateInvoice } from './invoices';
+import { createInvoiceWithGeneratedNumber, addInvoiceItem, getInvoice, updateInvoice } from './invoices';
 import { createNotification } from './notifications';
 import { getUsersByClientId } from './auth';
 import { logger } from './logger';
@@ -183,15 +183,15 @@ export async function generateInvoiceForContract(contract: Contract, createdBy: 
     return null;
   }
 
-  // Generate the invoice
-  const invoiceNumber = await generateInvoiceNumber();
+  // Generate the invoice with a collision-safe invoice number. Manual
+  // invoice creation uses the same helper, so recurring and ad hoc
+  // invoices share one numbering contract.
   const dueDate = new Date();
   dueDate.setDate(dueDate.getDate() + (contract.payment_terms_days ?? 30));
 
-  const invoiceId = await createInvoice({
+  const { id: invoiceId } = await createInvoiceWithGeneratedNumber({
     contract_id: contract.id,
     client_id: contract.client_id,
-    invoice_number: invoiceNumber,
     due_date: dueDate.toISOString().split('T')[0],
     created_by: createdBy,
   });

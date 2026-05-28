@@ -406,19 +406,23 @@ const todayISO = new Date().toISOString().slice(0, 10);
         "A new microsite for {client}",
         "A redesign of {client}'s existing site",
       ],
-      option_name: [
-        "Option 1: Single unified site",
-        "Option 2: Split setup",
-        "Option 1: One bigger site with a focused section inside",
-        "Option 2: Two sites, primary plus standalone microsite",
-        "Option 1: Brand-led primary site",
-        "Option 2: Sub-brand microsite on its own URL",
-        "Option 1: Build out the current site",
-        "Option 2: Build a new microsite alongside",
-        "Option 1: Expand the existing site",
-        "Option 2: Add a standalone site",
-        "Option 1: Keep one site and add the new content",
-        "Option 2: Split into two sites for better focus",
+      option_name_unified: [
+        "Single unified site",
+        "One bigger site with a focused section inside",
+        "Brand-led primary site",
+        "Build out the current site",
+        "Expand the existing site",
+        "Keep one site and add the new content",
+        "New site with a focused pre-sell section",
+      ],
+      option_name_split: [
+        "Split setup",
+        "Two sites, primary plus standalone microsite",
+        "Sub-brand microsite on its own URL",
+        "Build a new microsite alongside",
+        "Add a standalone site",
+        "Split into two sites for better focus",
+        "Main site plus standalone pre-sell microsite",
       ],
       option_pitch: [
         "One site with a focused section for the pre-sell.",
@@ -592,7 +596,9 @@ const todayISO = new Date().toISOString().slice(0, 10);
     // Attach a standard-options dropdown above an existing text input
     // or textarea. On pick, populate the input with the template (with
     // known placeholders substituted), dispatch an input event so any
-    // existing listener runs, then reset the dropdown to blank.
+    // existing listener runs, and keep the picked template visible in
+    // the dropdown. If the admin types manually afterward, the dropdown
+    // returns to the blank helper prompt.
     function attachStandardDropdown(input, optionsKey) {
       const options = STANDARD_OPTIONS[optionsKey];
       if (!Array.isArray(options) || options.length === 0) return;
@@ -608,6 +614,12 @@ const todayISO = new Date().toISOString().slice(0, 10);
         o.textContent = tpl.length > 90 ? tpl.slice(0, 87) + '…' : tpl;
         select.appendChild(o);
       }
+      let lastApplied = '';
+      input.addEventListener('input', () => {
+        if (lastApplied && input.value === lastApplied) return;
+        lastApplied = '';
+        select.value = '';
+      });
       select.addEventListener('change', () => {
         if (!select.value) return;
         let text = select.value;
@@ -616,8 +628,8 @@ const todayISO = new Date().toISOString().slice(0, 10);
           if (v) text = text.split('{' + k + '}').join(v);
         }
         input.value = text;
+        lastApplied = text;
         input.dispatchEvent(new Event('input', { bubbles: true }));
-        select.value = '';
       });
       if (input.parentNode) input.parentNode.insertBefore(select, input);
     }
@@ -1220,9 +1232,14 @@ const todayISO = new Date().toISOString().slice(0, 10);
         const opts = Array.isArray(state.product_vars[productId].build_options)
           ? state.product_vars[productId].build_options
           : [];
+        const nextIndex = opts.length;
         opts.push({
-          id: 'opt' + (opts.length + 1),
-          name: `Option ${opts.length + 1}: `,
+          id: 'opt' + (nextIndex + 1),
+          name: nextIndex === 0
+            ? 'Single unified site'
+            : nextIndex === 1
+              ? 'Split setup'
+              : `Build option ${nextIndex + 1}`,
           pitch: '',
           pricing_delta: 0,
           rollout_phases: [],
@@ -1286,10 +1303,10 @@ const todayISO = new Date().toISOString().slice(0, 10);
       nameInput.type = 'text';
       nameInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30';
       nameInput.value = opt.name || '';
-      nameInput.placeholder = 'Option 1: One bigger site';
+      nameInput.placeholder = index === 0 ? 'Single unified site' : 'Standalone microsite';
       nameInput.addEventListener('input', () => { opt.name = nameInput.value; });
       nameWrap.appendChild(nameInput);
-      attachStandardDropdown(nameInput, 'option_name');
+      attachStandardDropdown(nameInput, index === 0 ? 'option_name_unified' : 'option_name_split');
       card.appendChild(nameWrap);
 
       const pitchWrap = document.createElement('div');

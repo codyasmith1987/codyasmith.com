@@ -1167,15 +1167,13 @@ async function run() {
     ],
   });
   const scheduleMonthly = parityScheduleA.web_management?.monthly_total;
-  // Schedule A rounds to whole dollars; composePricing keeps cents.
-  // The fix's goal is that BOTH paths use per-site routing (not that
-  // they're penny-identical). Rounded equality is the real check —
-  // before the fix, composePricing fell back to single-eco and the
-  // gap was hundreds of dollars per month, not a rounding penny.
-  test('composePricing fix: proposal-page WM monthly == Schedule A WM monthly (multi-site, rounded)',
+  // Schedule A and proposal-page pricing must stay penny-identical.
+  // Before the portal-wide audit, Schedule A rounded cents away while
+  // the proposal page kept cents from the multi-site formula.
+  test('composePricing fix: proposal-page WM monthly == Schedule A WM monthly (multi-site cents)',
     proposalPagePricing &&
     typeof scheduleMonthly === 'number' &&
-    Math.round(proposalPagePricing.monthly) === scheduleMonthly,
+    proposalPagePricing.monthly === scheduleMonthly,
     `proposal=${proposalPagePricing?.monthly} schedule=${scheduleMonthly}`);
   test('composePricing fix: proposal-page total uses per-site routing (not single-eco fallback)',
     proposalPagePricing &&

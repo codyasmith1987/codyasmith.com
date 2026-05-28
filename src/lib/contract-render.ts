@@ -340,7 +340,11 @@ function fmtMoney(v: unknown): string {
   if (v === null || v === undefined || v === '') return PENDING_FIELD_HTML;
   const n = typeof v === 'number' ? v : Number(v);
   if (!Number.isFinite(n)) return PENDING_FIELD_HTML;
-  return `$${Math.round(n).toLocaleString('en-US')}`;
+  const hasCents = Math.round(n * 100) % 100 !== 0;
+  return `$${n.toLocaleString('en-US', {
+    minimumFractionDigits: hasCents ? 2 : 0,
+    maximumFractionDigits: hasCents ? 2 : 0,
+  })}`;
 }
 
 /**

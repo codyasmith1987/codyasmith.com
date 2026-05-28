@@ -40,6 +40,18 @@ const results = [];
 let adminCsrf = '';
 let clientCsrf = '';
 
+function route(path) {
+  return path.replace(/\/(\?|$)/, '$1');
+}
+
+async function clearLoginRateLimits() {
+  const { createClient } = await import('@libsql/client');
+  const db = createClient({ url: 'file:./data/dev2.db' });
+  await db.execute("DELETE FROM portal_rate_limits WHERE key LIKE 'login:%'").catch(err => {
+    if (!/no such table/i.test(String(err?.message || ''))) throw err;
+  });
+}
+
 async function api(method, path, body, session, csrf) {
   const headers = {
     Cookie: `portal_session=${session}`,
@@ -50,7 +62,7 @@ async function api(method, path, body, session, csrf) {
   const opts = { method, headers };
   if (body && method !== 'GET') opts.body = JSON.stringify(body);
 
-  const url = method === 'GET' && body === null ? `${BASE}${path}` : `${BASE}${path}`;
+  const url = `${BASE}${route(path)}`;
   const res = await fetch(url, opts);
   const text = await res.text();
   let json;
@@ -73,6 +85,7 @@ function test(name, pass, detail) {
 }
 
 async function run() {
+  await clearLoginRateLimits();
   console.log('Logging in...');
   ADMIN_SESSION = await login('admin@dev2.test', 'testpass123');
   CLIENT_SESSION = await login('testuser@dev2.test', 'testpass123');
@@ -402,7 +415,7 @@ async function run() {
   console.log('\n--- NOTIFICATIONS ---');
 
   // Create notification for client user directly via DB (simulating trigger)
-  const notifRes = await fetch(`${BASE}/portal/api/notifications/`, {
+  const notifRes = await fetch(`${BASE}${route('/portal/api/notifications/')}`, {
     method: 'GET',
     headers: { Cookie: `portal_session=${CLIENT_SESSION}` },
   });
@@ -413,14 +426,20 @@ async function run() {
   const { createClient } = await import('@libsql/client');
   const db = createClient({ url: 'file:./data/dev2.db' });
   const { nanoid } = await import('nanoid');
+  const userLookup = await db.execute({
+    sql: "SELECT id FROM users WHERE email = 'testuser@dev2.test' LIMIT 1",
+    args: [],
+  });
+  const clientUserId = userLookup.rows[0]?.[0];
+  if (!clientUserId) throw new Error('testuser@dev2.test fixture user missing');
 
   const notif1Id = nanoid();
   const notif2Id = nanoid();
   const notif3Id = nanoid();
   await db.batch([
-    { sql: "INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, 'milestone_completed', 'Milestone completed', 'Design phase is done')", args: [notif1Id, 'ukPCtjfLtebMs8xRHXij1'] },
-    { sql: "INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, 'invoice_sent', 'Invoice ready', 'Invoice INV-2026-0001 is ready for review')", args: [notif2Id, 'ukPCtjfLtebMs8xRHXij1'] },
-    { sql: "INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, 'general', 'Welcome', 'Welcome to the portal')", args: [notif3Id, 'ukPCtjfLtebMs8xRHXij1'] },
+    { sql: "INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, 'milestone_completed', 'Milestone completed', 'Design phase is done')", args: [notif1Id, clientUserId] },
+    { sql: "INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, 'invoice_sent', 'Invoice ready', 'Invoice INV-2026-0001 is ready for review')", args: [notif2Id, clientUserId] },
+    { sql: "INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, 'general', 'Welcome', 'Welcome to the portal')", args: [notif3Id, clientUserId] },
   ], 'write');
 
   r = await api('GET', '/portal/api/notifications/', null, CLIENT_SESSION, null);

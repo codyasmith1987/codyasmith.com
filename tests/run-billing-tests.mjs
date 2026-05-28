@@ -4,8 +4,19 @@
 const BASE = 'http://localhost:4322';
 const results = [];
 const CLIENT_A_CLIENT = 'jlCeA1SCHv8D6zD4U3h0b';
-const CLIENT_A_USER = 'ukPCtjfLtebMs8xRHXij1';
-const ADMIN_ID = 'YIPeOincMxhPce7yjPeuK';
+let clientAUserId = '';
+
+function route(path) {
+  return path.replace(/\/(\?|$)/, '$1');
+}
+
+async function clearLoginRateLimits() {
+  const { createClient } = await import('@libsql/client');
+  const db = createClient({ url: 'file:./data/dev2.db' });
+  await db.execute("DELETE FROM portal_rate_limits WHERE key LIKE 'login:%'").catch(err => {
+    if (!/no such table/i.test(String(err?.message || ''))) throw err;
+  });
+}
 
 function test(name, pass, detail) {
   results.push({ name, pass, detail: String(detail).slice(0, 300) });
@@ -38,7 +49,7 @@ async function api(method, path, body, session, csrf) {
   if (csrf) headers['X-CSRF-Token'] = csrf;
   const opts = { method, headers, redirect: 'manual' };
   if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(`${BASE}${path}`, opts);
+  const res = await fetch(`${BASE}${route(path)}`, opts);
   const ct = res.headers.get('content-type') || '';
   if (ct.includes('application/pdf')) {
     const buf = await res.arrayBuffer();
@@ -54,7 +65,18 @@ async function getDb() {
   return createClient({ url: 'file:./data/dev2.db' });
 }
 
+async function getUserIdByEmail(db, email) {
+  const result = await db.execute({
+    sql: 'SELECT id FROM users WHERE email = ? LIMIT 1',
+    args: [email],
+  });
+  const id = result.rows[0]?.[0];
+  if (!id) throw new Error(`${email} fixture user missing`);
+  return String(id);
+}
+
 async function run() {
+  await clearLoginRateLimits();
   console.log('Logging in...');
   const adminSession = await login('admin@dev2.test', 'testpass123');
   const adminCsrf = await getCsrf(adminSession);
@@ -67,6 +89,7 @@ async function run() {
   const del = (p) => api('DELETE', p, null, adminSession, adminCsrf);
 
   const db = await getDb();
+  clientAUserId = await getUserIdByEmail(db, 'testuser@dev2.test');
   await db.execute('DELETE FROM notifications');
 
   // ============ SYSTEM 1: Contract billing fields ============
@@ -193,7 +216,7 @@ async function run() {
   // Client notification from invoice generation
   const notifs = await db.execute({
     sql: "SELECT title, body FROM notifications WHERE user_id = ? AND type = 'invoice_sent'",
-    args: [CLIENT_A_USER],
+    args: [clientAUserId],
   });
   test('s5.client_invoice_notification', notifs.rows.length >= 1, `count: ${notifs.rows.length}`);
 

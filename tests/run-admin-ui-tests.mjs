@@ -4,6 +4,18 @@
 const BASE = 'http://localhost:4322';
 const results = [];
 
+function route(path) {
+  return path.replace(/\/(\?|$)/, '$1');
+}
+
+async function clearLoginRateLimits() {
+  const { createClient } = await import('@libsql/client');
+  const db = createClient({ url: 'file:./data/dev2.db' });
+  await db.execute("DELETE FROM portal_rate_limits WHERE key LIKE 'login:%'").catch(err => {
+    if (!/no such table/i.test(String(err?.message || ''))) throw err;
+  });
+}
+
 function test(name, pass, detail) {
   results.push({ name, pass, detail: String(detail).slice(0, 200) });
   console.log(`[${pass ? 'PASS' : 'FAIL'}] ${name}`);
@@ -32,14 +44,14 @@ async function getCsrf(session) {
 }
 
 async function get(path, session) {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${BASE}${route(path)}`, {
     headers: { Cookie: `portal_session=${session}` }, redirect: 'manual',
   });
   return { status: res.status, html: await res.text() };
 }
 
 async function post(path, body, session, csrf) {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${BASE}${route(path)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Cookie: `portal_session=${session}`, 'X-CSRF-Token': csrf },
     body: JSON.stringify(body), redirect: 'manual',
@@ -50,7 +62,7 @@ async function post(path, body, session, csrf) {
 }
 
 async function put(path, body, session, csrf) {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${BASE}${route(path)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', Cookie: `portal_session=${session}`, 'X-CSRF-Token': csrf },
     body: JSON.stringify(body), redirect: 'manual',
@@ -61,7 +73,7 @@ async function put(path, body, session, csrf) {
 }
 
 async function del(path, session, csrf) {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${BASE}${route(path)}`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json', Cookie: `portal_session=${session}`, 'X-CSRF-Token': csrf },
     redirect: 'manual',
@@ -72,6 +84,7 @@ async function del(path, session, csrf) {
 }
 
 async function run() {
+  await clearLoginRateLimits();
   console.log('Logging in...');
   const session = await login('admin@dev2.test', 'testpass123');
   const csrf = await getCsrf(session);

@@ -3,9 +3,21 @@
 
 const BASE = 'http://localhost:4322';
 const results = [];
-const ADMIN_ID = 'YIPeOincMxhPce7yjPeuK';
-const CLIENT_A_ID = 'ukPCtjfLtebMs8xRHXij1';
+let adminId = '';
+let clientAUserId = '';
 const CLIENT_A_CLIENT = 'jlCeA1SCHv8D6zD4U3h0b';
+
+function route(path) {
+  return path.replace(/\/(\?|$)/, '$1');
+}
+
+async function clearLoginRateLimits() {
+  const { createClient } = await import('@libsql/client');
+  const db = createClient({ url: 'file:./data/dev2.db' });
+  await db.execute("DELETE FROM portal_rate_limits WHERE key LIKE 'login:%'").catch(err => {
+    if (!/no such table/i.test(String(err?.message || ''))) throw err;
+  });
+}
 
 function test(name, pass, detail) {
   results.push({ name, pass, detail: String(detail).slice(0, 300) });
@@ -38,7 +50,7 @@ async function api(method, path, body, session, csrf) {
   if (csrf) headers['X-CSRF-Token'] = csrf;
   const opts = { method, headers, redirect: 'manual' };
   if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(`${BASE}${path}`, opts);
+  const res = await fetch(`${BASE}${route(path)}`, opts);
   const text = await res.text();
   let json; try { json = JSON.parse(text); } catch { json = text; }
   return { status: res.status, body: json };
@@ -56,17 +68,31 @@ async function getNotificationsForUser(userId) {
   return r.rows.map(row => ({ id: row[0], type: row[1], title: row[2], body: row[3], entity_type: row[4], entity_id: row[5] }));
 }
 
+async function getUserIdByEmail(email) {
+  const db = await getDb();
+  const r = await db.execute({
+    sql: 'SELECT id FROM users WHERE email = ? LIMIT 1',
+    args: [email],
+  });
+  const id = r.rows[0]?.[0];
+  if (!id) throw new Error(`${email} fixture user missing`);
+  return String(id);
+}
+
 async function clearNotifications() {
   const db = await getDb();
   await db.execute('DELETE FROM notifications');
 }
 
 async function run() {
+  await clearLoginRateLimits();
   console.log('Logging in...');
   const adminSession = await login('admin@dev2.test', 'testpass123');
   const adminCsrf = await getCsrf(adminSession);
   const clientASession = await login('testuser@dev2.test', 'testpass123');
   const clientACsrf = await getCsrf(clientASession);
+  adminId = await getUserIdByEmail('admin@dev2.test');
+  clientAUserId = await getUserIdByEmail('testuser@dev2.test');
   console.log('Sessions: OK\n');
 
   const adminPost = (p, b) => api('POST', p, b, adminSession, adminCsrf);
@@ -125,7 +151,7 @@ async function run() {
   test('t1.milestone_not_yet_complete', r.body.status !== 'completed', `status: ${r.body.status}`);
 
   // Check notification for client (task completed)
-  let notifs = await getNotificationsForUser(CLIENT_A_ID);
+  let notifs = await getNotificationsForUser(clientAUserId);
   test('t1.client_notified_task_a', notifs.some(n => n.type === 'task_completed' && n.body.includes('Task A')), `notifs: ${JSON.stringify(notifs.map(n => n.body))}`);
 
   // Complete task B → should auto-complete milestone
@@ -137,7 +163,7 @@ async function run() {
   test('t1.milestone_auto_completed', r.body.status === 'completed' && !!r.body.completed_at, `status: ${r.body.status}, completed_at: ${r.body.completed_at}`);
 
   // Check milestone completion notification
-  notifs = await getNotificationsForUser(CLIENT_A_ID);
+  notifs = await getNotificationsForUser(clientAUserId);
   test('t1.client_notified_milestone', notifs.some(n => n.type === 'milestone_completed' && n.body.includes('Trigger Test Milestone 1')), `notifs: ${JSON.stringify(notifs.map(n => n.body))}`);
 
   // ============ TEST 2: Milestone → Project auto-complete ============
@@ -155,7 +181,7 @@ async function run() {
   r = await adminGet(`/portal/api/admin/projects/${projectId}`);
   test('t2.project_auto_completed', r.body.status === 'completed', `status: ${r.body.status}`);
 
-  notifs = await getNotificationsForUser(CLIENT_A_ID);
+  notifs = await getNotificationsForUser(clientAUserId);
   test('t2.client_notified_project', notifs.some(n => n.body.includes('Trigger Test Project') && n.body.includes('complete')), `notifs: ${JSON.stringify(notifs.map(n => n.body))}`);
 
   // ============ TEST 3: Approval responded → admin notified ============
@@ -174,7 +200,7 @@ async function run() {
   });
   test('t3.client_responds', r.status === 200, `status: ${r.status}`);
 
-  notifs = await getNotificationsForUser(ADMIN_ID);
+  notifs = await getNotificationsForUser(adminId);
   test('t3.admin_notified', notifs.some(n => n.type === 'approval_responded' && n.body.includes('Approve the logo')), `notifs: ${JSON.stringify(notifs.map(n => n.body))}`);
 
   // ============ TEST 4: Change order approved → contract value updated ============
@@ -193,7 +219,7 @@ async function run() {
   r = await adminGet(`/portal/api/admin/contracts/${contractId}`);
   test('t4.contract_value_updated', r.body.total_value === 6500, `total_value: ${r.body.total_value} (expected 6500)`);
 
-  notifs = await getNotificationsForUser(CLIENT_A_ID);
+  notifs = await getNotificationsForUser(clientAUserId);
   test('t4.client_notified', notifs.some(n => n.type === 'change_order_approved' && n.body.includes('Add analytics')), `notifs: ${JSON.stringify(notifs.map(n => n.body))}`);
 
   // ============ TEST 5: Invoice sent → client notified ============
@@ -214,7 +240,7 @@ async function run() {
   });
   test('t5.invoice_sent', r.status === 200, `status: ${r.status}`);
 
-  notifs = await getNotificationsForUser(CLIENT_A_ID);
+  notifs = await getNotificationsForUser(clientAUserId);
   test('t5.client_notified', notifs.some(n => n.type === 'invoice_sent' && n.body.includes('INV-')), `notifs: ${JSON.stringify(notifs.map(n => n.body))}`);
 
   // ============ TEST 6: Payment → notifications ============
@@ -228,7 +254,7 @@ async function run() {
   });
   test('t6.partial_payment', r.status === 201, `status: ${r.status}`);
 
-  notifs = await getNotificationsForUser(ADMIN_ID);
+  notifs = await getNotificationsForUser(adminId);
   test('t6.admin_notified_payment', notifs.some(n => n.type === 'payment_received' && n.body.includes('$500')), `notifs: ${JSON.stringify(notifs.map(n => n.body))}`);
 
   await clearNotifications();
@@ -239,7 +265,7 @@ async function run() {
   });
   test('t6.full_payment', r.status === 201, `status: ${r.status}`);
 
-  notifs = await getNotificationsForUser(CLIENT_A_ID);
+  notifs = await getNotificationsForUser(clientAUserId);
   test('t6.client_notified_paid', notifs.some(n => n.body.includes('paid in full')), `notifs: ${JSON.stringify(notifs.map(n => n.body))}`);
 
   // ============ TEST 7: No double-fire ============
@@ -252,7 +278,7 @@ async function run() {
   test('t7.re_complete_task', r.status === 200, `status: ${r.status}`);
 
   // Should NOT create another task_completed notification (task was already done)
-  notifs = await getNotificationsForUser(CLIENT_A_ID);
+  notifs = await getNotificationsForUser(clientAUserId);
   const taskNotifs = notifs.filter(n => n.type === 'task_completed');
   test('t7.no_duplicate_notification', taskNotifs.length === 0, `task_completed count: ${taskNotifs.length}`);
 

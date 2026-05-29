@@ -29,29 +29,38 @@ function fmtDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-export function getCurrentBillingPeriod(billingDay: number): { start: string; end: string } {
-  const now = new Date();
+// Build a Date for (year, monthIndex, day) but CAP day to that month's
+// actual length, so a billingDay of 29-31 never overflows into the next
+// month (e.g. billingDay=31 in February). day=0 is preserved (it means
+// "last day of the prior month", used for the day-before-the-1st case).
+function periodDate(year: number, monthIndex: number, day: number): Date {
+  if (day <= 0) return new Date(year, monthIndex, day);
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+  return new Date(year, monthIndex, Math.min(day, lastDay));
+}
+
+export function getCurrentBillingPeriod(billingDay: number, now: Date = new Date()): { start: string; end: string } {
   const year = now.getFullYear();
   const month = now.getMonth(); // 0-indexed
 
   // A period anchored on day D runs from D of one month to (D-1) of the
-  // next. The end is computed with Date arithmetic, not string math, so
-  // D=1 yields the last day of the start month (e.g. 2026-05-31), NOT the
-  // malformed "2026-06-00" the old `billingDay - 1` string produced. JS
-  // Date normalizes day 0 to the prior month's last day.
+  // next. Built with periodDate so D=1 yields the last day of the start
+  // month (not the malformed "YYYY-MM-00" the old string math produced)
+  // AND D=29-31 caps to the real last day of short months instead of
+  // overflowing. `now` is injectable for deterministic tests.
   if (now.getDate() < billingDay) {
-    // We haven't reached billing day this month; the current period
-    // started on billingDay of LAST month and ends the day before
-    // billingDay of THIS month.
-    const start = new Date(year, month - 1, billingDay);
-    const end = new Date(year, month, billingDay - 1);
+    // Haven't reached billing day this month: the period started on
+    // billingDay of LAST month and ends the day before billingDay of THIS
+    // month.
+    const start = periodDate(year, month - 1, billingDay);
+    const end = periodDate(year, month, billingDay - 1);
     return { start: fmtDate(start), end: fmtDate(end) };
   }
 
-  // Otherwise the current period started on billingDay of THIS month and
-  // ends the day before billingDay of NEXT month.
-  const start = new Date(year, month, billingDay);
-  const end = new Date(year, month + 1, billingDay - 1);
+  // Otherwise the period started on billingDay of THIS month and ends the
+  // day before billingDay of NEXT month.
+  const start = periodDate(year, month, billingDay);
+  const end = periodDate(year, month + 1, billingDay - 1);
   return { start: fmtDate(start), end: fmtDate(end) };
 }
 

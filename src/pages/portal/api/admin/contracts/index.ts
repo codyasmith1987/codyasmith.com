@@ -74,7 +74,10 @@ export const POST: APIRoute = async ({ locals, request }) => {
       start_date: start_date || undefined,
       end_date: end_date || undefined,
       billing_cadence: billing_cadence || undefined,
-      billing_day: billing_day != null ? Number(billing_day) : undefined,
+      // Clamp to 1-28 so the anchor day exists in every month (matches the
+      // billing handoff). Avoids 29-31 anchors that have no equivalent in
+      // short months.
+      billing_day: billing_day != null ? Math.max(1, Math.min(28, Number(billing_day) || 1)) : undefined,
       recurring_amount: recurring_amount != null ? Number(recurring_amount) : undefined,
       included_hours: included_hours != null ? Number(included_hours) : undefined,
       overage_rate: overage_rate != null ? Number(overage_rate) : undefined,

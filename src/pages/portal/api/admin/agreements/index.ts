@@ -56,6 +56,9 @@ export const GET: APIRoute = async ({ locals }) => {
       proposal_id: a.proposal_id,
       template_slug: a.template_slug,
       template_version: a.template_version,
+      // Billing handoff link: lets API consumers see which executed
+      // agreements have a billable contract vs. are pending.
+      contract_id: a.contract_id,
       created_at: a.created_at,
       issued_at: a.issued_at,
       finalized_at: a.finalized_at,

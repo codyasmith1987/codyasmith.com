@@ -219,6 +219,19 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
     pdfFilename = `${agreement.slug}-executed-${new Date().toISOString().slice(0, 10)}.pdf`;
   } catch (err) {
     logger.error('contract PDF generation failed', err);
+    // Surface generation failures in the audit trail too (not just upload
+    // failures), so a missing PDF is never silent regardless of which step
+    // failed.
+    try {
+      await logActivity({
+        clientId: agreement.client_id,
+        userId: user.id,
+        action: 'pdf_generation_failed',
+        entityType: 'agreement',
+        entityId: agreement.id,
+        summary: `Executed PDF for ${agreement.title} FAILED to generate. Agreement is finalized with no PDF; regenerate once the cause is fixed. Error: ${String((err as any)?.message || err).slice(0, 200)}`,
+      });
+    } catch { /* best-effort */ }
   }
   if (pdfBuffer && pdfFilename) {
     try {

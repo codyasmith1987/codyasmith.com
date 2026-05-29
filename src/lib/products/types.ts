@@ -401,6 +401,12 @@ export interface ProductContext {
   // Engagement-strategy synthesis from the research call, when present.
   // Optional so legacy composer calls without research still work.
   engagementStrategy?: EngagementStrategy | null;
+  // Reissue / already-onboarded waiver. When true, products zero their
+  // one-time setup fee (WM onboarding, MC initial audit) because the
+  // client already paid it on a prior engagement. Set from the proposal
+  // config's waive_onboarding flag. Pro-bono uses the client discount
+  // instead; this is specifically for re-issuing to an existing client.
+  waiveOnboarding?: boolean;
 }
 
 export interface ProductDefinition {
@@ -457,6 +463,13 @@ export interface ProposalConfig {
   // buyer's pricing does not silently change if the client record
   // is edited later. Decimal: 0.10 = 10% off.
   discount_rate?: number;
+  // Reissue / already-onboarded waiver. When true, the one-time setup
+  // fees (WM onboarding and MC initial audit) are zeroed because the
+  // client already paid them on a prior engagement (e.g. re-issuing a
+  // contract to an existing client like ZipKit Homes). Recurring fees
+  // and the first-month-at-signing are unaffected. Pro-bono uses
+  // discount_rate instead.
+  waive_onboarding?: boolean;
   narrative: {
     intro: string;
     sections: NarrativeSection[];
@@ -540,6 +553,11 @@ export interface ComposeArgs {
   overrides?: ProposalOverrides;
   // Optional explicit pricing_formula (defaults to 'product_driven_v1').
   pricing_formula?: string;
+  // Reissue / already-onboarded waiver. When true, the composed config
+  // carries waive_onboarding so the one-time setup fees (WM onboarding,
+  // MC initial audit) are zeroed. For re-issuing to an existing client
+  // (e.g. ZipKit Homes); pro-bono uses the client discount instead.
+  waive_onboarding?: boolean;
   // Optional engagement-strategy synthesis from the AI research call.
   // When present, drives the proposal's opener (The Situation) and
   // adapts per-product narrative wording. Absent for legacy/manual

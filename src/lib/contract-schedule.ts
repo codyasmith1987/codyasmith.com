@@ -304,6 +304,7 @@ function buildScheduleAForProductDrivenV1(ctx: ScheduleAContext): ScheduleA {
       productVars,
       products,
       managedSites,
+      waiveOnboarding: config?.waive_onboarding === true,
     });
     const pricing = product.computePricing(productCtx);
     const contribution = product.buildScheduleAContribution(productCtx, pricing);

@@ -410,11 +410,18 @@ export const marketingConsultingProduct: ProductDefinition = {
     if (!tier || tier.monthly == null || tier.audit == null) {
       return { monthly: 0, oneTime: 0, breakdown: [], displaySummary: {} };
     }
+    // Reissue / already-onboarded: zero the initial audit fee. The
+    // retainer is unaffected. A labeled $0 line keeps the waiver visible.
+    const waived = ctx.waiveOnboarding === true;
+    const finalAudit = waived ? 0 : tier.audit;
+    const auditLabel = waived
+      ? `Marketing Consulting initial audit (waived, existing client)`
+      : `Marketing Consulting ${tier.name} initial audit (${eco.label})`;
     return {
       monthly: tier.monthly,
-      oneTime: tier.audit,
+      oneTime: finalAudit,
       breakdown: [
-        { label: `Marketing Consulting ${tier.name} initial audit (${eco.label})`, amount: tier.audit },
+        { label: auditLabel, amount: finalAudit },
       ],
       displaySummary: {
         tier_name: tier.name,
@@ -435,7 +442,9 @@ export const marketingConsultingProduct: ProductDefinition = {
       marketing_consulting: {
         tier_name: tier.name,
         monthly_retainer: tier.monthly || 0,
-        initial_audit_fee: tier.audit || 0,
+        // Reissue / already-onboarded waiver zeros the initial audit so
+        // Schedule A's A.6 agrees with the at-signing block.
+        initial_audit_fee: ctx.waiveOnboarding === true ? 0 : (tier.audit || 0),
         strategy_call_frequency: tier.call_frequency || 'as agreed',
         deep_advisories_per_cycle: tier.advisories || 'as requested',
         performance_reporting_cadence: tier.reporting || 'as agreed',

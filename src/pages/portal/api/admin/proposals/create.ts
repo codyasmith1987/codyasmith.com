@@ -166,8 +166,14 @@ export const POST: APIRoute = async ({ locals, request }) => {
     // onboarding + MC initial audit). Admin checkbox in the wizard.
     const waive_onboarding = c.waive_onboarding === true;
     // Bundle mode: fuse WM + MC into one Good/Better/Best card. Admin
-    // checkbox in the wizard.
+    // checkbox in the wizard. Both products must be in scope or the
+    // composer silently drops bundle mode; reject rather than publish a
+    // proposal that looks bundled in the wizard but renders as separate
+    // cards. Mirrors the client-side guard in new.astro.
     const bundle_mode = c.bundle_mode === true;
+    if (bundle_mode && !(products.includes('web-management') && products.includes('marketing-consulting'))) {
+      return json({ error: 'Bundle mode requires both Web Management and Marketing Consulting' }, 400);
+    }
 
     // Voice-lint admin-typed strings before persist. Catches em or en
     // dashes, AI-template language, overclaim, drop-cap patterns,

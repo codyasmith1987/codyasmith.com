@@ -2301,6 +2301,15 @@ const todayISO = new Date().toISOString().slice(0, 10);
       const buildOptionsError = normalizeBuildOptionsForSubmit();
       if (buildOptionsError) { showMsg(buildOptionsError, 'error'); return; }
 
+      // Bundle mode fuses Web Management and Marketing Consulting into one
+      // card, so both must be in scope. Otherwise the composer silently
+      // drops bundle mode and renders separate cards with no feedback.
+      if (state.bundle_mode === true &&
+          !(state.products.includes('web-management') && state.products.includes('marketing-consulting'))) {
+        showMsg('Bundle mode needs both Web Management and Marketing Consulting selected. Add the missing product or untick bundle mode.', 'error');
+        return;
+      }
+
       const draftBtn = document.getElementById('save-draft-btn');
       const pubBtn = document.getElementById('publish-btn');
       draftBtn.disabled = true;

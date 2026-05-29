@@ -105,7 +105,10 @@ const empty = agreements.length === 0 && proposals.length === 0;
                 <div class="flex flex-col items-end gap-2 shrink-0">
                   <a href={`/portal/contracts/${a.slug}`} class="px-3 py-1.5 bg-neutral-800/50 border border-white/10 rounded-md text-xs text-neutral-300 hover:bg-neutral-700/50 hover:text-neutral-100 transition-colors">View</a>
                   {a.pdf_file_id && (
-                    <a href={`/portal/api/files/download/${a.pdf_file_id}`} class="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-md text-xs text-emerald-400 hover:bg-emerald-500/20 transition-colors">Download PDF</a>
+                    <a href={`/portal/api/files/download?id=${a.pdf_file_id}`} class="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-md text-xs text-emerald-400 hover:bg-emerald-500/20 transition-colors">Download PDF</a>
+                  )}
+                  {!a.pdf_file_id && a.status === 'executed' && (
+                    <span class="px-3 py-1.5 text-[10px] font-mono text-amber-500/80" title="The PDF could not be generated when this was executed. Contact Cody to have it regenerated.">PDF unavailable</span>
                   )}
                 </div>
               </div>

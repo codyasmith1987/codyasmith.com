@@ -477,6 +477,12 @@ export function applyBuildOptionManagedSiteChanges<
       is_primary: isFirstSite,
       page_count: site.page_count_estimate,
       monthly_override: null,
+      // Build-produced site: the build fee covers standing it up, so WM
+      // onboarding is 0 for it. This is mechanism (C) per-site override
+      // (see ProposalConfig in types.ts), NOT the reissue waiver
+      // (config.waive_onboarding, mechanism A). Both can be in play in one
+      // proposal (new build site + existing reissued sites) and both yield
+      // $0 onboarding via different paths; do not collapse them.
       onboarding_override: 0,
     } as S);
   }

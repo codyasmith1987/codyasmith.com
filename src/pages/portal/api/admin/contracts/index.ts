@@ -8,6 +8,7 @@ import {
 } from '../../../../../lib/contracts';
 import { logActivity } from '../../../../../lib/activity';
 import { logger } from '../../../../../lib/logger';
+import turso from '../../../../../lib/turso';
 
 export const prerender = false;
 
@@ -40,6 +41,28 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
     if (!client_id?.trim() || !title?.trim()) {
       return json({ error: 'client_id and title are required' }, 400);
+    }
+
+    // Guard against duplicating a contract the billing handoff already
+    // created. When an agreement is signed, ensureBillingContractFromAgreement
+    // auto-creates a contract and links it to the agreement. An admin who
+    // then manually creates one here would orphan a second contract. Block
+    // it unless the caller explicitly forces (legitimate standalone /
+    // non-proposal contracts).
+    if (!body.force) {
+      const linked = await turso.execute({
+        sql: `SELECT a.contract_id, a.title FROM client_agreements a
+               WHERE a.client_id = ? AND a.contract_id IS NOT NULL LIMIT 1`,
+        args: [client_id.trim()],
+      });
+      if (linked.rows.length > 0) {
+        return json({
+          error: 'This client already has a contract auto-created from a signed agreement. ' +
+            'Manual creation would orphan a second contract. If this is an intentional separate ' +
+            '(non-proposal) contract, resend with force: true.',
+          existing_contract_id: linked.rows[0][0] as string,
+        }, 409);
+      }
     }
 
     const id = await createContract({

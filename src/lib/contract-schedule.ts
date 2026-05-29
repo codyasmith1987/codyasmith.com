@@ -62,7 +62,10 @@ export interface ScheduleAContext {
 export interface PricingLike {
   oneTime: number;
   monthly: number;
-  atSigning?: number;
+  // Canonical at-signing total (oneTime + first month). Required so the
+  // Schedule A A.4 block reads it directly and cannot drift from the
+  // proposal page / emails.
+  atSigning: number;
   breakdown: Array<{ label: string; amount: number }>;
   mgmtMonthly: number;
   consultingMonthly: number;
@@ -251,9 +254,9 @@ function buildAmountDueAtSigning(pricing: PricingLike | null): AmountDueAtSignin
     items.push({ label: 'First month, other recurring services', amount: otherRecurring });
   }
 
-  const total = typeof pricing.atSigning === 'number'
-    ? round2(pricing.atSigning)
-    : round2((pricing.oneTime || 0) + (pricing.monthly || 0));
+  // Read the canonical at-signing total directly (no re-derivation from
+  // components, which could drift). pricing is non-null here (guarded above).
+  const total = round2(pricing.atSigning);
 
   if (items.length === 0 && total <= 0) return null;
   return { line_items: items, total, note: AT_SIGNING_NOTE };

@@ -101,7 +101,7 @@ export function computeRaisedBarV1(selections: Record<string, string | null>): P
 // composePricing lives in the products registry; importing it as a
 // value here works because products/types.ts and products/index.ts
 // only type-import PricingResult from this file (no runtime circular).
-import { composePricing } from './products';
+import { composePricing, expandBundleSelections } from './products';
 
 // The new formula for proposals built via the product-and-variable
 // composer. Reads config.products + config.product_vars, asks each
@@ -111,7 +111,11 @@ export function computeProductDrivenV1(
   selections: Record<string, string | null>,
   config: any,
 ): PricingResult | null {
-  return composePricing({ config, selections });
+  // Bundled-tier proposals carry a single bundle_tier pick; expand it
+  // into the canonical wm_tier/mc_tier/build_options keys before pricing
+  // so the math is registry-derived. No-op for non-bundle proposals.
+  const expanded = expandBundleSelections(config, selections);
+  return composePricing({ config, selections: expanded });
 }
 
 // Dispatcher ----------------------------------------------------------

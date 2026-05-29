@@ -11,7 +11,7 @@
 // is not purchased; the renderer in contract-render.ts then omits the
 // section entirely.
 
-import { PRODUCT_REGISTRY, buildContextForProduct } from './products';
+import { PRODUCT_REGISTRY, buildContextForProduct, expandBundleSelections } from './products';
 
 // Standing language for Schedule A's WM section describing the
 // single-cadence billing policy. Threaded into WebManagementSection
@@ -271,6 +271,13 @@ function buildScheduleAForProductDrivenV1(ctx: ScheduleAContext): ScheduleA {
   const products: string[] = Array.isArray(config?.products) ? config.products : [];
   if (products.length === 0) return emptyScheduleA(ctx.effectiveDate);
 
+  // Bundled-tier proposals carry a single bundle_tier pick; expand it into
+  // the canonical wm_tier/mc_tier/build_options keys so Schedule A derives
+  // from the same registry math (same per-product tiers) the proposal-page
+  // price used. MUST mirror the expansion in computeProductDrivenV1 or the
+  // proposal price and Schedule A diverge. No-op for non-bundle proposals.
+  const selections = expandBundleSelections(config, ctx.draftSelections);
+
   // Start with an empty Schedule A; each product fills its slots.
   const base = emptyScheduleA(ctx.effectiveDate);
   // Designated-contact client side from clientMetadata, when present.
@@ -303,7 +310,7 @@ function buildScheduleAForProductDrivenV1(ctx: ScheduleAContext): ScheduleA {
     if (!product) continue;
     const productCtx = buildContextForProduct({
       id,
-      selections: ctx.draftSelections,
+      selections,
       productVars,
       products,
       managedSites,

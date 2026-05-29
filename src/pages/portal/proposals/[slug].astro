@@ -948,7 +948,7 @@ const clientConfig = {
             {opt.html && <p set:html={opt.html} />}
             <div class="addon-pricing">
               {opt.price_dynamic
-                ? <p class="addon-price-line"><span class={`dyn-price dyn-price-${step.id}-${opt.id}`}>&mdash;</span> / month</p>
+                ? <p class="addon-price-line"><span class={`dyn-price dyn-price-${step.id}-${opt.id}`}>-</span> / month</p>
                 : opt.price_label
                   ? <p class="addon-price-line">{opt.price_label}</p>
                   : null
@@ -1026,15 +1026,15 @@ const clientConfig = {
       ))}
     <div class="summary-row totals" id="row-onetime">
       <span class="summary-label">One-time setup</span>
-      <span class="summary-value" id="summary-onetime">&mdash;</span>
+      <span class="summary-value" id="summary-onetime">Pick above</span>
     </div>
     <div class="summary-row totals" id="row-monthly">
       <span class="summary-label">Monthly</span>
-      <span class="summary-value" id="summary-monthly">&mdash;</span>
+      <span class="summary-value" id="summary-monthly">Pick above</span>
     </div>
     <div class="summary-row totals atsigning-row" id="row-atsigning">
       <span class="summary-label">Due when you sign</span>
-      <span class="summary-value" id="summary-atsigning">&mdash;</span>
+      <span class="summary-value" id="summary-atsigning">Pick above</span>
     </div>
     <p class="summary-note" id="summary-atsigning-note"></p>
   </div>
@@ -1457,16 +1457,16 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
       var t = state.selections.mgmt_tier;
       var o1Card = document.querySelector('.dyn-price-site_setup-o1');
       var o2Card = document.querySelector('.dyn-price-site_setup-o2');
-      if (o1Card) o1Card.textContent = t ? money(rbMgmtMonthly(t, 'o1')) : '—';
-      if (o2Card) o2Card.textContent = t ? money(rbMgmtMonthly(t, 'o2')) : '—';
+      if (o1Card) o1Card.textContent = t ? money(rbMgmtMonthly(t, 'o1')) : 'Pick above';
+      if (o2Card) o2Card.textContent = t ? money(rbMgmtMonthly(t, 'o2')) : 'Pick above';
       // Spans embedded in price_detail_html (dyn-mgmt-onb, dyn-multi-onb)
       var mgmtOnbSpans = document.querySelectorAll('.dyn-mgmt-onb');
       var multiOnbSpans = document.querySelectorAll('.dyn-multi-onb');
       for (var di = 0; di < mgmtOnbSpans.length; di++) {
-        mgmtOnbSpans[di].textContent = t ? moneyInt(RB_MGMT_TIERS[t].onb) : '$—';
+        mgmtOnbSpans[di].textContent = t ? moneyInt(RB_MGMT_TIERS[t].onb) : '-';
       }
       for (var dj = 0; dj < multiOnbSpans.length; dj++) {
-        multiOnbSpans[dj].textContent = t ? moneyInt(rbMultiSiteExtraOnb(t, 'o2')) : '$—';
+        multiOnbSpans[dj].textContent = t ? moneyInt(rbMultiSiteExtraOnb(t, 'o2')) : '-';
       }
     }
 
@@ -1516,9 +1516,9 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
     } else if (selectionsComplete() && state.pricing && typeof state.pricing.oneTime === 'number' && typeof state.pricing.monthly === 'number') {
       applyTotals(state.pricing.oneTime, state.pricing.monthly, state.pricing.atSigning);
     } else {
-      setSummary('summary-onetime', '—', false);
-      setSummary('summary-monthly', '—', false);
-      setSummary('summary-atsigning', '—', false);
+      setSummary('summary-onetime', 'Pick above', false);
+      setSummary('summary-monthly', 'Pick above', false);
+      setSummary('summary-atsigning', 'Pick above', false);
       setRowVisible('row-onetime', true);
       setRowVisible('row-monthly', true);
       var atsNote = document.getElementById('summary-atsigning-note');
@@ -1634,7 +1634,7 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
             sendBtn.disabled = !(selectionsComplete() && nameOk);
             if (otherSig) {
               sendBtn.textContent = 'Co-confirm and request the call';
-              if (formNote) formNote.textContent = 'The other person already accepted. You can change any selection before co-confirming — they will get an email about the change. Type your name and click to co-confirm.';
+              if (formNote) formNote.textContent = 'The other person already accepted. You can change any selection before co-confirming. They will get an email about the change. Type your name and click to co-confirm.';
             } else {
               sendBtn.textContent = 'Accept and request a call';
               if (formNote) formNote.textContent = isSoleSigner

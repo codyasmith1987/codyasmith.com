@@ -168,6 +168,12 @@ export const POST: APIRoute = async ({ locals, request }) => {
     if (!clientId || !month) {
       return json({ error: 'client_id and month are required' }, 400);
     }
+    // Month must be canonical YYYY-MM. A non-padded month (e.g. "2026-5")
+    // would sort wrong lexicographically and corrupt prior-period lookups
+    // in the report layer. Matches the files/upload guard.
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      return json({ error: 'month must be in YYYY-MM format' }, 400);
+    }
 
     // Collect files: legacy single 'file' or batch 'files'.
     const files: File[] = [];

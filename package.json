@@ -12,7 +12,7 @@
     "astro": "astro",
     "migrate:naming": "tsx scripts/migrate-naming.ts",
     "migrate:listener": "tsx scripts/migrate-listener.ts",
-    "test": "tsx tests/run-naming-unit-tests.mjs && tsx tests/run-listener-sentiment-unit-tests.mjs && tsx tests/run-naming-preview-unit-tests.mjs && tsx tests/run-contract-render-tests.mjs && tsx tests/run-csv-detector-tests.mjs",
+    "test": "tsx tests/run-naming-unit-tests.mjs && tsx tests/run-listener-sentiment-unit-tests.mjs && tsx tests/run-naming-preview-unit-tests.mjs && tsx tests/run-contract-render-tests.mjs && tsx tests/run-csv-detector-tests.mjs && tsx tests/run-report-deltas-tests.mjs && tsx tests/run-report-windows-tests.mjs && tsx tests/run-report-assembly-tests.mjs",
     "test:integration": "tsx tests/run-naming-integration-tests.mjs && tsx tests/run-listener-sentiment-integration-tests.mjs"
   },
   "dependencies": {

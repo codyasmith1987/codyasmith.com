@@ -433,6 +433,27 @@ const clientConfig = {
     color: #1a1814;
     font-style: normal;
   }
+  /* The bottom-line number the buyer actually pays to start: one-time
+     setup plus the first month. Heavier separator and larger value so it
+     reads as the total, not another line item. */
+  .summary-row.atsigning-row {
+    border-top: 1px solid #1a1814;
+    margin-top: 10px;
+    padding-top: 16px;
+  }
+  .summary-row.atsigning-row .summary-label {
+    color: #1a1814;
+    font-weight: 600;
+  }
+  .summary-row.atsigning-row .summary-value {
+    font-size: 26px;
+  }
+  .summary-note {
+    margin-top: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #6b6359;
+  }
   .form-fields {
     display: grid;
     gap: 18px;
@@ -1003,14 +1024,19 @@ const clientConfig = {
           <span class="summary-value" id={`summary-${step.id}`}>Pick above</span>
         </div>
       ))}
-    <div class="summary-row totals">
-      <span class="summary-label">One-time at signing</span>
+    <div class="summary-row totals" id="row-onetime">
+      <span class="summary-label">One-time setup</span>
       <span class="summary-value" id="summary-onetime">&mdash;</span>
     </div>
-    <div class="summary-row totals">
-      <span class="summary-label">Monthly recurring</span>
+    <div class="summary-row totals" id="row-monthly">
+      <span class="summary-label">Monthly</span>
       <span class="summary-value" id="summary-monthly">&mdash;</span>
     </div>
+    <div class="summary-row totals atsigning-row" id="row-atsigning">
+      <span class="summary-label">Due when you sign</span>
+      <span class="summary-value" id="summary-atsigning">&mdash;</span>
+    </div>
+    <p class="summary-note" id="summary-atsigning-note"></p>
   </div>
 
   <div class="form-fields">
@@ -1103,6 +1129,51 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
   }
   function moneyInt(n) {
     return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  }
+  // Whole dollars when the amount is whole, cents when it isn't, so a
+  // clean $5,925 doesn't render as $5,925.00 while a multi-site or
+  // discounted total keeps its cents.
+  function moneyAuto(n) {
+    return (Math.round(n * 100) % 100 === 0) ? moneyInt(n) : money(n);
+  }
+  // Show/hide a totals row by id (used to drop the one-time or monthly
+  // component when it is zero, e.g. a reissue with onboarding waived or a
+  // build-only engagement with no recurring).
+  function setRowVisible(rowId, visible) {
+    var r = document.getElementById(rowId);
+    if (r) r.style.display = visible ? 'flex' : 'none';
+  }
+  // Plain-language note explaining what the at-signing number is made of.
+  // Contract section 5.2: one-time fees are 100% at signing and the first
+  // month of every recurring fee is collected with them; work begins once
+  // it clears.
+  function atSigningNote(oneTime, monthly) {
+    var hasOne = oneTime > 0, hasMo = monthly > 0;
+    if (hasOne && hasMo) {
+      return 'Signing the agreement collects your one-time setup of ' + moneyInt(oneTime) +
+        ' plus your first month of ' + money(monthly) + '. Work begins once it clears, and ' +
+        money(monthly) + ' recurs each month after that.';
+    }
+    if (hasOne && !hasMo) {
+      return 'Signing the agreement collects your one-time total of ' + moneyInt(oneTime) +
+        '. Work begins once it clears.';
+    }
+    if (!hasOne && hasMo) {
+      return 'Signing the agreement collects your first month of ' + money(monthly) +
+        '. Work begins once it clears, and ' + money(monthly) + ' recurs each month after that.';
+    }
+    return '';
+  }
+  // Render the three totals rows from a one-time and monthly figure. The
+  // at-signing total is always one-time plus the first month.
+  function applyTotals(oneTime, monthly) {
+    setSummary('summary-onetime', moneyInt(oneTime), true);
+    setSummary('summary-monthly', money(monthly) + ' / month', true);
+    setSummary('summary-atsigning', moneyAuto(oneTime + monthly), true);
+    setRowVisible('row-onetime', oneTime > 0);
+    setRowVisible('row-monthly', monthly > 0);
+    var note = document.getElementById('summary-atsigning-note');
+    if (note) note.textContent = atSigningNote(oneTime, monthly);
   }
 
   function rbMgmtMonthly(tier, option) {
@@ -1249,7 +1320,9 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
       monthly = state.pricing.monthly;
     }
     if (typeof oneTime !== 'number' || typeof monthly !== 'number') return '';
-    return '<p class="success-note">Accepted totals: ' + moneyInt(oneTime) + ' at signing; ' + money(monthly) + ' / month.</p>';
+    return '<p class="success-note">Accepted totals: ' + moneyAuto(oneTime + monthly) +
+      ' due when you sign (one-time setup ' + moneyInt(oneTime) + ' plus first month ' + money(monthly) +
+      '); ' + money(monthly) + ' / month thereafter.</p>';
   }
 
   // Resolve a human-readable summary string for a step's current
@@ -1432,14 +1505,17 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
     // accept endpoint, because their product mix can include arbitrary
     // product definitions and build-shape pricing.
     if (PRICING_FORMULA === 'raised_bar_v1' && selectionsComplete()) {
-      setSummary('summary-onetime', moneyInt(rbOneTimeTotal()), true);
-      setSummary('summary-monthly', money(rbMonthlyTotal()) + ' / month', true);
+      applyTotals(rbOneTimeTotal(), rbMonthlyTotal());
     } else if (selectionsComplete() && state.pricing && typeof state.pricing.oneTime === 'number' && typeof state.pricing.monthly === 'number') {
-      setSummary('summary-onetime', moneyInt(state.pricing.oneTime), true);
-      setSummary('summary-monthly', money(state.pricing.monthly) + ' / month', true);
+      applyTotals(state.pricing.oneTime, state.pricing.monthly);
     } else {
       setSummary('summary-onetime', '—', false);
       setSummary('summary-monthly', '—', false);
+      setSummary('summary-atsigning', '—', false);
+      setRowVisible('row-onetime', true);
+      setRowVisible('row-monthly', true);
+      var atsNote = document.getElementById('summary-atsigning-note');
+      if (atsNote) atsNote.textContent = '';
     }
 
     // Signer blocks: each gets its own read-only / editable / signed state.

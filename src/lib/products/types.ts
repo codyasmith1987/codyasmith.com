@@ -592,6 +592,12 @@ export interface ComposeArgs {
   // MC initial audit) are zeroed. For re-issuing to an existing client
   // (e.g. ZipKit Homes); pro-bono uses the client discount instead.
   waive_onboarding?: boolean;
+  // Bundle mode. When true and both Web Management + Marketing Consulting
+  // are in scope, the composer fuses them into one symmetric Good/Better/
+  // Best card (good->WM good + MC good, etc.) and emits config.bundle. If a
+  // build with 2+ build_options is also in scope, the second option becomes
+  // the optional add-on (first = baseline). The Raised Bar / Jason shape.
+  bundle_mode?: boolean;
   // Optional engagement-strategy synthesis from the AI research call.
   // When present, drives the proposal's opener (The Situation) and
   // adapts per-product narrative wording. Absent for legacy/manual

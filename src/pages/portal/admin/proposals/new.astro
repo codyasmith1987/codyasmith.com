@@ -326,6 +326,13 @@ const todayISO = new Date().toISOString().slice(0, 10);
             Zeros the Web Management onboarding and Marketing Consulting initial audit because this client already paid them on a prior engagement. Recurring fees and the first month collected at signing are unchanged. For a pro-bono client, set a client discount instead.
           </span>
         </label>
+        <label class="flex items-start gap-3 cursor-pointer mt-4">
+          <input type="checkbox" id="bundle-mode" class="mt-1" />
+          <span class="text-[11px] text-neutral-500 leading-relaxed">
+            <span class="text-neutral-200">Bundle into one Good/Better/Best card.</span>
+            Fuses Web Management and Marketing Consulting into a single tier card (one monthly, one to-start) instead of separate pickers. Good = both at Good, Better = both at Better, Best = both at Best. If a build with two options is in scope, the second becomes an optional add-on below the card. Requires both Web Management and Marketing Consulting selected above.
+          </span>
+        </label>
       </section>
 
       <!-- 6. HEADER OVERRIDES (auto-derived from client; expanded by
@@ -670,6 +677,8 @@ const todayISO = new Date().toISOString().slice(0, 10);
       // onboarding + MC initial audit). For re-issuing to an existing
       // client; pro-bono uses the client discount instead.
       waive_onboarding: false,
+      // Bundle mode: fuse WM + MC into one Good/Better/Best card.
+      bundle_mode: false,
     };
 
     // Autosave wizard state to sessionStorage every 3 seconds. Clears
@@ -2139,6 +2148,13 @@ const todayISO = new Date().toISOString().slice(0, 10);
       waiveBox.addEventListener('change', () => { state.waive_onboarding = waiveBox.checked; });
     }
 
+    // Bundle mode: fuse WM + MC into one GBB card.
+    const bundleBox = document.getElementById('bundle-mode');
+    if (bundleBox) {
+      bundleBox.checked = state.bundle_mode === true;
+      bundleBox.addEventListener('change', () => { state.bundle_mode = bundleBox.checked; });
+    }
+
     // =========================================================================
     // Signers
     // =========================================================================
@@ -2327,6 +2343,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           engagement_strategy,
           tier_overrides: Object.keys(tier_overrides_payload).length > 0 ? tier_overrides_payload : undefined,
           waive_onboarding: state.waive_onboarding === true,
+          bundle_mode: state.bundle_mode === true,
         },
       };
 

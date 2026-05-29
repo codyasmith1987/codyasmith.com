@@ -48,22 +48,31 @@ export const POST: APIRoute = async ({ locals, url }) => {
 
   const cycleMonth = await getHealthLatestMonth(clientId);
   if (!cycleMonth) return json({ error: 'No crawl / site-health data has been ingested for this client yet.' }, 422);
-  const priorMonth = url.searchParams.get('prior_month') || await getHealthPriorMonth(clientId, cycleMonth);
+  const priorParam = url.searchParams.get('prior_month');
+  if (priorParam && (!/^\d{4}-\d{2}$/.test(priorParam) || priorParam >= cycleMonth)) {
+    return json({ error: 'prior_month must be in YYYY-MM format and earlier than the current cycle.' }, 422);
+  }
+  const priorMonth = priorParam || await getHealthPriorMonth(clientId, cycleMonth);
   const period = url.searchParams.get('period') || monthLabel(cycleMonth);
 
   const current = await getHealthMonthData(clientId, cycleMonth);
-  const prior = priorMonth ? await getHealthMonthData(clientId, priorMonth) : null;
+  // Collapse an empty prior month to baseline so trend columns never render
+  // against a blank prior cycle.
+  const priorRaw = priorMonth ? await getHealthMonthData(clientId, priorMonth) : null;
+  const prior = priorRaw && priorRaw.issues.length > 0 ? priorRaw : null;
+  const trendMonth = prior ? priorMonth : null;
+
   const navigablePages = await getNavigablePageCount(clientId, cycleMonth);
-  const navigablePagesPrior = priorMonth ? await getNavigablePageCount(clientId, priorMonth) : null;
+  const navigablePagesPrior = trendMonth ? await getNavigablePageCount(clientId, trendMonth) : null;
 
   // Response codes: derived from crawl_urls.status_code bands for each month.
   const curCodes = await getResponseCodeCounts(clientId, cycleMonth);
-  const priorCodes = priorMonth ? await getResponseCodeCounts(clientId, priorMonth) : [];
+  const priorCodes = trendMonth ? await getResponseCodeCounts(clientId, trendMonth) : [];
   const priorByCode = new Map(priorCodes.map(r => [r.code, r.count]));
   const responseCodes = curCodes.map(r => ({
     code: r.code,
     current: r.count,
-    prior: priorMonth ? (priorByCode.has(r.code) ? priorByCode.get(r.code)! : 0) : null,
+    prior: trendMonth ? (priorByCode.has(r.code) ? priorByCode.get(r.code)! : 0) : null,
   }));
 
   const markdown = buildSiteHealthMarkdown({
@@ -101,7 +110,7 @@ export const POST: APIRoute = async ({ locals, url }) => {
       download_url: `/portal/api/files/download?id=${id}`,
       mode: prior ? 'trend' : 'baseline',
       health_month: cycleMonth,
-      health_prior_month: priorMonth,
+      health_prior_month: trendMonth,
     });
   } catch (err: any) {
     logger.error('Site health storage failed', err);

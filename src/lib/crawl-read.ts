@@ -153,10 +153,15 @@ export async function getNavigablePageCount(clientId: string, month?: string): P
 // depending on an unverified metrics-table slug; the band math is the same
 // derivation the issue layer uses.
 export async function getResponseCodeCounts(clientId: string, month: string): Promise<ResponseCodeCount[]> {
+  // Restrict to real HTTP status ranges (100-599). This intentionally
+  // excludes status 0 (no response / DNS or connection failure) and any
+  // out-of-range value; the report's bands are 2xx-5xx and a no-response
+  // URL is not a response code. Consistent with the navigable-page count,
+  // which also only counts 200s.
   const res = await turso.execute({
     sql: `SELECT (status_code / 100) AS band, COUNT(DISTINCT url) AS n
           FROM crawl_urls
-          WHERE client_id = ? AND month = ? AND status_code IS NOT NULL
+          WHERE client_id = ? AND month = ? AND status_code BETWEEN 100 AND 599
           GROUP BY band`,
     args: [clientId, month],
   });

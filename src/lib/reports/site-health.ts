@@ -103,7 +103,7 @@ function buildCrawlHealthSection(input: SiteHealthInput): string {
 
 function buildIssueSection(heading: string, issues: SiteIssueRow[], priorCounts: Map<string, number | null>, trend: boolean): string {
   if (issues.length === 0) return '';
-  const sorted = [...issues].sort((a, b) => (b.affected_urls ?? 0) - (a.affected_urls ?? 0));
+  const sorted = [...issues].sort((a, b) => (b.affected_urls ?? 0) - (a.affected_urls ?? 0) || a.issue_name.localeCompare(b.issue_name));
   const parts: string[] = [`## ${heading}`];
   if (trend) {
     parts.push(table(['Finding', 'This cycle', 'Prior cycle', 'Change'],
@@ -132,13 +132,15 @@ function buildClosedThisMonthSection(input: SiteHealthInput): string {
   for (const p of input.prior.issues) {
     const priorN = p.affected_urls ?? 0;
     if (priorN <= 0) continue;
-    const currN = curMap.has(p.issue_name) ? (curMap.get(p.issue_name) ?? 0) : 0;
-    if (currN === 0) {
-      rows.push([`${p.issue_name} cleared`, `Resolved (was ${fmtInt(priorN)} pages in the prior cycle).`]);
+    if (!curMap.has(p.issue_name)) {
+      // Genuinely gone from the current crawl.
+      rows.push([`${escCell(p.issue_name)} cleared`, `Resolved (was ${fmtInt(priorN)} pages in the prior cycle).`]);
     } else {
+      // Still present: report a material reduction by the numbers, not a verdict.
+      const currN = curMap.get(p.issue_name) ?? 0;
       const d = computeDelta(priorN, currN, { metricKind: 'count' });
       if (d.percentChange !== null && d.percentChange <= -0.5) {
-        rows.push([`${p.issue_name} reduced`, `${fmtInt(priorN)} to ${fmtInt(currN)} pages (${fmtSignedPct(d.percentChange)}).`]);
+        rows.push([`${escCell(p.issue_name)} reduced`, `${fmtInt(priorN)} to ${fmtInt(currN)} pages (${fmtSignedPct(d.percentChange)}).`]);
       }
     }
   }
@@ -177,7 +179,8 @@ export function buildSiteHealthMarkdown(input: SiteHealthInput): string {
   // so unmatched families land in "Other findings".
   const placed = new Set<string>();
   for (const section of SECTIONS) {
-    const issues = input.current.issues.filter(i => section.families.includes(family(i.issue_name)));
+    const fams = section.families.map(f => f.toLowerCase());
+    const issues = input.current.issues.filter(i => !placed.has(i.issue_name) && fams.includes(family(i.issue_name).toLowerCase()));
     issues.forEach(i => placed.add(i.issue_name));
     const block = buildIssueSection(section.heading, issues, priorCounts, trend);
     if (block) blocks.push(block);

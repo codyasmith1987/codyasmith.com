@@ -769,11 +769,19 @@ export const webManagementProduct: ProductDefinition = {
       monthly = computeMultiSiteMonthly(tier.monthly, sitesCount);
       onb = computeMultiSiteOnboarding(tier.onb, sitesCount);
     }
+    // Reissue / already-onboarded: zero the onboarding fee. Recurring is
+    // unaffected. The breakdown keeps a labeled $0 line so the waiver is
+    // visible on the proposal and contract instead of silently vanishing.
+    const waived = ctx.waiveOnboarding === true;
+    const finalOnb = waived ? 0 : onb;
+    const onbLabel = waived
+      ? `Web Management onboarding (waived, existing client)`
+      : `Web Management onboarding (${sitesCount === 1 ? '1 site' : `${sitesCount} sites`}, ${tier.name})`;
     return {
       monthly,
-      oneTime: onb,
+      oneTime: finalOnb,
       breakdown: [
-        { label: `Web Management onboarding (${sitesCount === 1 ? '1 site' : `${sitesCount} sites`}, ${tier.name})`, amount: onb },
+        { label: onbLabel, amount: finalOnb },
       ],
       displaySummary: {
         tier_name: tier.name,
@@ -790,6 +798,13 @@ export const webManagementProduct: ProductDefinition = {
     const eco = WM_ECOSYSTEMS[ctx.ecosystemId];
     const tier = eco?.tiers[ctx.tierId];
     if (!tier) return { products_purchased: { web_management: false } };
+
+    // Reissue / already-onboarded: onboarding is waived. pricing.oneTime
+    // is already 0 (computePricing honors the same flag); zero the
+    // reference fee and per-site onboarding rows so Schedule A's A.5
+    // table agrees with the $0 onboarding total and the A.4 at-signing
+    // block. Monthly/recurring is unaffected.
+    const waived = ctx.waiveOnboarding === true;
 
     // Per the 2026-05-24 locked multi-site formula, each site routes
     // to its OWN ecosystem and gets its OWN per-site contribution.
@@ -872,12 +887,12 @@ export const webManagementProduct: ProductDefinition = {
       products_purchased: { web_management: true },
       web_management: {
         tier_name: tier.name,
-        sites: siteRows,
+        sites: waived ? siteRows.map(r => ({ ...r, onboarding_contribution: 0 })) : siteRows,
         site_count: sites,
         monthly_base: tier.monthly || 0,
         monthly_total: Math.round(pricing.monthly * 100) / 100,
         included_hours: tier.hours || 0,
-        onboarding_fee: tier.onb || 0,
+        onboarding_fee: waived ? 0 : (tier.onb || 0),
         onboarding_total: Math.round(pricing.oneTime * 100) / 100,
         update_cadence: tier.update_cadence || 'monthly',
         response_time: tier.response_time || 'standard tier response window',

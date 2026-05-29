@@ -315,6 +315,18 @@ const todayISO = new Date().toISOString().slice(0, 10);
         </button>
       </section>
 
+      <!-- 5b. EXISTING-CLIENT OPTIONS -->
+      <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
+        <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-5">5b. Existing-client options</p>
+        <label class="flex items-start gap-3 cursor-pointer">
+          <input type="checkbox" id="waive-onboarding" class="mt-1" />
+          <span class="text-[11px] text-neutral-500 leading-relaxed">
+            <span class="text-neutral-200">Waive one-time setup (existing client / reissue).</span>
+            Zeros the Web Management onboarding and Marketing Consulting initial audit because this client already paid them on a prior engagement. Recurring fees and the first month collected at signing are unchanged. For a pro-bono client, set a client discount instead.
+          </span>
+        </label>
+      </section>
+
       <!-- 6. HEADER OVERRIDES (auto-derived from client; expanded by
            default so admin sees what's being auto-filled and can
            override before publish. Audit W14.) -->
@@ -653,6 +665,10 @@ const todayISO = new Date().toISOString().slice(0, 10);
       // different from AI's. Picked via the dropdown in the strategy
       // panel; flows into the create endpoint's tier_overrides field.
       tier_overrides: {},              // { productId: 'good' | 'better' | 'best' }
+      // Reissue / already-onboarded: waive the one-time setup fees (WM
+      // onboarding + MC initial audit). For re-issuing to an existing
+      // client; pro-bono uses the client discount instead.
+      waive_onboarding: false,
     };
 
     // Autosave wizard state to sessionStorage every 3 seconds. Clears
@@ -2101,6 +2117,13 @@ const todayISO = new Date().toISOString().slice(0, 10);
       state.narrative_variables.focus = picks.length ? picks : undefined;
     });
 
+    // Existing-client / reissue: waive the one-time setup fees.
+    const waiveBox = document.getElementById('waive-onboarding');
+    if (waiveBox) {
+      waiveBox.checked = state.waive_onboarding === true;
+      waiveBox.addEventListener('change', () => { state.waive_onboarding = waiveBox.checked; });
+    }
+
     // =========================================================================
     // Signers
     // =========================================================================
@@ -2288,6 +2311,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           overrides: state.overrides,
           engagement_strategy,
           tier_overrides: Object.keys(tier_overrides_payload).length > 0 ? tier_overrides_payload : undefined,
+          waive_onboarding: state.waive_onboarding === true,
         },
       };
 

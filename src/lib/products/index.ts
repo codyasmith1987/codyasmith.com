@@ -191,6 +191,8 @@ export function composeProposal(args: ComposeArgs): ProposalConfig {
     discount_rate: typeof args.client.discount_rate === 'number'
       ? Math.max(0, Math.min(1, args.client.discount_rate))
       : 0,
+    // Reissue / already-onboarded waiver, set by the admin in the wizard.
+    waive_onboarding: args.waive_onboarding === true ? true : undefined,
     narrative: {
       intro,
       sections,
@@ -777,6 +779,8 @@ export function composePricing(args: {
   // and disagreed with the contract for any client with 2+ sites.
   const managedSites = args.config.managed_sites;
   const engagementStrategy = args.config.engagement_strategy ?? null;
+  // Reissue / already-onboarded: zero the one-time setup fees.
+  const waiveOnboarding = args.config.waive_onboarding === true;
 
   let monthly = 0;
   let oneTime = 0;
@@ -789,6 +793,7 @@ export function composePricing(args: {
     products,
     managedSites,
     engagementStrategy,
+    waiveOnboarding,
   });
   const mcCtx = buildContextForProduct({
     id: 'marketing-consulting',
@@ -797,6 +802,7 @@ export function composePricing(args: {
     products,
     managedSites,
     engagementStrategy,
+    waiveOnboarding,
   });
 
   // Iterate products in order, accumulating.
@@ -815,6 +821,7 @@ export function composePricing(args: {
       products,
       managedSites,
       engagementStrategy,
+      waiveOnboarding,
     });
     const contribution = product.computePricing(ctx);
     monthly += contribution.monthly;
@@ -930,6 +937,8 @@ function buildContextForProduct(args: {
   // Engagement strategy too — same gap (some snippets read it,
   // dispatcher path was dropping it).
   engagementStrategy?: EngagementStrategy | null;
+  // Reissue / already-onboarded waiver from the proposal config.
+  waiveOnboarding?: boolean;
 }): ProductContext {
   const product = PRODUCT_REGISTRY[args.id];
   const variables = args.productVars[args.id] || {};
@@ -976,6 +985,7 @@ function buildContextForProduct(args: {
     allProductVars: args.productVars,
     managedSites: args.managedSites,
     engagementStrategy: args.engagementStrategy ?? null,
+    waiveOnboarding: args.waiveOnboarding ?? false,
   };
 }
 

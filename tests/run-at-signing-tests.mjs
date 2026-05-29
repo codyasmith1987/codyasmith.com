@@ -13,6 +13,7 @@
 // client discount. Runs via tsx because the modules are TypeScript.
 
 import { computePricing } from '../src/lib/proposal-pricing.ts';
+import { buildScheduleA } from '../src/lib/contract-schedule.ts';
 
 const results = [];
 function test(name, pass, detail = '') {
@@ -67,6 +68,31 @@ function run() {
   // With a client discount, the invariant holds on the post-discount figures.
   checkInvariant('product_driven WM+MC, 10% discount',
     computePricing('product_driven_v1', { wm_tier: 'better', mc_yes_no: 'yes', mc_tier: 'better' }, pdConfig({ discount_rate: 0.10 })));
+
+  // Schedule A's A.4 "Amount due at signing" block, product_driven path:
+  // built by the formula-agnostic dispatcher from the composed pricing.
+  // Items reconcile to the total, total equals atSigning, post-discount.
+  for (const disc of [0, 0.10]) {
+    const sel = { wm_tier: 'better', mc_yes_no: 'yes', mc_tier: 'better' };
+    const cfg = pdConfig(disc ? { discount_rate: disc } : {});
+    const pricing = computePricing('product_driven_v1', sel, cfg);
+    const scheduleA = buildScheduleA({
+      proposalConfig: cfg,
+      draftSelections: sel,
+      pricing,
+      clientMetadata: {},
+      effectiveDate: '2026-06-01',
+    });
+    const label = `Schedule A A.4 (product_driven, ${disc ? '10% disc' : 'no disc'})`;
+    const ads = scheduleA.amount_due_at_signing;
+    test(`${label}: populated`, !!ads && Array.isArray(ads.line_items) && ads.line_items.length > 0);
+    test(`${label}: total equals atSigning`, !!ads && near(ads.total, pricing.atSigning),
+      ads ? `total ${ads.total} vs atSigning ${pricing.atSigning}` : 'no block');
+    const itemSum = ads ? cents(ads.line_items.reduce((s, li) => s + li.amount, 0)) : NaN;
+    test(`${label}: line items sum to total`, !!ads && near(itemSum, ads.total),
+      ads ? `items ${itemSum} vs total ${ads.total}` : 'no block');
+    test(`${label}: has a first-month recurring line`, !!ads && ads.line_items.some(li => /First month/i.test(li.label)));
+  }
 
   const failed = results.filter(r => !r.pass);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);

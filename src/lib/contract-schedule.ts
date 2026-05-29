@@ -23,6 +23,16 @@ export const BILLING_CADENCE_NOTE =
   'to the next billing anchor day; from there forward the site bills ' +
   'with all others on the agreement on a single monthly close.';
 
+// Standing language under the Schedule A "Amount due at signing" block.
+// Section 5.2: one-time fees are billed in full at signing and the first
+// month of every recurring fee is collected with them; work does not
+// begin until it clears.
+export const AT_SIGNING_NOTE =
+  'This total is every one-time fee (onboarding, initial audit, and build, ' +
+  'each billed in full at signing) plus the first month of every recurring ' +
+  'fee. It must clear before the Practice begins work. Recurring fees then ' +
+  'bill monthly in advance per section 5.3.';
+
 export interface ScheduleAContext {
   proposalConfig: any;
   draftSelections: Record<string, string | null>;
@@ -98,6 +108,17 @@ export interface ScheduleA {
   pass_through_items: PassThroughItem[];
   build_sow_ref: string | null;
   other_sow_ref: string | null;
+  // Itemized amount due at signing per section 5.2: one-time fees plus
+  // the first month of every recurring fee. Total equals the pricing
+  // result's atSigning (post-discount). Null until pricing is known
+  // (e.g. an empty preview before products are chosen).
+  amount_due_at_signing: AmountDueAtSigning | null;
+}
+
+export interface AmountDueAtSigning {
+  line_items: Array<{ label: string; amount: number }>;
+  total: number;
+  note: string;
 }
 
 export interface WebManagementSection {
@@ -181,7 +202,61 @@ export function buildScheduleA(ctx: ScheduleAContext): ScheduleA {
   else if (formula === 'product_driven_v1') schedule = buildScheduleAForProductDrivenV1(ctx);
   else schedule = emptyScheduleA(ctx.effectiveDate);
   schedule.hours_and_rates.billing_anchor_day = clampBillingAnchorDay(ctx.billingAnchorDay);
+  // Itemize the amount due at signing from the already-computed pricing,
+  // after each formula has applied any discount. Both formula paths put
+  // their one-time fees in pricing.breakdown and their recurring split in
+  // mgmtMonthly/consultingMonthly, so the items reconcile to atSigning.
+  schedule.amount_due_at_signing = buildAmountDueAtSigning(ctx.pricing);
   return schedule;
+}
+
+// Build the itemized at-signing block from a pricing result. One-time
+// fees come from the pricing breakdown (each product contributes its
+// onboarding / audit / build fee there); the first month of recurring
+// comes from mgmtMonthly + consultingMonthly, with any remaining
+// recurring (other products) captured as a residual so the line items
+// always sum to the authoritative atSigning total.
+function buildAmountDueAtSigning(pricing: PricingLike | null): AmountDueAtSigning | null {
+  if (!pricing) return null;
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const items: Array<{ label: string; amount: number }> = [];
+
+  // One-time fees. Skip non-positive lines (e.g. the discount marker
+  // line composePricing pushes at amount 0; discounted figures are
+  // already net in the remaining lines).
+  for (const r of pricing.breakdown || []) {
+    if (typeof r.amount === 'number' && r.amount > 0.005) {
+      items.push({ label: r.label, amount: round2(r.amount) });
+    }
+  }
+
+  // First month of every recurring fee.
+  const mgmt = typeof pricing.mgmtMonthly === 'number' ? pricing.mgmtMonthly : 0;
+  const consulting = typeof pricing.consultingMonthly === 'number' ? pricing.consultingMonthly : 0;
+  if (mgmt > 0.005) {
+    items.push({
+      label: `First month, Web Management${pricing.mgmtTierName ? ` (${pricing.mgmtTierName})` : ''}`,
+      amount: round2(mgmt),
+    });
+  }
+  if (consulting > 0.005) {
+    items.push({
+      label: `First month, Marketing Consulting${pricing.consultingTierName ? ` (${pricing.consultingTierName})` : ''}`,
+      amount: round2(consulting),
+    });
+  }
+  // Any recurring not represented by WM/MC (e.g. a recurring other-SOW).
+  const otherRecurring = round2((pricing.monthly || 0) - mgmt - consulting);
+  if (otherRecurring > 0.005) {
+    items.push({ label: 'First month, other recurring services', amount: otherRecurring });
+  }
+
+  const total = typeof pricing.atSigning === 'number'
+    ? round2(pricing.atSigning)
+    : round2((pricing.oneTime || 0) + (pricing.monthly || 0));
+
+  if (items.length === 0 && total <= 0) return null;
+  return { line_items: items, total, note: AT_SIGNING_NOTE };
 }
 
 // product_driven_v1: walks the config's in-scope products, asks each
@@ -408,6 +483,8 @@ function buildScheduleAForRaisedBarV1(ctx: ScheduleAContext): ScheduleA {
     pass_through_items: passThrough,
     build_sow_ref,
     other_sow_ref: null,
+    // Set by the buildScheduleA dispatcher from ctx.pricing.
+    amount_due_at_signing: null,
   };
 }
 
@@ -545,5 +622,6 @@ function emptyScheduleA(effectiveDate: string): ScheduleA {
     pass_through_items: [],
     build_sow_ref: null,
     other_sow_ref: null,
+    amount_due_at_signing: null,
   };
 }

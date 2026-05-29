@@ -147,7 +147,13 @@ export function detectFormat(raw: string, filename: string): { format: CsvFormat
   // (date suffix varies, "GA4" tag inconsistent), so match on the
   // distinctive report-name substring rather than exact equality.
   // Order matters: more specific patterns first.
-  const normalizedName = filename.toLowerCase().replace(/^.*[\\/]/, '');
+  // Strip the directory path AND any ZIP-entry prefix. The CSV upload
+  // route tags files unpacked from a ZIP as "<archive>.zip:<basename>"
+  // (so the UI chip shows which archive a CSV came from). Without
+  // stripping that prefix, the exact-match GSC switch below never fires
+  // for GSC Performance exports, which ship as ZIPs, and every GSC CSV
+  // falls through to unknown_stored.
+  const normalizedName = filename.toLowerCase().replace(/^.*[\\/]/, '').replace(/^.*\.zip:/, '');
   if (normalizedName.includes('reports_snapshot')) {
     return { format: 'ga4_reports_snapshot', headers: [] };
   }

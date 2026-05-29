@@ -296,6 +296,9 @@ function pickPublicPricing(config: any, draft: ProposalDraft | null) {
   return {
     oneTime: pricing.oneTime,
     monthly: pricing.monthly,
+    // Expose the canonical at-signing total so the proposal page renders
+    // it directly instead of re-deriving oneTime + monthly client-side.
+    atSigning: pricing.atSigning,
   };
 }
 
@@ -619,8 +622,11 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
     const monthly = pricing?.monthly ?? 0;
     // Amount actually due when the agreement is signed, per contract
     // section 5.2: one-time fees (100% at signing) plus the first month of
-    // every recurring fee. Work does not begin until it clears.
-    const atSigning = pricing?.atSigning ?? (oneTime + monthly);
+    // every recurring fee. Read the canonical pricing.atSigning directly
+    // (no re-derivation from components) so the confirmation emails show
+    // exactly what the contract Schedule A A.4 shows. 0 only if pricing is
+    // null, in which case oneTime/monthly are also 0.
+    const atSigning = pricing?.atSigning ?? 0;
     let agreement: ClientAgreement;
     try {
       agreement = await ensureDraftAgreementForAcceptedProposal(proposal, draft, pricing, user.id);

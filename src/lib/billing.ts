@@ -23,26 +23,36 @@ async function queryAll(sql: string, args: any[] = []): Promise<any[]> {
 // Billing Period
 // ============================================================
 
+// Format a Date as YYYY-MM-DD from its LOCAL components (not toISOString,
+// which is UTC and can shift the day across a timezone boundary).
+function fmtDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export function getCurrentBillingPeriod(billingDay: number): { start: string; end: string } {
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth(); // 0-indexed
 
-  // If we haven't reached billing day this month, the current period started last month
+  // A period anchored on day D runs from D of one month to (D-1) of the
+  // next. The end is computed with Date arithmetic, not string math, so
+  // D=1 yields the last day of the start month (e.g. 2026-05-31), NOT the
+  // malformed "2026-06-00" the old `billingDay - 1` string produced. JS
+  // Date normalizes day 0 to the prior month's last day.
   if (now.getDate() < billingDay) {
-    const startMonth = month === 0 ? 11 : month - 1;
-    const startYear = month === 0 ? year - 1 : year;
-    const start = `${startYear}-${String(startMonth + 1).padStart(2, '0')}-${String(billingDay).padStart(2, '0')}`;
-    const end = `${year}-${String(month + 1).padStart(2, '0')}-${String(billingDay - 1).padStart(2, '0')}`;
-    return { start, end };
+    // We haven't reached billing day this month; the current period
+    // started on billingDay of LAST month and ends the day before
+    // billingDay of THIS month.
+    const start = new Date(year, month - 1, billingDay);
+    const end = new Date(year, month, billingDay - 1);
+    return { start: fmtDate(start), end: fmtDate(end) };
   }
 
-  // Otherwise, current period started this month
-  const endMonth = month === 11 ? 0 : month + 1;
-  const endYear = month === 11 ? year + 1 : year;
-  const start = `${year}-${String(month + 1).padStart(2, '0')}-${String(billingDay).padStart(2, '0')}`;
-  const end = `${endYear}-${String(endMonth + 1).padStart(2, '0')}-${String(billingDay - 1).padStart(2, '0')}`;
-  return { start, end };
+  // Otherwise the current period started on billingDay of THIS month and
+  // ends the day before billingDay of NEXT month.
+  const start = new Date(year, month, billingDay);
+  const end = new Date(year, month + 1, billingDay - 1);
+  return { start: fmtDate(start), end: fmtDate(end) };
 }
 
 export async function invoiceExistsForPeriod(contractId: string, periodStart: string, periodEnd: string): Promise<boolean> {

@@ -459,6 +459,20 @@ export interface ProposalConfig {
   prepared_for: string;
   prepared_on: string;
   title: string;
+  // ── Price-reduction mechanisms (three independent handles; can compose) ──
+  // Reach for the right one; they all lower what the buyer sees but mean
+  // different things and apply at different layers:
+  //   (A) waive_onboarding  → zeros ONLY the one-time setup fees (WM
+  //       onboarding + MC audit) uniformly. Use for an existing-client
+  //       REISSUE where setup was already paid. Recurring is untouched.
+  //   (B) discount_rate     → scales ALL fees (one-time + recurring)
+  //       proportionally. Use for PRO-BONO / negotiated discounts.
+  //   (C) client_sites.onboarding_override (per-site, migration 047) →
+  //       sets one site's onboarding to an exact amount (incl. 0). Use for
+  //       GRANULAR carve-outs: build-produced sites (auto 0) or a single
+  //       grandfathered/already-onboarded site in a mixed pool.
+  // The wizard surfaces (A) today; (B) comes from the client record; (C)
+  // is set on client_sites. They compose (e.g. discount + waiver together).
   // Per-client discount, snapshotted at proposal-compose time so the
   // buyer's pricing does not silently change if the client record
   // is edited later. Decimal: 0.10 = 10% off.

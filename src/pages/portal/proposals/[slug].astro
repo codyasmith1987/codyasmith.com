@@ -1165,11 +1165,15 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
     return '';
   }
   // Render the three totals rows from a one-time and monthly figure. The
-  // at-signing total is always one-time plus the first month.
-  function applyTotals(oneTime, monthly) {
+  // at-signing total prefers the canonical server value (state.pricing.
+  // atSigning) when present, so the buyer's "Due when you sign" line is
+  // byte-for-byte the contract Schedule A A.4 figure; it falls back to
+  // one-time plus the first month only for the page-side raised_bar math.
+  function applyTotals(oneTime, monthly, atSigning) {
+    var due = (typeof atSigning === 'number') ? atSigning : (oneTime + monthly);
     setSummary('summary-onetime', moneyInt(oneTime), true);
     setSummary('summary-monthly', money(monthly) + ' / month', true);
-    setSummary('summary-atsigning', moneyAuto(oneTime + monthly), true);
+    setSummary('summary-atsigning', moneyAuto(due), true);
     setRowVisible('row-onetime', oneTime > 0);
     setRowVisible('row-monthly', monthly > 0);
     var note = document.getElementById('summary-atsigning-note');
@@ -1312,15 +1316,18 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
   function acceptedTotalsHtml() {
     var oneTime = null;
     var monthly = null;
+    var atSigning = null;
     if (PRICING_FORMULA === 'raised_bar_v1' && selectionsComplete()) {
       oneTime = rbOneTimeTotal();
       monthly = rbMonthlyTotal();
     } else if (selectionsComplete() && state.pricing && typeof state.pricing.oneTime === 'number' && typeof state.pricing.monthly === 'number') {
       oneTime = state.pricing.oneTime;
       monthly = state.pricing.monthly;
+      if (typeof state.pricing.atSigning === 'number') atSigning = state.pricing.atSigning;
     }
     if (typeof oneTime !== 'number' || typeof monthly !== 'number') return '';
-    return '<p class="success-note">Accepted totals: ' + moneyAuto(oneTime + monthly) +
+    var due = (typeof atSigning === 'number') ? atSigning : (oneTime + monthly);
+    return '<p class="success-note">Accepted totals: ' + moneyAuto(due) +
       ' due when you sign (one-time setup ' + moneyInt(oneTime) + ' plus first month ' + money(monthly) +
       '); ' + money(monthly) + ' / month thereafter.</p>';
   }
@@ -1507,7 +1514,7 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
     if (PRICING_FORMULA === 'raised_bar_v1' && selectionsComplete()) {
       applyTotals(rbOneTimeTotal(), rbMonthlyTotal());
     } else if (selectionsComplete() && state.pricing && typeof state.pricing.oneTime === 'number' && typeof state.pricing.monthly === 'number') {
-      applyTotals(state.pricing.oneTime, state.pricing.monthly);
+      applyTotals(state.pricing.oneTime, state.pricing.monthly, state.pricing.atSigning);
     } else {
       setSummary('summary-onetime', '—', false);
       setSummary('summary-monthly', '—', false);

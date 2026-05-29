@@ -6,12 +6,32 @@ import turso from './turso';
 let _s3: S3Client | null = null;
 function getS3(): S3Client {
   if (!_s3) {
+    // Validate credentials up front and fail with a descriptive message
+    // naming the missing var(s). Without this, a missing DO_SPACES_KEY
+    // surfaced only as the AWS SDK's cryptic "Resolved credential object
+    // is not valid" deep in uploadFile (which sign.ts swallowed), so
+    // every executed PDF silently failed to store. This is lazy (on first
+    // storage use) rather than at module load, so a storage misconfig
+    // does not take down the whole app, but it is now immediately legible.
+    const endpoint = import.meta.env.DO_SPACES_ENDPOINT;
+    const key = import.meta.env.DO_SPACES_KEY;
+    const secret = import.meta.env.DO_SPACES_SECRET;
+    const bucket = import.meta.env.DO_SPACES_BUCKET;
+    const missing = [
+      !endpoint && 'DO_SPACES_ENDPOINT',
+      !key && 'DO_SPACES_KEY',
+      !secret && 'DO_SPACES_SECRET',
+      !bucket && 'DO_SPACES_BUCKET',
+    ].filter(Boolean);
+    if (missing.length > 0) {
+      throw new Error(`Storage misconfigured: missing ${missing.join(', ')}. File upload and download are unavailable until these env vars are set on the app.`);
+    }
     _s3 = new S3Client({
-      endpoint: import.meta.env.DO_SPACES_ENDPOINT,
+      endpoint,
       region: import.meta.env.DO_SPACES_REGION || 'us-east-1',
       credentials: {
-        accessKeyId: import.meta.env.DO_SPACES_KEY,
-        secretAccessKey: import.meta.env.DO_SPACES_SECRET,
+        accessKeyId: key,
+        secretAccessKey: secret,
       },
       forcePathStyle: false,
     });

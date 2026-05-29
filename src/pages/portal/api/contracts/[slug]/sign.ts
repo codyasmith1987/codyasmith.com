@@ -186,12 +186,20 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
     });
   }
 
-  // Generate the PDF, drop it in files, mark finalized.
+  // Generate the PDF, then upload it. Generation and upload are split
+  // into separate try blocks: an upload failure (e.g. storage misconfig)
+  // is now distinguishable from a render failure AND is recorded in the
+  // activity log. A single silent catch around both is exactly what hid
+  // the missing DO_SPACES_KEY (every executed PDF failed to store, with
+  // no signal). pdfBase64 is captured at generation time so the
+  // fully-executed email can still attach the PDF even if storage upload
+  // fails.
   let pdfFileId: string | null = null;
   let pdfBase64: string | undefined;
   let pdfFilename: string | undefined;
+  let pdfBuffer: Buffer | null = null;
   try {
-    const pdfBuffer = await generateContractPdf({
+    pdfBuffer = await generateContractPdf({
       template,
       context: renderContext as any,
       resolvedBodyMarkdown: template.body_markdown,
@@ -207,27 +215,47 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
       }),
       practice: PRACTICE,
     });
-    // Look up client slug for the storage key prefix.
-    const clientRow = await turso.execute({
-      sql: `SELECT slug FROM clients WHERE id = ? LIMIT 1`,
-      args: [agreement.client_id],
-    });
-    const clientSlug = (clientRow.rows[0]?.[0] as string) || 'unknown';
     pdfBase64 = pdfBuffer.toString('base64');
     pdfFilename = `${agreement.slug}-executed-${new Date().toISOString().slice(0, 10)}.pdf`;
-    const upload = await uploadFile(
-      clientSlug,
-      new Date().toISOString().slice(0, 7),
-      pdfFilename,
-      pdfBuffer,
-      'application/pdf',
-      agreement.client_id,
-      user.id,
-      'contract',
-    );
-    pdfFileId = upload?.id || null;
   } catch (err) {
     logger.error('contract PDF generation failed', err);
+  }
+  if (pdfBuffer && pdfFilename) {
+    try {
+      // Look up client slug for the storage key prefix.
+      const clientRow = await turso.execute({
+        sql: `SELECT slug FROM clients WHERE id = ? LIMIT 1`,
+        args: [agreement.client_id],
+      });
+      const clientSlug = (clientRow.rows[0]?.[0] as string) || 'unknown';
+      const upload = await uploadFile(
+        clientSlug,
+        new Date().toISOString().slice(0, 7),
+        pdfFilename,
+        pdfBuffer,
+        'application/pdf',
+        agreement.client_id,
+        user.id,
+        'contract',
+      );
+      pdfFileId = upload?.id || null;
+    } catch (err) {
+      logger.error('contract PDF upload failed', err);
+      // Surface the storage failure in the audit trail so a missing PDF
+      // is visible immediately, not discovered when a client tries to
+      // download it. The agreement still finalizes (the PDF can be
+      // regenerated once storage is healthy).
+      try {
+        await logActivity({
+          clientId: agreement.client_id,
+          userId: user.id,
+          action: 'pdf_upload_failed',
+          entityType: 'agreement',
+          entityId: agreement.id,
+          summary: `Executed PDF for ${agreement.title} generated but FAILED to store (storage error). Agreement is finalized with no downloadable PDF; regenerate once storage is healthy. Error: ${String((err as any)?.message || err).slice(0, 200)}`,
+        });
+      } catch { /* best-effort */ }
+    }
   }
 
   const finalizedOk = await tryMarkAgreementFinalized(agreement.id, documentHash, pdfFileId);
@@ -274,7 +302,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
         action: 'contract_handoff_failed',
         entityType: 'agreement',
         entityId: agreement.id,
-        summary: `Billing handoff FAILED for ${agreement.title}. Agreement is executed; create the billable contract manually. Error: ${String((err as any)?.message || err).slice(0, 200)}`,
+        summary: `INCIDENT: billing handoff did NOT complete for ${agreement.title}. Automatic contract + at-signing invoice creation failed. The agreement is executed but has no billable contract yet; create one manually as recovery and investigate. Error: ${String((err as any)?.message || err).slice(0, 200)}`,
       });
     } catch { /* best-effort */ }
   }

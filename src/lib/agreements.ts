@@ -199,6 +199,18 @@ export async function updateAgreementScheduleA(id: string, scheduleA: any): Prom
   });
 }
 
+// Bump a not-yet-executed agreement to a newer contract template version.
+// Guarded to draft/issued/partially_signed so an executed (legally final)
+// agreement is never silently re-versioned. Nulls document_hash so any
+// prior signature is invalidated and the signer re-reviews the new body.
+export async function updateAgreementTemplateVersion(id: string, version: number): Promise<void> {
+  await turso.execute({
+    sql: `UPDATE client_agreements SET template_version = ?, document_hash = NULL
+           WHERE id = ? AND status IN ('draft','issued','partially_signed')`,
+    args: [version, id],
+  });
+}
+
 export async function updateAgreementStatus(id: string, status: AgreementStatus): Promise<void> {
   await turso.execute({
     sql: `UPDATE client_agreements SET status = ? WHERE id = ?`,

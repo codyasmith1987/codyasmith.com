@@ -12,10 +12,12 @@ import {
   getAgreementBySlug,
   upsertClientMetadata,
   updateAgreementScheduleA,
+  updateAgreementTemplateVersion,
   getSignersForAgreement,
   getActiveSignatureForSigner,
 } from '../../../../../lib/agreements';
 import { getDraft } from '../../../../../lib/proposal-drafts';
+import { getLatestContractTemplate } from '../../../../../lib/contract-templates';
 import { buildScheduleA } from '../../../../../lib/contract-schedule';
 import { listManagedSites } from '../../../../../lib/client-sites';
 import { computePricing } from '../../../../../lib/proposal-pricing';
@@ -105,6 +107,18 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
       });
       await updateAgreementScheduleA(agreement.id, newScheduleA);
       scheduleARebuilt = true;
+
+      // Keep the template body in sync with the freshly rebuilt Schedule A.
+      // template_version is pinned at agreement creation, so an agreement
+      // drafted before a template bump (e.g. v3 -> v4, build 50/50 ->
+      // 100% at signing) would render an old body against a new Schedule A.
+      // Since intake already rebuilds the schedule and invalidates
+      // signatures, bump to the latest version of the same template here so
+      // the two stay a matched set. Guarded to non-executed agreements.
+      const latestTemplate = await getLatestContractTemplate(agreement.template_slug);
+      if (latestTemplate && latestTemplate.version > agreement.template_version) {
+        await updateAgreementTemplateVersion(agreement.id, latestTemplate.version);
+      }
     }
   }
 

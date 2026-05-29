@@ -329,7 +329,7 @@ function renderScheduleAPage(doc: any, s: ScheduleA): void {
   doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.8 Pass-through items at signing');
   doc.font('Helvetica').fontSize(10).fillColor('#222');
   if (s.pass_through_items.length > 0) {
-    doc.list(s.pass_through_items.map(p => `${p.name} — $${p.annual_cost.toLocaleString('en-US')} (${p.billing_note})`));
+    doc.list(s.pass_through_items.map(p => `${p.name}: $${p.monthly_cost.toLocaleString('en-US')}/month (${p.billing_note})`));
   } else {
     doc.text('None at signing.');
   }

@@ -82,7 +82,7 @@ const csrfToken = Astro.locals.csrfToken || '';
       <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-6 space-y-4">
         <div>
           <label class="block text-xs font-mono uppercase tracking-[0.18em] text-amber-600 mb-2">Title</label>
-          <input type="text" id="title-input" placeholder="Master Services Agreement — Client name" class="w-full bg-neutral-950 border border-white/10 rounded-lg px-3 py-2 text-sm text-neutral-200" />
+          <input type="text" id="title-input" placeholder="Master Services Agreement - Client name" class="w-full bg-neutral-950 border border-white/10 rounded-lg px-3 py-2 text-sm text-neutral-200" />
         </div>
         <div>
           <label class="block text-xs font-mono uppercase tracking-[0.18em] text-amber-600 mb-2">Slug</label>
@@ -156,7 +156,7 @@ const csrfToken = Astro.locals.csrfToken || '';
     var signers = [];
     try { signers = JSON.parse(opt.getAttribute('data-signers') || '[]'); } catch (e) {}
     if (clientSelect) clientSelect.value = clientId;
-    if (titleInput) titleInput.value = 'Master Services Agreement — ' + clientName;
+    if (titleInput) titleInput.value = 'Master Services Agreement - ' + clientName;
     if (slugInput) slugInput.value = slug + '-msa';
     signersList.innerHTML = '';
     signers.forEach(function(s, i) {

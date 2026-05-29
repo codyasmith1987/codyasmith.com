@@ -30,7 +30,10 @@ import { generateContractPdf } from '../../../../../lib/contract-pdf';
 import {
   sendCountersignNeededEmail,
   sendFullyExecutedEmail,
+  sendAtSigningInvoiceEmail,
 } from '../../../../../lib/contract-emails';
+import { getInvoice } from '../../../../../lib/invoices';
+import { generateInvoicePdf } from '../../../../../lib/pdf';
 import turso from '../../../../../lib/turso';
 
 export const prerender = false;
@@ -296,8 +299,10 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
   // breaks execution (the agreement is already finalized above); the
   // handoff is idempotent and can be retried. We run it on the winning
   // finalize path only, so it creates exactly one contract per agreement.
+  let atSigningInvoiceId: string | null = null;
   try {
     const handoff = await ensureBillingContractFromAgreement(agreement, user.id);
+    atSigningInvoiceId = handoff.invoiceId;
     await logActivity({
       clientId: agreement.client_id,
       userId: user.id,
@@ -318,6 +323,53 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
         summary: `INCIDENT: billing handoff did NOT complete for ${agreement.title}. Automatic contract + at-signing invoice creation failed. The agreement is executed but has no billable contract yet; create one manually as recovery and investigate. Error: ${String((err as any)?.message || err).slice(0, 200)}`,
       });
     } catch { /* best-effort */ }
+  }
+
+  // At-signing invoice auto-email + PDF. Closes the last manual step in
+  // every execution: the client is told what to pay to start, with the
+  // invoice attached, instead of having to find it in the portal. Only
+  // fires when the handoff actually raised an invoice (skipped for the
+  // backfill / already-paid path). Wrapped so any failure never breaks
+  // execution; the invoice is already created and client-visible.
+  if (atSigningInvoiceId) {
+    try {
+      const invoice = await getInvoice(atSigningInvoiceId);
+      let invPdfBase64: string | undefined;
+      let invPdfFilename: string | undefined;
+      try {
+        const invBuffer = await generateInvoicePdf(atSigningInvoiceId);
+        invPdfBase64 = invBuffer.toString('base64');
+        invPdfFilename = `${invoice?.invoice_number || 'invoice'}.pdf`;
+      } catch (err) {
+        logger.error('at-signing invoice PDF generation failed', err);
+      }
+      const invoicesUrl = `${baseUrl}/portal/invoices`;
+      for (const signer of signers) {
+        try {
+          await sendAtSigningInvoiceEmail({
+            recipient: signer,
+            agreement,
+            invoiceNumber: invoice?.invoice_number || '',
+            amountDue: invoice?.total ?? 0,
+            invoicesUrl,
+            pdfBase64: invPdfBase64,
+            pdfFilename: invPdfFilename,
+          });
+        } catch (err) {
+          logger.error(`at-signing invoice email to ${signer.email_snapshot} failed`, err);
+        }
+      }
+      await logActivity({
+        clientId: agreement.client_id,
+        userId: user.id,
+        action: 'at_signing_invoice_emailed',
+        entityType: 'agreement',
+        entityId: agreement.id,
+        summary: `At-signing invoice ${invoice?.invoice_number || atSigningInvoiceId} emailed to ${signers.length} signer(s) for ${agreement.title}.`,
+      });
+    } catch (err) {
+      logger.error('at-signing invoice email block failed', err);
+    }
   }
 
   // Send fully-executed emails to each signer with the PDF attached.

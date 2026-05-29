@@ -166,6 +166,40 @@ export async function sendFullyExecutedEmail(args: {
   });
 }
 
+// 5.5b At-signing invoice. Sent to each signer right after execution, with
+// the invoice PDF attached. Closes the last manual step: the client no
+// longer has to discover the invoice in the portal. Value-first copy.
+export async function sendAtSigningInvoiceEmail(args: {
+  recipient: AgreementSigner;
+  agreement: ClientAgreement;
+  invoiceNumber: string;
+  amountDue: number;
+  invoicesUrl: string;
+  pdfBase64?: string;
+  pdfFilename?: string;
+}): Promise<boolean> {
+  const fn = firstName(args.recipient.name_snapshot);
+  const amount = '$' + args.amountDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const hasPdf = !!(args.pdfBase64 && args.pdfFilename);
+  const inner = `
+    <h2 style="font-size: 22px; margin: 0 0 16px;">You are all set. Here is your invoice to get started.</h2>
+    <p style="font-size: 15px; color: #4a4239; margin: 0 0 16px;">Hey ${escapeHtml(fn)}, the agreement is fully executed and I am ready to begin. Here is the invoice that kicks things off: <strong>${escapeHtml(amount)}</strong> (invoice ${escapeHtml(args.invoiceNumber)}). It covers your one-time setup and your first month. The day it clears, I start.</p>
+    <p style="font-size: 15px; color: #4a4239; margin: 0 0 20px;">${hasPdf ? 'It is attached here and waiting in your portal.' : 'It is waiting in your portal.'}</p>
+    <p style="margin: 24px 0;">
+      <a href="${escapeHtml(args.invoicesUrl)}" style="display: inline-block; background: #1a1814; color: #faf7f2; padding: 12px 22px; text-decoration: none; font-size: 15px;">View your invoice</a>
+    </p>
+    <p style="font-size: 15px; color: #4a4239; margin: 16px 0 0;">Reach me any time if you have a question about it.</p>
+  `;
+  const attachments: BrevoAttachment[] = [];
+  if (hasPdf) attachments.push({ name: args.pdfFilename!, content: args.pdfBase64! });
+  return sendBrevo({
+    to: [{ email: args.recipient.email_snapshot, name: args.recipient.name_snapshot }],
+    subject: `Your invoice to get started: ${args.agreement.title}`,
+    html: shell(inner),
+    attachments: attachments.length > 0 ? attachments : undefined,
+  });
+}
+
 // 5.6 Signer revoked. Sent to other signers.
 export async function sendSignerRevokedEmail(args: {
   revokedBy: AgreementSigner;

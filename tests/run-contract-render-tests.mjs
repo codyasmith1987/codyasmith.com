@@ -4,6 +4,7 @@
 // substitution, hash determinism, and Schedule A conditional sections.
 // Runs via tsx because the modules are TypeScript.
 
+import { readFileSync } from 'node:fs';
 import { renderTemplate, renderTemplateToMarkdown, renderScheduleA, computeDocumentHash, PRACTICE } from '../src/lib/contract-render.ts';
 import { buildScheduleA } from '../src/lib/contract-schedule.ts';
 import { computePricing } from '../src/lib/proposal-pricing.ts';
@@ -300,6 +301,25 @@ async function run() {
     const sites = scheduleA.web_management?.sites || [];
     const hasAlt = sites.some(s => s.domain === 'raisedbarconstruction.com');
     test('schedule_a resolves alternative Builders domain', hasAlt, `got: ${sites.map(s => s.domain).join(', ')}`);
+  }
+
+  // Test 16: standard-v5 template is clean and a faithful copy of v4.
+  // v5 only removes the stray </content>/</invoke> artifacts that printed
+  // into the executed PDF; nothing else may drift.
+  {
+    const tplDir = new URL('../src/contracts/templates/', import.meta.url);
+    const v4 = readFileSync(new URL('standard-v4.md', tplDir), 'utf-8');
+    const v5 = readFileSync(new URL('standard-v5.md', tplDir), 'utf-8');
+    test('v5: no </content> artifact', !v5.includes('</content>'));
+    test('v5: no </invoke> artifact', !v5.includes('</invoke>'));
+    test('v5: no stray closing markup', !/<\/(content|invoke|function_calls|parameter)>/.test(v5));
+    // v5 must equal v4 with the artifact lines stripped (no content drift).
+    // Trailing-whitespace normalized: v5 ends with a final newline (better
+    // practice), v4 did not; that difference is not drift.
+    const v4Clean = v4.split('\n').filter(l => l.trim() !== '</content>' && l.trim() !== '</invoke>').join('\n').trimEnd();
+    const v5Clean = v5.trimEnd();
+    test('v5: identical to v4 minus the artifacts', v5Clean === v4Clean,
+      v5Clean === v4Clean ? '' : 'v5 drifted from v4 beyond the artifact removal');
   }
 
   // Print summary.

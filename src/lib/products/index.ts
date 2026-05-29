@@ -933,6 +933,55 @@ export function composePricing(args: {
   };
 }
 
+// Bundled-tier mode (the Raised Bar / Jason 5/22 shape). A single
+// buyer-facing Good/Better/Best card fuses Web Management + Marketing
+// Consulting into one monthly + one to-start figure, with an optional
+// add-on card below. The bundle is a PRESENTATION + buyer-decision layer
+// only: all money stays registry-derived. This helper expands the single
+// `bundle_tier` pick (and the optional `bundle_addon` toggle) into the
+// canonical per-product selection keys (wm_tier / mc_yes_no / mc_tier /
+// build_options) BEFORE composePricing and buildScheduleA run, so both
+// derive identically from the unchanged product registry. That is the
+// structural opposite of the rejected hardcoded-bundle approach (PR #195):
+// the bundle never stores dollar figures.
+//
+// When config.bundle is absent it returns the selections unchanged, so
+// every non-bundle product_driven_v1 proposal behaves byte-for-byte as
+// before. Pure and idempotent: re-expanding an already-expanded map sets
+// the same keys to the same values.
+export function expandBundleSelections(
+  config: any,
+  selections: Record<string, string | null>,
+): Record<string, string | null> {
+  const bundle = config?.bundle;
+  if (!bundle || !bundle.tiers || !selections) return selections;
+  const pick = selections.bundle_tier;
+  if (pick !== 'good' && pick !== 'better' && pick !== 'best') return selections;
+  const map = bundle.tiers[pick];
+  const wm = map?.wm;
+  const mc = map?.mc;
+  if (wm !== 'good' && wm !== 'better' && wm !== 'best') return selections;
+  const expanded: Record<string, string | null> = {
+    ...selections,
+    wm_tier: wm,
+    mc_yes_no: 'yes',
+    mc_tier: (mc === 'good' || mc === 'better' || mc === 'best') ? mc : wm,
+  };
+  // Optional add-on: "add" maps to the add-on's build option (a net-new
+  // site plus a subsequent build at the 20% discount); "skip" maps to the
+  // no-add baseline option. Both option ids must exist in the build
+  // product's build_options so the canonical build/WM math prices them.
+  const addon = bundle.addon;
+  if (addon && typeof selections.bundle_addon === 'string') {
+    if (selections.bundle_addon === 'add' && addon.build_option_id) {
+      expanded.build_options = addon.build_option_id;
+    } else if (selections.bundle_addon === 'skip' && addon.skip_option_id) {
+      expanded.build_options = addon.skip_option_id;
+    }
+  }
+  return expanded;
+}
+
 // Resolve the tier picked for a product based on its step ids.
 // Convention: web-management picks under selections.wm_tier;
 // marketing-consulting under selections.mc_tier (gated by mc_yes_no).

@@ -454,6 +454,18 @@ export interface ProductDefinition {
 // `narrative_variables`, `overrides`) live alongside the legacy fields
 // so the same config can be both renderer-compatible and
 // composer-traceable.
+// Bundled-tier configuration (see ProposalConfig.bundle). The bundle is a
+// presentation + buyer-decision layer only; it stores NO dollar figures.
+// Each GBB level names the per-product tiers it expands to (default
+// symmetric: good->good, better->better, best->best, but the wm/mc tiers
+// can differ if a level intentionally mixes them). The optional add-on maps
+// to two build_options ids (the "add" build vs the "skip" baseline). All
+// money is derived from the product registry via expandBundleSelections.
+export interface BundleConfig {
+  tiers: Record<'good' | 'better' | 'best', { wm: TierId; mc: TierId }>;
+  addon?: { build_option_id: string; skip_option_id: string; label: string };
+}
+
 export interface ProposalConfig {
   version: number;
   prepared_for: string;
@@ -484,6 +496,14 @@ export interface ProposalConfig {
   // and the first-month-at-signing are unaffected. Pro-bono uses
   // discount_rate instead.
   waive_onboarding?: boolean;
+  // Bundled-tier mode: one buyer-facing Good/Better/Best card fusing
+  // Web Management + Marketing Consulting into a single monthly + to-start,
+  // with an optional add-on below (the Raised Bar / Jason 5/22 shape). When
+  // present, the proposal page shows the single GBB card instead of separate
+  // WM/MC pickers; expandBundleSelections fans the pick out to the canonical
+  // per-product keys so pricing + Schedule A stay registry-derived (the
+  // anti-#195 guarantee). Absent = standard multi-product composer.
+  bundle?: BundleConfig;
   narrative: {
     intro: string;
     sections: NarrativeSection[];

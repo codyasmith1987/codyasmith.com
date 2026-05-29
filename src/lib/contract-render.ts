@@ -174,9 +174,28 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
   parts.push(`<li>Other Statement of Work: <strong>${pp.other_sow ? 'Yes (separate Statement of Work attached)' : 'No'}</strong></li>`);
   parts.push('</ul>');
 
+  // A.4 Amount due at signing. Per section 5.2 this itemizes the one-time
+  // fees plus the first month of every recurring fee; the total equals the
+  // pricing result's atSigning, the same number the buyer saw on the
+  // proposal. Must clear before work begins.
+  parts.push(`<h3>A.4 Amount due at signing</h3>`);
+  const ads = scheduleA.amount_due_at_signing;
+  if (ads && Array.isArray(ads.line_items) && ads.line_items.length > 0) {
+    parts.push(`<table class="at-signing-table" style="margin-top:0.5em; border-collapse:collapse; width:100%; font-size:0.95em">`);
+    parts.push(`<tbody>`);
+    for (const li of ads.line_items) {
+      parts.push(`<tr><td style="padding:4px 8px; border-bottom:1px solid #eee">${escapeHtml(li.label || '')}</td><td style="padding:4px 8px; text-align:right; border-bottom:1px solid #eee">${fmtMoney(li.amount)}</td></tr>`);
+    }
+    parts.push(`<tr><td style="padding:8px 8px 4px; font-weight:bold; border-top:2px solid #333">Total due at signing</td><td style="padding:8px 8px 4px; text-align:right; font-weight:bold; border-top:2px solid #333">${fmtMoney(ads.total)}</td></tr>`);
+    parts.push(`</tbody></table>`);
+    if (ads.note) parts.push(`<p class="at-signing-note"><em>${escapeHtml(ads.note)}</em></p>`);
+  } else {
+    parts.push(`<p>Itemized at intake once products and tiers are confirmed.</p>`);
+  }
+
   if (pp.web_management && scheduleA.web_management) {
     const wm = scheduleA.web_management;
-    parts.push(`<h3>A.4 Web Management specifics</h3>`);
+    parts.push(`<h3>A.5 Web Management specifics</h3>`);
     parts.push('<ul>');
     parts.push(`<li>Tier: <strong>${escapeHtml(wm.tier_name || '')}</strong></li>`);
     // Per-site breakdown table. Each site shows its routed ecosystem
@@ -230,7 +249,7 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
 
   if (pp.marketing_consulting && scheduleA.marketing_consulting) {
     const mc = scheduleA.marketing_consulting;
-    parts.push(`<h3>A.5 Marketing Consulting specifics</h3>`);
+    parts.push(`<h3>A.6 Marketing Consulting specifics</h3>`);
     parts.push('<ul>');
     parts.push(`<li>Tier: <strong>${escapeHtml(mc.tier_name || '')}</strong></li>`);
     if (mc.monthly_retainer) parts.push(`<li>Monthly retainer: ${fmtMoney(mc.monthly_retainer)}</li>`);
@@ -242,7 +261,7 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
     parts.push('</ul>');
   }
 
-  parts.push(`<h3>A.6 Hours and rates</h3>`);
+  parts.push(`<h3>A.7 Hours and rates</h3>`);
   const hr = scheduleA.hours_and_rates || {};
   const anchorDayValue = typeof hr.billing_anchor_day === 'number' && hr.billing_anchor_day >= 1 && hr.billing_anchor_day <= 31
     ? hr.billing_anchor_day
@@ -262,7 +281,7 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
   parts.push(`<li>Monthly billing anchor day (per section 5.3 proration policy): ${escapeHtml(anchorOrdinal)} of each month</li>`);
   parts.push('</ul>');
 
-  parts.push(`<h3>A.7 Day-one access list</h3>`);
+  parts.push(`<h3>A.8 Day-one access list</h3>`);
   const day1 = scheduleA.day_one_access || {};
   if (day1.required_by) {
     parts.push(`<p>The Client provides administrator-level access to the following systems, by ${escapeHtml(day1.required_by)}, in the manner stated:</p>`);
@@ -280,7 +299,7 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
     parts.push('<p><em>To be completed at intake.</em></p>');
   }
 
-  parts.push(`<h3>A.8 Pass-through items</h3>`);
+  parts.push(`<h3>A.9 Pass-through items</h3>`);
   const passes = scheduleA.pass_through_items;
   if (Array.isArray(passes) && passes.length > 0) {
     parts.push('<ul>');
@@ -294,7 +313,7 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
   }
 
   if (pp.build) {
-    parts.push(`<h3>A.9 Build Statement of Work</h3>`);
+    parts.push(`<h3>A.10 Build Statement of Work</h3>`);
     parts.push(`<p>A separate, signed Build Statement of Work specifies the scope, deliverables, pages, design, launch criteria, build fee, and payment schedule for any from-scratch build work under this agreement.</p>`);
     if (scheduleA.build_sow_ref) {
       parts.push(`<p><em>${escapeHtml(scheduleA.build_sow_ref)}</em></p>`);
@@ -302,14 +321,14 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
   }
 
   if (pp.other_sow) {
-    parts.push(`<h3>A.10 Other Statement of Work</h3>`);
+    parts.push(`<h3>A.11 Other Statement of Work</h3>`);
     parts.push(`<p>A separate, signed Statement of Work specifies the scope, deliverables, fee, and timeline for any non-build execution work under section 3.2 (for example, copy production at scale, campaign setup, social or ad creative, research production).</p>`);
     if (scheduleA.other_sow_ref) {
       parts.push(`<p><em>${escapeHtml(scheduleA.other_sow_ref)}</em></p>`);
     }
   }
 
-  parts.push(`<h3>A.11 Excluded work</h3>`);
+  parts.push(`<h3>A.12 Excluded work</h3>`);
   parts.push(`<p>The following are not included in any product purchased under this agreement. Anything in this list requires either a written change order under section 8, a separate Build Statement of Work, or a separate Statement of Work under section 3.2:</p>`);
   parts.push('<ul>');
   parts.push('<li><strong>Net-new builds and redesigns.</strong> Full site redesigns, custom theme development, custom plugin development, e-commerce builds, membership system builds, learning-management builds, and any other from-scratch build work.</li>');

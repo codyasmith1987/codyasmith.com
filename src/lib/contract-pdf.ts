@@ -224,6 +224,16 @@ function splitFormattedRuns(text: string): Run[] {
   return runs.length === 0 ? [{ style: 'plain', text }] : runs;
 }
 
+// Money for PDF lines: whole dollars when whole, cents when not (so a
+// multi-site or discounted at-signing figure keeps its cents).
+function pdfMoney(n: number): string {
+  const hasCents = Math.round(n * 100) % 100 !== 0;
+  return '$' + n.toLocaleString('en-US', {
+    minimumFractionDigits: hasCents ? 2 : 0,
+    maximumFractionDigits: hasCents ? 2 : 0,
+  });
+}
+
 function renderScheduleAPage(doc: any, s: ScheduleA): void {
   doc.font('Helvetica-Bold').fontSize(18).fillColor('#111').text('Schedule A — Engagement Specifics');
   doc.moveDown(0.4);
@@ -252,9 +262,30 @@ function renderScheduleAPage(doc: any, s: ScheduleA): void {
   ]);
   doc.moveDown(0.5);
 
+  // A.4 Amount due at signing (section 5.2): one-time fees plus the first
+  // month of every recurring fee. Total equals the pricing result's
+  // atSigning, the same figure the buyer saw on the proposal.
+  doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.4 Amount due at signing');
+  doc.font('Helvetica').fontSize(10).fillColor('#222');
+  const ads = s.amount_due_at_signing;
+  if (ads && Array.isArray(ads.line_items) && ads.line_items.length > 0) {
+    doc.list(ads.line_items.map(li => `${li.label}: ${pdfMoney(li.amount)}`));
+    doc.moveDown(0.2);
+    doc.font('Helvetica-Bold').text(`Total due at signing: ${pdfMoney(ads.total)}`);
+    doc.font('Helvetica');
+    if (ads.note) {
+      doc.moveDown(0.2);
+      doc.font('Helvetica-Oblique').fontSize(9).fillColor('#555').text(ads.note);
+      doc.font('Helvetica').fontSize(10).fillColor('#222');
+    }
+  } else {
+    doc.text('Itemized at intake once products and tiers are confirmed.');
+  }
+  doc.moveDown(0.5);
+
   if (pp.web_management && s.web_management) {
     const wm = s.web_management;
-    doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.4 Web Management specifics');
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.5 Web Management specifics');
     doc.font('Helvetica').fontSize(10).fillColor('#222');
     const wmItems = [
       `Tier: ${wm.tier_name}`,
@@ -275,7 +306,7 @@ function renderScheduleAPage(doc: any, s: ScheduleA): void {
 
   if (pp.marketing_consulting && s.marketing_consulting) {
     const mc = s.marketing_consulting;
-    doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.5 Marketing Consulting specifics');
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.6 Marketing Consulting specifics');
     doc.font('Helvetica').fontSize(10).fillColor('#222');
     doc.list([
       `Tier: ${mc.tier_name}`,
@@ -289,7 +320,7 @@ function renderScheduleAPage(doc: any, s: ScheduleA): void {
     doc.moveDown(0.5);
   }
 
-  doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.6 Hours and rates');
+  doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.7 Hours and rates');
   doc.font('Helvetica').fontSize(10).fillColor('#222');
   const hr = s.hours_and_rates;
   const anchorDay = typeof hr.billing_anchor_day === 'number' && hr.billing_anchor_day >= 1 && hr.billing_anchor_day <= 31
@@ -311,7 +342,7 @@ function renderScheduleAPage(doc: any, s: ScheduleA): void {
   ]);
   doc.moveDown(0.5);
 
-  doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.7 Day-one access list');
+  doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.8 Day-one access list');
   doc.font('Helvetica').fontSize(10).fillColor('#222');
   if (s.day_one_access.required_by) {
     doc.text(`The Client provides administrator-level access to the following systems by ${s.day_one_access.required_by}:`);
@@ -326,7 +357,7 @@ function renderScheduleAPage(doc: any, s: ScheduleA): void {
   }
   doc.moveDown(0.5);
 
-  doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.8 Pass-through items at signing');
+  doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.9 Pass-through items');
   doc.font('Helvetica').fontSize(10).fillColor('#222');
   if (s.pass_through_items.length > 0) {
     doc.list(s.pass_through_items.map(p => `${p.name}: $${p.monthly_cost.toLocaleString('en-US')}/month (${p.billing_note})`));
@@ -336,7 +367,7 @@ function renderScheduleAPage(doc: any, s: ScheduleA): void {
   doc.moveDown(0.5);
 
   if (pp.build) {
-    doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.9 Build Statement of Work');
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.10 Build Statement of Work');
     doc.font('Helvetica').fontSize(10).fillColor('#222');
     doc.text('A separate, signed Build Statement of Work specifies the scope, deliverables, pages, design, launch criteria, build fee, and payment schedule for any from-scratch build work under this agreement.');
     if (s.build_sow_ref) {
@@ -348,7 +379,7 @@ function renderScheduleAPage(doc: any, s: ScheduleA): void {
   }
 
   if (pp.other_sow) {
-    doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.10 Other Statement of Work');
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.11 Other Statement of Work');
     doc.font('Helvetica').fontSize(10).fillColor('#222');
     doc.text('A separate, signed Statement of Work specifies the scope, deliverables, fee, and timeline for any non-build execution work under section 3.2.');
     if (s.other_sow_ref) {
@@ -359,7 +390,7 @@ function renderScheduleAPage(doc: any, s: ScheduleA): void {
     doc.moveDown(0.5);
   }
 
-  doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.11 Excluded work');
+  doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.12 Excluded work');
   doc.font('Helvetica').fontSize(10).fillColor('#222');
   doc.list([
     'Full site redesign, custom theme or plugin development, advanced coding',

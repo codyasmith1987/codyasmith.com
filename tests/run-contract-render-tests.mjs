@@ -123,16 +123,16 @@ async function run() {
     test('schedule_a marks Web Management purchased', scheduleA.products_purchased.web_management === true);
     test('schedule_a marks Marketing Consulting purchased when consulting=yes', scheduleA.products_purchased.marketing_consulting === true);
     test('schedule_a marks build purchased for raised-bar', scheduleA.products_purchased.build === true);
-    test('schedule_a A.4 web_management populated when web_management=true', scheduleA.web_management !== null);
+    test('schedule_a A.5 web_management populated when web_management=true', scheduleA.web_management !== null);
     test('schedule_a tier_name reflects pricing result', scheduleA.web_management?.tier_name === 'Better');
     test('schedule_a site_count is 3 for o2 (split setup)', scheduleA.web_management?.site_count === 3);
     test('schedule_a monthly_total uses multi-site formula', Math.round(scheduleA.web_management?.monthly_total) === 1292);
     test('schedule_a marketing_consulting populated when consulting=yes', scheduleA.marketing_consulting !== null);
-    test('schedule_a A.5 tier_name reflects pricing result', scheduleA.marketing_consulting?.tier_name === 'Better');
-    test('schedule_a A.5 monthly_retainer is $997', scheduleA.marketing_consulting?.monthly_retainer === 997);
+    test('schedule_a A.6 tier_name reflects pricing result', scheduleA.marketing_consulting?.tier_name === 'Better');
+    test('schedule_a A.6 monthly_retainer is $997', scheduleA.marketing_consulting?.monthly_retainer === 997);
   }
 
-  // Test 9: buildScheduleA omits A.5 when consulting=no.
+  // Test 9: buildScheduleA omits MC section when consulting=no.
   {
     const selections = {
       mgmt_tier: 'good',
@@ -152,7 +152,8 @@ async function run() {
     test('schedule_a site_count is 2 for o1 (single setup)', scheduleA.web_management?.site_count === 2);
   }
 
-  // Test 10: Schedule A renderer omits A.5 when products_purchased.marketing_consulting is false.
+  // Test 10: Schedule A renderer omits A.6 (MC) when products_purchased.marketing_consulting is false.
+  // MC moved A.5 -> A.6 after the A.4 "Amount due at signing" section was inserted.
   {
     const selections = { mgmt_tier: 'better', site_setup: 'o1', consulting: 'no' };
     const pricing = computePricing('raised_bar_v1', selections);
@@ -164,11 +165,11 @@ async function run() {
       effectiveDate: '2026-06-01',
     });
     const html = renderScheduleA(scheduleA, 'client');
-    const hasA5 = html.includes('A.5 Marketing Consulting specifics');
-    test('Schedule A renderer omits A.5 section when MC not purchased', !hasA5, hasA5 ? 'A.5 still rendered despite MC=no' : '');
+    const hasMc = html.includes('Marketing Consulting specifics');
+    test('Schedule A renderer omits MC section when MC not purchased', !hasMc, hasMc ? 'MC section still rendered despite MC=no' : '');
   }
 
-  // Test 11: Schedule A renderer includes A.5 when MC purchased.
+  // Test 11: Schedule A renderer includes A.6 (MC) when MC purchased.
   {
     const selections = { mgmt_tier: 'better', site_setup: 'o1', consulting: 'yes', consulting_tier: 'best' };
     const pricing = computePricing('raised_bar_v1', selections);
@@ -180,8 +181,33 @@ async function run() {
       effectiveDate: '2026-06-01',
     });
     const html = renderScheduleA(scheduleA, 'client');
-    test('Schedule A renderer includes A.5 when MC purchased', html.includes('A.5 Marketing Consulting specifics'));
-    test('Schedule A A.5 includes hiring guidance line for Best tier', html.includes('included') && html.includes('Hiring guidance'));
+    test('Schedule A renderer includes A.6 when MC purchased', html.includes('A.6 Marketing Consulting specifics'));
+    test('Schedule A A.6 includes hiring guidance line for Best tier', html.includes('included') && html.includes('Hiring guidance'));
+  }
+
+  // Test 11b: A.4 Amount due at signing block. Itemizes one-time fees +
+  // first month of recurring; total equals pricing.atSigning (one-time +
+  // monthly); line items sum to the total; renderer emits the section.
+  {
+    const selections = { mgmt_tier: 'better', site_setup: 'o2', consulting: 'yes', consulting_tier: 'better' };
+    const pricing = computePricing('raised_bar_v1', selections);
+    const scheduleA = buildScheduleA({
+      proposalConfig: { pricing_formula: 'raised_bar_v1' },
+      draftSelections: selections,
+      pricing,
+      clientMetadata: {},
+      effectiveDate: '2026-06-01',
+    });
+    const ads = scheduleA.amount_due_at_signing;
+    test('A.4 amount_due_at_signing populated', !!ads && Array.isArray(ads.line_items) && ads.line_items.length > 0);
+    test('A.4 total equals pricing.atSigning', !!ads && Math.abs(ads.total - pricing.atSigning) < 0.005,
+      ads ? `total ${ads.total} vs atSigning ${pricing.atSigning}` : 'no block');
+    test('A.4 total equals oneTime + monthly', !!ads && Math.abs(ads.total - (pricing.oneTime + pricing.monthly)) < 0.005);
+    const itemSum = ads ? Math.round(ads.line_items.reduce((s, li) => s + li.amount, 0) * 100) / 100 : NaN;
+    test('A.4 line items sum to total', !!ads && Math.abs(itemSum - ads.total) < 0.005, ads ? `items ${itemSum} vs total ${ads.total}` : 'no block');
+    test('A.4 includes a first-month recurring line', !!ads && ads.line_items.some(li => /First month/i.test(li.label)));
+    const html = renderScheduleA(scheduleA, 'client');
+    test('Schedule A renderer includes A.4 Amount due at signing', html.includes('A.4 Amount due at signing') && html.includes('Total due at signing'));
   }
 
   // Test 12: Pricing formula math (multi-site Better, 3 sites).

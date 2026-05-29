@@ -187,7 +187,7 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
         {
           phase_num: 'Phase 1',
           h3: 'Scoping, design, and build',
-          html: `I scope the build with you against an agreed page list and feature set, then design and produce the site against that scope. Anything past the scope becomes a change order, quoted separately and approved before it begins. 50 percent deposit at signing. 50 percent at launch.`,
+          html: `I scope the build with you against an agreed page list and feature set, then design and produce the site against that scope. Anything past the scope becomes a change order, quoted separately and approved before it begins. The build fee is paid in full at signing, and work begins once it clears.`,
         },
         {
           phase_num: 'Phase 2',

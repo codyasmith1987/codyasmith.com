@@ -8,7 +8,7 @@
 // the period bounds are always real, parseable YYYY-MM-DD dates with
 // start strictly before end, for every plausible anchor day. Runs via tsx.
 
-import { getCurrentBillingPeriod } from '../src/lib/billing.ts';
+import { getCurrentBillingPeriod, getUpcomingBillingPeriod } from '../src/lib/billing.ts';
 
 const results = [];
 function test(name, pass, detail = '') {
@@ -53,6 +53,31 @@ function run() {
       return dayOf(end) <= lastDay;
     })(), `end=${end}`);
     test(`overflow ${c.label}: start strictly before end`, Date.parse(start) < Date.parse(end), `start=${start} end=${end}`);
+  }
+
+  // getUpcomingBillingPeriod: the period AFTER the one containing `now`,
+  // used for 7-day-advance recurring issuance. Its start must be the day
+  // after the current period's end, and it must be a valid month-long span.
+  const upcomingCases = [
+    { now: new Date(2026, 4, 29), day: 1, label: 'May29, day1' },
+    { now: new Date(2026, 4, 10), day: 15, label: 'May10, day15' },
+    { now: new Date(2026, 0, 20), day: 31, label: 'Jan20, day31 (upcoming touches Feb)' },
+  ];
+  for (const c of upcomingCases) {
+    const cur = getCurrentBillingPeriod(c.day, c.now);
+    const up = getUpcomingBillingPeriod(c.day, c.now);
+    test(`upcoming ${c.label}: start valid (${up.start})`, valid(up.start), `start=${up.start}`);
+    test(`upcoming ${c.label}: end valid (${up.end})`, valid(up.end), `end=${up.end}`);
+    test(`upcoming ${c.label}: starts day after current period ends`, (() => {
+      const dayAfterCurEnd = new Date(Date.parse(cur.end + 'T00:00:00') + 86400000);
+      const expected = `${dayAfterCurEnd.getFullYear()}-${String(dayAfterCurEnd.getMonth() + 1).padStart(2, '0')}-${String(dayAfterCurEnd.getDate()).padStart(2, '0')}`;
+      return up.start === expected;
+    })(), `cur.end=${cur.end} up.start=${up.start}`);
+    test(`upcoming ${c.label}: starts after current period starts`, Date.parse(up.start) > Date.parse(cur.start));
+    test(`upcoming ${c.label}: end day <= that month's last (no overflow)`, (() => {
+      const [y, m] = up.end.split('-').map(Number);
+      return dayOf(up.end) <= new Date(y, m, 0).getDate();
+    })(), `end=${up.end}`);
   }
 
   const failed = results.filter(r => !r.pass);

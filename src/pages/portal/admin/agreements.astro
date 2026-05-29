@@ -162,6 +162,11 @@ import { AGREEMENT_STATUS, badgeClass, lookupStatus, STATUS_PILL_BASE } from '..
                   {a.created_at && <span>Created {fmtDate(a.created_at)}</span>}
                   {a.issued_at && <span>Issued {fmtDate(a.issued_at)}</span>}
                   {a.finalized_at && <span>Executed {fmtDate(a.finalized_at)}</span>}
+                  {/* Billing handoff status: only meaningful once executed. */}
+                  {a.status === 'executed' && (a.contract_id
+                    ? <span class="text-emerald-500">● Billing linked</span>
+                    : <span class="text-amber-500" title="Executed but no billable contract was created. Run the billing-contracts backfill or create one manually.">▲ Billing PENDING</span>
+                  )}
                 </div>
               </div>
 

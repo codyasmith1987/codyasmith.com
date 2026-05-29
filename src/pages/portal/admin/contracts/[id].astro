@@ -195,7 +195,12 @@ const statusColors: Record<string, string> = {
           ))}
         </div>
       ) : (
-        <p class="text-sm text-neutral-400 py-4">No invoices yet.</p>
+        <p class="text-sm text-neutral-400 py-4">
+          No invoices yet.
+          {contract.billing_cadence === 'monthly' && contract.recurring_amount
+            ? ' If this contract came from a signed agreement, its at-signing invoice should already be here. Check that agreement activity log for a contract_handoff_failed entry before creating one manually.'
+            : ' Create one from the contract detail below.'}
+        </p>
       )}
     </div>
 

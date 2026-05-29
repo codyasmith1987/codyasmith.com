@@ -14,6 +14,7 @@ import type { GscDailyRow, GscDimRow, GscTotals, GscFilter } from '../gsc-read';
 import type { WindowSpec } from './windows';
 import { aggregateWindow, weeklyBuckets } from './windows';
 import { computeDelta, dualDelta, ctrDelta, positionDelta, shouldBold } from './deltas';
+import { table, fmtInt, fmtSignedPct, deltaCell } from './_shared';
 
 export interface ReportWindows {
   gscCurrent: WindowSpec;
@@ -39,10 +40,6 @@ export interface SiteReportInput {
 
 // ---- formatters (display boundary; math stays in deltas/windows) ----
 
-function fmtInt(n: number | null): string {
-  if (n === null || n === undefined) return '';
-  return Math.round(n).toLocaleString('en-US');
-}
 function fmtRate(frac: number | null): string {        // engagement rate stored 0..1
   if (frac === null || frac === undefined) return '';
   return `${(frac * 100).toFixed(1)}%`;
@@ -59,23 +56,6 @@ function fmtSeconds(s: number | null): string {
   if (s === null || s === undefined) return '';
   return `${s.toFixed(1)}s`;
 }
-function fmtSignedPct(frac: number | null): string {
-  if (frac === null || frac === undefined) return '';
-  const sign = frac > 0 ? '+' : '';
-  return `${sign}${(frac * 100).toFixed(1)}%`;
-}
-
-// A single-metric delta cell: "+12.3%", "new", "flat", or "" when no compare.
-function deltaCell(prior: number | null, current: number | null): string {
-  const d = computeDelta(prior, current, { metricKind: 'count' });
-  if (d.direction === 'new') return 'new';
-  if (d.direction === 'none') return '';
-  if (d.direction === 'flat') return 'flat';
-  if (d.percentChange !== null) return fmtSignedPct(d.percentChange);
-  // prior 0, percent undefined: state the absolute move
-  return d.absoluteChange !== null ? `${d.absoluteChange > 0 ? '+' : ''}${fmtInt(d.absoluteChange)}` : '';
-}
-
 // Dual delta cell for clicks/impressions: "+22.9% (+27.0% per day)", bolded
 // when the per-day move is material. Baseline/no-prior -> "".
 function dualCell(prior: { label: string; days: number; clicks: number | null; impressions: number | null }, current: { label: string; days: number; clicks: number | null; impressions: number | null }, metric: 'clicks' | 'impressions'): string {
@@ -90,18 +70,6 @@ function dualCell(prior: { label: string; days: number; clicks: number | null; i
 }
 
 // ---- markdown helpers ----
-
-function table(headers: string[], rows: string[][]): string {
-  // Sanitize cells: a literal pipe or newline inside a value (a GSC query,
-  // a page URL, a source/medium) would otherwise add a phantom column and
-  // corrupt the row. Pipes are not meaningful in these values, so map them
-  // to a slash; collapse newlines to spaces. (Bold ** markers survive.)
-  const esc = (s: string) => String(s).replace(/\|/g, '/').replace(/\r?\n/g, ' ');
-  const head = `| ${headers.map(esc).join(' | ')} |`;
-  const sep = `| ${headers.map(() => '---').join(' | ')} |`;
-  const body = rows.map(r => `| ${r.map(esc).join(' | ')} |`).join('\n');
-  return `${head}\n${sep}\n${body}`;
-}
 
 // ---- GA4 date helpers (tokens like "20260412") ----
 

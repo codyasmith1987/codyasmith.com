@@ -1,0 +1,173 @@
+// Canonical Screaming Frog crawl / site-health read layer.
+//
+// Single source for reading ingested crawl data for the Site Health Report.
+// Mirrors gsc-read.ts / ga4-read.ts: data-source-prefixed, parameterized by
+// month so the report can read the current and prior crawl cycles for
+// month-over-month deltas. The report anchors every read on ONE cycle month
+// (the latest site_issues month) so the document is internally consistent,
+// unlike the dashboard which resolves each table's month independently.
+
+import turso from './turso';
+
+export interface SiteIssueRow {
+  issue_name: string;
+  issue_type: string | null;
+  priority: string | null;
+  affected_urls: number | null;
+  pct_of_total: number | null;
+  description: string | null;
+  how_to_fix: string | null;
+}
+
+export interface HealthMonthData {
+  month: string;
+  issues: SiteIssueRow[];                 // deduped by name, ORDER BY affected_urls DESC
+  totalIssues: number;                    // distinct issue categories
+  totalAffected: number;                  // SUM(affected_urls) across categories
+  byPriority: { high: number; medium: number; low: number };
+}
+
+export interface ResponseCodeCount {
+  code: string;          // '2xx' | '3xx' | '4xx' | '5xx'
+  count: number | null;
+}
+
+// Utility-URL exclusions and crawl-row filters, lifted verbatim from
+// dashboard/crawl-stats.ts so the report's "navigable pages" count matches
+// the dashboard's exactly (the count a client would make by hand).
+function urlPatternExclusions(col: string): string {
+  return `
+    AND ${col} NOT LIKE '%/tag/%'
+    AND ${col} NOT LIKE '%/category/%'
+    AND ${col} NOT LIKE '%/author/%'
+    AND ${col} NOT LIKE '%/feed/%'
+    AND ${col} NOT LIKE '%/feed'
+    AND ${col} NOT LIKE '%/embed/%'
+    AND ${col} NOT LIKE '%/embed'
+    AND ${col} NOT LIKE '%/attachment/%'
+    AND ${col} NOT LIKE '%/wp-content/%'
+    AND ${col} NOT LIKE '%/wp-includes/%'
+    AND ${col} NOT LIKE '%/wp-admin/%'
+    AND ${col} NOT LIKE '%/wp-json/%'
+    AND ${col} NOT LIKE '%/cdn-cgi/%'
+    AND ${col} NOT LIKE '%?attachment_id=%'
+    AND ${col} NOT LIKE '%?attachment=%'
+    AND ${col} NOT LIKE '%?replytocom=%'
+    AND ${col} NOT LIKE '%?p=%'
+    AND ${col} NOT LIKE '%?paged=%'
+    AND ${col} NOT GLOB '*/page/[0-9]*'
+  `;
+}
+function pageRowFilters(prefix = ''): string {
+  const p = prefix ? `${prefix}.` : '';
+  return `
+    AND ${p}status_code = 200
+    AND LOWER(IFNULL(${p}content_type, '')) LIKE '%html%'
+    AND LOWER(IFNULL(${p}indexability, '')) != 'non-indexable'
+  `;
+}
+
+// Canonical priority bucketing, matching score.ts: critical|high -> high,
+// medium -> medium, everything else (including null) -> low. Pure.
+export function bucketPriority(p: string | null): 'high' | 'medium' | 'low' {
+  const v = String(p || '').toLowerCase();
+  if (v === 'critical' || v === 'high') return 'high';
+  if (v === 'medium') return 'medium';
+  return 'low';
+}
+
+// Pure rollup of issue rows into a priority histogram (one count per
+// category, matching how score.ts counts issue categories).
+export function rollupByPriority(issues: SiteIssueRow[]): { high: number; medium: number; low: number } {
+  const out = { high: 0, medium: 0, low: 0 };
+  for (const i of issues) out[bucketPriority(i.priority)] += 1;
+  return out;
+}
+
+export async function getHealthLatestMonth(clientId: string): Promise<string | null> {
+  const r = await turso.execute({
+    sql: 'SELECT DISTINCT month FROM site_issues WHERE client_id = ? ORDER BY month DESC LIMIT 1',
+    args: [clientId],
+  });
+  return r.rows.length ? (r.rows[0][0] as string) : null;
+}
+
+export async function getHealthPriorMonth(clientId: string, currentMonth: string): Promise<string | null> {
+  const r = await turso.execute({
+    sql: 'SELECT DISTINCT month FROM site_issues WHERE client_id = ? AND month < ? ORDER BY month DESC LIMIT 1',
+    args: [clientId, currentMonth],
+  });
+  return r.rows.length ? (r.rows[0][0] as string) : null;
+}
+
+// The issue rollup for one month. Deduped by name (MAX affected_urls wins
+// when multiple tools report the same issue), matching dashboard/issues.ts.
+export async function getHealthMonthData(clientId: string, month: string): Promise<HealthMonthData> {
+  const res = await turso.execute({
+    sql: `SELECT issue_name, issue_type, priority, MAX(affected_urls) AS affected_urls,
+                 MAX(pct_of_total) AS pct_of_total, description, how_to_fix
+          FROM site_issues
+          WHERE client_id = ? AND month = ?
+          GROUP BY issue_name
+          ORDER BY affected_urls DESC`,
+    args: [clientId, month],
+  });
+  const issues: SiteIssueRow[] = res.rows.map(row => ({
+    issue_name: row[0] as string,
+    issue_type: row[1] as string | null,
+    priority: row[2] as string | null,
+    affected_urls: row[3] as number | null,
+    pct_of_total: row[4] as number | null,
+    description: row[5] as string | null,
+    how_to_fix: row[6] as string | null,
+  }));
+  const totalAffected = issues.reduce((s, i) => s + (i.affected_urls ?? 0), 0);
+  return {
+    month,
+    issues,
+    totalIssues: issues.length,
+    totalAffected,
+    byPriority: rollupByPriority(issues),
+  };
+}
+
+// Navigable page count, matching the dashboard's "friendly" definition.
+// Optionally scoped to one crawl month so the report is month-correct (the
+// dashboard counts across all of a client's crawl_urls).
+export async function getNavigablePageCount(clientId: string, month?: string): Promise<number> {
+  const monthClause = month ? 'AND month = ?' : '';
+  const args = month ? [clientId, month] : [clientId];
+  const res = await turso.execute({
+    sql: `SELECT COUNT(DISTINCT url) AS n
+          FROM crawl_urls
+          WHERE client_id = ?
+          ${monthClause}
+          ${pageRowFilters()}
+          ${urlPatternExclusions('url')}`,
+    args,
+  });
+  return (res.rows[0]?.[0] as number) || 0;
+}
+
+// Response-code bands derived directly from crawl_urls.status_code. Avoids
+// depending on an unverified metrics-table slug; the band math is the same
+// derivation the issue layer uses.
+export async function getResponseCodeCounts(clientId: string, month: string): Promise<ResponseCodeCount[]> {
+  // Restrict to real HTTP status ranges (100-599). This intentionally
+  // excludes status 0 (no response / DNS or connection failure) and any
+  // out-of-range value; the report's bands are 2xx-5xx and a no-response
+  // URL is not a response code. Consistent with the navigable-page count,
+  // which also only counts 200s.
+  const res = await turso.execute({
+    sql: `SELECT (status_code / 100) AS band, COUNT(DISTINCT url) AS n
+          FROM crawl_urls
+          WHERE client_id = ? AND month = ? AND status_code BETWEEN 100 AND 599
+          GROUP BY band`,
+    args: [clientId, month],
+  });
+  const byBand = new Map<number, number>();
+  for (const r of res.rows) byBand.set(Number(r[0]), Number(r[1]));
+  return [2, 3, 4, 5].map(b => ({ code: `${b}xx`, count: byBand.has(b) ? byBand.get(b)! : 0 }));
+}
+
+export const __test = { bucketPriority, rollupByPriority };

@@ -164,6 +164,25 @@ export async function getInvoicesByStatus(status: InvoiceStatus): Promise<Invoic
   return queryAll('SELECT * FROM invoices WHERE status = ? ORDER BY created_at DESC', [status]);
 }
 
+// Cross-client list of at-signing invoices (no billing period) still
+// awaiting payment. These gate work starting per contract 5.2, so the
+// admin needs one place to see what is blocked. Joined to client name.
+export async function getAwaitingAtSigningInvoices(): Promise<Array<{
+  id: string; invoice_number: string; total: number; amount_paid: number;
+  issued_date: string | null; due_date: string | null; status: string;
+  client_id: string; client_name: string;
+}>> {
+  return queryAll(
+    `SELECT i.id, i.invoice_number, i.total, i.amount_paid, i.issued_date, i.due_date, i.status, i.client_id,
+            c.name AS client_name
+       FROM invoices i JOIN clients c ON c.id = i.client_id
+      WHERE i.billing_period_start IS NULL
+        AND i.amount_paid < i.total
+        AND i.status IN ('sent','partial','overdue')
+      ORDER BY i.issued_date ASC, i.created_at ASC`
+  );
+}
+
 export async function getOverdueInvoices(): Promise<Invoice[]> {
   return queryAll(
     "SELECT * FROM invoices WHERE status = 'sent' AND due_date < date('now') ORDER BY due_date",

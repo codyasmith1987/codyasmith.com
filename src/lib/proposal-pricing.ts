@@ -8,6 +8,11 @@
 export type PricingResult = {
   oneTime: number;
   monthly: number;
+  // Total due at signing per contract section 5.2: every one-time fee
+  // (onboarding, audit, build, all 100% at signing) plus the first month
+  // of every recurring fee. Work does not begin until this clears. Equals
+  // oneTime + monthly. Optional for back-compat; both formula producers set it.
+  atSigning?: number;
   breakdown: Array<{ label: string; amount: number }>;
   mgmtMonthly: number;
   consultingMonthly: number;
@@ -76,6 +81,7 @@ export function computeRaisedBarV1(selections: Record<string, string | null>): P
   return {
     oneTime,
     monthly,
+    atSigning: oneTime + monthly,
     breakdown,
     mgmtMonthly: mgmtMo,
     consultingMonthly: consultingMo,

@@ -893,6 +893,7 @@ export function composePricing(args: {
   return {
     oneTime,
     monthly,
+    atSigning: oneTime + monthly,
     breakdown,
     mgmtMonthly,
     consultingMonthly,

@@ -206,6 +206,18 @@ export async function updateAgreementStatus(id: string, status: AgreementStatus)
   });
 }
 
+// Link an executed agreement to the billable contract created from it.
+// Compare-and-set on contract_id IS NULL so the billing handoff runs
+// exactly once even if the finalize path is retried; returns true only
+// for the call that performed the link.
+export async function linkAgreementContract(agreementId: string, contractId: string): Promise<boolean> {
+  const result = await turso.execute({
+    sql: `UPDATE client_agreements SET contract_id = ? WHERE id = ? AND contract_id IS NULL`,
+    args: [contractId, agreementId],
+  });
+  return (result.rowsAffected ?? 0) > 0;
+}
+
 export async function markAgreementIssued(id: string, personalNote?: string | null): Promise<void> {
   await turso.execute({
     sql: `UPDATE client_agreements SET status = 'issued', issued_at = datetime('now'), personal_note = ? WHERE id = ? AND status IN ('draft','issued')`,

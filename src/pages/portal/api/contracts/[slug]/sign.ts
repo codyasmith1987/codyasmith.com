@@ -24,6 +24,7 @@ import {
   getClientMetadata,
 } from '../../../../../lib/agreements';
 import { getContractTemplate } from '../../../../../lib/contract-templates';
+import { ensureBillingContractFromAgreement } from '../../../../../lib/contract-handoff';
 import { renderTemplate, computeDocumentHash, PRACTICE } from '../../../../../lib/contract-render';
 import { generateContractPdf } from '../../../../../lib/contract-pdf';
 import {
@@ -247,6 +248,35 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
     });
   } catch (err) {
     logger.error('finalized activity log failed', err);
+  }
+
+  // Billing handoff: turn the executed agreement into a billable contract
+  // and raise the at-signing invoice. Wrapped so a billing hiccup never
+  // breaks execution (the agreement is already finalized above); the
+  // handoff is idempotent and can be retried. We run it on the winning
+  // finalize path only, so it creates exactly one contract per agreement.
+  try {
+    const handoff = await ensureBillingContractFromAgreement(agreement, user.id);
+    await logActivity({
+      clientId: agreement.client_id,
+      userId: user.id,
+      action: handoff.created ? 'contract_created' : 'contract_exists',
+      entityType: 'agreement',
+      entityId: agreement.id,
+      summary: `Billing handoff for ${agreement.title}: contract=${handoff.contractId}; at_signing_invoice=${handoff.invoiceId || 'none'}; created=${handoff.created}`,
+    });
+  } catch (err) {
+    logger.error('billing handoff failed after finalize', err);
+    try {
+      await logActivity({
+        clientId: agreement.client_id,
+        userId: user.id,
+        action: 'contract_handoff_failed',
+        entityType: 'agreement',
+        entityId: agreement.id,
+        summary: `Billing handoff FAILED for ${agreement.title}. Agreement is executed; create the billable contract manually. Error: ${String((err as any)?.message || err).slice(0, 200)}`,
+      });
+    } catch { /* best-effort */ }
   }
 
   // Send fully-executed emails to each signer with the PDF attached.

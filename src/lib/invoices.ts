@@ -180,7 +180,8 @@ export async function getClientVisibleInvoices(clientId: string): Promise<Pick<I
 }
 
 export async function updateInvoice(id: string, data: Partial<Pick<Invoice,
-  'status' | 'issued_date' | 'due_date' | 'subtotal' | 'tax' | 'total' | 'amount_paid' | 'notes' | 'client_visible'
+  'status' | 'issued_date' | 'due_date' | 'subtotal' | 'tax' | 'total' | 'amount_paid' | 'notes' | 'client_visible' |
+  'billing_period_start' | 'billing_period_end' | 'last_reminder_sent'
 >>): Promise<void> {
   const update = buildSafeUpdate('invoices', id, data);
   if (!update) return;

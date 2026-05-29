@@ -89,6 +89,7 @@ export function deriveBillingTerms(scheduleA: any, billingAnchorDay?: number | n
 export async function ensureBillingContractFromAgreement(
   agreement: ClientAgreement,
   createdBy: string,
+  opts: { skipAtSigningInvoice?: boolean } = {},
 ): Promise<BillingHandoffResult> {
   if (agreement.contract_id) {
     return { contractId: agreement.contract_id, invoiceId: null, created: false };
@@ -123,9 +124,13 @@ export async function ensureBillingContractFromAgreement(
     return { contractId: fresh?.contract_id || contractId, invoiceId: null, created: false };
   }
 
-  // Raise the at-signing invoice from the Schedule A itemization.
+  // Raise the at-signing invoice from the Schedule A itemization. Skipped
+  // when the caller knows payment was already collected (the backfill
+  // running over agreements executed before the handoff shipped), so we
+  // create the billable contract without re-invoicing an already-paid
+  // engagement.
   let invoiceId: string | null = null;
-  if (atSigningItems.length > 0 && atSigningTotal > 0) {
+  if (!opts.skipAtSigningInvoice && atSigningItems.length > 0 && atSigningTotal > 0) {
     const { id } = await createInvoiceWithGeneratedNumber({
       contract_id: contractId,
       client_id: agreement.client_id,
@@ -144,7 +149,7 @@ export async function ensureBillingContractFromAgreement(
       issued_date: today,
       client_visible: 1,
       ...(period ? { billing_period_start: period.start, billing_period_end: period.end } : {}),
-    } as any);
+    });
 
     for (const li of atSigningItems) {
       if (typeof li.amount === 'number' && li.amount !== 0) {

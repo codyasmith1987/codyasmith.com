@@ -106,6 +106,46 @@ export function renderTemplate(body: string, ctx: RenderContext, mode: RenderMod
   return html;
 }
 
+/**
+ * Resolve a template body to MARKDOWN (not HTML), for the PDF path.
+ *
+ * The PDF generator runs its own markdown subset renderer, so it needs
+ * resolved markdown, not HTML. This applies the same client-facing
+ * boundary as renderTemplate in 'client' mode: internal-only blocks are
+ * stripped and conditional blocks resolved. Placeholders resolve to PLAIN
+ * text (no HTML entity escaping), because the value flows into a markdown
+ * renderer, not an HTML document. A missing field renders as a plain
+ * pending marker rather than an HTML span.
+ *
+ * This is the fix for the executed-PDF leak: feeding the PDF the raw
+ * template body left literal {{ client.* }} placeholders and the internal
+ * reserved-coverage note in the legally retained document.
+ */
+export function renderTemplateToMarkdown(body: string, ctx: RenderContext): string {
+  let text = body;
+
+  // Internal-only blocks never reach a client-facing PDF.
+  text = text.replace(INTERNAL_BLOCK_RE, '');
+
+  // Conditional blocks first, so placeholders inside an omitted block do
+  // not leave stray pending markers.
+  text = text.replace(IF_BLOCK_RE, (_match, path, inner) => {
+    const value = resolvePath(ctx, path);
+    return isTruthy(value) ? inner : '';
+  });
+
+  // Remaining placeholders, resolved to plain text for the markdown renderer.
+  text = text.replace(PLACEHOLDER_RE, (_match, path) => {
+    const value = resolvePath(ctx, path);
+    if (value === null || value === undefined || value === '') {
+      return '[to be completed at signing]';
+    }
+    return String(value);
+  });
+
+  return text;
+}
+
 function scrubInternalLinks(html: string): string {
   // Strip href targets that point at admin or API surfaces.
   return html
@@ -154,7 +194,7 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
 
   const parts: string[] = [];
   parts.push('<section class="schedule-a">');
-  parts.push('<h2 id="schedule-a">Schedule A &mdash; Engagement Specifics</h2>');
+  parts.push('<h2 id="schedule-a">Schedule A: Engagement Specifics</h2>');
   parts.push('<p class="schedule-a-intro">Schedule A is completed per Client and incorporated into the agreement by reference.</p>');
 
   parts.push(`<h3>A.1 Effective Date</h3>`);
@@ -304,7 +344,7 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
   if (Array.isArray(passes) && passes.length > 0) {
     parts.push('<ul>');
     for (const p of passes) {
-      const note = p.billing_note ? ` &mdash; ${escapeHtml(p.billing_note)}` : '';
+      const note = p.billing_note ? `. ${escapeHtml(p.billing_note)}` : '';
       parts.push(`<li>${escapeHtml(p.name || '')}: ${fmtMoney(p.monthly_cost)}/month${note}</li>`);
     }
     parts.push('</ul>');

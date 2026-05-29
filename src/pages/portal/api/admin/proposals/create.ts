@@ -165,6 +165,9 @@ export const POST: APIRoute = async ({ locals, request }) => {
     // Reissue / already-onboarded: waive the one-time setup fees (WM
     // onboarding + MC initial audit). Admin checkbox in the wizard.
     const waive_onboarding = c.waive_onboarding === true;
+    // Bundle mode: fuse WM + MC into one Good/Better/Best card. Admin
+    // checkbox in the wizard.
+    const bundle_mode = c.bundle_mode === true;
 
     // Voice-lint admin-typed strings before persist. Catches em or en
     // dashes, AI-template language, overclaim, drop-cap patterns,
@@ -385,6 +388,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
         tier_overrides: tier_overrides as any,
         managedSites,
         waive_onboarding,
+        bundle_mode,
       });
     } catch (err) {
       logger.error('composeProposal failed', err);

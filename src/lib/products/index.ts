@@ -22,6 +22,8 @@ import type {
   ComposeArgs,
   NarrativeSection,
   ProposalStep,
+  ProposalStepOption,
+  BundleConfig,
   TierId,
   NarrativeSnippetSet,
   NarrativePhase,
@@ -62,6 +64,84 @@ export function listProducts(): ProductDefinition[] {
 // =========================================================================
 // composeProposal: wizard -> ProposalConfig
 // =========================================================================
+
+// Whole dollars when whole, cents when not (multi-site / discounted).
+function bundleMoney(n: number): string {
+  const hasCents = Math.round(n * 100) % 100 !== 0;
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: hasCents ? 2 : 0, maximumFractionDigits: hasCents ? 2 : 0 });
+}
+
+// Build the bundle config from wizard args when bundle mode is on. The GBB
+// mapping is symmetric (good->WM good + MC good, etc.) per the Raised Bar
+// shape. If a build with 2+ build_options is in scope, the first option is
+// the baseline (skip) and the second is the optional add-on (add).
+function buildBundleConfig(args: ComposeArgs): BundleConfig {
+  const tiers: BundleConfig['tiers'] = {
+    good: { wm: 'good', mc: 'good' },
+    better: { wm: 'better', mc: 'better' },
+    best: { wm: 'best', mc: 'best' },
+  };
+  const buildVars: any = args.product_vars?.['build'];
+  const opts: any[] = buildVars && Array.isArray(buildVars.build_options) ? buildVars.build_options : [];
+  if (opts.length >= 2 && opts[0]?.id && opts[1]?.id) {
+    return { tiers, addon: { skip_option_id: opts[0].id, build_option_id: opts[1].id, label: opts[1].name || 'Optional add-on' } };
+  }
+  return { tiers };
+}
+
+// Generate the single fused Good/Better/Best card (+ optional add-on step)
+// for a bundle. Each card's monthly + to-start come straight from the
+// registry (composePricing on the expanded selections) so they can never
+// drift from the contract; the feature lists are pulled from the canonical
+// WM + MC tier cards (so waiver-awareness etc. carries through). Buyer-facing
+// copy here is drafted for Cody to tweak.
+function generateBundleSteps(bundle: BundleConfig, contexts: Record<ProductId, ProductContext>, pricingConfig: any): ProposalStep[] {
+  const wmStep = PRODUCT_REGISTRY['web-management'].generateSteps(contexts['web-management']).find(s => s.id === 'wm_tier');
+  const mcStep = PRODUCT_REGISTRY['marketing-consulting'].generateSteps(contexts['marketing-consulting']).find(s => s.id === 'mc_tier');
+  const levels: Array<'good' | 'better' | 'best'> = ['good', 'better', 'best'];
+
+  const options: ProposalStepOption[] = levels.map(level => {
+    const map = bundle.tiers[level];
+    const expanded = expandBundleSelections(pricingConfig, { bundle_tier: level, bundle_addon: bundle.addon ? 'skip' : null });
+    const pricing = composePricing({ config: pricingConfig, selections: expanded });
+    const wmOpt = wmStep?.options.find(o => o.id === map.wm);
+    const mcOpt = mcStep?.options.find(o => o.id === map.mc);
+    const features = [...(wmOpt?.features || []), ...(mcOpt?.features || [])];
+    return {
+      id: level,
+      name: level.charAt(0).toUpperCase() + level.slice(1),
+      tagline: wmOpt?.tagline,
+      recommended: level === 'better',
+      price_label: pricing ? bundleMoney(pricing.monthly) : undefined,
+      price_suffix: '/ month',
+      price_subline: pricing ? `${bundleMoney(pricing.oneTime)} to start` : undefined,
+      included_hours: wmOpt?.included_hours,
+      features,
+    };
+  });
+
+  const steps: ProposalStep[] = [{
+    id: 'bundle_tier',
+    type: 'tier_picker',
+    h2: 'Pick your engagement level',
+    prompt: 'Each level sets both your web management and your marketing consulting in one number. Better is the recommendation.',
+    options,
+  }];
+
+  if (bundle.addon) {
+    steps.push({
+      id: 'bundle_addon',
+      type: 'binary_picker',
+      h2: bundle.addon.label,
+      prompt: 'An optional add-on, on top of the level you pick above.',
+      options: [
+        { id: 'skip', name: 'Not now', html: 'Keep the unified setup. You can add this later without re-papering.' },
+        { id: 'add', name: `Add ${bundle.addon.label}`, html: 'Splits this into its own dedicated site with its own build. Adds to your to-start and your monthly while it runs.' },
+      ],
+    });
+  }
+  return steps;
+}
 
 export function composeProposal(args: ComposeArgs): ProposalConfig {
   // Order products by PRODUCT_ORDER so the composed output is stable.
@@ -139,13 +219,38 @@ export function composeProposal(args: ComposeArgs): ProposalConfig {
     };
   }
 
-  // Steps: concatenate each product's steps in product order.
+  // Bundle mode: fuse WM + MC into one Good/Better/Best card. Only when
+  // both are in scope. Builds a symmetric bundle config + the per-tier
+  // card prices straight from the registry.
+  const discountRate = typeof args.client.discount_rate === 'number'
+    ? Math.max(0, Math.min(1, args.client.discount_rate))
+    : 0;
+  const bundleMode = args.bundle_mode === true
+    && orderedProducts.includes('web-management')
+    && orderedProducts.includes('marketing-consulting');
+  const bundleConfig = bundleMode ? buildBundleConfig(args) : undefined;
+  const pricingConfig = {
+    products: orderedProducts,
+    product_vars: args.product_vars,
+    managed_sites: args.managedSites,
+    discount_rate: discountRate,
+    waive_onboarding: args.waive_onboarding === true,
+    bundle: bundleConfig,
+  };
+
+  // Steps. In bundle mode the single GBB card (+ optional add-on) replaces
+  // the separate WM / MC / build pickers; other products keep their steps.
   const composedSteps: ProposalStep[] = [];
-  for (const id of orderedProducts) {
-    const product = PRODUCT_REGISTRY[id];
-    const ctx = contexts[id];
-    const steps = product.generateSteps(ctx);
-    composedSteps.push(...steps);
+  if (bundleMode && bundleConfig) {
+    composedSteps.push(...generateBundleSteps(bundleConfig, contexts, pricingConfig));
+    for (const id of orderedProducts) {
+      if (id === 'web-management' || id === 'marketing-consulting' || id === 'build') continue;
+      composedSteps.push(...PRODUCT_REGISTRY[id].generateSteps(contexts[id]));
+    }
+  } else {
+    for (const id of orderedProducts) {
+      composedSteps.push(...PRODUCT_REGISTRY[id].generateSteps(contexts[id]));
+    }
   }
 
   // Narrative: merge per-product NarrativeSnippetSets into the
@@ -197,6 +302,8 @@ export function composeProposal(args: ComposeArgs): ProposalConfig {
       : 0,
     // Reissue / already-onboarded waiver, set by the admin in the wizard.
     waive_onboarding: args.waive_onboarding === true ? true : undefined,
+    // Bundle config (symmetric GBB + optional add-on) when bundle mode is on.
+    bundle: bundleConfig,
     narrative: {
       intro,
       sections,

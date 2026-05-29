@@ -3,7 +3,7 @@
 // Triggers create notifications, cascade status changes, and log activity.
 // They never fail the parent operation — errors are logged and swallowed.
 
-import { getTask, getMilestone, getProject, getContract, getTasksByMilestone, getMilestonesByProject, updateMilestone, updateProject, updateTask, updateContract } from './contracts';
+import { getTask, getMilestone, getProject, getContract, getTasksByMilestone, getMilestonesByProject, updateMilestone, updateProject, updateTask, updateContract, createProject, getProjectsByContract } from './contracts';
 import { getInvoice, getChangeOrder } from './invoices';
 import { createPendingCharge } from './billing';
 import { createNotification } from './notifications';
@@ -241,8 +241,70 @@ export async function onPaymentRecorded(invoiceId: string, amount: number): Prom
         entity_type: 'invoice',
         entity_id: invoiceId,
       });
+
+      // At-signing invoice cleared = work can start (contract section 5.2).
+      // An at-signing invoice carries no billing period (recurring ones do).
+      if (!invoice.billing_period_start) {
+        await onAtSigningInvoicePaid(invoice.contract_id);
+      }
     }
   } catch (err) {
     logger.error('Trigger onPaymentRecorded failed', err);
+  }
+}
+
+// ============================================================
+// Trigger 6b: At-signing invoice cleared -> work starts
+// ============================================================
+// The throughput model gates work on cleared funds. When the at-signing
+// invoice is paid in full, auto-create the engagement project shell (a
+// home for work tracking; milestones/tasks are Cody's judgment, not
+// auto-filled), flag the admin that work can begin, and tell the client
+// they are underway. Idempotent: only fires when the contract has no
+// project yet, so repeat payments do not duplicate it.
+async function onAtSigningInvoicePaid(contractId: string): Promise<void> {
+  const contract = await getContract(contractId);
+  if (!contract) return;
+
+  const existing = await getProjectsByContract(contractId);
+  if (existing.length > 0) return; // already kicked off
+
+  const projectId = await createProject({
+    contract_id: contractId,
+    client_id: contract.client_id,
+    title: 'Engagement kickoff',
+    description: 'Auto-created when the at-signing payment cleared. Add milestones and tasks to begin.',
+    client_visible: true,
+  });
+
+  await notifyAdmins({
+    type: 'payment_received',
+    title: 'Work can start',
+    body: `At-signing payment cleared for ${contract.title}. The "Engagement kickoff" project is ready; add milestones and begin.`,
+    entity_type: 'project',
+    entity_id: projectId,
+  });
+
+  // Value-first nudge to the client: payment in, work underway.
+  try {
+    const { sendEmail } = await import('./email');
+    const users = await getUsersByClientId(contract.client_id);
+    if (users.length > 0) {
+      const portalUrl = import.meta.env.SITE || 'https://codyasmith.com';
+      await sendEmail(
+        users.map(u => ({ email: u.email, name: u.name })),
+        `Payment received. We are underway on ${contract.title}.`,
+        `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+          <h2 style="color: #171717; margin-bottom: 16px;">We are underway</h2>
+          <p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">Your payment cleared and work has started. You will see progress land in your portal as it happens.</p>
+          <a href="${portalUrl}/portal" style="display: inline-block; background: #f59e0b; color: #0a0a0a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; margin-top: 16px;">Open your portal</a>
+          <p style="color: #a3a3a3; font-size: 12px; margin-top: 32px;"><a href="${portalUrl}" style="color: #a3a3a3;">codyasmith.com</a></p>
+        </div>
+        `
+      );
+    }
+  } catch (err) {
+    logger.error('onAtSigningInvoicePaid client email failed', err);
   }
 }

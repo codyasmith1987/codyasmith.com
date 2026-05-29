@@ -52,6 +52,7 @@ export interface ScheduleAContext {
 export interface PricingLike {
   oneTime: number;
   monthly: number;
+  atSigning?: number;
   breakdown: Array<{ label: string; amount: number }>;
   mgmtMonthly: number;
   consultingMonthly: number;

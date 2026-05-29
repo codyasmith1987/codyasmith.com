@@ -11,6 +11,7 @@
 import { computePricing } from '../src/lib/proposal-pricing.ts';
 import { buildScheduleA } from '../src/lib/contract-schedule.ts';
 import { deriveBillingTerms } from '../src/lib/contract-handoff.ts';
+import { composeProposal } from '../src/lib/products/index.ts';
 
 const results = [];
 function test(name, pass, detail = '') {
@@ -73,6 +74,36 @@ function run() {
   const terms = deriveBillingTerms(scheduleA, scheduleA.hours_and_rates.billing_anchor_day);
   test('Handoff: recurring unaffected by waiver', near(terms.recurring, without.monthly));
   test('Handoff: at-signing total equals first month only', near(terms.atSigningTotal, waived.monthly));
+
+  // Narrative consistency: a waived (reissue) proposal must not promise
+  // onboarding/audit in copy while the fees are priced $0. Compose a full
+  // WM+MC proposal both ways and compare the rendered config strings.
+  {
+    const composeArgs = {
+      client: { id: 'c-test', name: 'Test Client', slug: 'test-client', discount_rate: 0 },
+      signers: [{ id: 's1', email: 'a@example.com', name: 'A Signer' }],
+      products: ['web-management', 'marketing-consulting'],
+      product_vars: {
+        'web-management': { page_count: 7, site_count: 1 },
+        'marketing-consulting': { revenue_band: '1m-to-10m' },
+      },
+    };
+    const plain = JSON.stringify(composeProposal({ ...composeArgs, waive_onboarding: false }));
+    const waived = JSON.stringify(composeProposal({ ...composeArgs, waive_onboarding: true }));
+
+    // Sanity: the default proposal DOES carry the first-time language.
+    test('Narrative: default proposal promises an audit at the start', /audit at the start/i.test(plain));
+    test('Narrative: default proposal says "Month one is onboarding"', /Month one is onboarding/i.test(plain));
+
+    // Waived proposal must drop both.
+    test('Narrative (waived): no "audit at the start" promise', !/audit at the start/i.test(waived),
+      'waived config still contains "audit at the start"');
+    test('Narrative (waived): no "Month one is onboarding"', !/Month one is onboarding/i.test(waived),
+      'waived config still contains "Month one is onboarding"');
+    // And carries the waiver-aware framing instead.
+    test('Narrative (waived): uses already-on-file / continuation framing',
+      /already on file|continues where we left off|already been onboarded|already onboarded/i.test(waived));
+  }
 
   const failed = results.filter(r => !r.pass);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);

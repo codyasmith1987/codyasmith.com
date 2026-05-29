@@ -133,6 +133,9 @@ export function composeProposal(args: ComposeArgs): ProposalConfig {
       otherProducts,
       engagementStrategy,
       managedSites: args.managedSites,
+      // Reissue waiver: products read this to keep step copy (tier-card
+      // features) and narrative consistent with the $0 setup pricing.
+      waiveOnboarding: args.waive_onboarding === true,
     };
   }
 
@@ -156,6 +159,7 @@ export function composeProposal(args: ComposeArgs): ProposalConfig {
     clientId: args.client.id,
     narrativeVariables: args.narrative_variables || {},
     engagementStrategy,
+    waiveOnboarding: args.waive_onboarding === true,
   });
 
   // Signers
@@ -234,6 +238,11 @@ interface ComposeNarrativeArgs {
   clientId?: string;
   narrativeVariables: { industry?: string; urgency?: string; focus?: string[] };
   engagementStrategy?: EngagementStrategy | null;
+  // Reissue / already-onboarded waiver: when true, the "how it works"
+  // closer drops the month-one onboarding/audit framing (already done on
+  // the prior engagement) so the narrative does not contradict the $0
+  // setup pricing.
+  waiveOnboarding?: boolean;
 }
 
 function composeNarrative(args: ComposeNarrativeArgs): {
@@ -389,6 +398,7 @@ function composeNarrative(args: ComposeNarrativeArgs): {
   const closerParagraphs = composeHowItWorksCloser({
     orderedProducts: args.orderedProducts,
     tieBack: closerTieBack,
+    waiveOnboarding: args.waiveOnboarding === true,
   });
 
   const sections: NarrativeSection[] = [];
@@ -677,30 +687,42 @@ function composeWhereTheWorkIs(args: {
 function composeHowItWorksCloser(args: {
   orderedProducts: ProductId[];
   tieBack?: string;
+  waiveOnboarding?: boolean;
 }): string[] {
   if (args.orderedProducts.length === 0) return [];
   const hasWM = args.orderedProducts.includes('web-management');
   const hasMC = args.orderedProducts.includes('marketing-consulting');
   const hasBuild = args.orderedProducts.includes('build');
   const hasTraining = args.orderedProducts.includes('training');
+  const waived = args.waiveOnboarding === true;
 
   const paragraphs: string[] = [];
 
   // Paragraph 1: month one. Onboarding so the client sees what is
-  // changing fast (04 §4: anxiety highest in the first week).
-  const monthOneParts: string[] = [
-    `<strong>Month one is onboarding.</strong> The work in the first weeks is concentrated so you can see what is changing.`,
-  ];
+  // changing fast (04 §4: anxiety highest in the first week). On a
+  // reissue (waived), onboarding and the initial audit were already done
+  // on the prior engagement, so the month-one framing flips to a
+  // continuation: a build (new work) still scopes here, but the managed
+  // sites and consulting pick up directly instead of re-onboarding.
+  const monthOneParts: string[] = waived
+    ? [`<strong>Month one continues where we left off.</strong> Because this picks up an existing engagement, there is no onboarding or initial audit to repeat; those were completed previously.`]
+    : [`<strong>Month one is onboarding.</strong> The work in the first weeks is concentrated so you can see what is changing.`];
   if (hasBuild) {
     monthOneParts.push(`If a build is in scope, scoping conversations and the first design pass happen here.`);
   }
   if (hasWM) {
-    monthOneParts.push(`If a site is moving onto management, the takeover audit, baseline health work, and access transfer happen in this window.`);
+    monthOneParts.push(waived
+      ? `Your managed sites carry over from the prior engagement; management continues without a new takeover.`
+      : `If a site is moving onto management, the takeover audit, baseline health work, and access transfer happen in this window.`);
   }
   if (hasMC && !hasBuild && !hasWM) {
-    monthOneParts.push(`If consulting is in scope on its own, the initial audit and the first strategy cycle land in this window.`);
+    monthOneParts.push(waived
+      ? `The consulting audit is already on file; the strategy cycle picks up where it left off.`
+      : `If consulting is in scope on its own, the initial audit and the first strategy cycle land in this window.`);
   } else if (hasMC) {
-    monthOneParts.push(`If consulting is in scope, the initial audit lands in this window too.`);
+    monthOneParts.push(waived
+      ? `The consulting audit is already on file; the strategy cycle continues.`
+      : `If consulting is in scope, the initial audit lands in this window too.`);
   }
   paragraphs.push(monthOneParts.join(' '));
 

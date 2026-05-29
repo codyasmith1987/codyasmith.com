@@ -234,7 +234,23 @@ export function routeMarketingConsultingEcosystem(revenueBand: string | null): E
 // Step generation
 // =========================================================================
 
-function buildTierOption(tierId: TierId, ecosystem: Ecosystem, aiRecommendedTier?: TierId | null, aiRecommendedRationale?: string): ProposalStepOption {
+// Rewrite an audit-promising feature line for the reissue waiver, where
+// the initial audit was already paid on a prior engagement and is priced
+// $0. Keeps the ongoing cycle (still delivered); only the "audit at the
+// start" claim is restated as already-on-file. Phrases are controlled
+// (defined in MC_ECOSYSTEMS above), so matching them is safe.
+function waiveAuditFeature(feature: string): string {
+  if (feature.includes('baseline competitive and keyword read at the start')) {
+    return 'Your competitive and keyword baseline is already on file from the prior engagement; the cycle picks up from there.';
+  }
+  const m = feature.match(/audit at the start, then (.+)\.$/);
+  if (m) {
+    return `The audit is already on file from the prior engagement; ${m[1]} picks up from there.`;
+  }
+  return feature;
+}
+
+function buildTierOption(tierId: TierId, ecosystem: Ecosystem, aiRecommendedTier?: TierId | null, aiRecommendedRationale?: string, waiveOnboarding?: boolean): ProposalStepOption {
   const tier = ecosystem.tiers[tierId];
   // AI's per-prospect tier recommendation overrides the static product
   // default (Better is recommended at every ecosystem). When no AI rec
@@ -256,8 +272,12 @@ function buildTierOption(tierId: TierId, ecosystem: Ecosystem, aiRecommendedTier
     recommended_rationale: showRationale ? aiRecommendedRationale!.trim() : undefined,
     price_label: formatMoney(tier.monthly || 0),
     price_suffix: '/ month',
-    price_subline: `${formatMoney(tier.audit || 0)} audit at signing, ${ecosystem.label}`,
-    features: tier.features ? [...tier.features] : [],
+    price_subline: waiveOnboarding
+      ? `Audit waived (existing client), ${ecosystem.label}`
+      : `${formatMoney(tier.audit || 0)} audit at signing, ${ecosystem.label}`,
+    features: tier.features
+      ? (waiveOnboarding ? tier.features.map(waiveAuditFeature) : [...tier.features])
+      : [],
   };
 }
 
@@ -337,6 +357,9 @@ export const marketingConsultingProduct: ProductDefinition = {
       : null;
     // Per audit move 5: AI rationale on the recommended card.
     const aiRecommendedRationale = ctx.engagementStrategy?.recommended_tier_per_product?.marketing_consulting?.rationale;
+    // Reissue waiver: the audit is already paid/on file, so tier cards must
+    // not promise it as a new deliverable while it is priced $0.
+    const waiveOnboarding = ctx.waiveOnboarding === true;
 
     // If MC is the only product in scope, present a single tier_picker.
     // If other products are also in scope, present a yes/no first
@@ -353,9 +376,9 @@ export const marketingConsultingProduct: ProductDefinition = {
           h2: 'Pick a Marketing Consulting level',
           prompt: `Good, Better, or Best for Marketing Consulting. The level sets the cadence and depth of the strategic cycle.`,
           options: [
-            buildTierOption('good', eco, aiRecommendedTier, aiRecommendedRationale),
-            buildTierOption('better', eco, aiRecommendedTier, aiRecommendedRationale),
-            buildTierOption('best', eco, aiRecommendedTier, aiRecommendedRationale),
+            buildTierOption('good', eco, aiRecommendedTier, aiRecommendedRationale, waiveOnboarding),
+            buildTierOption('better', eco, aiRecommendedTier, aiRecommendedRationale, waiveOnboarding),
+            buildTierOption('best', eco, aiRecommendedTier, aiRecommendedRationale, waiveOnboarding),
           ],
         },
       ];
@@ -388,9 +411,9 @@ export const marketingConsultingProduct: ProductDefinition = {
         depends_on: 'mc_yes_no',
         show_when: { mc_yes_no: 'yes' },
         options: [
-          buildTierOption('good', eco, aiRecommendedTier, aiRecommendedRationale),
-          buildTierOption('better', eco, aiRecommendedTier, aiRecommendedRationale),
-          buildTierOption('best', eco, aiRecommendedTier, aiRecommendedRationale),
+          buildTierOption('good', eco, aiRecommendedTier, aiRecommendedRationale, waiveOnboarding),
+          buildTierOption('better', eco, aiRecommendedTier, aiRecommendedRationale, waiveOnboarding),
+          buildTierOption('best', eco, aiRecommendedTier, aiRecommendedRationale, waiveOnboarding),
         ],
       },
     ];

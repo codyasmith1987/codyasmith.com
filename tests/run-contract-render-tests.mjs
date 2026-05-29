@@ -4,7 +4,7 @@
 // substitution, hash determinism, and Schedule A conditional sections.
 // Runs via tsx because the modules are TypeScript.
 
-import { renderTemplate, renderScheduleA, computeDocumentHash, PRACTICE } from '../src/lib/contract-render.ts';
+import { renderTemplate, renderTemplateToMarkdown, renderScheduleA, computeDocumentHash, PRACTICE } from '../src/lib/contract-render.ts';
 import { buildScheduleA } from '../src/lib/contract-schedule.ts';
 import { computePricing } from '../src/lib/proposal-pricing.ts';
 
@@ -101,6 +101,25 @@ async function run() {
     const html = renderTemplate(tpl, SAMPLE_CONTEXT, 'client');
     const hasAdminPath = html.includes('/portal/admin/');
     test('client mode scrubs admin links', !hasAdminPath, hasAdminPath ? 'admin path leaked in client view' : '');
+  }
+
+  // Test 7b: renderTemplateToMarkdown (the executed-PDF path). Must strip
+  // the internal block, resolve placeholders to plain text, leave NO raw
+  // {{ }} or internal markers, and stay markdown (no marked.parse to HTML).
+  {
+    const md = renderTemplateToMarkdown(SAMPLE_TEMPLATE, SAMPLE_CONTEXT);
+    test('markdown: no raw placeholders remain', !md.includes('{{'), md.includes('{{') ? 'literal {{ leaked into PDF body' : '');
+    test('markdown: internal block stripped', !md.includes('Reserved. Internal draft note'), md.includes('Reserved. Internal draft note') ? 'internal reserved-coverage note leaked into PDF' : '');
+    test('markdown: no internal markers remain', !md.includes('internal:start') && !md.includes('internal:end'));
+    test('markdown: placeholders resolved to plain text', md.includes('Raised Bar Group LLC') && md.includes('limited liability company') && md.includes('Idaho'));
+    test('markdown: keeps neutral one-liner', md.includes('Client is responsible for its own insurance'));
+    test('markdown: stays markdown, not HTML', md.includes('## 1. Parties') && !md.includes('<h2'));
+  }
+
+  // Test 7c: missing values render as a plain pending marker (not an HTML span).
+  {
+    const md = renderTemplateToMarkdown(SAMPLE_TEMPLATE, { ...SAMPLE_CONTEXT, client: { ...SAMPLE_CONTEXT.client, entity_type: '' } });
+    test('markdown: missing value uses plain pending marker', md.includes('[to be completed at signing]') && !md.includes('metadata-pending'));
   }
 
   // Test 8: buildScheduleA for raised_bar_v1 with full selections.

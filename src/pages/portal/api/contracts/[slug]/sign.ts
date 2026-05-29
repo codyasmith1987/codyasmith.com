@@ -25,7 +25,7 @@ import {
 } from '../../../../../lib/agreements';
 import { getContractTemplate } from '../../../../../lib/contract-templates';
 import { ensureBillingContractFromAgreement } from '../../../../../lib/contract-handoff';
-import { renderTemplate, computeDocumentHash, PRACTICE } from '../../../../../lib/contract-render';
+import { renderTemplate, renderTemplateToMarkdown, computeDocumentHash, PRACTICE } from '../../../../../lib/contract-render';
 import { generateContractPdf } from '../../../../../lib/contract-pdf';
 import {
   sendCountersignNeededEmail,
@@ -205,7 +205,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
     pdfBuffer = await generateContractPdf({
       template,
       context: renderContext as any,
-      resolvedBodyMarkdown: template.body_markdown,
+      resolvedBodyMarkdown: renderTemplateToMarkdown(template.body_markdown, renderContext),
       scheduleA: agreement.schedule_a,
       signers: signers.map(s => {
         const sig = allSignatures.find(x => x.signer_id === s.id && !x.revoked_at);

@@ -232,12 +232,18 @@ export async function generateInvoiceForContract(contract: Contract, createdBy: 
     created_by: createdBy,
   });
 
-  // Set billing period (the upcoming period this invoice covers)
+  // Set billing period (the upcoming period this invoice covers).
+  // Issue as 'sent', not 'draft': getDueInvoices and markOverdueInvoices
+  // both filter status = 'sent', so a draft recurring invoice would never
+  // be reminded or marked overdue, and the client portal would badge it
+  // 'Draft' / hide it from the amount-due widget while the issuance
+  // notification says it is ready. The at-signing path already issues as
+  // 'sent'; recurring must match so the whole collection pipeline engages.
   await updateInvoice(invoiceId, {
     billing_period_start: period.start,
     billing_period_end: period.end,
     issued_date: now.toISOString().split('T')[0],
-    status: 'draft',
+    status: 'sent',
     client_visible: 1,
   });
 

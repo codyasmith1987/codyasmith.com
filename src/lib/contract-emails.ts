@@ -113,7 +113,7 @@ export async function sendCountersignNeededEmail(args: {
   const fn = firstName(args.signedBy.name_snapshot);
   const otherFn = firstName(args.otherSigner.name_snapshot);
   const inner = `
-    <h2 style="font-size: 22px; margin: 0 0 16px;">${escapeHtml(fn)} signed your contract &mdash; your turn</h2>
+    <h2 style="font-size: 22px; margin: 0 0 16px;">${escapeHtml(fn)} signed your contract. Your turn.</h2>
     <p style="font-size: 15px; color: #4a4239; margin: 0 0 16px;">Hey ${escapeHtml(otherFn)}, ${escapeHtml(fn)} just signed the standard client services agreement on ${escapeHtml(args.signedAt)}. Schedule A and the audit trail are locked at the version they signed.</p>
     <p style="font-size: 15px; color: #4a4239; margin: 0 0 20px;">Review and countersign in the portal to fully execute. If you want to discuss anything before signing, reply to this email or text Cody.</p>
     <p style="margin: 24px 0;">
@@ -122,7 +122,7 @@ export async function sendCountersignNeededEmail(args: {
   `;
   return sendBrevo({
     to: [{ email: args.otherSigner.email_snapshot, name: args.otherSigner.name_snapshot }],
-    subject: `${fn} signed your contract — your turn`,
+    subject: `${fn} signed your contract. Your turn.`,
     html: shell(inner),
   });
 }
@@ -160,7 +160,7 @@ export async function sendFullyExecutedEmail(args: {
   }
   return sendBrevo({
     to: [{ email: args.recipient.email_snapshot, name: args.recipient.name_snapshot }],
-    subject: hasPdf ? `Contract executed — your copy is attached` : `Contract executed`,
+    subject: hasPdf ? `Contract executed. Your copy is attached.` : `Contract executed`,
     html: shell(inner),
     attachments: attachments.length > 0 ? attachments : undefined,
   });
@@ -235,7 +235,7 @@ export async function sendScheduleChangedEmail(args: {
   const fn = firstName(args.recipient.name_snapshot);
   const change = args.changeSummary ? `<p style="font-size: 14px; color: #4a4239; margin: 0 0 16px; padding: 12px 14px; background: #f0ead9; border-radius: 4px;"><strong>What changed:</strong> ${escapeHtml(args.changeSummary)}</p>` : '';
   const inner = `
-    <h2 style="font-size: 22px; margin: 0 0 16px;">Schedule A changed on a contract you signed &mdash; review needed</h2>
+    <h2 style="font-size: 22px; margin: 0 0 16px;">Schedule A changed on a contract you signed. Review needed.</h2>
     <p style="font-size: 15px; color: #4a4239; margin: 0 0 16px;">Hey ${escapeHtml(fn)}, Cody edited Schedule A on the standard client services agreement after you signed it. Your signature is paused until you confirm the updated version.</p>
     ${change}
     <p style="font-size: 15px; color: #4a4239; margin: 0 0 20px;">Open the contract to review the change and re-sign if you agree. If you do not agree, reply to this email or text Cody.</p>
@@ -245,7 +245,7 @@ export async function sendScheduleChangedEmail(args: {
   `;
   return sendBrevo({
     to: [{ email: args.recipient.email_snapshot, name: args.recipient.name_snapshot }],
-    subject: `Schedule A changed on a contract you signed — review needed`,
+    subject: `Schedule A changed on a contract you signed. Review needed.`,
     html: shell(inner),
   });
 }

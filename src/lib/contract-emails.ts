@@ -138,9 +138,16 @@ export async function sendFullyExecutedEmail(args: {
   pdfFilename?: string;
 }): Promise<boolean> {
   const fn = firstName(args.recipient.name_snapshot);
+  // Only promise an attachment when one is actually present. If PDF
+  // generation/upload failed, the copy points to the portal instead, so the
+  // email never claims an attachment that isn't there.
+  const hasPdf = !!(args.pdfBase64 && args.pdfFilename);
+  const copyLine = hasPdf
+    ? 'Your fully executed copy is attached, and the same copy is permanently available in your portal documents area.'
+    : 'Your fully executed copy is available in your portal documents area.';
   const inner = `
     <h2 style="font-size: 22px; margin: 0 0 16px;">Contract executed</h2>
-    <p style="font-size: 15px; color: #4a4239; margin: 0 0 16px;">Hey ${escapeHtml(fn)}, both signatures are in. Your fully executed copy is attached, and the same copy is permanently available in your portal documents area.</p>
+    <p style="font-size: 15px; color: #4a4239; margin: 0 0 16px;">Hey ${escapeHtml(fn)}, both signatures are in. ${copyLine}</p>
     <p style="font-size: 15px; color: #4a4239; margin: 0 0 20px;">Cody will be in touch about kickoff and first-invoice timing.</p>
     <p style="margin: 24px 0;">
       <a href="${escapeHtml(args.documentsUrl)}" style="display: inline-block; background: #1a1814; color: #faf7f2; padding: 12px 22px; text-decoration: none; font-size: 15px;">Open documents area</a>
@@ -148,12 +155,12 @@ export async function sendFullyExecutedEmail(args: {
     <p style="font-size: 13px; color: #6b6359; margin: 16px 0 0;">Executed ${escapeHtml(args.finalizedAt)}.</p>
   `;
   const attachments: BrevoAttachment[] = [];
-  if (args.pdfBase64 && args.pdfFilename) {
-    attachments.push({ name: args.pdfFilename, content: args.pdfBase64 });
+  if (hasPdf) {
+    attachments.push({ name: args.pdfFilename!, content: args.pdfBase64! });
   }
   return sendBrevo({
     to: [{ email: args.recipient.email_snapshot, name: args.recipient.name_snapshot }],
-    subject: `Contract executed — your copy is attached`,
+    subject: hasPdf ? `Contract executed — your copy is attached` : `Contract executed`,
     html: shell(inner),
     attachments: attachments.length > 0 ? attachments : undefined,
   });

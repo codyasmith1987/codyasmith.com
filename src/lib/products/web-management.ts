@@ -538,6 +538,9 @@ function buildTierOption(args: {
     monthly_override?: number | null;
     onboarding_override?: number | null;
   }>;
+  // Reissue waiver: when true the onboarding fee is zeroed in pricing, so
+  // the tier card must not advertise the full onboarding cost.
+  waiveOnboarding?: boolean;
 }): ProposalStepOption {
   const tier = args.ecosystem.tiers[args.tierId];
 
@@ -607,9 +610,13 @@ function buildTierOption(args: {
     recommended_rationale: showRationale ? args.aiRecommendedRationale!.trim() : undefined,
     price_label: formatMoney(monthly),
     price_suffix: '/ month',
-    price_subline: args.sites > 1
-      ? `${formatMoney(onb)} onboarding total, ${args.sites} sites${hasPerSiteData ? ' (per-site routed)' : ` at ${args.ecosystem.label}`}`
-      : `${formatMoney(onb)} onboarding, ${args.ecosystem.label}`,
+    price_subline: args.waiveOnboarding
+      ? (args.sites > 1
+          ? `Onboarding waived (existing client), ${args.sites} sites${hasPerSiteData ? ' (per-site routed)' : ` at ${args.ecosystem.label}`}`
+          : `Onboarding waived (existing client), ${args.ecosystem.label}`)
+      : (args.sites > 1
+          ? `${formatMoney(onb)} onboarding total, ${args.sites} sites${hasPerSiteData ? ' (per-site routed)' : ` at ${args.ecosystem.label}`}`
+          : `${formatMoney(onb)} onboarding, ${args.ecosystem.label}`),
     included_hours: tier.hours,
     features,
   };
@@ -721,9 +728,9 @@ export const webManagementProduct: ProductDefinition = {
       h2: 'Pick a Web Management level',
       prompt: `Good, Better, or Best for Web Management. The level sets how often I update your sites, how fast I respond when something breaks, and how many hands-on hours per month sit in your pool.`,
       options: [
-        buildTierOption({ tierId: 'good', ecosystem: eco, sites, aiRecommendedTier, aiRecommendedRationale, managedSites }),
-        buildTierOption({ tierId: 'better', ecosystem: eco, sites, aiRecommendedTier, aiRecommendedRationale, managedSites }),
-        buildTierOption({ tierId: 'best', ecosystem: eco, sites, aiRecommendedTier, aiRecommendedRationale, managedSites }),
+        buildTierOption({ tierId: 'good', ecosystem: eco, sites, aiRecommendedTier, aiRecommendedRationale, managedSites, waiveOnboarding: ctx.waiveOnboarding === true }),
+        buildTierOption({ tierId: 'better', ecosystem: eco, sites, aiRecommendedTier, aiRecommendedRationale, managedSites, waiveOnboarding: ctx.waiveOnboarding === true }),
+        buildTierOption({ tierId: 'best', ecosystem: eco, sites, aiRecommendedTier, aiRecommendedRationale, managedSites, waiveOnboarding: ctx.waiveOnboarding === true }),
       ],
     };
     return [step];

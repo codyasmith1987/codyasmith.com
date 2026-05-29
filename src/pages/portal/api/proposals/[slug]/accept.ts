@@ -325,6 +325,11 @@ function moneyInt(n: number): string {
 function money(n: number): string {
   return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+// Whole dollars when whole, cents when not, so a clean total stays clean
+// while a multi-site or discounted at-signing figure keeps its cents.
+function moneyAuto(n: number): string {
+  return (Math.round(n * 100) % 100 === 0) ? moneyInt(n) : money(n);
+}
 
 // Helper: check whether the draft has all the selections it needs to
 // finalize. Walks the steps in the config and verifies each non-
@@ -612,6 +617,10 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
 
     const oneTime = pricing?.oneTime ?? 0;
     const monthly = pricing?.monthly ?? 0;
+    // Amount actually due when the agreement is signed, per contract
+    // section 5.2: one-time fees (100% at signing) plus the first month of
+    // every recurring fee. Work does not begin until it clears.
+    const atSigning = pricing?.atSigning ?? (oneTime + monthly);
     let agreement: ClientAgreement;
     try {
       agreement = await ensureDraftAgreementForAcceptedProposal(proposal, draft, pricing, user.id);
@@ -632,7 +641,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
       action: 'accepted',
       entityType: 'proposal',
       entityId: slug,
-      summary: `${proposal.title} accepted: ${Object.entries(draft.selections).map(([k, v]) => `${k}=${v ?? '-'}`).join(', ')}, one_time=${oneTime}, monthly=${monthly.toFixed(2)}, ${signatureSummaryParts.join(', ')}`,
+      summary: `${proposal.title} accepted: ${Object.entries(draft.selections).map(([k, v]) => `${k}=${v ?? '-'}`).join(', ')}, one_time=${oneTime}, monthly=${monthly.toFixed(2)}, at_signing=${atSigning.toFixed(2)}, ${signatureSummaryParts.join(', ')}`,
     });
 
     const brevoKey = import.meta.env.BREVO_API_KEY;
@@ -650,16 +659,19 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
             <h2 style="font-size: 22px; margin: 0 0 16px;">LOI accepted: ${escapeHtml(proposal.title)}</h2>
             <p style="font-size: 14px; color: #4a4239; margin: 0 0 16px;">Both signers have accepted the Letter of Intent. <strong>Next step</strong>: schedule the call within 24 hours, review the prepared draft agreement, then issue it at <a href="https://codyasmith.com/portal/admin/agreements/${escapeHtml(agreement.id)}" style="color: #c47d5a;">/portal/admin/agreements/${escapeHtml(agreement.id)}</a>.</p>
             <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">${summaryRowsHtml(proposal.config, draft.selections)}</table>
-            <p style="font-size: 12px; color: #6b6359; margin: 0 0 6px; letter-spacing: 0.06em; text-transform: uppercase;">One-time at signing</p>
+            <p style="font-size: 12px; color: #6b6359; margin: 0 0 6px; letter-spacing: 0.06em; text-transform: uppercase;">One-time setup</p>
             <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px;">
               ${breakdownTable}
               <tr><td style="padding: 8px 0 0; border-top: 1px solid #d4cdc0; font-weight: 600;">Total</td><td style="padding: 8px 0 0; text-align: right; border-top: 1px solid #d4cdc0; font-weight: 600;">${escapeHtml(moneyInt(oneTime))}</td></tr>
             </table>
             <p style="font-size: 12px; color: #6b6359; margin: 18px 0 6px; letter-spacing: 0.06em; text-transform: uppercase;">Monthly recurring</p>
-            <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px;">
               <tr><td style="padding: 4px 0; color: #6b6359;">Web Management (${escapeHtml(pricing?.mgmtTierName || 'selected tier')})</td><td style="padding: 4px 0; text-align: right; color: #1a1814;">${escapeHtml(money(pricing?.mgmtMonthly || 0))}</td></tr>
               ${pricing && pricing.consultingMonthly > 0 ? `<tr><td style="padding: 4px 0; color: #6b6359;">Marketing Consulting (${escapeHtml(pricing.consultingTierName)})</td><td style="padding: 4px 0; text-align: right; color: #1a1814;">${escapeHtml(money(pricing.consultingMonthly))}</td></tr>` : ''}
               <tr><td style="padding: 8px 0 0; border-top: 1px solid #d4cdc0; font-weight: 600;">Total</td><td style="padding: 8px 0 0; text-align: right; border-top: 1px solid #d4cdc0; font-weight: 600;">${escapeHtml(money(monthly))}</td></tr>
+            </table>
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">
+              <tr><td style="padding: 10px 0 0; border-top: 2px solid #1a1814; font-weight: 700;">Due at signing (setup + first month)</td><td style="padding: 10px 0 0; text-align: right; border-top: 2px solid #1a1814; font-weight: 700;">${escapeHtml(moneyAuto(atSigning))}</td></tr>
             </table>
             ${signedAsRows}
             <p style="font-size: 12px; color: #a3a3a3; margin: 0;">LOI accepted ${escapeHtml(acceptedAt)}.</p>
@@ -689,11 +701,19 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 22px; color: #1a1814; line-height: 1.55;">
               <h2 style="font-size: 22px; margin: 0 0 16px;">${escapeHtml(proposal.title)} confirmed</h2>
               <p style="font-size: 15px; color: #4a4239; margin: 0 0 16px;">Hey ${escapeHtml(signerFirstName)}, both confirmations are in. This is a Letter of Intent, not a contract yet. Here is what you both picked:</p>
-              <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 20px;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 12px;">
                 ${summaryRowsHtml(proposal.config, draft.selections)}
-                <tr><td style="padding: 6px 0; color: #6b6359; border-top: 1px solid #e6ddd0;">One-time at signing</td><td style="padding: 6px 0; text-align: right; font-weight: 600; border-top: 1px solid #e6ddd0;">${escapeHtml(moneyInt(oneTime))}</td></tr>
-                <tr><td style="padding: 6px 0; color: #6b6359;">Monthly recurring</td><td style="padding: 6px 0; text-align: right; font-weight: 600;">${escapeHtml(money(monthly))}</td></tr>
+                ${oneTime > 0 ? `<tr><td style="padding: 6px 0; color: #6b6359; border-top: 1px solid #e6ddd0;">One-time setup</td><td style="padding: 6px 0; text-align: right; font-weight: 600; border-top: 1px solid #e6ddd0;">${escapeHtml(moneyInt(oneTime))}</td></tr>` : ''}
+                ${monthly > 0 ? `<tr><td style="padding: 6px 0; color: #6b6359;${oneTime > 0 ? '' : ' border-top: 1px solid #e6ddd0;'}">Monthly recurring</td><td style="padding: 6px 0; text-align: right; font-weight: 600;${oneTime > 0 ? '' : ' border-top: 1px solid #e6ddd0;'}">${escapeHtml(money(monthly))} / month</td></tr>` : ''}
+                <tr><td style="padding: 10px 0 0; color: #1a1814; font-weight: 700; border-top: 2px solid #1a1814;">Due when you sign</td><td style="padding: 10px 0 0; text-align: right; font-weight: 700; border-top: 2px solid #1a1814;">${escapeHtml(moneyAuto(atSigning))}</td></tr>
               </table>
+              <p style="font-size: 13px; color: #6b6359; line-height: 1.5; margin: 0 0 20px;">${escapeHtml(
+                oneTime > 0 && monthly > 0
+                  ? `Signing the agreement collects your one-time setup of ${moneyInt(oneTime)} plus your first month of ${money(monthly)}. Work begins once it clears, and ${money(monthly)} recurs each month after that.`
+                  : oneTime > 0
+                    ? `Signing the agreement collects your one-time total of ${moneyInt(oneTime)}. Work begins once it clears.`
+                    : `Signing the agreement collects your first month of ${money(monthly)}. Work begins once it clears, and ${money(monthly)} recurs each month after that.`
+              )}</p>
               <p style="font-size: 15px; color: #4a4239; margin: 0 0 16px;">
                 I will reach out within the next 24 hours to schedule the call. After we talk, I send the formal Standard Client Services Agreement and Schedule A into the portal for signature. The standard contract is already visible at the bottom of your proposal page if you want to start reading. Reach me at <a href="mailto:cody@codyasmith.com" style="color: #c47d5a;">cody@codyasmith.com</a> or by phone any time.
               </p>

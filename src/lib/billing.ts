@@ -64,6 +64,17 @@ export function getCurrentBillingPeriod(billingDay: number, now: Date = new Date
   return { start: fmtDate(start), end: fmtDate(end) };
 }
 
+// The NEXT service period after the one containing `now`. Used to issue
+// recurring invoices ~7 days ahead (contract section 5.3). The day after
+// the current period ends is the next period's start (a billingDay
+// boundary), so we re-evaluate getCurrentBillingPeriod there.
+export function getUpcomingBillingPeriod(billingDay: number, now: Date = new Date()): { start: string; end: string } {
+  const cur = getCurrentBillingPeriod(billingDay, now);
+  const nextStart = new Date(cur.end + 'T00:00:00');
+  nextStart.setDate(nextStart.getDate() + 1);
+  return getCurrentBillingPeriod(billingDay, nextStart);
+}
+
 export async function invoiceExistsForPeriod(contractId: string, periodStart: string, periodEnd: string): Promise<boolean> {
   const row = await queryOne(
     'SELECT COUNT(*) as cnt FROM invoices WHERE contract_id = ? AND billing_period_start = ? AND billing_period_end = ?',
@@ -184,28 +195,34 @@ export async function updateOverageCharge(contractId: string, periodStart: strin
 // Recurring Invoice Generation
 // ============================================================
 
-export async function generateInvoiceForContract(contract: Contract, createdBy: string): Promise<string | null> {
+export async function generateInvoiceForContract(contract: Contract, createdBy: string, now: Date = new Date()): Promise<string | null> {
   if (contract.status !== 'active' || contract.billing_cadence !== 'monthly' || !contract.billing_day || !contract.recurring_amount) {
     return null;
   }
 
-  const period = getCurrentBillingPeriod(contract.billing_day);
+  // Per contract section 5.3, recurring invoices are issued ~7 days BEFORE
+  // the service period begins. So we bill the UPCOMING period (not the one
+  // containing today) and only once we are within 7 days of its start.
+  // The at-signing invoice covers the first period, so the recurring engine
+  // naturally picks up from the next one with no overlap.
+  const period = getUpcomingBillingPeriod(contract.billing_day, now);
 
-  // Check if invoice already exists for this period
+  // Already issued for that period?
   if (await invoiceExistsForPeriod(contract.id, period.start, period.end)) {
     return null;
   }
 
-  // Check if billing day has arrived
-  const today = new Date().getDate();
-  if (today < contract.billing_day) {
+  // Too early: not yet within the 7-day advance window.
+  const issueThreshold = new Date(period.start + 'T00:00:00');
+  issueThreshold.setDate(issueThreshold.getDate() - 7);
+  if (now < issueThreshold) {
     return null;
   }
 
   // Generate the invoice with a collision-safe invoice number. Manual
   // invoice creation uses the same helper, so recurring and ad hoc
   // invoices share one numbering contract.
-  const dueDate = new Date();
+  const dueDate = new Date(now);
   dueDate.setDate(dueDate.getDate() + (contract.payment_terms_days ?? 30));
 
   const { id: invoiceId } = await createInvoiceWithGeneratedNumber({
@@ -215,11 +232,11 @@ export async function generateInvoiceForContract(contract: Contract, createdBy: 
     created_by: createdBy,
   });
 
-  // Set billing period
+  // Set billing period (the upcoming period this invoice covers)
   await updateInvoice(invoiceId, {
     billing_period_start: period.start,
     billing_period_end: period.end,
-    issued_date: new Date().toISOString().split('T')[0],
+    issued_date: now.toISOString().split('T')[0],
     status: 'draft',
     client_visible: 1,
   });
@@ -313,6 +330,18 @@ export async function getDueInvoices(withinDays: number = 3): Promise<any[]> {
   );
 }
 
+// Transition sent-but-unpaid invoices past their due date to 'overdue'.
+// The status is otherwise unreachable (nothing ever sets it), so the
+// client-visible status and the red overdue styling in the PDF never fire.
+// Run from the daily cron. Returns the number of invoices marked.
+export async function markOverdueInvoices(): Promise<number> {
+  const result = await turso.execute({
+    sql: `UPDATE invoices SET status = 'overdue', updated_at = datetime('now')
+           WHERE status = 'sent' AND amount_paid < total AND due_date < date('now')`,
+  });
+  return result.rowsAffected ?? 0;
+}
+
 export async function sendDueReminders(): Promise<number> {
   const { sendEmail } = await import('./email');
   const dueInvoices = await getDueInvoices(3);
@@ -327,15 +356,23 @@ export async function sendDueReminders(): Promise<number> {
       if (users.length === 0) continue;
 
       const portalUrl = import.meta.env.SITE || 'https://codyasmith.com';
+      // An at-signing invoice (no billing period) gates work starting per
+      // section 5.2; a recurring invoice keeps service going. Name the
+      // consequence so the client understands what is at stake.
+      const isAtSigning = !invoice.billing_period_start;
+      const subject = isAtSigning
+        ? `Your invoice to get started is due ${invoice.due_date}. Work begins once it clears.`
+        : `Invoice ${invoice.invoice_number}: payment due ${invoice.due_date}`;
+      const leadLine = isAtSigning
+        ? `Your at-signing invoice <strong>${invoice.invoice_number}</strong> for <strong>$${invoice.total.toFixed(2)}</strong> is due on <strong>${invoice.due_date}</strong>. Work begins as soon as it clears.`
+        : `Invoice <strong>${invoice.invoice_number}</strong> for <strong>$${invoice.total.toFixed(2)}</strong> is due on <strong>${invoice.due_date}</strong>.`;
       const ok = await sendEmail(
         users.map(u => ({ email: u.email, name: u.name })),
-        `Invoice ${invoice.invoice_number}: payment due ${invoice.due_date}`,
+        subject,
         `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-          <h2 style="color: #171717; margin-bottom: 16px;">Payment reminder</h2>
-          <p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">
-            Invoice <strong>${invoice.invoice_number}</strong> for <strong>$${invoice.total.toFixed(2)}</strong> is due on <strong>${invoice.due_date}</strong>.
-          </p>
+          <h2 style="color: #171717; margin-bottom: 16px;">${isAtSigning ? 'Getting started' : 'Payment reminder'}</h2>
+          <p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">${leadLine}</p>
           ${invoice.amount_paid > 0 ? `<p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">Amount paid so far: $${invoice.amount_paid.toFixed(2)}. Remaining: $${(invoice.total - invoice.amount_paid).toFixed(2)}.</p>` : ''}
           <a href="${portalUrl}/portal/invoices" style="display: inline-block; background: #f59e0b; color: #0a0a0a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; margin-top: 16px;">
             View invoice in portal

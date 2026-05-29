@@ -15,7 +15,6 @@
 
 import { createContract, updateContract, deleteContract } from './contracts';
 import { createInvoiceWithGeneratedNumber, updateInvoice, addInvoiceItem } from './invoices';
-import { getCurrentBillingPeriod } from './billing';
 import { linkAgreementContract, getAgreementBySlug, type ClientAgreement } from './agreements';
 import { logger } from './logger';
 
@@ -140,15 +139,15 @@ export async function ensureBillingContractFromAgreement(
     });
     invoiceId = id;
 
-    // Tag the invoice to the current billing period so the recurring
-    // engine treats this month as already billed and starts at the next
-    // period. (Builds-only contracts have no recurring period to guard.)
-    const period = isRecurring ? getCurrentBillingPeriod(billingDay) : null;
+    // Deliberately left with NO billing_period: the at-signing invoice
+    // covers the first month, and the recurring engine issues the UPCOMING
+    // period 7 days ahead (per section 5.3), so it never collides with this
+    // one. A null billing_period also cleanly distinguishes the at-signing
+    // invoice from recurring invoices (e.g. for reminder copy).
     await updateInvoice(id, {
       status: 'sent',
       issued_date: today,
       client_visible: 1,
-      ...(period ? { billing_period_start: period.start, billing_period_end: period.end } : {}),
     });
 
     for (const li of atSigningItems) {

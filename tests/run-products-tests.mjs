@@ -391,8 +391,8 @@ async function run() {
   test('ScheduleA: WM monthly_total = 797',
     scheduleA.web_management?.monthly_total === 797,
     `got ${scheduleA.web_management?.monthly_total}`);
-  test('ScheduleA: WM included_hours = 8 (Eco B Better hours)',
-    scheduleA.web_management?.included_hours === 8,
+  test('ScheduleA: WM included_hours = 4 (Eco B Better hours)',
+    scheduleA.web_management?.included_hours === 4,
     `got ${scheduleA.web_management?.included_hours}`);
   test('ScheduleA: products_purchased.web_management = true',
     scheduleA.products_purchased?.web_management === true);

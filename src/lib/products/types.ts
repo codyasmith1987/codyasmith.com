@@ -160,6 +160,11 @@ export interface ProposalStepOption {
   price_label?: string;
   price_suffix?: string;
   price_subline?: string;
+  // Included monthly pooled hours for this tier, surfaced as a dedicated
+  // card element (not buried in feature prose) so a rebuild cannot drop
+  // it. Per the tier-cards-show-included-hours requirement. WM sets it;
+  // MC is advisory cadence and leaves it undefined.
+  included_hours?: number;
   features?: string[];
   price_dynamic?: string;
   price_detail_html?: string;

@@ -149,7 +149,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
           >
             <option value="">Select a client</option>
             {clients.map(c => (
-              <option value={c.id} data-slug={c.slug} data-name={c.name} data-domain={c.domain || ''}>{c.name}</option>
+              <option value={c.id} data-slug={c.slug} data-name={c.name} data-domain={c.domain || ''} data-discount={c.discount_rate ?? 0}>{c.name}</option>
             ))}
           </select>
           <button type="button" id="add-client-btn" class="px-4 py-3 bg-neutral-800 border border-white/10 text-neutral-300 text-sm rounded-lg hover:border-amber-500/40 hover:text-amber-600 transition-colors">
@@ -318,6 +318,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
       <!-- 5b. EXISTING-CLIENT OPTIONS -->
       <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
         <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-5">5b. Existing-client options</p>
+        <p id="client-discount-note" class="text-[11px] text-amber-500/80 mb-4 hidden"></p>
         <label class="flex items-start gap-3 cursor-pointer">
           <input type="checkbox" id="waive-onboarding" class="mt-1" />
           <span class="text-[11px] text-neutral-500 leading-relaxed">
@@ -810,6 +811,20 @@ const todayISO = new Date().toISOString().slice(0, 10);
       state.client_name = opt.dataset.name || '';
       state.client_slug = opt.dataset.slug || '';
       state.client_domain = opt.dataset.domain || '';
+      // Surface the client's standing discount so the admin sees it without
+      // leaving the wizard. discount_rate scales ALL fees; the waive
+      // checkbox below zeros only one-time setup. Different tools.
+      const discNote = document.getElementById('client-discount-note');
+      if (discNote) {
+        const rate = Number(opt.dataset.discount || 0);
+        if (rate > 0) {
+          discNote.textContent = `This client has a standing ${(rate * 100).toFixed(rate * 100 % 1 === 0 ? 0 : 1)}% discount on the client record; it is applied to all fees on this proposal automatically.`;
+          discNote.classList.remove('hidden');
+        } else {
+          discNote.textContent = '';
+          discNote.classList.add('hidden');
+        }
+      }
       refreshResearchPanel();
       if (state.client_id) {
         const users = usersByClient[state.client_id] || [];

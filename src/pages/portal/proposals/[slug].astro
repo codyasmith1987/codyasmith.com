@@ -969,7 +969,7 @@ const clientConfig = {
         ))}
       </div>
     )}
-    {step.type === 'tier_picker' && step.id === 'mgmt_tier' && ecosystemNoticeText && (
+    {step.type === 'tier_picker' && (step.id === 'mgmt_tier' || step.id === 'wm_tier' || step.id === 'bundle_tier') && ecosystemNoticeText && (
       <p class="ecosystem-notice">{ecosystemNoticeText}</p>
     )}
     {step.type === 'binary_picker' && (
@@ -1059,7 +1059,7 @@ const clientConfig = {
       .filter(step => !step.show_when)
       .map(step => (
         <div class="summary-row" data-summary-step={step.id}>
-          <span class="summary-label">{step.id === 'mgmt_tier' ? 'Web Management level' : step.id === 'site_setup' ? 'Site setup' : step.id === 'consulting' ? 'Marketing Consulting' : (step.h2 || step.id)}</span>
+          <span class="summary-label">{(step.id === 'mgmt_tier' || step.id === 'wm_tier') ? 'Web Management level' : step.id === 'site_setup' ? 'Site setup' : step.id === 'consulting' ? 'Marketing Consulting' : (step.h2 || step.id)}</span>
           <span class="summary-value" id={`summary-${step.id}`}>Pick above</span>
         </div>
       ))}

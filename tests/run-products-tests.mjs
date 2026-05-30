@@ -117,6 +117,44 @@ async function run() {
   }
 
   // -------------------------------------------------------------------
+  // WM tier card multi-site RANGE across build options (the hand-built
+  // Raised Bar pattern). F3 takeover (6p, primary) + o1 (Builders 20p) /
+  // o2 (Builders 20p + Tailwater 6p). Better Eco A $497: o1 = 497 + 497*0.8
+  // = 894.60; o2 = 497 + 2*397.60 = 1292.20. Reproduces the 5/22 sample.
+  // -------------------------------------------------------------------
+  {
+    const rcfg = composeProposal({
+      client: { id: 'c1', name: 'RBG', slug: 'rbg', discount_rate: 0 },
+      signers: [{ id: 'j', name: 'Jason', email: 'j@x.com' }],
+      products: ['web-management', 'build'],
+      product_vars: {
+        'web-management': { page_count: 6, takeover_sites: [{ domain: 'f3.com', label: 'F3', page_count: 6, is_primary: true }] },
+        build: { build_total_pages: 20, build_options: [
+          { id: 'o1', name: 'Unified', wm_sites_added: [{ domain: 'rbb.com', label: 'Builders', page_count_estimate: 20 }] },
+          { id: 'o2', name: 'Split', wm_sites_added: [{ domain: 'rbb.com', label: 'Builders', page_count_estimate: 20 }, { domain: 'tw.com', label: 'Tailwater', page_count_estimate: 6 }] },
+        ] },
+      },
+      narrative_variables: {}, overrides: {}, managedSites: [], waive_onboarding: false, bundle_mode: false,
+    });
+    const wmStep = (rcfg.steps || []).find(s => s.id === 'wm_tier');
+    const rGood = wmStep && wmStep.options.find(o => o.id === 'good');
+    const rBetter = wmStep && wmStep.options.find(o => o.id === 'better');
+    const rBest = wmStep && wmStep.options.find(o => o.id === 'best');
+    test('WM range: Better card spans o1 $894.60 to o2 $1,292.20',
+      !!rBetter && /894\.60/.test(rBetter.price_label) && /1,292\.20/.test(rBetter.price_label),
+      rBetter ? rBetter.price_label : '(no better card)');
+    test('WM range: Good card spans $534.60 to $772.20',
+      !!rGood && /534\.60/.test(rGood.price_label) && /772\.20/.test(rGood.price_label),
+      rGood ? rGood.price_label : '(no good card)');
+    test('WM range: Best card spans $1,164.60 to $1,682.20',
+      !!rBest && /1,164\.60/.test(rBest.price_label) && /1,682\.20/.test(rBest.price_label),
+      rBest ? rBest.price_label : '(no best card)');
+    test('WM range: subline shows onboarding + depending on site setup',
+      !!rBetter && /800 onboarding, depending on your site setup/.test(rBetter.price_subline || ''),
+      rBetter ? rBetter.price_subline : '');
+  }
+
+  // -------------------------------------------------------------------
   // WM multi-site formula (2026-05-24 locked):
   // Each site routes to its own ecosystem by its own page count. Tier
   // is set once for the engagement. Primary contributes full base;

@@ -252,6 +252,10 @@ export function composeProposal(args: ComposeArgs): ProposalConfig {
       otherProducts,
       engagementStrategy,
       managedSites: args.managedSites,
+      // Full product_vars so step generation (e.g. the WM tier multi-site
+      // range across build options) can read takeover_sites and build_options,
+      // matching the pricing context.
+      allProductVars: args.product_vars,
       // Reissue waiver: products read this to keep step copy (tier-card
       // features) and narrative consistent with the $0 setup pricing.
       waiveOnboarding: args.waive_onboarding === true,

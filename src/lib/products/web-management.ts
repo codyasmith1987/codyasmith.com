@@ -637,6 +637,21 @@ function baseManagedSitesForBuildOption(args: ProductContext): ManagedSiteForPri
 // Step generation
 // =========================================================================
 
+// A multi-site WM monthly + onboarding range across build options. min===max
+// means a single value (one option, or all options the same total).
+interface TierMoneyRange {
+  monthlyMin: number; monthlyMax: number; onbMin: number; onbMax: number;
+}
+
+// Money formatter that shows cents only when present ($894.60), whole
+// otherwise ($800). Used for multi-site ranges where the 0.80 additional-site
+// factor yields cents, matching the hand-built Raised Bar sample.
+function formatMoneyAuto(n: number): string {
+  return (Math.round(n * 100) % 100 === 0)
+    ? '$' + Math.round(n).toLocaleString('en-US')
+    : '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function buildTierOption(args: {
   tierId: TierId;
   ecosystem: Ecosystem;
@@ -663,6 +678,10 @@ function buildTierOption(args: {
   // Reissue waiver: when true the onboarding fee is zeroed in pricing, so
   // the tier card must not advertise the full onboarding cost.
   waiveOnboarding?: boolean;
+  // Multi-site total range across build options. When present, the card shows
+  // the min-to-max monthly ("depending on your site setup") instead of the
+  // single-total path, matching the hand-built Raised Bar sample.
+  range?: TierMoneyRange;
 }): ProposalStepOption {
   const tier = args.ecosystem.tiers[args.tierId];
 
@@ -724,6 +743,34 @@ function buildTierOption(args: {
     && args.aiRecommendedTier === args.tierId
     && typeof args.aiRecommendedRationale === 'string'
     && args.aiRecommendedRationale.trim().length > 0;
+
+  // Multi-site range across build options (the hand-built Raised Bar pattern):
+  // show min-to-max monthly + a "depending on your site setup" subline. Takes
+  // precedence over the single-total path above when supplied.
+  if (args.range) {
+    const { monthlyMin, monthlyMax, onbMin, onbMax } = args.range;
+    const isMonthlyRange = Math.round(monthlyMin * 100) !== Math.round(monthlyMax * 100);
+    const onbLabel = (Math.round(onbMin * 100) !== Math.round(onbMax * 100))
+      ? `${formatMoneyAuto(onbMin)} – ${formatMoneyAuto(onbMax)} onboarding`
+      : `${formatMoneyAuto(onbMin)} onboarding`;
+    return {
+      id: args.tierId,
+      name: tier.name,
+      tagline: tier.tagline,
+      recommended,
+      recommended_rationale: showRationale ? args.aiRecommendedRationale!.trim() : undefined,
+      price_label: isMonthlyRange
+        ? `${formatMoneyAuto(monthlyMin)} – ${formatMoneyAuto(monthlyMax)}`
+        : formatMoneyAuto(monthlyMin),
+      price_suffix: '/ month',
+      price_subline: args.waiveOnboarding
+        ? 'Onboarding waived (existing client)'
+        : (isMonthlyRange ? `${onbLabel}, depending on your site setup` : onbLabel),
+      included_hours: tier.hours,
+      features: tier.features ? [...tier.features] : [],
+    };
+  }
+
   return {
     id: args.tierId,
     name: tier.name,
@@ -840,15 +887,45 @@ export const webManagementProduct: ProductDefinition = {
     // Thread managedSites into buildTierOption so per-site monthly
     // and the per-site breakdown line render correctly when multi-site.
     const managedSites = ctx.managedSites;
+    // Multi-site WM tier range across build options (the hand-built Raised Bar
+    // pattern): each build option's effective site list = the takeover/managed
+    // base + that option's built sites; the card shows the min-to-max monthly
+    // total with a "depending on your site setup" subline. Only used when build
+    // options and/or takeover sites exist; a plain managed-client proposal
+    // keeps buildTierOption's single-total card.
+    const rangeBaseSites = baseManagedSitesForBuildOption(ctx);
+    const rangeBuildOpts: any[] = Array.isArray((ctx.allProductVars as any)?.['build']?.build_options)
+      ? (ctx.allProductVars as any)['build'].build_options
+      : [];
+    const rangeSiteLists: ManagedSiteForPricing[][] = rangeBuildOpts.length > 0
+      ? rangeBuildOpts.map((o: any) => applyBuildOptionManagedSiteChanges({
+          managedSites: rangeBaseSites,
+          allProductVars: ctx.allProductVars,
+          selections: { build_options: o?.id },
+        }))
+      : [rangeBaseSites];
+    const useTierRange = rangeBuildOpts.length > 0 || extractTakeoverSites(ctx.allProductVars).length > 0;
+    const tierRangeFor = (tierId: TierId): TierMoneyRange | undefined => {
+      if (!useTierRange) return undefined;
+      const totals = rangeSiteLists
+        .filter(sl => sl && sl.length > 0 && sl.some(s => s.page_count != null))
+        .map(sl => {
+          const { monthlyPerSite, onboardingPerSite } = buildPerSiteBases({ managedSites: sl, tierId, primaryEcosystemId: ctx.ecosystemId! });
+          return { monthly: computeMultiSiteSumWithOverrides(monthlyPerSite), onb: computeMultiSiteSumWithOverrides(onboardingPerSite) };
+        });
+      if (totals.length === 0) return undefined;
+      const m = totals.map(t => t.monthly), o = totals.map(t => t.onb);
+      return { monthlyMin: Math.min(...m), monthlyMax: Math.max(...m), onbMin: Math.min(...o), onbMax: Math.max(...o) };
+    };
     const step: ProposalStep = {
       id: 'wm_tier',
       type: 'tier_picker',
       h2: 'Pick a Web Management level',
       prompt: `Good, Better, or Best for Web Management. The level sets how often I update your sites, how fast I respond when something breaks, and how many hands-on hours per month sit in your pool.`,
       options: [
-        buildTierOption({ tierId: 'good', ecosystem: eco, sites, aiRecommendedTier, aiRecommendedRationale, managedSites, waiveOnboarding: ctx.waiveOnboarding === true }),
-        buildTierOption({ tierId: 'better', ecosystem: eco, sites, aiRecommendedTier, aiRecommendedRationale, managedSites, waiveOnboarding: ctx.waiveOnboarding === true }),
-        buildTierOption({ tierId: 'best', ecosystem: eco, sites, aiRecommendedTier, aiRecommendedRationale, managedSites, waiveOnboarding: ctx.waiveOnboarding === true }),
+        buildTierOption({ tierId: 'good', ecosystem: eco, sites, aiRecommendedTier, aiRecommendedRationale, managedSites, waiveOnboarding: ctx.waiveOnboarding === true, range: tierRangeFor('good') }),
+        buildTierOption({ tierId: 'better', ecosystem: eco, sites, aiRecommendedTier, aiRecommendedRationale, managedSites, waiveOnboarding: ctx.waiveOnboarding === true, range: tierRangeFor('better') }),
+        buildTierOption({ tierId: 'best', ecosystem: eco, sites, aiRecommendedTier, aiRecommendedRationale, managedSites, waiveOnboarding: ctx.waiveOnboarding === true, range: tierRangeFor('best') }),
       ],
     };
     return [step];

@@ -61,15 +61,13 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
   // to someone who will own it.
   'web-management::B::tactical': (ctx) => {
     const clientName = clientNameFromCtx(ctx);
-    const ecoBand = ctx.ecosystemId ? '30 to 150 pages' : 'the working middle';
-    const pageCount = pageCountFromCtx(ctx);
     const angle = firstSalesAngleFromCtx(ctx);
     return {
       intro_lines: [
         `You have a real site. A specific problem you want fixed. The right answer is steady ownership from here.`,
       ],
       what_i_see_paragraphs: [
-        `${clientName}'s site sits in the ${ecoBand} range. ${pageCount} pages of working middle. A plugin going stale. A form that started misfiring. A piece of content that no longer says the right thing. None of it is dramatic on any given day. It adds up across months, and it adds up faster when nobody owns it.`,
+        `${clientName}'s site is a real, working site. A plugin going stale. A form that started misfiring. A piece of content that no longer says the right thing. None of it is dramatic on any given day. It adds up across months, and it adds up faster when nobody owns it.`,
         `What I see you buying out of is the unevenness. The site goes well when you can get to it. It goes quiet when you cannot. Per-task work means a new estimate, a new invoice, a new wait every time something small comes up, and the smallest items end up taking the longest to get done. There is no one whose week the site sits inside. That gap is what the engagement closes.`,
       ],
       what_i_recommend_paragraphs: [
@@ -99,7 +97,7 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
       ],
       what_i_see_paragraphs: [
         `${clientName} is in active growth, which puts pressure in two directions at once. The site has more to carry: more pages, more updates, more surface area where things can quietly break. At the same time, the room is making decisions that were not on the table last year. Which markets to push into. How to position against competitors who are also moving. Where the next role should sit. The site work and the decision work are two different jobs. Treating them as one engagement is how both end up half-served.`,
-        `The ${industry} businesses I see at the 30 to 150 page band are usually a step ahead of their own systems. You can feel the next stage of the business before the website, the content, or the in-room thinking has caught up to it. That gap is not a problem so long as it is named. The operator who built the business is the same operator carrying the next set of choices. The day there is no outside thinker in the conversation is the day those choices start running on instinct alone.`,
+        `The ${industry} businesses I see at this stage are usually a step ahead of their own systems. You can feel the next stage of the business before the website, the content, or the in-room thinking has caught up to it. That gap is not a problem so long as it is named. The operator who built the business is the same operator carrying the next set of choices. The day there is no outside thinker in the conversation is the day those choices start running on instinct alone.`,
       ],
       what_i_recommend_paragraphs: [
         `I recommend <strong>Web Management</strong> as the execution layer for the ${clientName} site. The monthly fee covers hosting, daily backups, security and uptime monitoring, and software updates on the contracted cadence. A monthly pool of hands-on hours covers active work: edits, page builds, small fixes, content updates, the running list a working site accumulates. The cadence is known. The number is known. The site stops being a thing you have to remember to think about.`,
@@ -120,15 +118,13 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
   // keeping it that way.
   'web-management::B::*': (ctx) => {
     const clientName = clientNameFromCtx(ctx);
-    const ecoBand = ctx.ecosystemId ? '30 to 150 pages' : 'the working middle';
-    const pageCount = pageCountFromCtx(ctx);
     const angle = firstSalesAngleFromCtx(ctx);
     return {
       intro_lines: [
         `This is the version where nothing is on fire. The goal is keeping it that way.`,
       ],
       what_i_see_paragraphs: [
-        `${clientName}'s site is established. It sits in the ${ecoBand} band, with ${pageCount} pages of working content. It carries the company's story and holds the pages a customer or a search engine expects to find. Sites at this size do not need rescuing. They need ongoing attention. Software ages. Security surface area widens with every plugin. Content drifts out of date a paragraph at a time. The risk is slow erosion.`,
+        `${clientName}'s site is established and working. It carries the company's story and holds the pages a customer or a search engine expects to find. A site like this does not need rescuing. It needs ongoing attention. Software ages. Security surface area widens with every plugin. Content drifts out of date a paragraph at a time. The risk is slow erosion.`,
       ],
       what_i_recommend_paragraphs: [
         `I recommend <strong>Web Management</strong> on a monthly basis for the ${clientName} site. The monthly fee covers hosting, daily backups, security and uptime monitoring, and software updates on the contracted cadence. Those four lines run in the background every day. They are how a site this size stays running while nobody is looking at it, and they are also how it stays out of the moments where one missed update turns into a recovery weekend.`,
@@ -219,7 +215,7 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
         `You are looking for someone to think with you on the questions that sit above the day-to-day.`,
       ],
       what_i_see_paragraphs: [
-        `A business in the $1 million to $10 million revenue band runs into a particular set of decisions every quarter. How to position against competitors moving on the same customers. Which content strategy maps to where the search audience is going. Whether the brand is still saying what the business now sells. Whether the marketing role you have is the right one. Whether the vendors around it still are. None of these have a right answer in a book. They have a right answer for ${clientName}, in this market, this year.`,
+        `A business at your stage runs into a particular set of decisions every quarter. How to position against competitors moving on the same customers. Which content strategy maps to where the search audience is going. Whether the brand is still saying what the business now sells. Whether the marketing role you have is the right one. Whether the vendors around it still are. None of these have a right answer in a book. They have a right answer for ${clientName}, in this market, this year.`,
       ],
       what_i_recommend_paragraphs: [
         `I recommend <strong>Marketing Consulting</strong> as a thinking-partner subscription for the business. The engagement opens with a research-grade audit: competitors, search and keyword landscape, content gaps, brand positioning, the state of the in-room strategy as it actually exists today. After the audit, the engagement runs on an ongoing cadence of strategy work, with the rhythm and depth set in the agreement. Sold once for the whole business. Not per site. Not per entity.`,
@@ -238,7 +234,6 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
   // deeper sites; the engagement is sized to the footprint.
   'web-management::C::*': (ctx) => {
     const clientName = clientNameFromCtx(ctx);
-    const ecoBand = '150 or more pages';
     const pageCount = pageCountFromCtx(ctx);
     const angle = firstSalesAngleFromCtx(ctx);
     return {
@@ -246,7 +241,7 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
         `A site of this depth is operating infrastructure. The engagement should be sized to that reality.`,
       ],
       what_i_see_paragraphs: [
-        `The ${clientName} site carries ${pageCount} pages in the ${ecoBand} band. That is a real footprint, not a brochure site, and the math changes at this size. More pages means more places a link can break. More content means more drift between what a page says and what the business does today. More plugins and integrations means more security surface area. The work to keep all of it running is steady and ongoing, not a quarterly cleanup.`,
+        `The ${clientName} site carries ${pageCount} pages. That is a real, deep site, not a brochure site, and the math changes at this size. More pages means more places a link can break. More content means more drift between what a page says and what the business does today. More plugins and integrations means more security surface area. The work to keep all of it running is steady and ongoing, not a quarterly cleanup.`,
       ],
       what_i_recommend_paragraphs: [
         `I recommend <strong>Web Management</strong> on a monthly basis for the ${clientName} site, at the higher hours pool a larger footprint requires. The monthly fee covers hosting, daily backups, security and uptime monitoring, and software updates on the contracted cadence. The hours pool is sized to the site itself. More updates to vet before they ship. More pages to keep current. More places to check when something upstream has shifted. The hours match the site, not the average.`,
@@ -413,7 +408,13 @@ export function getSnippetCandidateKeys(args: SnippetLookupArgs): string[] {
   return candidates;
 }
 
-export function lookupSnippetOverride(args: SnippetLookupArgs): ((ctx: ProductContext) => NarrativeSnippetSet) | null {
+// Like lookupSnippetOverride, but returns the matched key alongside the
+// snippet so the composer knows WHICH products the snippet speaks for (the
+// key's product segment). A single-product snippet that matched in a
+// multi-product proposal must not silently drop the other products.
+export function lookupSnippetOverrideWithKey(
+  args: SnippetLookupArgs,
+): { snippet: (ctx: ProductContext) => NarrativeSnippetSet; key: string } | null {
   const clientId = (args.clientId && args.clientId.trim()) || null;
   for (const key of getSnippetCandidateKeys(args)) {
     // Per audit move 7: client-scoped DB override wins first, then
@@ -423,14 +424,18 @@ export function lookupSnippetOverride(args: SnippetLookupArgs): ((ctx: ProductCo
     // and within that key tries client-scoped before global).
     if (clientId) {
       const clientScoped = lookupDbOverride(key, clientId);
-      if (clientScoped) return clientScoped;
+      if (clientScoped) return { snippet: clientScoped, key };
     }
     const dbGlobal = lookupDbOverride(key, null);
-    if (dbGlobal) return dbGlobal;
+    if (dbGlobal) return { snippet: dbGlobal, key };
     const entry = SNIPPET_REGISTRY[key];
-    if (entry) return entry;
+    if (entry) return { snippet: entry, key };
   }
   return null;
+}
+
+export function lookupSnippetOverride(args: SnippetLookupArgs): ((ctx: ProductContext) => NarrativeSnippetSet) | null {
+  return lookupSnippetOverrideWithKey(args)?.snippet || null;
 }
 
 // -----------------------------------------------------------------

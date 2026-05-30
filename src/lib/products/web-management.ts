@@ -500,6 +500,9 @@ function baseManagedSitesForBuildOption(args: ProductContext): ManagedSiteForPri
     || (Array.isArray(pickedOption.wm_site_modifications) && pickedOption.wm_site_modifications.length > 0)
   );
   if (!hasStructuralWmPayload) return [];
+  // The primary managed site is represented by a placeholder routed off WM's
+  // own ecosystem (from variables.page_count); build_options.wm_sites_added
+  // are ADDITIONAL sites layered on top by applyBuildOptionManagedSiteChanges.
   const sites = numberFromVar(args.variables.site_count, 1);
   return Array.from({ length: Math.max(1, sites) }, (_, i) => ({
     domain: i === 0 ? '(primary domain confirmed at signing)' : `(additional site ${i + 1} domain confirmed at signing)`,
@@ -612,11 +615,11 @@ function buildTierOption(args: {
     price_suffix: '/ month',
     price_subline: args.waiveOnboarding
       ? (args.sites > 1
-          ? `Onboarding waived (existing client), ${args.sites} sites${hasPerSiteData ? ' (per-site routed)' : ` at ${args.ecosystem.label}`}`
-          : `Onboarding waived (existing client), ${args.ecosystem.label}`)
+          ? `Onboarding waived (existing client), ${args.sites} sites`
+          : `Onboarding waived (existing client)`)
       : (args.sites > 1
-          ? `${formatMoney(onb)} onboarding total, ${args.sites} sites${hasPerSiteData ? ' (per-site routed)' : ` at ${args.ecosystem.label}`}`
-          : `${formatMoney(onb)} onboarding, ${args.ecosystem.label}`),
+          ? `${formatMoney(onb)} onboarding total, ${args.sites} sites`
+          : `${formatMoney(onb)} onboarding`),
     included_hours: tier.hours,
     features,
   };
@@ -636,18 +639,14 @@ function formatMoney(n: number): string {
 // through the wizard's override step.
 function buildWebManagementNarrative(ctx: ProductContext): NarrativeSnippetSet {
   const sites = numberFromVar(ctx.variables.site_count, 1);
-  const ecoId = ctx.ecosystemId || 'B';
-  const eco = WM_ECOSYSTEMS[ecoId];
-
   const siteWord = sites === 1 ? 'one site' : `${sites} sites`;
-  const ecoBand = eco?.band || '';
 
   // Engagement-strategy adaptation. Light touch; one additional
   // paragraph at most when the synthesis points to a strong shape.
   // Does NOT name tiers (no-dangling-tier-references rule); steers
   // the framing instead.
   const what_i_see_paragraphs: string[] = [
-    `Your site footprint sits at <strong>${ecoBand}</strong>${ecoBand ? ', placing it in ' : 'in '}${eco?.label || 'an ecosystem'} for management pricing. The tier you pick sets how often I update your sites, how fast I respond when something breaks, and how many hands-on hours per month sit in your pool.`,
+    `The tier you pick sets how often I update your sites, how fast I respond when something breaks, and how many hands-on hours a month sit in your pool.`,
   ];
   const waived = ctx.waiveOnboarding === true;
   const strategy = ctx.engagementStrategy;
@@ -672,8 +671,8 @@ function buildWebManagementNarrative(ctx: ProductContext): NarrativeSnippetSet {
       sites === 1
         ? `<strong>Web Management</strong> for the site. The fee covers hosting, daily backups, security and uptime monitoring, software updates at the contracted cadence, and a pool of hands-on hours for site work. Unused hours do not roll over; that is the trade for a predictable monthly.`
         : waived
-          ? `<strong>Web Management</strong> for all ${sites} sites under one engagement. Each site is sized to its own ecosystem by its own page count, at the engagement tier you pick. The primary site pays the full base monthly for its ecosystem at that tier; each additional site pays 80 percent of its own ecosystem's base monthly at the same tier. Onboarding is waived because these sites were already onboarded on the prior engagement. Linear, no compounding. Pooled hours scale across all sites.`
-          : `<strong>Web Management</strong> for all ${sites} sites under one engagement. Each site is sized to its own ecosystem by its own page count, at the engagement tier you pick. The primary site pays the full base monthly and full base onboarding for its ecosystem at that tier; each additional site pays 80 percent of its own ecosystem's base monthly and 80 percent of its own ecosystem's base onboarding at the same tier. Linear, no compounding. Pooled hours scale across all sites.`,
+          ? `<strong>Web Management</strong> for all ${sites} sites under one engagement, billed per site, with the hands-on hours pooled across them. Onboarding is waived because these sites were already onboarded on the prior engagement.`
+          : `<strong>Web Management</strong> for all ${sites} sites under one engagement, billed per site, with the hands-on hours pooled into one monthly bucket you draw from wherever the work is.`,
     ],
   };
 }

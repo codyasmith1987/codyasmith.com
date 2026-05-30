@@ -96,14 +96,16 @@ export const POST: APIRoute = async ({ locals, url }) => {
     const filename = `${slug}-site-health-${cycleMonth}-DRAFT.pdf`;
     try {
       const priorFiles = await turso.execute({
-        sql: `SELECT id, s3_key FROM files WHERE client_id = ? AND original_name = ? AND category = 'report'`,
+        sql: `SELECT id, s3_key FROM files WHERE client_id = ? AND original_name = ? AND category = 'internal_draft'`,
         args: [clientId, filename],
       });
       for (const pf of priorFiles.rows) await deleteFileFromStorage(pf[1] as string, pf[0] as string);
     } catch (cleanupErr: any) {
       logger.error('prior site-health report cleanup failed (continuing)', cleanupErr);
     }
-    const { id } = await uploadFile(slug, cycleMonth, filename, buffer, 'application/pdf', clientId, locals.user!.id, 'report');
+    // Admin-only category: a drafting aid, not a client deliverable. See the
+    // performance-summary endpoint for the rationale.
+    const { id } = await uploadFile(slug, cycleMonth, filename, buffer, 'application/pdf', clientId, locals.user!.id, 'internal_draft');
     return json({
       ok: true,
       file_id: id,

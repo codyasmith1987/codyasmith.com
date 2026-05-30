@@ -19,7 +19,11 @@ const clients = isAdmin ? await getAllClients() : [];
       <div>
         <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Audience &amp; Acquisition</p>
         <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Traffic</h1>
-        <p class="text-sm text-neutral-400 mt-2">From Google Analytics 4. Shows the latest period uploaded.</p>
+        <p class="text-sm text-neutral-400 mt-2">From Google Analytics 4. <span id="ga4-asof"></span></p>
+        <p class="mt-2">
+          <button id="request-update-btn" class="text-[11px] font-mono text-amber-500 hover:text-amber-400 underline underline-offset-2">Request a data update</button>
+          <span id="request-update-status" class="text-[11px] text-neutral-500 ml-2"></span>
+        </p>
       </div>
       {isAdmin && <ClientSelector clients={clients} />}
     </div>
@@ -83,6 +87,28 @@ const clients = isAdmin ? await getAllClients() : [];
       selector.addEventListener('change', (e) => {
         activeClientId = e.target.value;
         loadGa4();
+      });
+    }
+
+    // Request a data update: pings Cody to refresh this source (analytics is
+    // a manual upload today, not an auto API connection).
+    const reqBtn = document.getElementById('request-update-btn');
+    if (reqBtn) {
+      reqBtn.addEventListener('click', async () => {
+        const statusEl = document.getElementById('request-update-status');
+        reqBtn.disabled = true;
+        statusEl.textContent = 'Sending...';
+        try {
+          const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+          const res = await fetch('/portal/api/request-data-update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+            body: JSON.stringify({ client_id: activeClientId, source: 'traffic' }),
+          });
+          statusEl.textContent = res.ok ? 'Requested. We will refresh it shortly.' : 'Could not send the request.';
+        } catch {
+          statusEl.textContent = 'Could not send the request.';
+        }
       });
     }
 
@@ -162,6 +188,8 @@ const clients = isAdmin ? await getAllClients() : [];
           const periodTo = fmtDate(data.topline.end_date);
           const periodText = periodFrom && periodTo ? `${periodFrom} to ${periodTo}` : (data.month || '');
           document.getElementById('ga4-period').textContent = periodText;
+          const asofEl = document.getElementById('ga4-asof');
+          if (asofEl) asofEl.textContent = periodTo ? `Data through ${periodTo}.` : (data.month ? `Latest data: ${data.month}.` : '');
           document.getElementById('kpi-active-users').textContent = fmtInt(data.topline.active_users);
           document.getElementById('kpi-new-users').textContent = fmtInt(data.topline.new_users);
           document.getElementById('kpi-sessions').textContent = fmtInt(data.topline.sessions);

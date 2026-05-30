@@ -29,6 +29,24 @@ async function notifyAdmins(notification: { type: Parameters<typeof createNotifi
   }
 }
 
+// A client asked for fresher data on one of their live pages. Not all
+// sources are auto-connected (a site crawl is a manual or paid step), so the
+// page offers a request button that pings Cody to refresh. In-portal
+// notification only today (no email on this path).
+export async function onDataUpdateRequested(args: { clientId: string; clientName: string; sourceLabel: string; requestedByName: string }): Promise<void> {
+  try {
+    await notifyAdmins({
+      type: 'data_update_requested',
+      title: `Data update requested: ${args.clientName}`,
+      body: `${args.requestedByName} requested fresher ${args.sourceLabel} data for ${args.clientName}.`,
+      entity_type: 'client',
+      entity_id: args.clientId,
+    });
+  } catch (err) {
+    logger.error('onDataUpdateRequested failed', err);
+  }
+}
+
 // ============================================================
 // Trigger 1: Task marked complete
 // ============================================================

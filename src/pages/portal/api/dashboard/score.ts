@@ -43,6 +43,7 @@
 
 import type { APIRoute } from 'astro';
 import turso from '../../../../lib/turso';
+import { bucketPriority } from '../../../../lib/crawl-read';
 
 export const prerender = false;
 
@@ -130,10 +131,8 @@ async function computeHealth(clientId: string): Promise<Component> {
   });
   let high = 0, medium = 0, low = 0;
   for (const r of issuesRes.rows) {
-    const p = String(r[0] || '').toLowerCase();
-    if (p === 'critical' || p === 'high') high++;
-    else if (p === 'medium') medium++;
-    else low++;
+    const b = bucketPriority(r[0] as string | null);
+    if (b === 'high') high++; else if (b === 'medium') medium++; else low++;
   }
   const total = high + medium + low;
   const raw = 100 - (high * 8 + medium * 3 + low * 1);

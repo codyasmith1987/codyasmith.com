@@ -31,6 +31,7 @@ export type NotificationType =
   | 'change_order_submitted'
   | 'change_order_approved'
   | 'task_completed'
+  | 'data_update_requested'
   | 'general';
 
 export interface Notification {

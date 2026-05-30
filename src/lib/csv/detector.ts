@@ -77,8 +77,15 @@ const SIGNATURES: FormatSignature[] = [
     requiredColumns: ['keywords', 'volume', 'position', 'est. visits', 'ranking url'],
   },
   {
+    // Ubersuggest keyword exports. The "suggestions" file also carries
+    // 'search intent'; the "bulk analysis" file does not — so 'search
+    // intent' is NOT required here, letting both land. The column quad
+    // below is distinctive to Ubersuggest keyword files (position_tracking
+    // needs position+url+location; keyword_research needs the plural
+    // 'keywords'+'est. visits'+'ranking url'), so widening this does not
+    // collide with the other keyword formats.
     format: 'keyword_suggestions',
-    requiredColumns: ['keyword', 'search intent', 'search volume', 'cpc', 'seo difficulty'],
+    requiredColumns: ['keyword', 'search volume', 'cpc', 'seo difficulty'],
   },
   {
     format: 'accessibility',

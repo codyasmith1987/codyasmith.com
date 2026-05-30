@@ -47,6 +47,51 @@ export async function onDataUpdateRequested(args: { clientId: string; clientName
   }
 }
 
+// Cody deliberately issued a prescriptive deliverable (a strategic
+// recommendation or a research report) to the client. This is the delivery
+// event: notify the client in-portal and email them. Value-first copy
+// (what they get, not what the system did). Fired once per file, from
+// /portal/api/files/issue.
+export async function onDocumentIssued(args: { clientId: string; fileId: string; fileName: string; category: string }): Promise<void> {
+  try {
+    const { fileCategoryLabel } = await import('./storage');
+    const { escapeHtml } = await import('./email-safety');
+    const label = fileCategoryLabel(args.category);
+    const users = await getUsersByClientId(args.clientId);
+
+    for (const user of users) {
+      await createNotification({
+        user_id: user.id,
+        type: 'document_issued',
+        title: `New ${label} ready`,
+        body: `"${args.fileName}" is ready to read in your documents.`,
+        entity_type: 'file',
+        entity_id: args.fileId,
+      });
+    }
+
+    if (users.length > 0) {
+      const { sendEmail } = await import('./email');
+      const portalUrl = import.meta.env.SITE || 'https://codyasmith.com';
+      const safeName = escapeHtml(args.fileName);
+      await sendEmail(
+        users.map(u => ({ email: u.email, name: u.name })),
+        `New ${label} ready in your portal`,
+        `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+          <h2 style="color: #171717; margin-bottom: 16px;">Something new to read</h2>
+          <p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">I just added <strong>${safeName}</strong> to your portal. It is ready whenever you are.</p>
+          <a href="${portalUrl}/portal/documents" style="display: inline-block; background: #f59e0b; color: #0a0a0a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; margin-top: 16px;">Open your documents</a>
+          <p style="color: #a3a3a3; font-size: 12px; margin-top: 32px;"><a href="${portalUrl}" style="color: #a3a3a3;">codyasmith.com</a></p>
+        </div>
+        `
+      );
+    }
+  } catch (err) {
+    logger.error('onDocumentIssued failed', err);
+  }
+}
+
 // ============================================================
 // Trigger 1: Task marked complete
 // ============================================================

@@ -184,36 +184,104 @@ export async function deleteFileFromStorage(s3Key: string, fileId: string): Prom
   await getS3().send(new DeleteObjectCommand({ Bucket: getBucket(), Key: s3Key }));
 }
 
+// Canonical file-category taxonomy. One place so the upload select, the
+// client/admin file lists, and the documents hub agree on labels and on
+// which categories are deliverables, drafts, or ad-hoc.
+export const FILE_CATEGORY_LABELS: Record<string, string> = {
+  strategic_recommendation: 'Strategic Recommendations',
+  research: 'Research Reports',
+  invoice: 'Invoice',
+  spreadsheet: 'Spreadsheet',
+  general: 'General',
+  internal_draft: 'Internal draft',
+  // Legacy: 'report' was the old generic upload category, retired in favor of
+  // strategic_recommendation / research. Kept so existing files read cleanly.
+  report: 'Report',
+};
+
+export function fileCategoryLabel(category: string): string {
+  return FILE_CATEGORY_LABELS[category] || category;
+}
+
 // Categories that are admin-only and must never appear in the client-facing
 // file list (e.g. auto-generated descriptive report DRAFTs, an internal
 // drafting aid, not a client deliverable).
 export const ADMIN_ONLY_FILE_CATEGORIES = ['internal_draft'];
 
+// Prescriptive deliverables Cody authors and deliberately issues (a strategic
+// recommendation or a research report). They are drafts (admin-only) until
+// issued, then surface on the client's documents hub via
+// getIssuedReportsForClient. They never appear in the ad-hoc Files list.
+export const ISSUABLE_FILE_CATEGORIES = ['strategic_recommendation', 'research'];
+
 export async function getFilesForClient(clientId: string): Promise<any[]> {
-  const placeholders = ADMIN_ONLY_FILE_CATEGORIES.map(() => '?').join(', ');
+  // The Files page is the ad-hoc exchange: hide internal drafts and the
+  // issuable deliverables (those live on the documents hub once issued).
+  const hidden = [...ADMIN_ONLY_FILE_CATEGORIES, ...ISSUABLE_FILE_CATEGORIES];
+  const placeholders = hidden.map(() => '?').join(', ');
   const result = await turso.execute({
     sql: `SELECT id, filename, original_name, mime_type, size_bytes, category, month, created_at
           FROM files WHERE client_id = ? AND category NOT IN (${placeholders})
           ORDER BY month DESC, created_at DESC`,
-    args: [clientId, ...ADMIN_ONLY_FILE_CATEGORIES],
+    args: [clientId, ...hidden],
   });
   return result.rows.map(row => ({
     id: row[0] as string,
     filename: row[1] as string,
     original_name: row[2] as string,
     mime_type: row[3] as string,
-    size_bytes: row[4] as number,
     category: row[5] as string,
     month: row[6] as string,
     created_at: row[7] as string,
+    size_bytes: row[4] as number,
   }));
 }
 
+// Issued prescriptive deliverables for the client's documents hub. Only
+// issuable categories with issued_at set; newest issue first.
+export async function getIssuedReportsForClient(clientId: string): Promise<Array<{
+  id: string; original_name: string; mime_type: string; size_bytes: number;
+  category: string; month: string; issued_at: string;
+}>> {
+  const placeholders = ISSUABLE_FILE_CATEGORIES.map(() => '?').join(', ');
+  const result = await turso.execute({
+    sql: `SELECT id, original_name, mime_type, size_bytes, category, month, issued_at
+          FROM files
+          WHERE client_id = ? AND category IN (${placeholders}) AND issued_at IS NOT NULL
+          ORDER BY issued_at DESC`,
+    args: [clientId, ...ISSUABLE_FILE_CATEGORIES],
+  });
+  return result.rows.map(row => ({
+    id: row[0] as string,
+    original_name: row[1] as string,
+    mime_type: row[2] as string,
+    size_bytes: row[3] as number,
+    category: row[4] as string,
+    month: row[5] as string,
+    issued_at: row[6] as string,
+  }));
+}
+
+// Issue a prescriptive deliverable to the client. Sets issued_at once and
+// reports whether this call performed the transition, so the caller only
+// notifies/emails on the first issue, not on a re-click. Race-safe via the
+// issued_at IS NULL guard.
+export async function markFileIssued(fileId: string): Promise<{ transitioned: boolean; issued_at: string | null }> {
+  const res = await turso.execute({
+    sql: `UPDATE files SET issued_at = datetime('now') WHERE id = ? AND issued_at IS NULL`,
+    args: [fileId],
+  });
+  const transitioned = res.rowsAffected === 1;
+  const after = await turso.execute({ sql: 'SELECT issued_at FROM files WHERE id = ?', args: [fileId] });
+  const issued_at = (after.rows[0]?.[0] as string) ?? null;
+  return { transitioned, issued_at };
+}
+
 export async function getFileById(fileId: string): Promise<{
-  id: string; client_id: string; s3_key: string; original_name: string; mime_type: string; category: string;
+  id: string; client_id: string; s3_key: string; original_name: string; mime_type: string; category: string; issued_at: string | null;
 } | null> {
   const result = await turso.execute({
-    sql: 'SELECT id, client_id, s3_key, original_name, mime_type, category FROM files WHERE id = ?',
+    sql: 'SELECT id, client_id, s3_key, original_name, mime_type, category, issued_at FROM files WHERE id = ?',
     args: [fileId],
   });
   if (result.rows.length === 0) return null;
@@ -225,12 +293,13 @@ export async function getFileById(fileId: string): Promise<{
     original_name: row[3] as string,
     mime_type: row[4] as string,
     category: row[5] as string,
+    issued_at: (row[6] as string | null) ?? null,
   };
 }
 
 export async function getAllFilesAdmin(): Promise<any[]> {
   const result = await turso.execute(
-    `SELECT f.id, f.original_name, f.mime_type, f.size_bytes, f.category, f.month, f.created_at, c.name as client_name, c.id as client_id
+    `SELECT f.id, f.original_name, f.mime_type, f.size_bytes, f.category, f.month, f.created_at, c.name as client_name, c.id as client_id, f.issued_at
      FROM files f JOIN clients c ON c.id = f.client_id
      ORDER BY f.month DESC, f.created_at DESC`
   );
@@ -244,5 +313,6 @@ export async function getAllFilesAdmin(): Promise<any[]> {
     created_at: row[6] as string,
     client_name: row[7] as string,
     client_id: row[8] as string,
+    issued_at: row[9] as string | null,
   }));
 }

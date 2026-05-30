@@ -172,7 +172,12 @@ function synthesizeWmPageCount(
   // proposals with no build product still need an ecosystem to route).
   const takeovers: any[] = Array.isArray(allProductVars?.['web-management']?.takeover_sites)
     ? allProductVars!['web-management'].takeover_sites : [];
-  const takeoverPrimary = takeovers.find((s: any) => typeof s?.page_count === 'number' && s.page_count > 0);
+  // Prefer the admin-marked primary takeover so the tier-card ecosystem
+  // (derived from this page_count) matches what buildPerSiteBases /
+  // buildScheduleAContribution use as the pricing primary (they sort by
+  // is_primary). Falling back to first-with-a-count only when none is marked.
+  const takeoverPrimary = takeovers.find((s: any) => s?.is_primary === true && typeof s?.page_count === 'number' && s.page_count > 0)
+    ?? takeovers.find((s: any) => typeof s?.page_count === 'number' && s.page_count > 0);
   if (takeoverPrimary) return { ...variables, page_count: takeoverPrimary.page_count };
   return variables;
 }

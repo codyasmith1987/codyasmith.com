@@ -1298,6 +1298,17 @@ const todayISO = new Date().toISOString().slice(0, 10);
       return wrap;
     }
 
+    // Route a page count to its WM ecosystem. Module scope so the takeover
+    // editor can tag rows (buildWmImpactEditor has its own inner copy that
+    // shadows this within that function). Mirrors routeWebManagementEcosystem
+    // server-side: under 30 = A, 30 to 150 = B, over 150 = C.
+    function routeWmEcoFromPages(pages) {
+      if (typeof pages !== 'number' || !Number.isFinite(pages) || pages <= 0) return null;
+      if (pages < 30) return 'A';
+      if (pages <= 150) return 'B';
+      return 'C';
+    }
+
     // Takeover sites editor. Existing sites the proposal proposes to MANAGE
     // (not build). Each prices at its real navigable page count and pays full
     // WM onboarding. Emits state.product_vars['web-management'].takeover_sites =
@@ -1345,8 +1356,10 @@ const todayISO = new Date().toISOString().slice(0, 10);
         container.appendChild(empty);
         return;
       }
-      // Exactly one primary (the anchor existing site).
-      if (!arr.some(s => s.is_primary)) arr[0].is_primary = true;
+      // Exactly one primary (the anchor existing site): keep the first marked,
+      // clear the rest. Defensive against a restored state with 0 or 2+ primaries.
+      const primaryIdx = arr.findIndex(s => s.is_primary);
+      arr.forEach((s, i) => { s.is_primary = (i === (primaryIdx >= 0 ? primaryIdx : 0)); });
       arr.forEach((site, i) => container.appendChild(takeoverRow(site, i, container, arr)));
     }
 

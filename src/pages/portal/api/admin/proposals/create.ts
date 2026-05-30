@@ -102,6 +102,46 @@ function normalizeBuildOptions(productVars: Record<string, any>): string | null 
   return null;
 }
 
+// Validate + normalize product_vars['web-management'].takeover_sites (existing
+// unmanaged sites the proposal proposes to take over). Mirrors
+// normalizeBuildOptions: reject silent data loss at the API boundary rather
+// than letting extractTakeoverSites quietly drop a malformed entry. Returns an
+// error string on the first violation, or null when clean.
+function normalizeWmTakeoverSites(productVars: Record<string, any>): string | null {
+  const wm = productVars['web-management'];
+  if (!wm || !Array.isArray(wm.takeover_sites)) return null;
+  // A domain cannot be both a proposed takeover AND a newly-built site.
+  const builtDomains = new Set<string>();
+  const buildVars = productVars['build'];
+  if (buildVars && Array.isArray(buildVars.build_options)) {
+    for (const opt of buildVars.build_options) {
+      const added = Array.isArray(opt?.wm_sites_added) ? opt.wm_sites_added : [];
+      for (const s of added) {
+        const d = typeof s?.domain === 'string' ? s.domain.trim().toLowerCase() : '';
+        if (d) builtDomains.add(d);
+      }
+    }
+  }
+  const cleaned: Array<{ domain: string; label: string; page_count: number; is_primary: boolean }> = [];
+  const seen = new Set<string>();
+  for (const s of wm.takeover_sites) {
+    if (!s || typeof s !== 'object') continue;
+    const domain = typeof s.domain === 'string' ? s.domain.trim().toLowerCase() : '';
+    const label = typeof s.label === 'string' ? s.label.trim() : '';
+    const pages = typeof s.page_count === 'number' && Number.isFinite(s.page_count) ? s.page_count : null;
+    const hasAny = !!domain || !!label || pages !== null;
+    if (!hasAny) continue;
+    if (!domain) return 'A takeover site is missing its domain.';
+    if (pages === null || pages < 1) return `Takeover site ${domain} needs a page count of at least 1.`;
+    if (builtDomains.has(domain)) return `${domain} is listed as both a takeover site and a newly-built site. Pick one.`;
+    if (seen.has(domain)) return `${domain} is listed as a takeover site more than once.`;
+    seen.add(domain);
+    cleaned.push({ domain, label, page_count: pages, is_primary: s.is_primary === true });
+  }
+  wm.takeover_sites = cleaned;
+  return null;
+}
+
 export const POST: APIRoute = async ({ locals, request }) => {
   if (locals.user?.role !== 'admin') return json({ error: 'Forbidden' }, 403);
 
@@ -144,6 +184,8 @@ export const POST: APIRoute = async ({ locals, request }) => {
     const product_vars = (c.product_vars && typeof c.product_vars === 'object') ? c.product_vars : {};
     const buildOptionError = normalizeBuildOptions(product_vars);
     if (buildOptionError) return json({ error: buildOptionError }, 400);
+    const takeoverError = normalizeWmTakeoverSites(product_vars);
+    if (takeoverError) return json({ error: takeoverError }, 400);
     const narrative_variables = (c.narrative_variables && typeof c.narrative_variables === 'object') ? c.narrative_variables : {};
     const rawSigners = Array.isArray(c.signers) ? c.signers : [];
     if (rawSigners.length === 0) {

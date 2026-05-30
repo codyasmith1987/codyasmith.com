@@ -138,6 +138,7 @@ export interface WebManagementSection {
     domain: string;
     description: string;
     ecosystem?: string;           // 'A' | 'B' | 'C' for the routed eco
+    site_type?: string;           // 'takeover' | 'built' | 'managed' (label only)
     monthly_contribution?: number;
     onboarding_contribution?: number;
     is_primary?: boolean;

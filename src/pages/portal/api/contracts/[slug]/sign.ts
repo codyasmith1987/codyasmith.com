@@ -325,6 +325,39 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
     } catch { /* best-effort */ }
   }
 
+  // Takeover sites go live: flip every proposed-takeover domain to managed now
+  // that the engagement is executed. Read off the originating proposal config's
+  // takeover_site_domains. Wrapped so a failure never breaks execution (the
+  // agreement is already finalized; an admin can flip manually as recovery).
+  // Idempotent via markDomainsManaged.
+  try {
+    if (agreement.proposal_id) {
+      const propRow = await turso.execute({
+        sql: 'SELECT config FROM proposals WHERE id = ? LIMIT 1',
+        args: [agreement.proposal_id],
+      });
+      const cfgRaw = propRow.rows[0]?.[0];
+      if (cfgRaw) {
+        const cfg = JSON.parse(String(cfgRaw));
+        const domains: string[] = Array.isArray(cfg?.takeover_site_domains) ? cfg.takeover_site_domains : [];
+        if (domains.length > 0) {
+          const { markDomainsManaged } = await import('../../../../../lib/client-sites');
+          const flipped = await markDomainsManaged(agreement.client_id, domains);
+          await logActivity({
+            clientId: agreement.client_id,
+            userId: user.id,
+            action: 'updated',
+            entityType: 'agreement',
+            entityId: agreement.id,
+            summary: `Takeover sites now under management for ${agreement.title}: ${domains.join(', ')} (${flipped} flipped or added).`,
+          });
+        }
+      }
+    }
+  } catch (err) {
+    logger.error('takeover is_managed flip after finalize failed', err);
+  }
+
   // At-signing invoice auto-email + PDF. Closes the last manual step in
   // every execution: the client is told what to pay to start, with the
   // invoice attached, instead of having to find it in the portal. Only

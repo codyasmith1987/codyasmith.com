@@ -250,9 +250,12 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
         parts.push(`<thead><tr><th style="text-align:left; padding:4px 8px; border-bottom:1px solid #ccc">Site</th><th style="text-align:right; padding:4px 8px; border-bottom:1px solid #ccc">Monthly</th><th style="text-align:right; padding:4px 8px; border-bottom:1px solid #ccc">Onboarding</th></tr></thead>`);
         parts.push(`<tbody>`);
         for (const s of wm.sites) {
-          const desc = s.is_primary ? ' <em>(primary)</em>' : '';
+          const primaryLabel = s.is_primary ? ' <em>(primary)</em>' : '';
+          const typeLabel = (s as any).site_type === 'takeover' ? ' <em>(existing site, taken over)</em>'
+            : (s as any).site_type === 'built' ? ' <em>(new build)</em>'
+            : '';
           parts.push(`<tr>`);
-          parts.push(`<td style="padding:4px 8px">${escapeHtml(s.domain || '')}${desc}</td>`);
+          parts.push(`<td style="padding:4px 8px">${escapeHtml(s.domain || '')}${primaryLabel}${typeLabel}</td>`);
           parts.push(`<td style="padding:4px 8px; text-align:right">${typeof s.monthly_contribution === 'number' ? fmtMoney(s.monthly_contribution) : ''}</td>`);
           parts.push(`<td style="padding:4px 8px; text-align:right">${typeof s.onboarding_contribution === 'number' ? fmtMoney(s.onboarding_contribution) : ''}</td>`);
           parts.push(`</tr>`);

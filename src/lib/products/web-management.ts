@@ -367,6 +367,10 @@ type ManagedSiteForPricing = {
   page_count?: number | null;
   monthly_override?: number | null;
   onboarding_override?: number | null;
+  // Origin of the site, for Schedule A labeling: 'takeover' (existing
+  // unmanaged site inherited), 'built' (new build), 'managed' (already under
+  // contract). Pricing is identical regardless; this is a label only.
+  site_type?: 'takeover' | 'built' | 'managed' | null;
 };
 
 function selectedBuildOption(args: {
@@ -402,6 +406,7 @@ export function extractTakeoverSites(allProductVars?: Record<string, any>): Mana
       label: typeof s.label === 'string' && s.label.trim() ? s.label.trim() : null,
       is_primary: s.is_primary === true,
       page_count: pages,
+      site_type: 'takeover',
       monthly_override: null,
       onboarding_override: null,
     });
@@ -580,6 +585,7 @@ export function applyBuildOptionManagedSiteChanges<
       label,
       is_primary: isFirstSite,
       page_count: site.page_count_estimate,
+      site_type: 'built',
       monthly_override: null,
       // Build-produced site: the build fee covers standing it up, so WM
       // onboarding is 0 for it. This is mechanism (C) per-site override
@@ -945,6 +951,7 @@ export const webManagementProduct: ProductDefinition = {
       domain: string;
       description: string;
       ecosystem?: string;
+      site_type?: string;
       monthly_contribution?: number;
       onboarding_contribution?: number;
       is_primary?: boolean;
@@ -986,10 +993,14 @@ export const webManagementProduct: ProductDefinition = {
         // Primary or overridden sites skip the multiplier.
         const monthlyFactor = (idx === 0 || monthlyIsOverride) ? 1 : MULTI_SITE_DISCOUNT;
         const onbFactor = (idx === 0 || onbIsOverride) ? 1 : MULTI_SITE_DISCOUNT;
+        const siteType = (s as any).site_type || 'managed';
         return {
           domain: s.label && s.label !== s.domain ? `${s.label} (${s.domain})` : s.domain,
-          description: s.is_primary ? 'primary site' : '',
+          description: siteType === 'takeover' ? 'existing site, taken over'
+            : siteType === 'built' ? 'new build'
+            : (s.is_primary ? 'primary site' : ''),
           ecosystem: siteEco,
+          site_type: siteType,
           monthly_contribution: Math.round(monthlyBase * monthlyFactor * 100) / 100,
           onboarding_contribution: Math.round(onbBase * onbFactor * 100) / 100,
           is_primary: !!s.is_primary,

@@ -553,6 +553,10 @@ export interface ProposalConfig {
   // entry per distinct ecosystem the engagement occupies, each with that
   // ecosystem's navigable-page ceiling and the next-tier trigger.
   ecosystem_ceilings?: EcosystemCeiling[];
+  // Domains the proposal proposes to TAKE OVER (existing unmanaged sites).
+  // Emitted by composeProposal; read by the contract-finalize flow to flip
+  // these sites to is_managed=1 when the engagement is signed.
+  takeover_site_domains?: string[];
 }
 
 // One occupied ecosystem + its page ceiling, for the client-facing

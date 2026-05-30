@@ -1229,6 +1229,8 @@ const todayISO = new Date().toISOString().slice(0, 10);
           if (managed.length >= 2) {
             block.appendChild(buildPerSiteEditor(managed));
           }
+          // Proposed-takeover sites: existing sites we inherit (not build).
+          block.appendChild(takeoverSitesEditor());
         }
 
         // Build product: when Build is in scope, surface the
@@ -1294,6 +1296,130 @@ const todayISO = new Date().toISOString().slice(0, 10);
       wrap.appendChild(addBtn);
       renderBuildOptionsList(list, productId);
       return wrap;
+    }
+
+    // Takeover sites editor. Existing sites the proposal proposes to MANAGE
+    // (not build). Each prices at its real navigable page count and pays full
+    // WM onboarding. Emits state.product_vars['web-management'].takeover_sites =
+    // [{ domain, label, page_count, is_primary }]; the server validates the
+    // rest (normalizeWmTakeoverSites). Exactly one site is the primary anchor.
+    function takeoverSitesEditor() {
+      const wrap = document.createElement('div');
+      wrap.className = 'mt-4 p-3 bg-neutral-900/30 border border-white/5 rounded-md';
+      const header = document.createElement('p');
+      header.className = 'text-[10px] font-mono text-neutral-500 tracking-wide uppercase mb-1';
+      header.textContent = 'Sites to take over (optional)';
+      wrap.appendChild(header);
+      const desc = document.createElement('p');
+      desc.className = 'text-[11px] text-neutral-400 mb-3 leading-relaxed';
+      desc.textContent = 'Existing sites you propose to manage but did not build. Each is priced at its real navigable page count and pays full Web Management onboarding. Do not list a site you are also building here (that goes under the build option instead).';
+      wrap.appendChild(desc);
+      const list = document.createElement('div');
+      list.className = 'space-y-2';
+      wrap.appendChild(list);
+      const addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.className = 'mt-3 text-xs px-3 py-1.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-700 hover:bg-amber-500/20 transition-colors';
+      addBtn.textContent = '+ Add takeover site';
+      addBtn.addEventListener('click', () => {
+        if (!state.product_vars['web-management']) state.product_vars['web-management'] = {};
+        const wm = state.product_vars['web-management'];
+        const arr = Array.isArray(wm.takeover_sites) ? wm.takeover_sites : [];
+        arr.push({ domain: '', label: '', page_count: undefined, is_primary: arr.length === 0 });
+        wm.takeover_sites = arr;
+        renderTakeoverList(list);
+      });
+      wrap.appendChild(addBtn);
+      renderTakeoverList(list);
+      return wrap;
+    }
+
+    function renderTakeoverList(container) {
+      container.innerHTML = '';
+      const wm = state.product_vars['web-management'] || {};
+      const arr = Array.isArray(wm.takeover_sites) ? wm.takeover_sites : [];
+      if (arr.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'text-[11px] text-neutral-500 italic';
+        empty.textContent = 'No takeover sites. Add one only if the proposal inherits an existing site you did not build.';
+        container.appendChild(empty);
+        return;
+      }
+      // Exactly one primary (the anchor existing site).
+      if (!arr.some(s => s.is_primary)) arr[0].is_primary = true;
+      arr.forEach((site, i) => container.appendChild(takeoverRow(site, i, container, arr)));
+    }
+
+    function takeoverRow(site, index, listContainer, arr) {
+      const card = document.createElement('div');
+      card.className = 'p-2.5 bg-neutral-900/40 border border-white/5 rounded flex flex-wrap items-center gap-2';
+
+      const domainInput = document.createElement('input');
+      domainInput.type = 'text';
+      domainInput.className = 'flex-1 min-w-[140px] px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30';
+      domainInput.placeholder = 'existing-site.com';
+      domainInput.value = site.domain || '';
+      domainInput.addEventListener('input', () => { site.domain = domainInput.value.trim().toLowerCase(); });
+      card.appendChild(domainInput);
+
+      const labelInput = document.createElement('input');
+      labelInput.type = 'text';
+      labelInput.className = 'flex-1 min-w-[120px] px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30';
+      labelInput.placeholder = 'Label (optional)';
+      labelInput.value = site.label || '';
+      labelInput.addEventListener('input', () => { site.label = labelInput.value; });
+      card.appendChild(labelInput);
+
+      const pagesWrap = document.createElement('div');
+      pagesWrap.className = 'flex items-center gap-1.5';
+      const pagesInput = document.createElement('input');
+      pagesInput.type = 'number';
+      pagesInput.min = '1';
+      pagesInput.className = 'w-20 px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30';
+      pagesInput.placeholder = 'pages';
+      pagesInput.value = (site.page_count != null) ? String(site.page_count) : '';
+      const ecoTag = document.createElement('span');
+      ecoTag.className = 'text-[10px] font-mono text-neutral-500';
+      const setEcoTag = () => {
+        const eco = (typeof site.page_count === 'number' && site.page_count > 0) ? routeWmEcoFromPages(site.page_count) : null;
+        ecoTag.textContent = eco ? ('Eco ' + eco) : '';
+      };
+      pagesInput.addEventListener('input', () => {
+        const n = parseInt(pagesInput.value, 10);
+        site.page_count = (Number.isFinite(n) && n > 0) ? n : undefined;
+        setEcoTag();
+      });
+      setEcoTag();
+      pagesWrap.appendChild(pagesInput);
+      pagesWrap.appendChild(ecoTag);
+      card.appendChild(pagesWrap);
+
+      const primaryWrap = document.createElement('label');
+      primaryWrap.className = 'flex items-center gap-1 text-[11px] text-neutral-400 cursor-pointer';
+      const primaryRadio = document.createElement('input');
+      primaryRadio.type = 'radio';
+      primaryRadio.name = 'takeover-primary';
+      primaryRadio.checked = !!site.is_primary;
+      primaryRadio.addEventListener('change', () => {
+        arr.forEach(s => { s.is_primary = false; });
+        site.is_primary = true;
+      });
+      primaryWrap.appendChild(primaryRadio);
+      primaryWrap.appendChild(document.createTextNode('primary'));
+      card.appendChild(primaryWrap);
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'text-xs text-neutral-400 hover:text-red-600 transition-colors ml-auto';
+      removeBtn.textContent = 'Remove';
+      removeBtn.addEventListener('click', () => {
+        arr.splice(index, 1);
+        if (arr.length > 0 && !arr.some(s => s.is_primary)) arr[0].is_primary = true;
+        renderTakeoverList(listContainer);
+      });
+      card.appendChild(removeBtn);
+
+      return card;
     }
 
     function renderBuildOptionsList(container, productId) {

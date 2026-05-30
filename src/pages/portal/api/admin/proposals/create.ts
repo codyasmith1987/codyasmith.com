@@ -382,6 +382,24 @@ export const POST: APIRoute = async ({ locals, request }) => {
       logger.warn('Failed to load managed sites for compose; proceeding with single-ecosystem fallback', err);
     }
 
+    // Auto-pull the client's real page count for Web Management ecosystem
+    // routing when the admin hasn't set one. Uses the navigable HTML page
+    // count from the latest crawl (real pages with content_type text/html,
+    // NOT all crawled URLs, which would over-count assets and over-route the
+    // ecosystem). This is the "builder reads the crawl" path; for an existing
+    // site we already have the real number, so don't make the admin retype it.
+    if (products.includes('web-management') && product_vars['web-management']?.page_count == null) {
+      try {
+        const { getNavigablePageCount } = await import('../../../../../lib/crawl-read');
+        const realPages = await getNavigablePageCount(client_id);
+        if (realPages > 0) {
+          product_vars['web-management'] = { ...(product_vars['web-management'] || {}), page_count: realPages };
+        }
+      } catch (err) {
+        logger.warn('WM page_count auto-pull from crawl failed; proceeding without it', err);
+      }
+    }
+
     try {
       config = composeProposal({
         client: { id: client_id, name: clientName, slug: clientSlug, discount_rate: clientDiscount },

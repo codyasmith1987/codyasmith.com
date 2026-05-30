@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { getFileById, getSignedDownloadUrl } from '../../../../lib/storage';
+import { getFileById, getSignedDownloadUrl, ADMIN_ONLY_FILE_CATEGORIES } from '../../../../lib/storage';
 
 export const prerender = false;
 
@@ -21,6 +21,13 @@ export const GET: APIRoute = async ({ locals, url }) => {
 
   // Clients can only download their own files.
   if (locals.user.role !== 'admin' && locals.user.client_id !== file.client_id) {
+    return new Response('Forbidden', { status: 403 });
+  }
+
+  // Object-level draft gate: admin-only categories (e.g. internal_draft
+  // descriptive reports) must never be downloadable by a client, even with a
+  // direct file id. Matches the list-level exclusion in getFilesForClient.
+  if (locals.user.role !== 'admin' && ADMIN_ONLY_FILE_CATEGORIES.includes(file.category)) {
     return new Response('Forbidden', { status: 403 });
   }
 

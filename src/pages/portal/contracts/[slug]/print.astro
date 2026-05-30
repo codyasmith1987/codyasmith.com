@@ -65,7 +65,7 @@ const mode = user.role === 'admin' ? 'admin-rendered' : 'client';
 const bodyHtml = renderTemplate(template.body_markdown, renderContext, mode);
 const scheduleAHtml = renderScheduleA(agreement.schedule_a, mode);
 
-const pageTitle = `${template.title} — ${clientLegalName}`;
+const pageTitle = `${template.title}: ${clientLegalName}`;
 ---
 <!DOCTYPE html>
 <html lang="en">

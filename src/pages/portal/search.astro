@@ -133,20 +133,21 @@ const clients = isAdmin ? await getAllClients() : [];
           statusEl.textContent = res.ok ? 'Requested. We will refresh it shortly.' : 'Could not send the request.';
         } catch {
           statusEl.textContent = 'Could not send the request.';
+          reqBtn.disabled = false;
         }
       });
     }
 
     function fmtInt(n) {
-      if (n === null || n === undefined) return '—';
+      if (n === null || n === undefined) return '-';
       return Number(n).toLocaleString();
     }
     function fmtCtr(n) {
-      if (n === null || n === undefined) return '—';
+      if (n === null || n === undefined) return '-';
       return `${(Number(n) * 100).toFixed(2)}%`;
     }
     function fmtPos(n) {
-      if (n === null || n === undefined) return '—';
+      if (n === null || n === undefined) return '-';
       return Number(n).toFixed(1);
     }
     function fmtDateUS(yyyymmdd) {

@@ -108,16 +108,17 @@ const clients = isAdmin ? await getAllClients() : [];
           statusEl.textContent = res.ok ? 'Requested. We will refresh it shortly.' : 'Could not send the request.';
         } catch {
           statusEl.textContent = 'Could not send the request.';
+          reqBtn.disabled = false;
         }
       });
     }
 
     function fmtInt(n) {
-      if (n === null || n === undefined) return '—';
+      if (n === null || n === undefined) return '-';
       return Number(n).toLocaleString();
     }
     function fmtSeconds(seconds) {
-      if (seconds === null || seconds === undefined) return '—';
+      if (seconds === null || seconds === undefined) return '-';
       const s = Math.round(Number(seconds));
       if (s < 60) return `${s}s`;
       const m = Math.floor(s / 60);
@@ -125,7 +126,7 @@ const clients = isAdmin ? await getAllClients() : [];
       return r ? `${m}m ${r}s` : `${m}m`;
     }
     function fmtPercent(n) {
-      if (n === null || n === undefined) return '—';
+      if (n === null || n === undefined) return '-';
       return `${(Number(n) * 100).toFixed(1)}%`;
     }
     function fmtDate(yyyymmdd) {

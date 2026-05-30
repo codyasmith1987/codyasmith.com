@@ -155,7 +155,7 @@ if (agreement.status === 'executed') {
 }
 
 const csrfToken = Astro.locals.csrfToken || '';
-const pageTitle = `${template.title} — ${clientLegalName}`;
+const pageTitle = `${template.title}: ${clientLegalName}`;
 const printHref = `/portal/contracts/${agreement.slug}/print`;
 ---
 <!DOCTYPE html>

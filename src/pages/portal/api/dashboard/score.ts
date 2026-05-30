@@ -43,7 +43,7 @@
 
 import type { APIRoute } from 'astro';
 import turso from '../../../../lib/turso';
-import { bucketPriority } from '../../../../lib/crawl-read';
+import { getHealthMonthData } from '../../../../lib/crawl-read';
 
 export const prerender = false;
 
@@ -125,15 +125,11 @@ async function computeHealth(clientId: string): Promise<Component> {
     };
   }
   const month = monthRow.rows[0][0] as string;
-  const issuesRes = await turso.execute({
-    sql: `SELECT priority FROM site_issues WHERE client_id = ? AND month = ?`,
-    args: [clientId, month],
-  });
-  let high = 0, medium = 0, low = 0;
-  for (const r of issuesRes.rows) {
-    const b = bucketPriority(r[0] as string | null);
-    if (b === 'high') high++; else if (b === 'medium') medium++; else low++;
-  }
+  // Use the shared deduped rollup so the health score basis matches the
+  // /portal/health page chips and the report (one issue reported by two tools
+  // counts once, not twice).
+  const { byPriority } = await getHealthMonthData(clientId, month);
+  const high = byPriority.high, medium = byPriority.medium, low = byPriority.low;
   const total = high + medium + low;
   const raw = 100 - (high * 8 + medium * 3 + low * 1);
   const score = Math.max(0, Math.min(100, raw));

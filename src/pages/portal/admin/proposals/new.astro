@@ -72,19 +72,16 @@ for (const row of clientSitesRows.rows as any[]) {
   });
 }
 
-// Latest aggregate total_urls per client so the WM page_count input
-// can pre-fill from real crawl data when present.
-const totalUrlsRows = await turso.execute({
-  sql: `SELECT client_id, metric_value FROM metrics
-        WHERE metric_key = 'total_urls'
-        ORDER BY client_id, month DESC`,
-  args: [],
-});
-const latestTotalUrls: Record<string, number> = {};
-for (const row of totalUrlsRows.rows as any[]) {
-  const cid = row[0] as string;
-  if (latestTotalUrls[cid] === undefined) {
-    latestTotalUrls[cid] = Math.round(row[1] as number);
+// Real HTML page count per client for the WM page_count pre-fill: the
+// primary site's page_count (synced from content_type text/html), NOT the
+// total_urls metric. total_urls counts every asset URL (images, CSS, JS)
+// and would over-count and over-route the pricing ecosystem; the page count
+// has to be real navigable pages.
+const latestRealPages: Record<string, number> = {};
+for (const [cid, sites] of Object.entries(clientSitesByClient)) {
+  const primary = sites.find(s => s.is_primary) || sites[0];
+  if (primary && typeof primary.page_count === 'number' && primary.page_count > 0) {
+    latestRealPages[cid] = primary.page_count;
   }
 }
 
@@ -386,7 +383,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
     </form>
   </div>
 
-  <script is:inline define:vars={{ todayLong, productManifest, usersByClient, latestTotalUrls, clientSitesByClient, BUILD_FEES, BUILD_SUBSEQUENT_DISCOUNT }}>
+  <script is:inline define:vars={{ todayLong, productManifest, usersByClient, latestRealPages, clientSitesByClient, BUILD_FEES, BUILD_SUBSEQUENT_DISCOUNT }}>
     // =========================================================================
     // Standard-option dropdowns
     // =========================================================================
@@ -849,10 +846,10 @@ const todayISO = new Date().toISOString().slice(0, 10);
         syncWmSiteCountFromManaged();
 
         // Pre-fill page_count when WM is in scope and a crawl exists.
-        if (state.products.includes('web-management') && latestTotalUrls[state.client_id]) {
+        if (state.products.includes('web-management') && latestRealPages[state.client_id]) {
           state.product_vars['web-management'] = {
             ...(state.product_vars['web-management'] || {}),
-            page_count: latestTotalUrls[state.client_id],
+            page_count: latestRealPages[state.client_id],
           };
           renderVars();
         }
@@ -860,7 +857,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
         const hints = [];
         hints.push(`Title -> Engagement Proposal for ${state.client_name}`);
         hints.push(`Slug -> ${state.client_slug}`);
-        if (latestTotalUrls[state.client_id]) hints.push(`Crawl total_urls -> ${latestTotalUrls[state.client_id]}`);
+        if (latestRealPages[state.client_id]) hints.push(`Crawl pages -> ${latestRealPages[state.client_id]}`);
         const managedCount = (clientSitesCache[state.client_id] || []).filter(s => s.is_managed).length;
         if (managedCount > 0) hints.push(`Managed sites -> ${managedCount}`);
         prefillNote.textContent = hints.join('  |  ');

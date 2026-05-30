@@ -273,8 +273,8 @@ function buildTierOption(tierId: TierId, ecosystem: Ecosystem, aiRecommendedTier
     price_label: formatMoney(tier.monthly || 0),
     price_suffix: '/ month',
     price_subline: waiveOnboarding
-      ? `Audit waived (existing client), ${ecosystem.label}`
-      : `${formatMoney(tier.audit || 0)} audit at signing, ${ecosystem.label}`,
+      ? `Audit waived (existing client)`
+      : `${formatMoney(tier.audit || 0)} audit at signing`,
     features: tier.features
       ? (waiveOnboarding ? tier.features.map(waiveAuditFeature) : [...tier.features])
       : [],
@@ -290,9 +290,6 @@ function formatMoney(n: number): string {
 // =========================================================================
 
 function buildMarketingConsultingNarrative(ctx: ProductContext): NarrativeSnippetSet {
-  const ecoId = ctx.ecosystemId || 'B';
-  const eco = MC_ECOSYSTEMS[ecoId];
-  const ecoBand = eco?.band || '';
   const hasWebManagement = ctx.otherProducts.some(p => p.id === 'web-management');
 
   const recommendation = hasWebManagement
@@ -303,7 +300,7 @@ function buildMarketingConsultingNarrative(ctx: ProductContext): NarrativeSnippe
   // when the synthesis points to a clear consulting shape. Does NOT
   // name tiers; steers the framing.
   const what_i_see_paragraphs: string[] = [
-    `Your business sits in ${eco?.label || 'the consulting ecosystem'}${ecoBand ? ` (${ecoBand})` : ''}. The tier you pick sets the depth of the cycle: how often we meet, how many deep advisories per cycle, and whether monthly performance reporting is in scope.`,
+    `The tier you pick sets the depth of the cycle: how often we meet, how many deep advisories per cycle, and whether monthly performance reporting is in scope.`,
   ];
   const strategy = ctx.engagementStrategy;
   if (strategy?.clv_horizon === 'long-term-stable') {
@@ -318,7 +315,7 @@ function buildMarketingConsultingNarrative(ctx: ProductContext): NarrativeSnippe
 
   return {
     intro_lines: [
-      `Marketing Consulting is strategic advisory applied to your business${ecoBand ? `, priced for the ${ecoBand} band` : ''}.`,
+      `Marketing Consulting is strategic advisory applied to your business.`,
     ],
     what_i_see_paragraphs,
     what_i_recommend_paragraphs: [recommendation],

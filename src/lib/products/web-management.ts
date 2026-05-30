@@ -12,6 +12,7 @@ import type {
   ProductContext,
   Ecosystem,
   EcosystemId,
+  EcosystemCeiling,
   TierId,
   ProductVariables,
   ProductPricingContribution,
@@ -250,17 +251,8 @@ export function routeWebManagementEcosystem(pageCount: number | null): Ecosystem
 // tier cards, and the Schedule A per-site table. "Pages" means real
 // navigable pages (getNavigablePageCount) -- the same count that routes the
 // ecosystem. Derived at render time from per-site page counts; nothing new
-// is stored.
-
-export interface EcosystemCeiling {
-  ecosystemId: EcosystemId;        // 'A' | 'B' | 'C'
-  label: string;                   // 'Ecosystem A' (verbatim from WM_ECOSYSTEMS)
-  band: string;                    // 'Under 30 pages' (verbatim)
-  ceilingPages: number | null;     // 29 | 150 | null (C is the largest, no ceiling)
-  nextTriggerPages: number | null; // 30 | 151 | null
-  nextLabel: string | null;        // 'Ecosystem B' | 'Ecosystem C' | null
-  sites: string[];                 // site names/domains routed into this ecosystem
-}
+// is stored. The EcosystemCeiling type lives in types.ts (shared with
+// ProposalConfig.ecosystem_ceilings).
 
 // Per-ecosystem ceiling constants, kept in lockstep with the thresholds in
 // routeWebManagementEcosystem (A: <30, B: <=150, C: >150). The ceiling is the

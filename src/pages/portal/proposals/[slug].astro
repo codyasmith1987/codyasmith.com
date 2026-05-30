@@ -72,6 +72,31 @@ const signerRole = isAdmin
 
 // Config shortcuts.
 const config = proposalRow.config || {};
+
+// Ecosystem page-ceiling disclosure notice (variant B, locked). Built from the
+// compose-time config.ecosystem_ceilings so it works for takeover/prospect
+// proposals whose managed_sites snapshot is empty. Rendered under the WM tier
+// cards only. "Pages" means real navigable pages. This + the contract A.13
+// clause are the only places the ecosystem label/ceiling reach the client.
+function ecoRangePhrase(eid: string): string {
+  if (eid === 'A') return 'up to 29 navigable pages';
+  if (eid === 'B') return '30 to 150 navigable pages';
+  return '150 or more navigable pages';
+}
+function buildEcosystemNotice(ceilings: any[]): string {
+  if (!Array.isArray(ceilings) || ceilings.length === 0) return '';
+  if (ceilings.length === 1) {
+    const c = ceilings[0];
+    if (c.ceilingPages == null) {
+      return `This pricing reflects ${c.label}, which fits sites with ${ecoRangePhrase(c.ecosystemId)}, the largest ecosystem. Full terms are in your agreement.`;
+    }
+    return `This pricing reflects ${c.label}, which fits sites with ${ecoRangePhrase(c.ecosystemId)}. If a managed site exceeds ${c.ceilingPages} pages, that site moves into the next ecosystem and its monthly fee adjusts to match. Full terms are in your agreement.`;
+  }
+  const items = ceilings.map((c: any) => `sites with ${ecoRangePhrase(c.ecosystemId)} are in ${c.label}`);
+  const listed = items.join('; ');
+  return `Each site is priced for its size. ${listed.charAt(0).toUpperCase()}${listed.slice(1)}. If a site grows past its ecosystem's page count, that site's monthly adjusts to the next ecosystem. Full terms are in your agreement.`;
+}
+const ecosystemNoticeText = buildEcosystemNotice(config.ecosystem_ceilings);
 const narrative = config.narrative || {};
 const narrativeSections: Array<{ h2: string; paragraphs: string[] }> = Array.isArray(narrative.sections) ? narrative.sections : [];
 const rollout = narrative.rollout || null;
@@ -198,6 +223,17 @@ const clientConfig = {
     grid-template-columns: repeat(3, 1fr);
     gap: 24px;
     margin: 40px 0 8px;
+  }
+  /* Ecosystem page-ceiling disclosure notice: deliberately subordinate to the
+     #6b6359 muted baseline. #a89e8a = --color-neutral-700, one step lower
+     contrast, so the notice reads as a quiet footnote, not fine print. */
+  .ecosystem-notice {
+    margin-top: 20px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #a89e8a;
+    font-style: italic;
+    max-width: 60ch;
   }
   .tier {
     background: #ffffff;
@@ -932,6 +968,9 @@ const clientConfig = {
           </div>
         ))}
       </div>
+    )}
+    {step.type === 'tier_picker' && step.id === 'mgmt_tier' && ecosystemNoticeText && (
+      <p class="ecosystem-notice">{ecosystemNoticeText}</p>
     )}
     {step.type === 'binary_picker' && (
       <div class="addon-choice" id={`step-choice-${step.id}`} data-step-id={step.id}>

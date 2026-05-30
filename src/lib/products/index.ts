@@ -7,7 +7,7 @@
 // endpoint. The downstream (renderer, accept, contract Schedule A)
 // reads the same shape it has read for the live Raised Bar proposal.
 
-import { webManagementProduct } from './web-management';
+import { webManagementProduct, extractTakeoverSites, deriveEcosystemCeilings } from './web-management';
 import { marketingConsultingProduct } from './marketing-consulting';
 import { buildProduct } from './build';
 import { trainingProduct } from './training';
@@ -353,12 +353,48 @@ export function composeProposal(args: ComposeArgs): ProposalConfig {
         .filter((d: string) => d.length > 0)
     : [];
 
+  // Ecosystem page-ceiling disclosure (proposal notice). Derived from every
+  // site the engagement could manage -- existing managed sites, proposed
+  // takeovers, and every build option's added sites -- so the notice discloses
+  // each ecosystem the engagement touches even when managed_sites is empty
+  // (pure-takeover/prospect proposals). "Pages" = real navigable count
+  // (takeover crawl count; build estimate). Emitted only when WM is in scope.
+  const disclosureSites: Array<{ domain: string; label?: string | null; page_count?: number | null }> = [];
+  if (Array.isArray(args.managedSites)) {
+    for (const s of args.managedSites) disclosureSites.push({ domain: s.domain, label: s.label, page_count: s.page_count });
+  }
+  for (const t of extractTakeoverSites(args.product_vars)) {
+    disclosureSites.push({ domain: t.domain, label: t.label, page_count: t.page_count });
+  }
+  const disclosureBuildOpts = (args.product_vars['build'] as any)?.build_options;
+  if (Array.isArray(disclosureBuildOpts)) {
+    for (const o of disclosureBuildOpts) {
+      const added = Array.isArray(o?.wm_sites_added) ? o.wm_sites_added : [];
+      for (const s of added) {
+        const dom = typeof s?.domain === 'string' ? s.domain.trim().toLowerCase() : '';
+        const pc = typeof s?.page_count_estimate === 'number' ? s.page_count_estimate : null;
+        if (dom || pc != null) disclosureSites.push({ domain: dom, label: s?.label ?? null, page_count: pc });
+      }
+    }
+  }
+  const seenDisclosureDomains = new Set<string>();
+  const dedupedDisclosureSites = disclosureSites.filter(s => {
+    const d = (s.domain || '').trim().toLowerCase();
+    if (d && seenDisclosureDomains.has(d)) return false;
+    if (d) seenDisclosureDomains.add(d);
+    return true;
+  });
+  const ecosystemCeilings = orderedProducts.includes('web-management')
+    ? deriveEcosystemCeilings(dedupedDisclosureSites)
+    : [];
+
   return {
     version: 1,
     prepared_for,
     prepared_on,
     title,
     takeover_site_domains: takeoverDomains.length > 0 ? takeoverDomains : undefined,
+    ecosystem_ceilings: ecosystemCeilings.length > 0 ? ecosystemCeilings : undefined,
     discount_rate: typeof args.client.discount_rate === 'number'
       ? Math.max(0, Math.min(1, args.client.discount_rate))
       : 0,

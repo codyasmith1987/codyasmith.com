@@ -548,6 +548,26 @@ export interface ProposalConfig {
     monthly_override?: number | null;
     onboarding_override?: number | null;
   }>;
+  // Ecosystem page-ceiling disclosure data for the proposal notice. Derived
+  // at compose time from the union of managed + takeover + build sites; one
+  // entry per distinct ecosystem the engagement occupies, each with that
+  // ecosystem's navigable-page ceiling and the next-tier trigger.
+  ecosystem_ceilings?: EcosystemCeiling[];
+}
+
+// One occupied ecosystem + its page ceiling, for the client-facing
+// disclosure (proposal notice). Built by deriveEcosystemCeilings in
+// web-management.ts. This and the contract A.13 clause are the only places
+// the ecosystem label + page ceiling reach the client; the de-leak boundary
+// (PRs #231/#232) otherwise holds.
+export interface EcosystemCeiling {
+  ecosystemId: EcosystemId;        // 'A' | 'B' | 'C'
+  label: string;                   // 'Ecosystem A' (verbatim from WM_ECOSYSTEMS)
+  band: string;                    // 'Under 30 pages' (verbatim)
+  ceilingPages: number | null;     // 29 | 150 | null (C is the largest, no ceiling)
+  nextTriggerPages: number | null; // 30 | 151 | null
+  nextLabel: string | null;        // 'Ecosystem B' | 'Ecosystem C' | null
+  sites: string[];                 // site names/domains routed into this ecosystem
 }
 
 export interface NarrativeVariables {

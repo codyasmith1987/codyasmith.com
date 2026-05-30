@@ -21,6 +21,8 @@ import {
   computeMultiSiteSumWithOverrides,
   buildPerSiteBases,
   applyBuildOptionSiteModifications,
+  deriveEcosystemCeilings,
+  WM_ECOSYSTEM_CLAUSE,
   MULTI_SITE_DISCOUNT,
   WM_ECOSYSTEMS,
   webManagementProduct,
@@ -55,6 +57,64 @@ async function run() {
   test('WM: 151 pages -> C', routeWebManagementEcosystem(151) === 'C');
   test('WM: 500 pages -> C', routeWebManagementEcosystem(500) === 'C');
   test('WM: null -> null', routeWebManagementEcosystem(null) === null);
+
+  // -------------------------------------------------------------------
+  // Ecosystem page-ceiling disclosure (deriveEcosystemCeilings). The
+  // ceiling is the LAST page count still in the ecosystem (29/150); the
+  // trigger is the FIRST count that moves up (30/151). Guards the exact
+  // boundary the client-facing disclosure copy quotes.
+  // -------------------------------------------------------------------
+  {
+    const a = deriveEcosystemCeilings([{ domain: 'a.com', page_count: 6 }]);
+    test('ceilings: single A entry', a.length === 1 && a[0].ecosystemId === 'A', JSON.stringify(a));
+    test('ceilings: A ceiling 29 / trigger 30 / next Ecosystem B',
+      a[0].ceilingPages === 29 && a[0].nextTriggerPages === 30 && a[0].nextLabel === 'Ecosystem B',
+      JSON.stringify(a[0]));
+    test('ceilings: A label/band verbatim from WM_ECOSYSTEMS',
+      a[0].label === 'Ecosystem A' && a[0].band === 'Under 30 pages');
+
+    const b = deriveEcosystemCeilings([{ domain: 'b.com', page_count: 80 }]);
+    test('ceilings: B ceiling 150 / trigger 151 / next Ecosystem C',
+      b[0].ecosystemId === 'B' && b[0].ceilingPages === 150 && b[0].nextTriggerPages === 151 && b[0].nextLabel === 'Ecosystem C',
+      JSON.stringify(b[0]));
+
+    const c = deriveEcosystemCeilings([{ domain: 'c.com', page_count: 200 }]);
+    test('ceilings: C is largest, no ceiling/trigger',
+      c[0].ecosystemId === 'C' && c[0].ceilingPages === null && c[0].nextTriggerPages === null && c[0].nextLabel === null,
+      JSON.stringify(c[0]));
+
+    const boundary = deriveEcosystemCeilings([
+      { domain: 's29.com', page_count: 29 },
+      { domain: 's30.com', page_count: 30 },
+      { domain: 's150.com', page_count: 150 },
+      { domain: 's151.com', page_count: 151 },
+    ]);
+    test('ceilings: boundary 29/30/150/151 -> A,B,C in order',
+      eq(boundary.map(e => e.ecosystemId), ['A', 'B', 'C']), JSON.stringify(boundary.map(e => e.ecosystemId)));
+    test('ceilings: 29 in A, 30+150 in B, 151 in C',
+      boundary.find(e => e.ecosystemId === 'A').sites.includes('s29.com')
+      && boundary.find(e => e.ecosystemId === 'B').sites.includes('s30.com')
+      && boundary.find(e => e.ecosystemId === 'B').sites.includes('s150.com')
+      && boundary.find(e => e.ecosystemId === 'C').sites.includes('s151.com'),
+      JSON.stringify(boundary.map(e => ({ id: e.ecosystemId, sites: e.sites }))));
+
+    const mixed = deriveEcosystemCeilings([{ domain: 'big.com', page_count: 90 }, { domain: 'small.com', page_count: 5 }]);
+    test('ceilings: mixed A+B -> 2 entries in A,B order',
+      mixed.length === 2 && mixed[0].ecosystemId === 'A' && mixed[1].ecosystemId === 'B',
+      JSON.stringify(mixed.map(e => e.ecosystemId)));
+
+    test('ceilings: null page_count + no fallback -> skipped',
+      deriveEcosystemCeilings([{ domain: 'x.com', page_count: null }]).length === 0);
+    test('ceilings: null page_count + fallback A -> grouped in A',
+      deriveEcosystemCeilings([{ domain: 'x.com', page_count: null }], 'A').length === 1);
+    test('ceilings: empty input -> empty', deriveEcosystemCeilings([]).length === 0);
+
+    test('clause: WM_ECOSYSTEM_CLAUSE defines all three bands + written notice + per-site',
+      WM_ECOSYSTEM_CLAUSE.includes('Ecosystem A') && WM_ECOSYSTEM_CLAUSE.includes('fewer than 30')
+      && WM_ECOSYSTEM_CLAUSE.includes('30 to 150') && WM_ECOSYSTEM_CLAUSE.includes('150 or more')
+      && WM_ECOSYSTEM_CLAUSE.includes('written notice') && WM_ECOSYSTEM_CLAUSE.includes('per site'),
+      WM_ECOSYSTEM_CLAUSE.slice(0, 80));
+  }
 
   // -------------------------------------------------------------------
   // WM multi-site formula (2026-05-24 locked):

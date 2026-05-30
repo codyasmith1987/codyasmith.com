@@ -258,6 +258,9 @@ export interface ProductScheduleAContribution {
   hours_addendum?: { included_hours?: number | null };
   // Day-one access additions if a product implies specific access needs.
   day_one_access_items?: Array<{ system: string; provider: string }>;
+  // Web Management ecosystem + page-ceiling disclosure clause (Schedule A
+  // A.13). Set by the WM contribution; the renderer prints it verbatim.
+  wm_ecosystem_clause?: string;
 }
 
 // =========================================================================
@@ -545,6 +548,30 @@ export interface ProposalConfig {
     monthly_override?: number | null;
     onboarding_override?: number | null;
   }>;
+  // Ecosystem page-ceiling disclosure data for the proposal notice. Derived
+  // at compose time from the union of managed + takeover + build sites; one
+  // entry per distinct ecosystem the engagement occupies, each with that
+  // ecosystem's navigable-page ceiling and the next-tier trigger.
+  ecosystem_ceilings?: EcosystemCeiling[];
+  // Domains the proposal proposes to TAKE OVER (existing unmanaged sites).
+  // Emitted by composeProposal; read by the contract-finalize flow to flip
+  // these sites to is_managed=1 when the engagement is signed.
+  takeover_site_domains?: string[];
+}
+
+// One occupied ecosystem + its page ceiling, for the client-facing
+// disclosure (proposal notice). Built by deriveEcosystemCeilings in
+// web-management.ts. This and the contract A.13 clause are the only places
+// the ecosystem label + page ceiling reach the client; the de-leak boundary
+// (PRs #231/#232) otherwise holds.
+export interface EcosystemCeiling {
+  ecosystemId: EcosystemId;        // 'A' | 'B' | 'C'
+  label: string;                   // 'Ecosystem A' (verbatim from WM_ECOSYSTEMS)
+  band: string;                    // 'Under 30 pages' (verbatim)
+  ceilingPages: number | null;     // 29 | 150 | null (C is the largest, no ceiling)
+  nextTriggerPages: number | null; // 30 | 151 | null
+  nextLabel: string | null;        // 'Ecosystem B' | 'Ecosystem C' | null
+  sites: string[];                 // site names/domains routed into this ecosystem
 }
 
 export interface NarrativeVariables {

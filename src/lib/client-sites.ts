@@ -222,6 +222,36 @@ export async function setSiteManaged(clientId: string, siteId: string, isManaged
   });
 }
 
+// On contract execution, flip proposed-takeover domains to managed. For each
+// domain: update the existing client_sites row to is_managed=1; if no row
+// exists (a takeover site the portal never crawled), insert it as a managed
+// site. Idempotent: re-running on an already-managed site is a no-op. Returns
+// the count of rows newly flipped or inserted. Used by the contract-finalize
+// flow so a taken-over site becomes managed the moment the engagement is live.
+export async function markDomainsManaged(clientId: string, domains: string[]): Promise<number> {
+  let changed = 0;
+  for (const raw of domains) {
+    const domain = (raw || '').trim().toLowerCase();
+    if (!domain) continue;
+    const res = await turso.execute({
+      sql: 'UPDATE client_sites SET is_managed = 1 WHERE client_id = ? AND domain = ? AND is_managed = 0',
+      args: [clientId, domain],
+    });
+    if (res.rowsAffected && res.rowsAffected > 0) { changed++; continue; }
+    // No unmanaged row updated: either it's already managed (no-op) or the
+    // row doesn't exist. Insert only when truly absent.
+    const existing = await turso.execute({
+      sql: 'SELECT id FROM client_sites WHERE client_id = ? AND domain = ? LIMIT 1',
+      args: [clientId, domain],
+    });
+    if (existing.rows.length === 0) {
+      const id = await addManualSite(clientId, domain, { isManaged: true });
+      if (id) changed++;
+    }
+  }
+  return changed;
+}
+
 // Admin or auto-derivation sets a site's page count. Routes the WM
 // ecosystem for this site in the multi-site pricing pipeline.
 // Passing null clears the value so the pricing pipeline falls back

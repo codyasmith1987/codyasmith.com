@@ -12,6 +12,7 @@ import type {
   ProductContext,
   Ecosystem,
   EcosystemId,
+  EcosystemCeiling,
   TierId,
   ProductVariables,
   ProductPricingContribution,
@@ -239,6 +240,80 @@ export function routeWebManagementEcosystem(pageCount: number | null): Ecosystem
 }
 
 // =========================================================================
+// Ecosystem page-ceiling disclosure
+// =========================================================================
+//
+// A proposal (and its contract) discloses, per site, the page ceiling of
+// the ecosystem each site is priced in, and that crossing it moves that
+// site into the next ecosystem at a higher rate. This is the ONLY surface
+// where the ecosystem label + page ceiling are shown to the client; the
+// de-leak boundary (PRs #231/#232) keeps them out of the narrative, the
+// tier cards, and the Schedule A per-site table. "Pages" means real
+// navigable pages (getNavigablePageCount) -- the same count that routes the
+// ecosystem. Derived at render time from per-site page counts; nothing new
+// is stored. The EcosystemCeiling type lives in types.ts (shared with
+// ProposalConfig.ecosystem_ceilings).
+
+// Per-ecosystem ceiling constants, kept in lockstep with the thresholds in
+// routeWebManagementEcosystem (A: <30, B: <=150, C: >150). The ceiling is the
+// LAST page count still in the ecosystem (29 / 150); the trigger is the FIRST
+// count that moves up (30 / 151). One place these numbers live.
+const ECOSYSTEM_CEILINGS: Record<EcosystemId, { ceilingPages: number | null; nextTriggerPages: number | null; nextLabel: string | null }> = {
+  A: { ceilingPages: 29, nextTriggerPages: 30, nextLabel: 'Ecosystem B' },
+  B: { ceilingPages: 150, nextTriggerPages: 151, nextLabel: 'Ecosystem C' },
+  C: { ceilingPages: null, nextTriggerPages: null, nextLabel: null },
+};
+
+// Distinct ecosystems occupied by a proposal's sites, in A,B,C order, each
+// with its ceiling + the domains routed into it. A site with a null page
+// count falls back to fallbackEcosystem (mirroring the pricing fallback);
+// callers that cannot back a hard ceiling for a null-count site soften the
+// wording rather than asserting a page number. Returns [] when no site
+// resolves to an ecosystem (the notice then renders nothing).
+export function deriveEcosystemCeilings(
+  sites: Array<{ domain: string; label?: string | null; page_count?: number | null }>,
+  fallbackEcosystem?: EcosystemId | null,
+): EcosystemCeiling[] {
+  const byEco = new Map<EcosystemId, string[]>();
+  for (const s of sites) {
+    if (!s) continue;
+    const routed = routeWebManagementEcosystem(typeof s.page_count === 'number' ? s.page_count : null);
+    const eco = routed ?? fallbackEcosystem ?? null;
+    if (!eco) continue;
+    const name = (s.label && s.label.trim()) ? s.label.trim() : (s.domain || '').trim();
+    const list = byEco.get(eco) || [];
+    if (name) list.push(name);
+    byEco.set(eco, list);
+  }
+  const order: EcosystemId[] = ['A', 'B', 'C'];
+  return order
+    .filter(id => byEco.has(id))
+    .map(id => ({
+      ecosystemId: id,
+      label: WM_ECOSYSTEMS[id].label,
+      band: WM_ECOSYSTEMS[id].band,
+      ceilingPages: ECOSYSTEM_CEILINGS[id].ceilingPages,
+      nextTriggerPages: ECOSYSTEM_CEILINGS[id].nextTriggerPages,
+      nextLabel: ECOSYSTEM_CEILINGS[id].nextLabel,
+      sites: byEco.get(id) || [],
+    }));
+}
+
+// Contract Schedule A A.13 clause (locked 2026-05-31, variant A): defines the
+// three ecosystems by navigable-page ceiling and the per-site escalation
+// mechanism with written notice. The ONLY place the contract names the
+// ecosystems and ceilings (scoped re-exposure; the de-leak boundary otherwise
+// holds). "the Practice" matches the contract's party term.
+export const WM_ECOSYSTEM_CLAUSE =
+  'Each site under this agreement is priced in an ecosystem set by its navigable page count. '
+  + 'Ecosystem A covers sites with fewer than 30 navigable pages; Ecosystem B covers 30 to 150 navigable pages; '
+  + 'Ecosystem C covers 150 or more navigable pages. "Navigable pages" are indexable, publicly reachable HTML pages, '
+  + 'excluding system, archive, feed, and pagination URLs. If a managed site\'s navigable page count grows beyond '
+  + 'its current ecosystem\'s ceiling, the Practice will re-route that site and adjust its recurring fee on the same '
+  + 'per-site basis stated in Section A.5, effective the next billing cycle. The Practice will give the Client '
+  + 'written notice before any such adjustment takes effect. This applies per site; other sites are unaffected.';
+
+// =========================================================================
 // Pricing math
 // =========================================================================
 //
@@ -292,6 +367,10 @@ type ManagedSiteForPricing = {
   page_count?: number | null;
   monthly_override?: number | null;
   onboarding_override?: number | null;
+  // Origin of the site, for Schedule A labeling: 'takeover' (existing
+  // unmanaged site inherited), 'built' (new build), 'managed' (already under
+  // contract). Pricing is identical regardless; this is a label only.
+  site_type?: 'takeover' | 'built' | 'managed' | null;
 };
 
 function selectedBuildOption(args: {
@@ -327,6 +406,7 @@ export function extractTakeoverSites(allProductVars?: Record<string, any>): Mana
       label: typeof s.label === 'string' && s.label.trim() ? s.label.trim() : null,
       is_primary: s.is_primary === true,
       page_count: pages,
+      site_type: 'takeover',
       monthly_override: null,
       onboarding_override: null,
     });
@@ -505,6 +585,7 @@ export function applyBuildOptionManagedSiteChanges<
       label,
       is_primary: isFirstSite,
       page_count: site.page_count_estimate,
+      site_type: 'built',
       monthly_override: null,
       // Build-produced site: the build fee covers standing it up, so WM
       // onboarding is 0 for it. This is mechanism (C) per-site override
@@ -870,6 +951,7 @@ export const webManagementProduct: ProductDefinition = {
       domain: string;
       description: string;
       ecosystem?: string;
+      site_type?: string;
       monthly_contribution?: number;
       onboarding_contribution?: number;
       is_primary?: boolean;
@@ -911,10 +993,14 @@ export const webManagementProduct: ProductDefinition = {
         // Primary or overridden sites skip the multiplier.
         const monthlyFactor = (idx === 0 || monthlyIsOverride) ? 1 : MULTI_SITE_DISCOUNT;
         const onbFactor = (idx === 0 || onbIsOverride) ? 1 : MULTI_SITE_DISCOUNT;
+        const siteType = (s as any).site_type || 'managed';
         return {
           domain: s.label && s.label !== s.domain ? `${s.label} (${s.domain})` : s.domain,
-          description: s.is_primary ? 'primary site' : '',
+          description: siteType === 'takeover' ? 'existing site, taken over'
+            : siteType === 'built' ? 'new build'
+            : (s.is_primary ? 'primary site' : ''),
           ecosystem: siteEco,
+          site_type: siteType,
           monthly_contribution: Math.round(monthlyBase * monthlyFactor * 100) / 100,
           onboarding_contribution: Math.round(onbBase * onbFactor * 100) / 100,
           is_primary: !!s.is_primary,
@@ -940,6 +1026,7 @@ export const webManagementProduct: ProductDefinition = {
     }
     return {
       products_purchased: { web_management: true },
+      wm_ecosystem_clause: WM_ECOSYSTEM_CLAUSE,
       web_management: {
         tier_name: tier.name,
         sites: waived ? siteRows.map(r => ({ ...r, onboarding_contribution: 0 })) : siteRows,

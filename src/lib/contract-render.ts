@@ -250,9 +250,12 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
         parts.push(`<thead><tr><th style="text-align:left; padding:4px 8px; border-bottom:1px solid #ccc">Site</th><th style="text-align:right; padding:4px 8px; border-bottom:1px solid #ccc">Monthly</th><th style="text-align:right; padding:4px 8px; border-bottom:1px solid #ccc">Onboarding</th></tr></thead>`);
         parts.push(`<tbody>`);
         for (const s of wm.sites) {
-          const desc = s.is_primary ? ' <em>(primary)</em>' : '';
+          const primaryLabel = s.is_primary ? ' <em>(primary)</em>' : '';
+          const typeLabel = (s as any).site_type === 'takeover' ? ' <em>(existing site, taken over)</em>'
+            : (s as any).site_type === 'built' ? ' <em>(new build)</em>'
+            : '';
           parts.push(`<tr>`);
-          parts.push(`<td style="padding:4px 8px">${escapeHtml(s.domain || '')}${desc}</td>`);
+          parts.push(`<td style="padding:4px 8px">${escapeHtml(s.domain || '')}${primaryLabel}${typeLabel}</td>`);
           parts.push(`<td style="padding:4px 8px; text-align:right">${typeof s.monthly_contribution === 'number' ? fmtMoney(s.monthly_contribution) : ''}</td>`);
           parts.push(`<td style="padding:4px 8px; text-align:right">${typeof s.onboarding_contribution === 'number' ? fmtMoney(s.onboarding_contribution) : ''}</td>`);
           parts.push(`</tr>`);
@@ -383,6 +386,15 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
   parts.push('<li><strong>SEO link building and outreach.</strong> Manual link acquisition campaigns, guest post outreach, digital PR campaigns. Strategy and recommendations are part of Marketing Consulting; execution is not.</li>');
   parts.push('<li><strong>Custom integrations.</strong> Building or maintaining bespoke integrations between the Client\'s systems and third-party platforms beyond what the Web Management tier supports as standard.</li>');
   parts.push('</ul>');
+
+  // A.13 Ecosystem and page ceiling: the scoped, deliberate disclosure of the
+  // ecosystem page ceilings + the per-site escalation mechanism. Rendered only
+  // when WM is in scope (the WM contribution sets wm_ecosystem_clause). The
+  // A.5 per-site table above still shows NO ecosystem column (de-leak intact).
+  if (scheduleA.wm_ecosystem_clause) {
+    parts.push(`<h3>A.13 Ecosystem and page ceiling</h3>`);
+    parts.push(`<p>${escapeHtml(scheduleA.wm_ecosystem_clause)}</p>`);
+  }
 
   parts.push('</section>');
   return parts.join('\n');

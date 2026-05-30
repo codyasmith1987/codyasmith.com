@@ -238,23 +238,21 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
     parts.push(`<h3>A.5 Web Management specifics</h3>`);
     parts.push('<ul>');
     parts.push(`<li>Tier: <strong>${escapeHtml(wm.tier_name || '')}</strong></li>`);
-    // Per-site breakdown table. Each site shows its routed ecosystem
-    // and its own monthly + onboarding contributions under the locked
-    // 2026-05-24 multi-site formula (primary at full base; each
-    // additional at 0.80 of its own ecosystem base).
+    // Per-site breakdown table. Each site shows its own monthly +
+    // onboarding contributions under the locked 2026-05-24 multi-site
+    // formula (primary at full base; each additional at 0.80 of its own
+    // base). The internal ecosystem routing is NOT shown to the client.
     if (Array.isArray(wm.sites) && wm.sites.length > 0) {
       const hasContributions = wm.sites.some(s => typeof s.monthly_contribution === 'number');
       if (hasContributions && wm.sites.length > 1) {
         parts.push(`<li>Sites managed and per-site breakdown:`);
         parts.push(`<table style="margin-top:0.5em; border-collapse:collapse; width:100%; font-size:0.95em">`);
-        parts.push(`<thead><tr><th style="text-align:left; padding:4px 8px; border-bottom:1px solid #ccc">Site</th><th style="text-align:left; padding:4px 8px; border-bottom:1px solid #ccc">Ecosystem</th><th style="text-align:right; padding:4px 8px; border-bottom:1px solid #ccc">Monthly</th><th style="text-align:right; padding:4px 8px; border-bottom:1px solid #ccc">Onboarding</th></tr></thead>`);
+        parts.push(`<thead><tr><th style="text-align:left; padding:4px 8px; border-bottom:1px solid #ccc">Site</th><th style="text-align:right; padding:4px 8px; border-bottom:1px solid #ccc">Monthly</th><th style="text-align:right; padding:4px 8px; border-bottom:1px solid #ccc">Onboarding</th></tr></thead>`);
         parts.push(`<tbody>`);
         for (const s of wm.sites) {
-          const ecoLabel = s.ecosystem ? `Eco ${escapeHtml(s.ecosystem)}` : '';
           const desc = s.is_primary ? ' <em>(primary)</em>' : '';
           parts.push(`<tr>`);
           parts.push(`<td style="padding:4px 8px">${escapeHtml(s.domain || '')}${desc}</td>`);
-          parts.push(`<td style="padding:4px 8px">${ecoLabel}</td>`);
           parts.push(`<td style="padding:4px 8px; text-align:right">${typeof s.monthly_contribution === 'number' ? fmtMoney(s.monthly_contribution) : ''}</td>`);
           parts.push(`<td style="padding:4px 8px; text-align:right">${typeof s.onboarding_contribution === 'number' ? fmtMoney(s.onboarding_contribution) : ''}</td>`);
           parts.push(`</tr>`);

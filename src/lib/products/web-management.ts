@@ -305,6 +305,35 @@ function selectedBuildOption(args: {
   return buildOptionsArr.find((o: any) => o && o.id === pickedBuildOptionId) || null;
 }
 
+// Existing but UNMANAGED sites the proposal proposes to TAKE OVER. They are
+// not is_managed yet (that flips on contract finalize); in the proposal they
+// price as managed sites at their REAL crawl page count and pay FULL WM
+// onboarding (onboarding_override stays null) -- the build covers onboarding
+// for newly-built sites, never for inheriting an existing one. Proposal-level
+// (constant across build options), read off product_vars['web-management'].
+export function extractTakeoverSites(allProductVars?: Record<string, any>): ManagedSiteForPricing[] {
+  const raw = allProductVars?.['web-management']?.takeover_sites;
+  if (!Array.isArray(raw)) return [];
+  const out: ManagedSiteForPricing[] = [];
+  for (const s of raw) {
+    if (!s || typeof s !== 'object') continue;
+    const domain = typeof s.domain === 'string' ? s.domain.trim().toLowerCase() : '';
+    const pages = typeof s.page_count === 'number' && Number.isFinite(s.page_count) && s.page_count > 0
+      ? s.page_count
+      : null;
+    if (!domain || pages === null) continue;
+    out.push({
+      domain,
+      label: typeof s.label === 'string' && s.label.trim() ? s.label.trim() : null,
+      is_primary: s.is_primary === true,
+      page_count: pages,
+      monthly_override: null,
+      onboarding_override: null,
+    });
+  }
+  return out;
+}
+
 export function computeMultiSiteSumWithOverrides(perSite: PerSiteBase[]): number {
   if (perSite.length === 0) return 0;
   let sum = 0;
@@ -490,7 +519,16 @@ export function applyBuildOptionManagedSiteChanges<
 }
 
 function baseManagedSitesForBuildOption(args: ProductContext): ManagedSiteForPricing[] {
-  if (args.managedSites && args.managedSites.length > 0) return args.managedSites;
+  const takeovers = extractTakeoverSites(args.allProductVars);
+  if (args.managedSites && args.managedSites.length > 0) {
+    // Existing managed sites, plus any proposed takeovers not already managed
+    // (dedup by domain). Reissue/amendment case.
+    const have = new Set(args.managedSites.map(s => (s.domain || '').trim().toLowerCase()));
+    return [...args.managedSites, ...takeovers.filter(t => !have.has(t.domain))];
+  }
+  // Prospect: proposed takeover sites ARE the base existing sites under the
+  // engagement. Built sites get layered on by applyBuildOptionManagedSiteChanges.
+  if (takeovers.length > 0) return takeovers;
   const pickedOption = selectedBuildOption({
     allProductVars: args.allProductVars,
     selections: args.selections,

@@ -1,6 +1,6 @@
 ---
 import Portal from '../../layouts/Portal.astro';
-import { getFilesForClient, getAllFilesAdmin } from '../../lib/storage';
+import { getFilesForClient, getAllFilesAdmin, fileCategoryLabel, ISSUABLE_FILE_CATEGORIES } from '../../lib/storage';
 import { getAllClients } from '../../lib/auth';
 export const prerender = false;
 
@@ -30,15 +30,7 @@ function formatBytes(bytes: number): string {
   return (bytes / 1048576).toFixed(1) + ' MB';
 }
 
-function categoryLabel(cat: string): string {
-  const labels: Record<string, string> = {
-    invoice: 'Invoice',
-    report: 'Report',
-    spreadsheet: 'Spreadsheet',
-    general: 'General',
-  };
-  return labels[cat] || cat;
-}
+const categoryLabel = fileCategoryLabel;
 ---
 
 <Portal title="Files">
@@ -71,11 +63,13 @@ function categoryLabel(cat: string): string {
           <div>
             <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Category</label>
             <select id="upload-category" name="category" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-300 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300">
-              <option value="report">Report</option>
+              <option value="strategic_recommendation">Strategic Recommendations</option>
+              <option value="research">Research Reports</option>
               <option value="invoice">Invoice</option>
               <option value="spreadsheet">Spreadsheet</option>
               <option value="general">General</option>
             </select>
+            <p class="text-[10px] text-neutral-500 mt-2 leading-relaxed">Strategic Recommendations and Research Reports stay private until you send them to the client. Everything else is visible to the client right away.</p>
           </div>
           <div>
             <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">File</label>
@@ -101,7 +95,10 @@ function categoryLabel(cat: string): string {
             {new Date(month + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}
           </p>
           <div class="space-y-2">
-            {byMonth.get(month)!.map(f => (
+            {byMonth.get(month)!.map(f => {
+              const issuable = isAdmin && ISSUABLE_FILE_CATEGORIES.includes(f.category);
+              const issued = issuable && !!f.issued_at;
+              return (
               <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 flex items-center justify-between group hover:border-white/10 transition-all duration-300">
                 <div class="flex items-center gap-4 min-w-0">
                   <div class="min-w-0">
@@ -110,10 +107,21 @@ function categoryLabel(cat: string): string {
                       <span class="text-[10px] font-mono text-neutral-400">{formatBytes(f.size_bytes)}</span>
                       <span class="text-[10px] text-neutral-500">{categoryLabel(f.category)}</span>
                       {'client_name' in f && <span class="text-[10px] text-neutral-500">{f.client_name}</span>}
+                      {issuable && !issued && <span class="px-2 py-0.5 text-[10px] font-mono uppercase rounded bg-neutral-700/40 text-neutral-400" data-issue-badge={f.id}>Private</span>}
+                      {issued && <span class="px-2 py-0.5 text-[10px] font-mono uppercase rounded bg-emerald-500/10 text-emerald-400" data-issue-badge={f.id}>Sent</span>}
                     </div>
                   </div>
                 </div>
                 <div class="flex items-center gap-2">
+                  {issuable && !issued && (
+                    <button
+                      data-issue-file={f.id}
+                      data-issue-name={f.original_name}
+                      class="px-4 py-2 text-xs font-medium text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/10 transition-all duration-300"
+                    >
+                      Send to client
+                    </button>
+                  )}
                   <a
                     href={`/portal/api/files/download?id=${f.id}`}
                     class="px-4 py-2 text-xs font-medium text-amber-600 border border-amber-500/20 rounded-lg hover:bg-amber-500/10 transition-all duration-300"
@@ -130,7 +138,8 @@ function categoryLabel(cat: string): string {
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ))
@@ -209,6 +218,45 @@ function categoryLabel(cat: string): string {
             row.style.transition = 'all 0.3s ease';
             setTimeout(() => row.remove(), 300);
           }
+        }
+      });
+    });
+
+    // Send-to-client handlers. Sending is the delivery event: it makes the
+    // private file visible on the client's documents hub and notifies +
+    // emails them.
+    document.querySelectorAll('[data-issue-file]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const el = btn as HTMLButtonElement;
+        const fileId = el.dataset.issueFile;
+        const name = el.dataset.issueName || 'this file';
+        const confirmed = await (window as any).__confirm({
+          title: 'Send to client',
+          message: `Send "${name}" to the client? They will see it in their documents and get an email.`,
+          confirmLabel: 'Send',
+        });
+        if (!confirmed) return;
+        el.disabled = true;
+        el.textContent = 'Sending...';
+        try {
+          const res = await fetch('/portal/api/files/issue', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ file_id: fileId }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Send failed');
+          (window as any).__toast(`Sent "${name}"`, 'success');
+          const badge = document.querySelector(`[data-issue-badge="${fileId}"]`);
+          if (badge) {
+            badge.textContent = 'Sent';
+            badge.className = 'px-2 py-0.5 text-[10px] font-mono uppercase rounded bg-emerald-500/10 text-emerald-400';
+          }
+          el.remove();
+        } catch (err: any) {
+          (window as any).__toast(err.message || 'Send failed', 'error');
+          el.disabled = false;
+          el.textContent = 'Send to client';
         }
       });
     });

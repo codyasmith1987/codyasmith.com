@@ -21,7 +21,8 @@ const clients = isAdmin ? await getAllClients() : [];
         <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Search</h1>
         <p class="text-sm text-neutral-400 mt-2">From Google Search Console. <span id="gsc-asof"></span></p>
         <p class="mt-2">
-          <button id="request-update-btn" class="text-[11px] font-mono text-amber-500 hover:text-amber-400 underline underline-offset-2">Request a data update</button>
+          <button id="request-update-btn" class="text-[11px] font-mono text-amber-500 hover:text-amber-400 underline underline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline">Request a data update</button>
+          <span id="request-update-chip" class="text-[11px] font-mono text-neutral-500 ml-2"></span>
           <span id="request-update-status" class="text-[11px] text-neutral-500 ml-2"></span>
         </p>
       </div>
@@ -96,6 +97,7 @@ const clients = isAdmin ? await getAllClients() : [];
       selector.addEventListener('change', (e) => {
         activeClientId = e.target.value;
         loadGsc();
+        refreshRequestChip();
       });
     }
 
@@ -117,12 +119,31 @@ const clients = isAdmin ? await getAllClients() : [];
     }
     function setChip(id, html) { const el = document.getElementById(id); if (el) el.innerHTML = html; }
 
+    // Request a data update: capped at twice a month per client; the chip
+    // shows what is left.
     const reqBtn = document.getElementById('request-update-btn');
+    const reqChip = document.getElementById('request-update-chip');
+    const reqStatus = document.getElementById('request-update-status');
+
+    function renderUsage(usage) {
+      if (!usage) return;
+      if (reqChip) reqChip.textContent = `${usage.used} of ${usage.limit} data updates used this month`;
+      if (reqBtn && usage.remaining <= 0) reqBtn.disabled = true;
+    }
+
+    async function refreshRequestChip() {
+      if (!activeClientId || !reqChip) return;
+      try {
+        const res = await fetch(`/portal/api/request-data-update?client_id=${activeClientId}`);
+        if (res.ok) renderUsage(await res.json());
+      } catch { /* chip is best-effort */ }
+    }
+
     if (reqBtn) {
       reqBtn.addEventListener('click', async () => {
-        const statusEl = document.getElementById('request-update-status');
+        if (reqBtn.disabled) return;
         reqBtn.disabled = true;
-        statusEl.textContent = 'Sending...';
+        if (reqStatus) reqStatus.textContent = 'Sending...';
         try {
           const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
           const res = await fetch('/portal/api/request-data-update', {
@@ -130,12 +151,24 @@ const clients = isAdmin ? await getAllClients() : [];
             headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
             body: JSON.stringify({ client_id: activeClientId, source: 'search' }),
           });
-          statusEl.textContent = res.ok ? 'Requested. We will refresh it shortly.' : 'Could not send the request.';
+          const data = await res.json().catch(() => ({}));
+          if (res.ok) {
+            if (reqStatus) reqStatus.textContent = 'Requested. We will refresh it shortly.';
+            renderUsage(data.usage);
+            if (!data.usage || data.usage.remaining > 0) reqBtn.disabled = false;
+          } else if (res.status === 429) {
+            if (reqStatus) reqStatus.textContent = data.error || 'No requests left this month.';
+            renderUsage(data.usage);
+          } else {
+            if (reqStatus) reqStatus.textContent = 'Could not send the request.';
+            reqBtn.disabled = false;
+          }
         } catch {
-          statusEl.textContent = 'Could not send the request.';
+          if (reqStatus) reqStatus.textContent = 'Could not send the request.';
           reqBtn.disabled = false;
         }
       });
+      refreshRequestChip();
     }
 
     function fmtInt(n) {

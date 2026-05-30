@@ -5,7 +5,10 @@
 // records the client should be able to find.
 
 import Portal from '../../layouts/Portal.astro';
+import ClientSelector from '../../components/portal/ClientSelector.astro';
 import { listAgreementsForClient } from '../../lib/agreements';
+import { getIssuedReportsForClient, fileCategoryLabel } from '../../lib/storage';
+import { getAllClients } from '../../lib/auth';
 import turso from '../../lib/turso';
 
 export const prerender = false;
@@ -13,13 +16,17 @@ export const prerender = false;
 const user = Astro.locals.user;
 if (!user) return Astro.redirect('/portal/login');
 
-// Admin: show their own client_id if they have one, otherwise empty
-// (admin can see the per-agreement view directly via the admin index).
-const clientId = user.client_id;
+const isAdmin = user.role === 'admin';
+const clients = isAdmin ? await getAllClients() : [];
+// A client sees their own documents; an admin views any client's via
+// ?client_id, switching inline with the selector (peer to the live pages).
+const clientId = isAdmin ? (Astro.url.searchParams.get('client_id') || null) : user.client_id;
 let agreements: Array<{ slug: string; title: string; status: string; finalized_at: string | null; issued_at: string | null; created_at: string; pdf_file_id: string | null; }> = [];
 let proposals: Array<{ slug: string; title: string; finalized_at: string | null; status: string }> = [];
+let reports: Awaited<ReturnType<typeof getIssuedReportsForClient>> = [];
 
 if (clientId) {
+  reports = await getIssuedReportsForClient(clientId);
   const list = await listAgreementsForClient(clientId);
   agreements = list
     .filter(a => ['issued', 'partially_signed', 'executed'].includes(a.status))
@@ -61,26 +68,60 @@ const statusBadge: Record<string, string> = {
   finalized: 'bg-emerald-500/10 text-emerald-400',
 };
 
-const empty = agreements.length === 0 && proposals.length === 0;
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+const empty = agreements.length === 0 && proposals.length === 0 && reports.length === 0;
 ---
 <Portal title="Documents">
   <div class="max-w-4xl mx-auto">
-    <div class="mb-10">
-      <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Deliverables</p>
-      <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Documents</h1>
-      <p class="text-sm text-neutral-500 mt-2">Your agreements, proposals, and reports.</p>
+    <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
+      <div>
+        <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Deliverables</p>
+        <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Documents</h1>
+        <p class="text-sm text-neutral-500 mt-2">Your agreements, proposals, and reports.</p>
+      </div>
+      {isAdmin && <ClientSelector clients={clients} />}
     </div>
 
-    {!clientId && (
+    {isAdmin && !clientId && (
       <div class="p-6 bg-neutral-900/30 border border-white/5 rounded-xl text-sm text-neutral-400">
-        Admin view: select a client from /portal/admin/clients to see their documents, or open the agreement directly from <a href="/portal/admin/agreements" class="text-amber-600 hover:text-amber-600">/portal/admin/agreements</a>.
+        Pick a client above to see their documents.
       </div>
     )}
 
     {clientId && empty && (
       <div class="text-center py-16">
         <p class="text-sm text-neutral-500">No documents yet.</p>
-        <p class="text-xs text-neutral-400 mt-2">Your agreements, proposals, and reports will appear here as they're issued.</p>
+        <p class="text-xs text-neutral-400 mt-2">Your agreements, proposals, and reports will appear here as they're added.</p>
+      </div>
+    )}
+
+    {clientId && reports.length > 0 && (
+      <div class="mb-10">
+        <h2 class="text-xs font-mono uppercase tracking-[0.18em] text-amber-600 mb-4">Reports</h2>
+        <div class="space-y-3">
+          {reports.map(r => (
+            <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 group hover:border-white/10 transition-all duration-300">
+              <div class="flex items-start justify-between gap-4">
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-baseline gap-3 flex-wrap">
+                    <p class="text-sm font-medium text-neutral-200">{r.original_name}</p>
+                    <span class="px-2 py-0.5 text-[10px] font-mono uppercase rounded bg-blue-500/10 text-blue-400">{fileCategoryLabel(r.category)}</span>
+                  </div>
+                  <div class="flex items-center gap-4 mt-2 text-[10px] font-mono text-neutral-500">
+                    <span>Issued {fmtDate(r.issued_at)}</span>
+                    <span>{formatBytes(r.size_bytes)}</span>
+                  </div>
+                </div>
+                <a href={`/portal/api/files/download?id=${r.id}`} class="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-md text-xs text-emerald-400 hover:bg-emerald-500/20 transition-colors shrink-0">Download</a>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     )}
 
@@ -142,4 +183,19 @@ const empty = agreements.length === 0 && proposals.length === 0;
       </div>
     )}
   </div>
+
+  {isAdmin && (
+    <script define:vars={{ current: clientId || '' }}>
+      // Admin client switch: server-rendered page, so navigate with the
+      // selected client_id. Preselect the one currently in view.
+      const sel = document.getElementById('client-selector');
+      if (sel) {
+        if (current) sel.value = current;
+        sel.addEventListener('change', (e) => {
+          const id = e.target.value;
+          window.location.href = id ? `/portal/documents?client_id=${encodeURIComponent(id)}` : '/portal/documents';
+        });
+      }
+    </script>
+  )}
 </Portal>

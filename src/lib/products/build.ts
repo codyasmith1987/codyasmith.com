@@ -138,9 +138,9 @@ function buildNarrative(ctx: ProductContext): NarrativeSnippetSet {
   const size = routeBuildSize(ctx.variables);
   const desc = typeof ctx.variables.build_description === 'string' ? ctx.variables.build_description : '';
 
-  const sizeLabel = size === 'small' ? 'small (under 30 pages)'
-    : size === 'mid' ? 'mid (30-150 pages)'
-    : size === 'large' ? 'large (150 or more pages)'
+  const sizeLabel = size === 'small' ? 'small'
+    : size === 'mid' ? 'mid-sized'
+    : size === 'large' ? 'large'
     : 'sized at signing';
 
   // Always describe the base as one build at the routed size; shape

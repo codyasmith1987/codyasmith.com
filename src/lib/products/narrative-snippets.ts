@@ -408,7 +408,13 @@ export function getSnippetCandidateKeys(args: SnippetLookupArgs): string[] {
   return candidates;
 }
 
-export function lookupSnippetOverride(args: SnippetLookupArgs): ((ctx: ProductContext) => NarrativeSnippetSet) | null {
+// Like lookupSnippetOverride, but returns the matched key alongside the
+// snippet so the composer knows WHICH products the snippet speaks for (the
+// key's product segment). A single-product snippet that matched in a
+// multi-product proposal must not silently drop the other products.
+export function lookupSnippetOverrideWithKey(
+  args: SnippetLookupArgs,
+): { snippet: (ctx: ProductContext) => NarrativeSnippetSet; key: string } | null {
   const clientId = (args.clientId && args.clientId.trim()) || null;
   for (const key of getSnippetCandidateKeys(args)) {
     // Per audit move 7: client-scoped DB override wins first, then
@@ -418,14 +424,18 @@ export function lookupSnippetOverride(args: SnippetLookupArgs): ((ctx: ProductCo
     // and within that key tries client-scoped before global).
     if (clientId) {
       const clientScoped = lookupDbOverride(key, clientId);
-      if (clientScoped) return clientScoped;
+      if (clientScoped) return { snippet: clientScoped, key };
     }
     const dbGlobal = lookupDbOverride(key, null);
-    if (dbGlobal) return dbGlobal;
+    if (dbGlobal) return { snippet: dbGlobal, key };
     const entry = SNIPPET_REGISTRY[key];
-    if (entry) return entry;
+    if (entry) return { snippet: entry, key };
   }
   return null;
+}
+
+export function lookupSnippetOverride(args: SnippetLookupArgs): ((ctx: ProductContext) => NarrativeSnippetSet) | null {
+  return lookupSnippetOverrideWithKey(args)?.snippet || null;
 }
 
 // -----------------------------------------------------------------

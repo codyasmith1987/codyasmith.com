@@ -500,6 +500,9 @@ function baseManagedSitesForBuildOption(args: ProductContext): ManagedSiteForPri
     || (Array.isArray(pickedOption.wm_site_modifications) && pickedOption.wm_site_modifications.length > 0)
   );
   if (!hasStructuralWmPayload) return [];
+  // The primary managed site is represented by a placeholder routed off WM's
+  // own ecosystem (from variables.page_count); build_options.wm_sites_added
+  // are ADDITIONAL sites layered on top by applyBuildOptionManagedSiteChanges.
   const sites = numberFromVar(args.variables.site_count, 1);
   return Array.from({ length: Math.max(1, sites) }, (_, i) => ({
     domain: i === 0 ? '(primary domain confirmed at signing)' : `(additional site ${i + 1} domain confirmed at signing)`,

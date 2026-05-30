@@ -12,7 +12,7 @@ import { marketingConsultingProduct } from './marketing-consulting';
 import { buildProduct } from './build';
 import { trainingProduct } from './training';
 import { otherSowProduct } from './other-sow';
-import { lookupSnippetOverride } from './narrative-snippets';
+import { lookupSnippetOverrideWithKey } from './narrative-snippets';
 import type {
   ProductDefinition,
   ProductId,
@@ -143,6 +143,34 @@ function generateBundleSteps(bundle: BundleConfig, contexts: Record<ProductId, P
   return steps;
 }
 
+// For Web Management on a PROSPECT, the page count that routes the primary
+// ecosystem usually lives in the build options (wm_sites_added), not in WM's
+// own product_vars. Without it, routeEcosystem returns null and computePricing
+// zeroes the monthly. Derive the primary site's page count from the first
+// build option that carries one. Per-site routing at pricing time still routes
+// each site by its own count; this just sets the base ecosystem so pricing runs.
+function synthesizeWmPageCount(
+  id: ProductId,
+  variables: Record<string, any>,
+  allProductVars: Record<string, any> | undefined,
+): Record<string, any> {
+  if (id !== 'web-management' || variables.page_count != null) return variables;
+  const buildVars: any = allProductVars?.['build'];
+  // Prefer the base build's total page count: that's the primary site's size.
+  const totalRaw = buildVars?.build_total_pages;
+  const total = typeof totalRaw === 'number' ? totalRaw
+    : (typeof totalRaw === 'string' ? parseInt(totalRaw, 10) : NaN);
+  if (Number.isFinite(total) && total > 0) return { ...variables, page_count: total };
+  // Fall back to the first build option that carries a primary added site.
+  const opts: any[] = buildVars && Array.isArray(buildVars.build_options) ? buildVars.build_options : [];
+  for (const opt of opts) {
+    const added: any[] = Array.isArray(opt?.wm_sites_added) ? opt.wm_sites_added : [];
+    const primary = added.find((s: any) => typeof s?.page_count_estimate === 'number' && s.page_count_estimate > 0);
+    if (primary) return { ...variables, page_count: primary.page_count_estimate };
+  }
+  return variables;
+}
+
 export function composeProposal(args: ComposeArgs): ProposalConfig {
   // Order products by PRODUCT_ORDER so the composed output is stable.
   const orderedProducts = PRODUCT_ORDER.filter(id => args.products.includes(id));
@@ -201,7 +229,7 @@ export function composeProposal(args: ComposeArgs): ProposalConfig {
   const contexts: Record<ProductId, ProductContext> = {} as any;
   for (const id of orderedProducts) {
     const product = PRODUCT_REGISTRY[id];
-    const variables = { ...composeLevelVars, ...(args.product_vars[id] || {}) };
+    const variables = synthesizeWmPageCount(id, { ...composeLevelVars, ...(args.product_vars[id] || {}) }, args.product_vars);
     const ecosystemId = product.routeEcosystem(variables);
     const otherProducts = orderedProducts
       .filter(other => other !== id)
@@ -289,7 +317,25 @@ export function composeProposal(args: ComposeArgs): ProposalConfig {
   const prepared_on = overrides.prepared_on || preparedOnDefault;
   const intro = overrides.intro || narrative.intro;
   const sections = overrides.sections || narrative.sections;
-  const rollout = overrides.rollout || narrative.rollout;
+  let rollout = overrides.rollout || narrative.rollout;
+  // In bundle mode the build's own option picker is replaced by the bundle
+  // add-on step (id 'bundle_addon', options 'skip'/'add'). The build narrative
+  // keyed its rollout scenarios to the build_options step ids (o1/o2); remap
+  // them to the add-on step so the "how it rolls out" phases actually render
+  // (otherwise the scenario_step never matches a real step and the rollout,
+  // i.e. the build/options section, silently disappears).
+  if (
+    bundleMode && bundleConfig?.addon
+    && rollout && (rollout as any).scenario_step === 'build_options'
+    && (rollout as any).scenarios
+  ) {
+    const addon = bundleConfig.addon;
+    const srcScenarios = (rollout as any).scenarios as Record<string, any>;
+    const remapped: Record<string, any> = {};
+    if (srcScenarios[addon.skip_option_id]) remapped['skip'] = srcScenarios[addon.skip_option_id];
+    if (srcScenarios[addon.build_option_id]) remapped['add'] = srcScenarios[addon.build_option_id];
+    rollout = { ...(rollout as any), scenario_step: 'bundle_addon', scenarios: remapped };
+  }
   const steps = overrides.steps || composedSteps;
 
   return {
@@ -389,7 +435,7 @@ function composeNarrative(args: ComposeNarrativeArgs): {
       : null;
     // Per audit move 7: thread the client id so client-scoped
     // overrides can win over global overrides at the same key.
-    const override = lookupSnippetOverride({
+    const overrideMatch = lookupSnippetOverrideWithKey({
       productId: primary,
       otherProductIds: others,
       ecosystemId: lookupEco,
@@ -397,27 +443,32 @@ function composeNarrative(args: ComposeNarrativeArgs): {
       focusPrimary,
       clientId: args.clientId || null,
     });
-    if (override) {
+    if (overrideMatch) {
       // The snippet runs with the primary product's context (the
       // helpers in narrative-snippets.ts read client_name, page_count,
       // industry, urgency from variables that the composer threaded
-      // through). Each bucket present in the snippet REPLACES the
-      // concatenated inline content for that bucket; absent buckets
-      // fall back to the inline contributions.
-      const snippetSet = override(args.contexts[primary]);
+      // through). Each bucket present in the snippet REPLACES the content
+      // for the products the snippet SPEAKS FOR (the matched key's product
+      // segment). Products NOT covered by the snippet always keep their
+      // inline contributions appended, so a single-product snippet matched
+      // in a multi-product proposal can never drop the other products'
+      // sections (the bug that made build + consulting copy vanish from a
+      // WM+MC+Build bundle once WM routed to an ecosystem with no combo
+      // snippet).
+      const snippetSet = overrideMatch.snippet(args.contexts[primary]);
+      const coveredIds = new Set(overrideMatch.key.split('::')[0].split('+'));
+      const coveredInline = inlineContributions.filter(c => coveredIds.has(c.id));
+      const uncoveredInline = inlineContributions.filter(c => !coveredIds.has(c.id));
+      const bucket = (snippetVal: string[] | undefined, name: 'intro_lines' | 'what_i_see_paragraphs' | 'what_i_recommend_paragraphs' | 'rollout_phases'): any[] => {
+        const head = snippetVal !== undefined ? snippetVal : coveredInline.flatMap(c => (c.set as any)[name] || []);
+        const tail = uncoveredInline.flatMap(c => (c.set as any)[name] || []);
+        return [...head, ...tail];
+      };
       const merged: NarrativeSnippetSet = {
-        intro_lines: snippetSet.intro_lines !== undefined
-          ? snippetSet.intro_lines
-          : inlineContributions.flatMap(c => c.set.intro_lines || []),
-        what_i_see_paragraphs: snippetSet.what_i_see_paragraphs !== undefined
-          ? snippetSet.what_i_see_paragraphs
-          : inlineContributions.flatMap(c => c.set.what_i_see_paragraphs || []),
-        what_i_recommend_paragraphs: snippetSet.what_i_recommend_paragraphs !== undefined
-          ? snippetSet.what_i_recommend_paragraphs
-          : inlineContributions.flatMap(c => c.set.what_i_recommend_paragraphs || []),
-        rollout_phases: snippetSet.rollout_phases !== undefined
-          ? snippetSet.rollout_phases
-          : inlineContributions.flatMap(c => c.set.rollout_phases || []),
+        intro_lines: bucket(snippetSet.intro_lines, 'intro_lines'),
+        what_i_see_paragraphs: bucket(snippetSet.what_i_see_paragraphs, 'what_i_see_paragraphs'),
+        what_i_recommend_paragraphs: bucket(snippetSet.what_i_recommend_paragraphs, 'what_i_recommend_paragraphs'),
+        rollout_phases: bucket(snippetSet.rollout_phases, 'rollout_phases'),
         rollout_scenarios: snippetSet.rollout_scenarios
           || inlineContributions.find(c => c.set.rollout_scenarios)?.set.rollout_scenarios,
         rollout_scenario_step: snippetSet.rollout_scenario_step
@@ -1119,7 +1170,7 @@ function buildContextForProduct(args: {
   waiveOnboarding?: boolean;
 }): ProductContext {
   const product = PRODUCT_REGISTRY[args.id];
-  const variables = args.productVars[args.id] || {};
+  const variables = synthesizeWmPageCount(args.id, args.productVars[args.id] || {}, args.productVars);
   const ecosystemId = product.routeEcosystem(variables);
 
   let tierId: TierId | null = null;

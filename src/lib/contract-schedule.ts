@@ -111,6 +111,9 @@ export interface ScheduleA {
   pass_through_items: PassThroughItem[];
   build_sow_ref: string | null;
   other_sow_ref: string | null;
+  // Web Management ecosystem + page-ceiling disclosure (Schedule A A.13).
+  // Set verbatim from the WM contribution; absent/null when WM not in scope.
+  wm_ecosystem_clause?: string | null;
   // Itemized amount due at signing per section 5.2: one-time fees plus
   // the first month of every recurring fee. Total equals the pricing
   // result's atSigning (post-discount). Null until pricing is known
@@ -326,6 +329,7 @@ function buildScheduleAForProductDrivenV1(ctx: ScheduleAContext): ScheduleA {
     if (contribution.marketing_consulting) composed.marketing_consulting = contribution.marketing_consulting;
     if (contribution.build_sow_ref) composed.build_sow_ref = contribution.build_sow_ref;
     if (contribution.other_sow_ref) composed.other_sow_ref = contribution.other_sow_ref;
+    if (contribution.wm_ecosystem_clause) composed.wm_ecosystem_clause = contribution.wm_ecosystem_clause;
     if (Array.isArray(contribution.pass_through_items)) {
       composed.pass_through_items.push(...contribution.pass_through_items);
     }

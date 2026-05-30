@@ -384,6 +384,15 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
   parts.push('<li><strong>Custom integrations.</strong> Building or maintaining bespoke integrations between the Client\'s systems and third-party platforms beyond what the Web Management tier supports as standard.</li>');
   parts.push('</ul>');
 
+  // A.13 Ecosystem and page ceiling: the scoped, deliberate disclosure of the
+  // ecosystem page ceilings + the per-site escalation mechanism. Rendered only
+  // when WM is in scope (the WM contribution sets wm_ecosystem_clause). The
+  // A.5 per-site table above still shows NO ecosystem column (de-leak intact).
+  if (scheduleA.wm_ecosystem_clause) {
+    parts.push(`<h3>A.13 Ecosystem and page ceiling</h3>`);
+    parts.push(`<p>${escapeHtml(scheduleA.wm_ecosystem_clause)}</p>`);
+  }
+
   parts.push('</section>');
   return parts.join('\n');
 }

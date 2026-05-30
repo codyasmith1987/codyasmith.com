@@ -258,6 +258,9 @@ export interface ProductScheduleAContribution {
   hours_addendum?: { included_hours?: number | null };
   // Day-one access additions if a product implies specific access needs.
   day_one_access_items?: Array<{ system: string; provider: string }>;
+  // Web Management ecosystem + page-ceiling disclosure clause (Schedule A
+  // A.13). Set by the WM contribution; the renderer prints it verbatim.
+  wm_ecosystem_clause?: string;
 }
 
 // =========================================================================

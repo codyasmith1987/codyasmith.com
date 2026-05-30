@@ -93,7 +93,7 @@ export async function onMilestoneCompleted(milestoneId: string): Promise<void> {
     // Auto-write client update text (System 5)
     if (milestone.client_visible) {
       await updateMilestone(milestoneId, {
-        client_update_text: `${milestone.title} completed \u2014 all tasks finished`,
+        client_update_text: `${milestone.title} completed, all tasks finished`,
       });
     }
 

@@ -160,13 +160,6 @@ export async function getGa4MonthData(clientId: string, month: string): Promise<
   return { month, has_data, topline, channels, pages, sources, ai_referrals, tech, geography, campaigns };
 }
 
-// Latest-month dashboard payload (the shape /portal/traffic renders).
-export async function getGa4Dashboard(clientId: string): Promise<Ga4MonthData | { month: null; has_data: false }> {
-  const month = await getGa4LatestMonth(clientId);
-  if (!month) return { month: null, has_data: false };
-  return getGa4MonthData(clientId, month);
-}
-
 // Dashboard payload WITH the prior cycle attached, for the live page's
 // "vs last month" comparison. Additive to the latest-month shape:
 // prior_month + prior (the full prior Ga4MonthData, or null in the first

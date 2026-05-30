@@ -732,7 +732,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
             body: JSON.stringify({
               sender: { name: 'Cody Smith', email: 'cody@codyasmith.com' },
               to: [{ email: s.email }],
-              subject: stripCRLF(`${proposal.title} confirmed — Cody will be in touch`),
+              subject: stripCRLF(`${proposal.title} confirmed. Cody will be in touch.`),
               htmlContent: signerHtml,
             }),
           });

@@ -210,10 +210,10 @@ export async function getFilesForClient(clientId: string): Promise<any[]> {
 }
 
 export async function getFileById(fileId: string): Promise<{
-  id: string; client_id: string; s3_key: string; original_name: string; mime_type: string;
+  id: string; client_id: string; s3_key: string; original_name: string; mime_type: string; category: string;
 } | null> {
   const result = await turso.execute({
-    sql: 'SELECT id, client_id, s3_key, original_name, mime_type FROM files WHERE id = ?',
+    sql: 'SELECT id, client_id, s3_key, original_name, mime_type, category FROM files WHERE id = ?',
     args: [fileId],
   });
   if (result.rows.length === 0) return null;
@@ -224,6 +224,7 @@ export async function getFileById(fileId: string): Promise<{
     s3_key: row[2] as string,
     original_name: row[3] as string,
     mime_type: row[4] as string,
+    category: row[5] as string,
   };
 }
 

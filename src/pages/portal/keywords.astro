@@ -35,19 +35,19 @@ const clients = isAdmin ? await getAllClients() : [];
       <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
         <div class="grid grid-cols-4 gap-6 mb-8">
           <div class="text-center">
-            <p id="kw-total" class="text-3xl font-bold text-neutral-100 mb-1">—</p>
+            <p id="kw-total" class="text-3xl font-bold text-neutral-100 mb-1">-</p>
             <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">tracked</p>
           </div>
           <div class="text-center">
-            <p id="kw-top3" class="text-3xl font-bold text-emerald-400 mb-1">—</p>
+            <p id="kw-top3" class="text-3xl font-bold text-emerald-400 mb-1">-</p>
             <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">top 3</p>
           </div>
           <div class="text-center">
-            <p id="kw-page1" class="text-3xl font-bold text-amber-600 mb-1">—</p>
+            <p id="kw-page1" class="text-3xl font-bold text-amber-600 mb-1">-</p>
             <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">page 1</p>
           </div>
           <div class="text-center">
-            <p id="kw-buried" class="text-3xl font-bold text-neutral-400 mb-1">—</p>
+            <p id="kw-buried" class="text-3xl font-bold text-neutral-400 mb-1">-</p>
             <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">page 2+</p>
           </div>
         </div>
@@ -242,7 +242,7 @@ const clients = isAdmin ? await getAllClients() : [];
           <div class="kw-animate flex items-center justify-between py-3 px-4 rounded-lg hover:bg-white/[0.02] transition-all duration-300" style="animation-delay:${delay}s">
             <div class="flex items-center gap-4 min-w-0">
               <span class="text-xs font-mono ${posColor} ${posBg} w-10 text-center py-1.5 rounded-md shrink-0">
-                ${pos ? '#' + pos : '—'}
+                ${pos ? '#' + pos : '-'}
               </span>
               <div class="min-w-0">
                 <span class="text-sm text-neutral-200 block truncate">${escapeHtml(k.keyword)}</span>

@@ -57,18 +57,18 @@ const clients = isAdmin ? await getAllClients() : [];
     }
 
     function fmtInt(n) {
-      if (n === null || n === undefined) return '—';
+      if (n === null || n === undefined) return '-';
       return Number(n).toLocaleString();
     }
     function fmtBytes(b) {
-      if (!b) return '—';
+      if (!b) return '-';
       const units = ['B', 'KB', 'MB', 'GB', 'TB'];
       let i = 0; let n = Number(b);
       while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
       return `${n.toFixed(n < 10 ? 2 : n < 100 ? 1 : 0)} ${units[i]}`;
     }
     function fmtPercent(n) {
-      if (n === null || n === undefined) return '—';
+      if (n === null || n === undefined) return '-';
       return `${(Number(n) * 100).toFixed(1)}%`;
     }
     function fmtDateUS(d) {

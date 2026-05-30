@@ -134,6 +134,7 @@ const clients = isAdmin ? await getAllClients() : [];
           statusEl.textContent = res.ok ? 'Requested. We will refresh it shortly.' : 'Could not send the request.';
         } catch {
           statusEl.textContent = 'Could not send the request.';
+          reqBtn.disabled = false;
         }
       });
     }
@@ -369,7 +370,7 @@ const clients = isAdmin ? await getAllClients() : [];
                     const tableHint = data.expected_source ? TABLE_LABELS[data.expected_source] : 'the relevant SF export';
                     emptyMsg = `Upload the ${tableHint} and the portal will derive the affected URLs automatically. Or upload the per-issue CSV (${escapeHtml(issueName)}) for the exact list the audit produced.`;
                   } else if (!data.derivable) {
-                    emptyMsg = `The portal cannot derive this issue's URL list from your stored data — it needs the per-issue CSV (${escapeHtml(issueName)}) from Screaming Frog's issues_reports folder.`;
+                    emptyMsg = `The detailed URL list for this issue is not available from the current upload. It needs the per-issue export (${escapeHtml(issueName)}) from the latest crawl.`;
                   } else {
                     emptyMsg = `Upload the per-issue CSV (${escapeHtml(issueName)}) from Screaming Frog to populate the list.`;
                   }

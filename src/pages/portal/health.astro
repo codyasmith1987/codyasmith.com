@@ -19,6 +19,11 @@ const clients = isAdmin ? await getAllClients() : [];
       <div>
         <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Technical Audit</p>
         <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Site Health</h1>
+        <p class="text-sm text-neutral-400 mt-2">From a full crawl of your site. <span id="health-asof"></span></p>
+        <p class="mt-2">
+          <button id="request-update-btn" class="text-[11px] font-mono text-amber-500 hover:text-amber-400 underline underline-offset-2">Request a data update</button>
+          <span id="request-update-status" class="text-[11px] text-neutral-500 ml-2"></span>
+        </p>
       </div>
       {isAdmin && <ClientSelector clients={clients} />}
     </div>
@@ -41,14 +46,17 @@ const clients = isAdmin ? await getAllClients() : [];
           <div class="text-center">
             <p id="count-critical" class="text-2xl font-bold text-red-400 mb-1">0</p>
             <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">critical / high</p>
+            <p id="count-critical-chip" class="text-[10px] font-mono mt-1 h-4"></p>
           </div>
           <div class="text-center">
             <p id="count-medium" class="text-2xl font-bold text-amber-600 mb-1">0</p>
             <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">medium</p>
+            <p id="count-medium-chip" class="text-[10px] font-mono mt-1 h-4"></p>
           </div>
           <div class="text-center">
             <p id="count-low" class="text-2xl font-bold text-neutral-500 mb-1">0</p>
             <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">low priority</p>
+            <p id="count-low-chip" class="text-[10px] font-mono mt-1 h-4"></p>
           </div>
         </div>
         <details class="mt-6 group">
@@ -97,6 +105,36 @@ const clients = isAdmin ? await getAllClients() : [];
         activeClientId = e.target.value;
         loadHealth();
         loadUrlInsights();
+      });
+    }
+
+    // "vs last month" for issue counts. Fewer issues is better, so a drop is
+    // green. Absolute change (counts are small integers). Never fabricates.
+    function countChip(prior, current) {
+      if (prior === null || prior === undefined || current === null || current === undefined) return '';
+      const diff = Number(current) - Number(prior);
+      if (diff === 0) return '<span class="text-neutral-500">no change</span>';
+      return `<span class="${diff < 0 ? 'text-emerald-500' : 'text-rose-400'}">${diff > 0 ? '+' : ''}${diff} vs last month</span>`;
+    }
+    function setChip(id, html) { const el = document.getElementById(id); if (el) el.innerHTML = html; }
+
+    const reqBtn = document.getElementById('request-update-btn');
+    if (reqBtn) {
+      reqBtn.addEventListener('click', async () => {
+        const statusEl = document.getElementById('request-update-status');
+        reqBtn.disabled = true;
+        statusEl.textContent = 'Sending...';
+        try {
+          const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+          const res = await fetch('/portal/api/request-data-update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+            body: JSON.stringify({ client_id: activeClientId, source: 'health' }),
+          });
+          statusEl.textContent = res.ok ? 'Requested. We will refresh it shortly.' : 'Could not send the request.';
+        } catch {
+          statusEl.textContent = 'Could not send the request.';
+        }
       });
     }
 
@@ -180,13 +218,23 @@ const clients = isAdmin ? await getAllClients() : [];
         document.getElementById('health-empty').classList.add('hidden');
         document.getElementById('health-hero').classList.remove('hidden');
 
-        const high = issues.filter(i => ['critical', 'high'].includes((i.priority || '').toLowerCase())).length;
-        const medium = issues.filter(i => (i.priority || '').toLowerCase() === 'medium').length;
-        const low = issues.filter(i => (i.priority || '').toLowerCase() === 'low' || !i.priority).length;
+        // Priority counts come from the shared rollup (by_priority), so the
+        // page, the score, and the report all bucket priority the same way.
+        const bp = data.by_priority || { high: 0, medium: 0, low: 0 };
+        const high = bp.high, medium = bp.medium, low = bp.low;
 
         document.getElementById('count-critical').textContent = high;
         document.getElementById('count-medium').textContent = medium;
         document.getElementById('count-low').textContent = low;
+
+        const asofEl = document.getElementById('health-asof');
+        if (asofEl) asofEl.textContent = data.month ? `Latest crawl: ${data.month}.` : '';
+
+        // "vs last month" comparison from the prior crawl (when present).
+        const pbp = data.prior_by_priority || null;
+        setChip('count-critical-chip', countChip(pbp && pbp.high, high));
+        setChip('count-medium-chip', countChip(pbp && pbp.medium, medium));
+        setChip('count-low-chip', countChip(pbp && pbp.low, low));
 
         const grade = gradeFromIssues(high, medium);
         document.getElementById('health-grade').textContent = grade.icon;

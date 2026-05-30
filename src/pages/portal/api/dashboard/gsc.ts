@@ -10,7 +10,7 @@
 
 import type { APIRoute } from 'astro';
 import {
-  getGscLatestMonth, getGscTotals, getGscChart, getGscDimension, getGscFilters,
+  getGscLatestMonth, getGscPriorMonth, getGscTotals, getGscChart, getGscDimension, getGscFilters,
 } from '../../../../lib/gsc-read';
 
 export const prerender = false;
@@ -40,6 +40,12 @@ export const GET: APIRoute = async ({ locals, url }) => {
   ]);
   const filters = await getGscFilters(clientId, month);
 
+  // Prior cycle totals for the live page's "vs last month" comparison
+  // (additive; null in the first cycle). Only the totals are needed for the
+  // chips, not the full prior breakdown.
+  const priorMonth = await getGscPriorMonth(clientId, month);
+  const priorTotals = priorMonth ? await getGscTotals(clientId, priorMonth) : null;
+
   return json({
     month,
     has_data: true,
@@ -51,5 +57,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
     devices,
     search_appearance: searchAppearance,
     filters,
+    prior_month: priorMonth,
+    prior_totals: priorTotals,
   });
 };

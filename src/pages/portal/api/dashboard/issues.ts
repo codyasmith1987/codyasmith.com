@@ -1,5 +1,13 @@
+// Site-health issues dashboard endpoint.
+//
+// Reads through the shared crawl-read layer so the page, the report, and the
+// health score all share one rollup + priority definition (no drift). The
+// {month, issues} shape is unchanged for the existing UI; by_priority and
+// the prior-cycle fields are additive, for the page's priority counts and
+// the "vs last month" comparison.
+
 import type { APIRoute } from 'astro';
-import turso from '../../../../lib/turso';
+import { getHealthLatestMonth, getHealthPriorMonth, getHealthMonthData } from '../../../../lib/crawl-read';
 
 export const prerender = false;
 
@@ -12,41 +20,22 @@ export const GET: APIRoute = async ({ locals, url }) => {
   const clientId = locals.user.role === 'admin'
     ? (url.searchParams.get('client_id') || null)
     : locals.user.client_id;
-
   if (!clientId) return json({ error: 'No client specified' }, 400);
 
-  // Get latest month
-  const monthResult = await turso.execute({
-    sql: 'SELECT DISTINCT month FROM site_issues WHERE client_id = ? ORDER BY month DESC LIMIT 1',
-    args: [clientId],
+  const month = await getHealthLatestMonth(clientId);
+  if (!month) return json({ month: null, issues: [] });
+
+  const current = await getHealthMonthData(clientId, month);
+  const priorMonth = await getHealthPriorMonth(clientId, month);
+  const prior = priorMonth ? await getHealthMonthData(clientId, priorMonth) : null;
+
+  return json({
+    month,
+    issues: current.issues,
+    by_priority: current.byPriority,
+    total_issues: current.totalIssues,
+    prior_month: priorMonth,
+    prior_by_priority: prior ? prior.byPriority : null,
+    prior_total_issues: prior ? prior.totalIssues : null,
   });
-
-  if (monthResult.rows.length === 0) {
-    return json({ month: null, issues: [] });
-  }
-
-  const month = monthResult.rows[0][0] as string;
-
-  // Deduplicate issues by name — when multiple tools report the same issue,
-  // keep the entry with the most affected URLs (usually the more detailed source)
-  const result = await turso.execute({
-    sql: `SELECT issue_name, issue_type, priority, MAX(affected_urls) as affected_urls, MAX(pct_of_total) as pct_of_total, description, how_to_fix
-          FROM site_issues
-          WHERE client_id = ? AND month = ?
-          GROUP BY issue_name
-          ORDER BY affected_urls DESC`,
-    args: [clientId, month],
-  });
-
-  const issues = result.rows.map(row => ({
-    issue_name: row[0] as string,
-    issue_type: row[1] as string | null,
-    priority: row[2] as string | null,
-    affected_urls: row[3] as number | null,
-    pct_of_total: row[4] as number | null,
-    description: row[5] as string | null,
-    how_to_fix: row[6] as string | null,
-  }));
-
-  return json({ month, issues });
 };

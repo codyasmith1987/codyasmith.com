@@ -59,6 +59,19 @@ export async function getGscLatestMonth(clientId: string): Promise<string | null
   return r.rows.length ? (r.rows[0][0] as string) : null;
 }
 
+// Latest month strictly before currentMonth (the prior reporting cycle), for
+// the live page's "vs last month" comparison.
+export async function getGscPriorMonth(clientId: string, currentMonth: string): Promise<string | null> {
+  const r = await turso.execute({
+    sql: `SELECT month FROM (
+            SELECT month FROM gsc_chart WHERE client_id = ?
+            UNION SELECT month FROM gsc_dimensions WHERE client_id = ?
+          ) WHERE month < ? ORDER BY month DESC LIMIT 1`,
+    args: [clientId, clientId, currentMonth],
+  });
+  return r.rows.length ? (r.rows[0][0] as string) : null;
+}
+
 // Totals from the chart time-series, plus the date range it covers. CTR is
 // total clicks / total impressions, not the mean of daily CTRs (averaging
 // percentages overweights low-volume days). Position is the mean of daily

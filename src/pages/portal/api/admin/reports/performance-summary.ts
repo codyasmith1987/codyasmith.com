@@ -131,7 +131,7 @@ export const POST: APIRoute = async ({ locals, url }) => {
     // duplicate rows and orphaned storage objects.
     try {
       const prior = await turso.execute({
-        sql: `SELECT id, s3_key FROM files WHERE client_id = ? AND original_name = ? AND category = 'report'`,
+        sql: `SELECT id, s3_key FROM files WHERE client_id = ? AND original_name = ? AND category = 'internal_draft'`,
         args: [clientId, filename],
       });
       for (const pf of prior.rows) {
@@ -140,7 +140,11 @@ export const POST: APIRoute = async ({ locals, url }) => {
     } catch (cleanupErr: any) {
       logger.error('prior report cleanup failed (continuing to store new copy)', cleanupErr);
     }
-    const { id } = await uploadFile(slug, storageMonth, filename, buffer, 'application/pdf', clientId, locals.user!.id, 'report');
+    // Stored under an admin-only category: this descriptive draft is a
+    // drafting aid for Cody, never a client-facing deliverable (the
+    // descriptive layer lives on the live pages now). getFilesForClient
+    // excludes internal_draft so it never reaches the client file list.
+    const { id } = await uploadFile(slug, storageMonth, filename, buffer, 'application/pdf', clientId, locals.user!.id, 'internal_draft');
     return json({
       ok: true,
       file_id: id,

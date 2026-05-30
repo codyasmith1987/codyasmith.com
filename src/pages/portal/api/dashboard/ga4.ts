@@ -6,7 +6,7 @@
 // file is now just: resolve scope, delegate, wrap.
 
 import type { APIRoute } from 'astro';
-import { getGa4Dashboard } from '../../../../lib/ga4-read';
+import { getGa4DashboardWithPrior } from '../../../../lib/ga4-read';
 
 export const prerender = false;
 
@@ -21,6 +21,6 @@ export const GET: APIRoute = async ({ locals, url }) => {
     : locals.user.client_id;
   if (!clientId) return json({ error: 'No client specified' }, 400);
 
-  const data = await getGa4Dashboard(clientId);
+  const data = await getGa4DashboardWithPrior(clientId);
   return json(data);
 };

@@ -166,3 +166,18 @@ export async function getGa4Dashboard(clientId: string): Promise<Ga4MonthData | 
   if (!month) return { month: null, has_data: false };
   return getGa4MonthData(clientId, month);
 }
+
+// Dashboard payload WITH the prior cycle attached, for the live page's
+// "vs last month" comparison. Additive to the latest-month shape:
+// prior_month + prior (the full prior Ga4MonthData, or null in the first
+// cycle). The page reads the current fields exactly as before.
+export async function getGa4DashboardWithPrior(
+  clientId: string,
+): Promise<(Ga4MonthData & { prior_month: string | null; prior: Ga4MonthData | null }) | { month: null; has_data: false; prior_month: null; prior: null }> {
+  const month = await getGa4LatestMonth(clientId);
+  if (!month) return { month: null, has_data: false, prior_month: null, prior: null };
+  const current = await getGa4MonthData(clientId, month);
+  const priorMonth = await getGa4PriorMonth(clientId, month);
+  const prior = priorMonth ? await getGa4MonthData(clientId, priorMonth) : null;
+  return { ...current, prior_month: priorMonth, prior };
+}

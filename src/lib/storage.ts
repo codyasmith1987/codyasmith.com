@@ -184,11 +184,18 @@ export async function deleteFileFromStorage(s3Key: string, fileId: string): Prom
   await getS3().send(new DeleteObjectCommand({ Bucket: getBucket(), Key: s3Key }));
 }
 
+// Categories that are admin-only and must never appear in the client-facing
+// file list (e.g. auto-generated descriptive report DRAFTs, an internal
+// drafting aid, not a client deliverable).
+export const ADMIN_ONLY_FILE_CATEGORIES = ['internal_draft'];
+
 export async function getFilesForClient(clientId: string): Promise<any[]> {
+  const placeholders = ADMIN_ONLY_FILE_CATEGORIES.map(() => '?').join(', ');
   const result = await turso.execute({
     sql: `SELECT id, filename, original_name, mime_type, size_bytes, category, month, created_at
-          FROM files WHERE client_id = ? ORDER BY month DESC, created_at DESC`,
-    args: [clientId],
+          FROM files WHERE client_id = ? AND category NOT IN (${placeholders})
+          ORDER BY month DESC, created_at DESC`,
+    args: [clientId, ...ADMIN_ONLY_FILE_CATEGORIES],
   });
   return result.rows.map(row => ({
     id: row[0] as string,

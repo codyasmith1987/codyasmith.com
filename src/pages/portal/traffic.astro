@@ -34,19 +34,23 @@ const clients = isAdmin ? await getAllClients() : [];
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-6">
           <div>
             <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Active users</p>
-            <p id="kpi-active-users" class="font-serif text-3xl text-neutral-100">—</p>
+            <p id="kpi-active-users" class="font-serif text-3xl text-neutral-100">-</p>
+            <p id="kpi-active-users-chip" class="text-[11px] font-mono mt-1 h-4"></p>
           </div>
           <div>
             <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">New users</p>
-            <p id="kpi-new-users" class="font-serif text-3xl text-neutral-100">—</p>
+            <p id="kpi-new-users" class="font-serif text-3xl text-neutral-100">-</p>
+            <p id="kpi-new-users-chip" class="text-[11px] font-mono mt-1 h-4"></p>
           </div>
           <div>
             <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Sessions</p>
-            <p id="kpi-sessions" class="font-serif text-3xl text-neutral-100">—</p>
+            <p id="kpi-sessions" class="font-serif text-3xl text-neutral-100">-</p>
+            <p id="kpi-sessions-chip" class="text-[11px] font-mono mt-1 h-4"></p>
           </div>
           <div>
             <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Avg engagement</p>
-            <p id="kpi-engagement" class="font-serif text-3xl text-neutral-100">—</p>
+            <p id="kpi-engagement" class="font-serif text-3xl text-neutral-100">-</p>
+            <p id="kpi-engagement-chip" class="text-[11px] font-mono mt-1 h-4"></p>
           </div>
         </div>
       </div>
@@ -106,6 +110,21 @@ const clients = isAdmin ? await getAllClients() : [];
       const date = new Date(Number(y), Number(m) - 1, Number(d));
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
+    // Comparison chip: percent change vs the prior cycle. All four topline
+    // metrics read up-as-good, so green is up and rose is down. Never
+    // fabricates: a null or zero prior shows "new" or nothing, not a percent.
+    function deltaChip(prior, current) {
+      if (prior === null || prior === undefined || current === null || current === undefined) return '';
+      if (Number(prior) === 0) return Number(current) > 0 ? '<span class="text-emerald-500">new vs last month</span>' : '';
+      const pct = (Number(current) - Number(prior)) / Number(prior);
+      if (Math.abs(pct) < 0.005) return '<span class="text-neutral-500">flat vs last month</span>';
+      const up = pct > 0;
+      return `<span class="${up ? 'text-emerald-500' : 'text-rose-400'}">${up ? '+' : ''}${(pct * 100).toFixed(1)}% vs last month</span>`;
+    }
+    function setChip(id, prior, current) {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = deltaChip(prior, current);
+    }
 
     async function loadGa4() {
       const loadingEl = document.getElementById('ga4-loading');
@@ -147,6 +166,12 @@ const clients = isAdmin ? await getAllClients() : [];
           document.getElementById('kpi-new-users').textContent = fmtInt(data.topline.new_users);
           document.getElementById('kpi-sessions').textContent = fmtInt(data.topline.sessions);
           document.getElementById('kpi-engagement').textContent = fmtSeconds(data.topline.avg_engagement_time_per_active_user);
+          // "vs last month" comparison chips from the prior cycle (when present).
+          const pt = data.prior && data.prior.topline ? data.prior.topline : null;
+          setChip('kpi-active-users-chip', pt && pt.active_users, data.topline.active_users);
+          setChip('kpi-new-users-chip', pt && pt.new_users, data.topline.new_users);
+          setChip('kpi-sessions-chip', pt && pt.sessions, data.topline.sessions);
+          setChip('kpi-engagement-chip', pt && pt.avg_engagement_time_per_active_user, data.topline.avg_engagement_time_per_active_user);
           heroEl.classList.remove('hidden');
         }
 

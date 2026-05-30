@@ -56,6 +56,24 @@ function run() {
   test('GA4 zip-tagged Reports_snapshot -> ga4_reports_snapshot',
     detectFormat(ga4Raw, `${ZIP}:ZKHReports_snapshot.csv`).format === 'ga4_reports_snapshot');
 
+  // Ubersuggest keyword exports. Suggestions carries Search Intent; bulk
+  // analysis does not. Both must land as keyword_suggestions (the relaxed
+  // signature drops the 'search intent' requirement).
+  const suggestionsRaw = 'No,Keyword,Search Intent,Search Volume,CPC,Paid Difficulty,SEO Difficulty\n1,custom prefab homes,navigational,720,US$2.17,92,41\n';
+  const bulkRaw = 'No,Keyword,Search Volume,CPC,Paid Difficulty,SEO Difficulty\n1,prefab homes idaho,"1,300",$2.17,96,29\n';
+  test('Ubersuggest suggestions -> keyword_suggestions',
+    detectFormat(suggestionsRaw, 'suggestions_ubersuggest_x.csv').format === 'keyword_suggestions',
+    detectFormat(suggestionsRaw, 'suggestions_ubersuggest_x.csv').format);
+  test('Ubersuggest bulk analysis (no Search Intent) -> keyword_suggestions',
+    detectFormat(bulkRaw, 'ubersuggest_bulk_analysis-x.csv').format === 'keyword_suggestions',
+    detectFormat(bulkRaw, 'ubersuggest_bulk_analysis-x.csv').format);
+  // Domain overview keeps its own format (plural 'Keywords' + 'Ranking Url'),
+  // not stolen by the relaxed suggestions signature.
+  const domainOverviewRaw = 'No,Keywords,Volume,Position,Est. Visits,Seo Difficulty,Ranking Url\n1,zip kit homes,5400,1,1735,25,http://zipkithomes.com/\n';
+  test('Ubersuggest domain overview -> keyword_research',
+    detectFormat(domainOverviewRaw, 'ubersuggest zipkithomes.com_3-26-26.csv').format === 'keyword_research',
+    detectFormat(domainOverviewRaw, 'ubersuggest zipkithomes.com_3-26-26.csv').format);
+
   const failed = results.filter(r => !r.pass);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);
   if (failed.length > 0) process.exit(1);

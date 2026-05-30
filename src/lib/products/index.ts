@@ -168,6 +168,12 @@ function synthesizeWmPageCount(
     const primary = added.find((s: any) => typeof s?.page_count_estimate === 'number' && s.page_count_estimate > 0);
     if (primary) return { ...variables, page_count: primary.page_count_estimate };
   }
+  // Last resort: a proposed takeover site's real page count (pure-takeover
+  // proposals with no build product still need an ecosystem to route).
+  const takeovers: any[] = Array.isArray(allProductVars?.['web-management']?.takeover_sites)
+    ? allProductVars!['web-management'].takeover_sites : [];
+  const takeoverPrimary = takeovers.find((s: any) => typeof s?.page_count === 'number' && s.page_count > 0);
+  if (takeoverPrimary) return { ...variables, page_count: takeoverPrimary.page_count };
   return variables;
 }
 
@@ -338,11 +344,21 @@ export function composeProposal(args: ComposeArgs): ProposalConfig {
   }
   const steps = overrides.steps || composedSteps;
 
+  // Domains the proposal proposes to TAKE OVER (existing unmanaged sites).
+  // Carried on the config so the contract-finalize flow can flip these to
+  // is_managed=1 when the engagement goes live.
+  const takeoverDomains: string[] = Array.isArray((args.product_vars['web-management'] as any)?.takeover_sites)
+    ? (args.product_vars['web-management'] as any).takeover_sites
+        .map((s: any) => (typeof s?.domain === 'string' ? s.domain.trim().toLowerCase() : ''))
+        .filter((d: string) => d.length > 0)
+    : [];
+
   return {
     version: 1,
     prepared_for,
     prepared_on,
     title,
+    takeover_site_domains: takeoverDomains.length > 0 ? takeoverDomains : undefined,
     discount_rate: typeof args.client.discount_rate === 'number'
       ? Math.max(0, Math.min(1, args.client.discount_rate))
       : 0,

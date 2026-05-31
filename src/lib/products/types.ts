@@ -169,6 +169,10 @@ export interface ProposalStepOption {
   // it. Per the tier-cards-show-included-hours requirement. WM sets it;
   // MC is advisory cadence and leaves it undefined.
   included_hours?: number;
+  // Multi-site range cards show a pooled-hours RANGE ("6 to 9 pooled
+  // hours per month, depending on the option you pick") instead of a
+  // single number; the renderer prefers this label over included_hours.
+  included_hours_label?: string;
   features?: string[];
   price_dynamic?: string;
   price_detail_html?: string;

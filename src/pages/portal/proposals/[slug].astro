@@ -957,9 +957,11 @@ const clientConfig = {
               <div class="price-monthly" set:html={opt.price_label + (opt.price_suffix ? `<span class="suffix"> ${opt.price_suffix}</span>` : '')} />
             )}
             {opt.price_subline && <div class="price-onetime">{opt.price_subline}</div>}
-            {typeof opt.included_hours === 'number' && (
-              <div class="price-onetime price-hours">{opt.included_hours} pooled hours per month included</div>
-            )}
+            {opt.included_hours_label
+              ? <div class="price-onetime price-hours">{opt.included_hours_label}</div>
+              : typeof opt.included_hours === 'number' && (
+                  <div class="price-onetime price-hours">{opt.included_hours} pooled hours per month included</div>
+                )}
             {Array.isArray(opt.features) && (
               <ul>
                 {opt.features.map((f: string) => <li>{f}</li>)}

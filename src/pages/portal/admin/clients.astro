@@ -211,7 +211,7 @@ function ecoChipLabel(pageCount: number | null): string {
                   Per-site settings ({sitesByClient[client.id].length} managed {sitesByClient[client.id].length === 1 ? 'site' : 'sites'})
                 </summary>
                 <div class="mt-3 p-3 bg-neutral-900/40 border border-white/5 rounded-md space-y-2">
-                  <p class="text-[11px] text-neutral-400 leading-relaxed">Per-site page count routes each managed site to its own ecosystem (primary pays full base, additional sites pay 0.80x). Live date drives first-period proration. Monthly and onboarding overrides bypass the formula for grandfathered or pro-bono ($0) carve-outs.</p>
+                  <p class="text-[11px] text-neutral-400 leading-relaxed">Per-site page count routes each managed site to its own ecosystem (primary pays full base, additional sites pay 0.90x). Live date drives first-period proration. Monthly and onboarding overrides bypass the formula for grandfathered or pro-bono ($0) carve-outs.</p>
                   {sitesByClient[client.id].map(site => (
                     <>
                       <div class="grid grid-cols-12 gap-2 items-center" data-site-row={site.id}>

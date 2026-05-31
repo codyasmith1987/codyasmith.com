@@ -119,6 +119,7 @@ function generateBundleSteps(bundle: BundleConfig, contexts: Record<ProductId, P
       price_suffix: '/ month',
       price_subline: pricing ? `${bundleMoney(pricing.oneTime)} at signing` : undefined,
       included_hours: wmOpt?.included_hours,
+      included_hours_label: wmOpt?.included_hours_label,
       features,
     };
   });
@@ -935,7 +936,7 @@ function composeHowItWorksCloser(args: {
     `It keeps every party clear on what was bought and what is new.`,
   ];
   if (hasBuild) {
-    changeOrderParts.push(`Subsequent builds in this engagement carry a 20 percent discount off the first.`);
+    changeOrderParts.push(`Subsequent builds in this engagement carry a 10 percent discount off the first.`);
   }
   paragraphs.push(changeOrderParts.join(' '));
 

@@ -59,7 +59,7 @@ Before ending, execute in order. Do not summarize or claim completion until all 
 
 4. **CLEAN UP.** Report any files left untracked and not in `.gitignore`. I want to know what was left behind so I can decide next session if it's junk or unfinished work.
 
-5. **LOG TO CLICKUP.** If this session corresponds to a ClickUp task, post a comment via `clickup_create_task_comment` (never `clickup_update_task`). Write in first person as me ("I verified... I will... my next move..."). Show the returned comment_id. If no ClickUp task was in scope, say so explicitly.
+5. **LOG TO CLICKUP.** If this session corresponds to a ClickUp task, post a comment via `clickup_create_task_comment`, first person as me ("I verified... I will... my next move..."), and show the returned comment_id. Full task updates (status, scope, descriptions) via `clickup_update_task` are allowed too. If no ClickUp task was in scope, say so explicitly.
 
 6. **HANDOFF NOTE.** In 3-5 sentences, tell me: what we finished, what's still open, what the next session's first action should be. No aspirational claims. No fabricated commit hashes. If you're not sure something shipped, say so.
 
@@ -88,8 +88,7 @@ Run all six. If any step fails, STOP there and report the failure. Do not fake c
 - Do not create files in `C:\Users\codya\projects\` (deprecated path)
 - Do not create files in Dropbox or OneDrive paths for code
 - Do not invent commit hashes in handoff notes
-- Do not claim ClickUp updates without returning the comment_id
-- Do not run `clickup_update_task` on descriptions, comments only
+- Do not claim ClickUp updates without returning the comment_id or task id for the write
 - Do not silently skip uncommitted files during end-of-session commit
 - Do not proceed past a failed verification step
 - Do not make test writes against the production portal or database (no recompose/create POSTs, admin API mutations, publish toggles, or manual DB edits to "check" something). Test locally or on staging.

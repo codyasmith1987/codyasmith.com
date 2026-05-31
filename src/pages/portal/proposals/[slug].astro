@@ -490,6 +490,25 @@ const clientConfig = {
     line-height: 1.5;
     color: #6b6359;
   }
+  /* Per-step cost lines shown under a selection: WM onboarding + monthly,
+     each build priced on its own line, MC onboarding + monthly. */
+  .summary-breakdown {
+    padding: 0 0 4px 2px;
+  }
+  .summary-breakdown:empty { display: none; }
+  .summary-bd-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    padding: 3px 0;
+    font-size: 13px;
+    color: #8a8275;
+  }
+  .summary-bd-line span:last-child {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
   .form-fields {
     display: grid;
     gap: 18px;
@@ -1060,22 +1079,25 @@ const clientConfig = {
       // summary stable at one row per top-level decision.
       .filter(step => !step.show_when)
       .map(step => (
-        <div class="summary-row" data-summary-step={step.id}>
-          <span class="summary-label">{(step.id === 'mgmt_tier' || step.id === 'wm_tier') ? 'Web Management level' : step.id === 'site_setup' ? 'Site setup' : step.id === 'consulting' ? 'Marketing Consulting' : (step.h2 || step.id)}</span>
-          <span class="summary-value" id={`summary-${step.id}`}>Pick above</span>
+        <div class="summary-step" data-summary-step={step.id}>
+          <div class="summary-row">
+            <span class="summary-label">{(step.id === 'mgmt_tier' || step.id === 'wm_tier') ? 'Web Management level' : step.id === 'site_setup' ? 'Site setup' : step.id === 'consulting' ? 'Marketing Consulting' : (step.h2 || step.id)}</span>
+            <span class="summary-value" id={`summary-${step.id}`}>Pick above</span>
+          </div>
+          <div class="summary-breakdown" id={`summary-bd-${step.id}`}></div>
         </div>
       ))}
-    <div class="summary-row totals" id="row-onetime">
+    <div class="summary-row totals" id="row-onetime" style="display: none">
       <span class="summary-label">One-time setup</span>
-      <span class="summary-value" id="summary-onetime">Pick above</span>
+      <span class="summary-value" id="summary-onetime"></span>
     </div>
-    <div class="summary-row totals" id="row-monthly">
+    <div class="summary-row totals" id="row-monthly" style="display: none">
       <span class="summary-label">Monthly</span>
-      <span class="summary-value" id="summary-monthly">Pick above</span>
+      <span class="summary-value" id="summary-monthly"></span>
     </div>
-    <div class="summary-row totals atsigning-row" id="row-atsigning">
+    <div class="summary-row totals atsigning-row" id="row-atsigning" style="display: none">
       <span class="summary-label">Due when you sign</span>
-      <span class="summary-value" id="summary-atsigning">Pick above</span>
+      <span class="summary-value" id="summary-atsigning"></span>
     </div>
     <p class="summary-note" id="summary-atsigning-note"></p>
   </div>
@@ -1217,8 +1239,41 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
     setSummary('summary-atsigning', moneyAuto(due), true);
     setRowVisible('row-onetime', oneTime > 0);
     setRowVisible('row-monthly', monthly > 0);
+    setRowVisible('row-atsigning', due > 0);
     var note = document.getElementById('summary-atsigning-note');
     if (note) note.textContent = atSigningNote(oneTime, monthly);
+  }
+
+  // Render the per-step cost lines under each selection from the server-
+  // computed pricing groups (WM onboarding + monthly, each build priced on
+  // its own line, MC onboarding + monthly). Cleared while the selection is
+  // incomplete so partial, not-yet-pickable numbers never flash. Uses
+  // textContent (no innerHTML) since labels originate from the config.
+  function renderBreakdowns() {
+    for (var i = 0; i < STEPS.length; i++) {
+      var c0 = document.getElementById('summary-bd-' + STEPS[i].id);
+      if (c0) c0.textContent = '';
+    }
+    if (!selectionsComplete()) return;
+    var groups = (state.pricing && Array.isArray(state.pricing.groups)) ? state.pricing.groups : [];
+    for (var g = 0; g < groups.length; g++) {
+      var grp = groups[g];
+      if (!grp || !Array.isArray(grp.lines)) continue;
+      var c = document.getElementById('summary-bd-' + grp.stepId);
+      if (!c) continue;
+      for (var l = 0; l < grp.lines.length; l++) {
+        var ln = grp.lines[l];
+        var row = document.createElement('div');
+        row.className = 'summary-bd-line';
+        var lbl = document.createElement('span');
+        lbl.textContent = ln.label;
+        var amt = document.createElement('span');
+        amt.textContent = moneyAuto(ln.amount);
+        row.appendChild(lbl);
+        row.appendChild(amt);
+        c.appendChild(row);
+      }
+    }
   }
 
   function rbMgmtMonthly(tier, option) {
@@ -1559,14 +1614,16 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
     } else if (selectionsComplete() && state.pricing && typeof state.pricing.oneTime === 'number' && typeof state.pricing.monthly === 'number') {
       applyTotals(state.pricing.oneTime, state.pricing.monthly, state.pricing.atSigning);
     } else {
-      setSummary('summary-onetime', 'Pick above', false);
-      setSummary('summary-monthly', 'Pick above', false);
-      setSummary('summary-atsigning', 'Pick above', false);
-      setRowVisible('row-onetime', true);
-      setRowVisible('row-monthly', true);
+      // Incomplete: the computed totals are not pickable, so hide them
+      // (and the per-step cost lines) until every needed pick is made,
+      // rather than showing a "Pick above" prompt on a total.
+      setRowVisible('row-onetime', false);
+      setRowVisible('row-monthly', false);
+      setRowVisible('row-atsigning', false);
       var atsNote = document.getElementById('summary-atsigning-note');
       if (atsNote) atsNote.textContent = '';
     }
+    renderBreakdowns();
 
     // Signer blocks: each gets its own read-only / editable / signed state.
     for (var k1 = 0; k1 < SIGNERS.length; k1++) {

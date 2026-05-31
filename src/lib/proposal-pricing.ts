@@ -5,6 +5,13 @@
 // same totals the proposal accept flow and the email summaries already
 // use. Single source of truth for the formula math.
 
+// One line of a per-step cost group (e.g. WM "Onboarding" $800, a single
+// build "Raised Bar Builders site" $5,625, MC "Monthly" $497).
+export type PricingGroupLine = { label: string; amount: number; recurring: boolean };
+// A per-step cost group for the proposal summary panel. `stepId` is the
+// summary step the group renders under (wm_tier, build_options, mc_yes_no).
+export type PricingGroup = { stepId: string; lines: PricingGroupLine[] };
+
 export type PricingResult = {
   oneTime: number;
   monthly: number;
@@ -22,6 +29,11 @@ export type PricingResult = {
   consultingTierName: string;
   siteSetupShortLabel: string;
   siteSetupLongLabel: string;
+  // Per-step cost breakdown for the summary panel: each step's own
+  // one-time and recurring lines, plus a line per build. Display-only;
+  // the totals above stay the source of truth. Optional: the legacy
+  // raised_bar_v1 formula omits it and the panel falls back to totals.
+  groups?: PricingGroup[];
 };
 
 // raised_bar_v1 -------------------------------------------------------

@@ -9,7 +9,7 @@
 
 import { webManagementProduct, extractTakeoverSites, deriveEcosystemCeilings } from './web-management';
 import { marketingConsultingProduct } from './marketing-consulting';
-import { buildProduct } from './build';
+import { buildProduct, routeBuildSize, computeBuildTotal } from './build';
 import { trainingProduct } from './training';
 import { otherSowProduct } from './other-sow';
 import { lookupSnippetOverrideWithKey } from './narrative-snippets';
@@ -969,7 +969,7 @@ function joinNames(items: string[]): string {
 // products, calls each computePricing, and accumulates totals. Returns
 // in the legacy PricingResult shape so the renderer and emails read
 // it unchanged.
-import type { PricingResult } from '../proposal-pricing';
+import type { PricingResult, PricingGroup, PricingGroupLine } from '../proposal-pricing';
 
 export function composePricing(args: {
   config: ProposalConfig;
@@ -1017,6 +1017,10 @@ export function composePricing(args: {
   let consultingMonthly = 0;
   let mgmtTierName = '';
   let consultingTierName = '';
+  // Per-product one-time amounts, captured for the summary-panel groups.
+  let wmOneTime = 0;
+  let mcOneTime = 0;
+  let buildOneTime = 0;
 
   for (const id of products) {
     const product = PRODUCT_REGISTRY[id];
@@ -1037,11 +1041,16 @@ export function composePricing(args: {
 
     if (id === 'web-management') {
       mgmtMonthly = contribution.monthly;
+      wmOneTime = contribution.oneTime;
       mgmtTierName = contribution.displaySummary?.tier_name || '';
     }
     if (id === 'marketing-consulting') {
       consultingMonthly = contribution.monthly;
+      mcOneTime = contribution.oneTime;
       consultingTierName = contribution.displaySummary?.tier_name || '';
+    }
+    if (id === 'build') {
+      buildOneTime = contribution.oneTime;
     }
   }
 
@@ -1098,10 +1107,67 @@ export function composePricing(args: {
     oneTime = Math.round(oneTime * keep * 100) / 100;
     mgmtMonthly = Math.round(mgmtMonthly * keep * 100) / 100;
     consultingMonthly = Math.round(consultingMonthly * keep * 100) / 100;
+    wmOneTime = Math.round(wmOneTime * keep * 100) / 100;
+    mcOneTime = Math.round(mcOneTime * keep * 100) / 100;
+    buildOneTime = Math.round(buildOneTime * keep * 100) / 100;
     // Surface the discount explicitly as the final breakdown line so
     // it shows up on the proposal page and in confirmation emails.
     const pctLabel = `Client discount (${(discount * 100).toFixed(discount * 100 % 1 === 0 ? 0 : 1)}%)`;
     breakdown.push({ label: pctLabel, amount: 0 });
+  }
+
+  // Per-step cost groups for the summary panel (display-only; the totals
+  // above stay authoritative). Each group renders under its summary row,
+  // resolved to the actual step id present in this config.
+  const stepIds: string[] = Array.isArray(args.config.steps)
+    ? args.config.steps.map((s: any) => s?.id).filter(Boolean)
+    : [];
+  const firstStepId = (...cands: string[]) => cands.find(c => stepIds.includes(c)) || '';
+  const keepFactor = 1 - discount;
+  const groups: PricingGroup[] = [];
+
+  const wmStepId = firstStepId('wm_tier', 'mgmt_tier');
+  if (wmStepId) {
+    const lines: PricingGroupLine[] = [];
+    if (wmOneTime > 0) lines.push({ label: 'Onboarding', amount: wmOneTime, recurring: false });
+    if (mgmtMonthly > 0) lines.push({ label: 'Monthly', amount: mgmtMonthly, recurring: true });
+    if (lines.length) groups.push({ stepId: wmStepId, lines });
+  }
+
+  const buildStepId = firstStepId('build_options', 'site_setup');
+  if (buildStepId && buildOneTime > 0) {
+    const pickedId = args.selections['build_options'];
+    const opt = pickedId ? buildOptionsArr.find((o: any) => o && o.id === pickedId) : null;
+    const sites = opt && Array.isArray(opt.wm_sites_added) ? opt.wm_sites_added : [];
+    const perSite: PricingGroupLine[] = [];
+    let sum = 0;
+    for (let i = 0; i < sites.length; i++) {
+      const s = sites[i];
+      const size = routeBuildSize({ build_total_pages: s?.page_count_estimate } as any);
+      const full = computeBuildTotal(size, 1);
+      if (!full) { perSite.length = 0; break; }
+      const base = i === 0 ? full : Math.round(full * 0.90 * 100) / 100;
+      const amount = Math.round(base * keepFactor * 100) / 100;
+      const name = (s?.label && String(s.label).trim()) ? String(s.label).trim() : 'Website';
+      perSite.push({ label: `${name} site`, amount, recurring: false });
+      sum = Math.round((sum + amount) * 100) / 100;
+    }
+    // Use the per-site lines only when they reconcile with the build
+    // total; otherwise fall back to one combined line so the panel always
+    // sums to the same one-time the totals row shows.
+    if (perSite.length > 0 && Math.abs(sum - buildOneTime) < 0.01) {
+      groups.push({ stepId: buildStepId, lines: perSite });
+    } else {
+      groups.push({ stepId: buildStepId, lines: [{ label: 'Website build', amount: buildOneTime, recurring: false }] });
+    }
+  }
+
+  const mcStepId = firstStepId('mc_yes_no', 'consulting');
+  if (mcStepId) {
+    const lines: PricingGroupLine[] = [];
+    if (mcOneTime > 0) lines.push({ label: 'Onboarding', amount: mcOneTime, recurring: false });
+    if (consultingMonthly > 0) lines.push({ label: 'Monthly', amount: consultingMonthly, recurring: true });
+    if (lines.length) groups.push({ stepId: mcStepId, lines });
   }
 
   return {
@@ -1115,6 +1181,7 @@ export function composePricing(args: {
     consultingTierName,
     siteSetupShortLabel: '',
     siteSetupLongLabel: '',
+    groups,
   };
 }
 

@@ -4,6 +4,23 @@ Standing instructions for Claude Code in this project. Read this first every ses
 
 ---
 
+## PRODUCTION SAFETY (read before any change)
+
+The portal is LIVE with real paying clients in it: Jason Roth and Kevin Adams (Raised Bar Group), and ZipKit Homes (Sven, Emree). Treat every change as a change to a product people are using right now.
+
+**Never test against production.** No test writes to the prod database or the live portal: no recompose or create POSTs, no admin API mutations (publish, status flips, draft writes), no manual database edits "just to check," no clicking flows that persist. Earlier sessions did exactly this. Stop.
+
+- Work happens **local** (your machine, a throwaway DB; logic checks via `tsx`) or on **staging** (a deployed mirror with its OWN Turso DB on a private URL). Staging is not built yet. Stand it up (a second DO app on a `staging` branch, a separate Turso DB, a private URL) before any testing that writes data. Until then, test locally.
+- **Production** (codyasmith.com) changes ONLY by merging a PR to main. Never poke it directly.
+- **Deploy is not release.** Ship unfinished or risky code to prod whenever, but keep it invisible to clients behind an admin/role gate or a feature flag until it is proven. `if (isAdmin)` is the crude version. Use it.
+- Schema only through backward-compatible migrations (expand, migrate, then contract). Never hand-edit prod's schema.
+- Know the rollback (DO redeploy the previous deployment) and that prod backups are on (Turso point-in-time recovery).
+- Never copy real client data into local or staging. Seed with fakes (the Cody Test client).
+
+Full version lives in memory as `nondestructive-prod-workflow`.
+
+---
+
 ## Who I am
 
 I am Cody Smith. I run Cody A Smith LLC. I work across two laptops. I push code and docs to GitHub to stay in sync between machines. I cannot afford drift between laptops, fabricated completion claims, or work that silently goes unpushed.
@@ -75,6 +92,8 @@ Run all six. If any step fails, STOP there and report the failure. Do not fake c
 - Do not run `clickup_update_task` on descriptions, comments only
 - Do not silently skip uncommitted files during end-of-session commit
 - Do not proceed past a failed verification step
+- Do not make test writes against the production portal or database (no recompose/create POSTs, admin API mutations, publish toggles, or manual DB edits to "check" something). Test locally or on staging.
+- Do not expose unfinished or unverified features to clients on prod; gate behind an admin/role check or feature flag until proven
 
 ---
 

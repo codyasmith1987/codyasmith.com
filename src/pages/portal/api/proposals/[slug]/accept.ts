@@ -464,9 +464,36 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
   const { ok, proposal } = await authorize(user, slug);
   if (!ok || !proposal) return json({ error: 'Forbidden' }, 403);
 
-  // Admin can preview but cannot persist or sign.
+  // Admin cannot persist or sign, but DOES get a read-only price
+  // preview: compute the totals for the posted selections in memory and
+  // return them without saving the draft, signing, or sending any email.
+  // This is the only way the owner can verify live totals on a proposal
+  // they review but never sign. Strictly read-only: no upsert, no
+  // finalize, no Brevo.
   if (user.role === 'admin') {
-    return json({ error: 'Admin preview mode. The proposal must be filled out and signed by an authorized signer.' }, 403);
+    let previewBody: any;
+    try { previewBody = await request.json(); } catch { previewBody = {}; }
+    const optionIndex = buildOptionIndex(proposal.config);
+    const previewSelections: Record<string, string | null> = {};
+    const incoming = previewBody && typeof previewBody.selections === 'object' && previewBody.selections
+      ? previewBody.selections
+      : {};
+    for (const stepId of Object.keys(incoming)) {
+      if (!(stepId in optionIndex)) continue;
+      const raw = incoming[stepId];
+      const v = raw === null || raw === undefined ? null : String(raw || '').toLowerCase().trim();
+      if (!v) { previewSelections[stepId] = null; continue; }
+      if (optionIndex[stepId].has(v)) previewSelections[stepId] = v;
+    }
+    const previewPricing = computePricing(proposal.config?.pricing_formula || '', previewSelections, proposal.config);
+    return json({
+      ok: true,
+      preview: true,
+      signer: 'admin',
+      pricing: previewPricing
+        ? { oneTime: previewPricing.oneTime, monthly: previewPricing.monthly, atSigning: previewPricing.atSigning }
+        : null,
+    });
   }
   const signer = identifySignerFromConfig(user.email || '', proposal.config?.signers || []);
   if (!signer) {

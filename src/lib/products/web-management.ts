@@ -47,7 +47,7 @@ export const WM_ECOSYSTEMS: Record<EcosystemId, Ecosystem> = {
         training_sessions: null,
         features: [
           'Hosting, daily backups, security and uptime monitoring on every site under management.',
-          'Monthly software updates at the contracted cadence.',
+          'Monthly updates at the contracted cadence.',
           'Pooled hours each month for hands-on site work.',
         ],
       },
@@ -63,8 +63,7 @@ export const WM_ECOSYSTEMS: Record<EcosystemId, Ecosystem> = {
         response_time: 'standard tier response window',
         training_sessions: null,
         features: [
-          'Everything in Good, plus bi-weekly software updates and performance optimization.',
-          'A monthly health report so you always know what is happening.',
+          'Everything in Good, plus bi-weekly updates and performance optimization.',
           'Pooled hours each month for active page work, copy edits, and image updates.',
         ],
       },
@@ -106,7 +105,7 @@ export const WM_ECOSYSTEMS: Record<EcosystemId, Ecosystem> = {
         training_sessions: null,
         features: [
           'Hosting, daily backups, security and uptime monitoring on every site under management.',
-          'Monthly software updates at the contracted cadence.',
+          'Monthly updates at the contracted cadence.',
           'Pooled hours each month for hands-on site work.',
         ],
       },
@@ -122,8 +121,7 @@ export const WM_ECOSYSTEMS: Record<EcosystemId, Ecosystem> = {
         response_time: 'standard tier response window',
         training_sessions: null,
         features: [
-          'Everything in Good, plus bi-weekly software updates and performance optimization.',
-          'A monthly health report so you always know what is happening.',
+          'Everything in Good, plus bi-weekly updates and performance optimization.',
           'Pooled hours each month for active page work, copy edits, and image updates.',
         ],
       },
@@ -165,7 +163,7 @@ export const WM_ECOSYSTEMS: Record<EcosystemId, Ecosystem> = {
         training_sessions: null,
         features: [
           'Hosting, daily backups, security and uptime monitoring on every site under management.',
-          'Monthly software updates at the contracted cadence.',
+          'Monthly updates at the contracted cadence.',
           'Pooled hours each month for hands-on site work.',
         ],
       },
@@ -181,8 +179,7 @@ export const WM_ECOSYSTEMS: Record<EcosystemId, Ecosystem> = {
         response_time: 'standard tier response window',
         training_sessions: null,
         features: [
-          'Everything in Good, plus bi-weekly software updates and performance optimization.',
-          'A monthly health report so you always know what is happening.',
+          'Everything in Good, plus bi-weekly updates and performance optimization.',
           'Pooled hours each month for active page work, copy edits, and image updates.',
         ],
       },
@@ -835,10 +832,10 @@ function buildWebManagementNarrative(ctx: ProductContext): NarrativeSnippetSet {
     what_i_see_paragraphs,
     what_i_recommend_paragraphs: [
       sites === 1
-        ? `<strong>Web Management</strong> for the site. The fee covers hosting, daily backups, security and uptime monitoring, software updates at the contracted cadence, and a pool of hands-on hours for site work. Unused hours do not roll over; that is the trade for a predictable monthly.`
+        ? `<strong>Web Management</strong> for the site. The fee covers hosting, daily backups, security and uptime monitoring, updates at the contracted cadence, and a pool of hands-on hours for site work. Unused hours do not roll over.`
         : waived
           ? `<strong>Web Management</strong> for all ${sites} sites under one engagement, billed per site, with the hands-on hours pooled across them. Onboarding is waived because these sites were already onboarded on the prior engagement.`
-          : `<strong>Web Management</strong> for all ${sites} sites under one engagement, billed per site, with the hands-on hours pooled into one monthly bucket you draw from wherever the work is.`,
+          : `<strong>Web Management</strong> for all ${sites} sites under one engagement, billed per site, with the hands-on hours pooled into one monthly bucket you draw from wherever the work is. The pool grows with each site; unused hours do not roll over.`,
     ],
   };
 }

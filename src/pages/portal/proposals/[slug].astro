@@ -1275,12 +1275,14 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
   }
 
   function saveDraft(payload) {
-    // Admin previews never POST.
+    // Real signers persist their picks. Admin hits the same endpoint for
+    // a read-only price preview (the server returns totals and saves
+    // nothing). Any other role does not touch the server at all.
     var validSigner = false;
     for (var i = 0; i < SIGNERS.length; i++) {
       if (SIGNERS[i].id === SIGNER_ROLE) { validSigner = true; break; }
     }
-    if (!validSigner) return Promise.resolve({ ok: true, data: { draft: null } });
+    if (!validSigner && SIGNER_ROLE !== 'admin') return Promise.resolve({ ok: true, data: { draft: null } });
     return fetch(DRAFT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrf() },
@@ -1723,12 +1725,15 @@ Cody Smith, Cody A Smith LLC. <a href="mailto:cody@codyasmith.com">cody@codyasmi
   }
 
   function persistSelections() {
-    // Only real signers POST; admin and other roles just render.
+    // Real signers persist their picks; admin gets a read-only price
+    // preview from the same call (the server saves nothing). Any other
+    // role just renders.
     var isReal = false;
     for (var i = 0; i < SIGNERS.length; i++) { if (SIGNERS[i].id === SIGNER_ROLE) { isReal = true; break; } }
-    if (!isReal) return;
+    if (!isReal && SIGNER_ROLE !== 'admin') return;
     // Send the full selections object. The server merges, validates,
-    // and re-emits authoritative draft state on the response.
+    // and re-emits authoritative draft state on the response. Admin gets
+    // pricing only (no draft echoed), so applyDraftToState is skipped.
     saveDraft({ selections: state.selections }).then(function(result) {
       if (result.ok && result.data) {
         if (result.data.draft) applyDraftToState(result.data.draft);

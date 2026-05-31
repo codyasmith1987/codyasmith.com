@@ -65,15 +65,15 @@ function run() {
 
   // Fused prices on the cards match the Fit Analysis.
   const better = bt?.options.find(o => o.id === 'better');
-  test('Better card monthly = $1,891.60', better?.price_label === '$1,891.60', `got ${better?.price_label}`);
+  test('Better card monthly = $1,941.30', better?.price_label === '$1,941.30', `got ${better?.price_label}`);
   test('Better card to-start = $8,925', /\$8,925\b/.test(better?.price_subline || ''), `got ${better?.price_subline}`);
   const good = bt?.options.find(o => o.id === 'good');
-  test('Good card monthly = $1,031.60', good?.price_label === '$1,031.60', `got ${good?.price_label}`);
+  test('Good card monthly = $1,061.30', good?.price_label === '$1,061.30', `got ${good?.price_label}`);
   test('Good card to-start = $7,925', /\$7,925\b/.test(good?.price_subline || ''), `got ${good?.price_subline}`);
   const best = bt?.options.find(o => o.id === 'best');
   test('Best card to-start = $10,625', /\$10,625\b/.test(best?.price_subline || ''), `got ${best?.price_subline}`);
   test('Better card carries fused features (WM + MC)', (better?.features || []).length >= 2);
-  test('Better card shows included hours', typeof better?.included_hours === 'number');
+  test('Better card shows included hours', typeof better?.included_hours === 'number' || typeof better?.included_hours_label === 'string');
 
   // Non-bundle mode unchanged: separate pickers, no bundle.
   test('non-bundle: no bundle on config', !plain.bundle);

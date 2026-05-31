@@ -42,7 +42,7 @@ function computeOptionBuildCost(sites: Array<{ page_count_estimate: number }>): 
   for (let i = 0; i < sites.length; i++) {
     const size = routeBuildSize({ build_total_pages: sites[i].page_count_estimate });
     const siteCost = computeBuildTotal(size, 1);
-    total += i === 0 ? siteCost : siteCost * 0.80;
+    total += i === 0 ? siteCost : siteCost * 0.90;
   }
   return Math.round(total * 100) / 100;
 }

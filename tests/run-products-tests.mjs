@@ -120,8 +120,8 @@ async function run() {
   // -------------------------------------------------------------------
   // WM tier card multi-site RANGE across build options (the hand-built
   // Raised Bar pattern). F3 takeover (6p, primary) + o1 (Builders 20p) /
-  // o2 (Builders 20p + Tailwater 6p). Better Eco A $497: o1 = 497 + 497*0.8
-  // = 894.60; o2 = 497 + 2*397.60 = 1292.20. Reproduces the 5/22 sample.
+  // o2 (Builders 20p + Tailwater 6p). Better Eco A $497: o1 = 497 + 497*0.9
+  // = 944.30; o2 = 497 + 2*447.30 = 1391.60 (10% multi-site discount).
   // -------------------------------------------------------------------
   {
     const rcfg = composeProposal({
@@ -141,15 +141,18 @@ async function run() {
     const rGood = wmStep && wmStep.options.find(o => o.id === 'good');
     const rBetter = wmStep && wmStep.options.find(o => o.id === 'better');
     const rBest = wmStep && wmStep.options.find(o => o.id === 'best');
-    test('WM range: Better card spans o1 $894.60 to o2 $1,292.20',
-      !!rBetter && /894\.60/.test(rBetter.price_label) && /1,292\.20/.test(rBetter.price_label),
+    test('WM range: Better card spans o1 $944.30 to o2 $1,391.60',
+      !!rBetter && /944\.30/.test(rBetter.price_label) && /1,391\.60/.test(rBetter.price_label),
       rBetter ? rBetter.price_label : '(no better card)');
-    test('WM range: Good card spans $534.60 to $772.20',
-      !!rGood && /534\.60/.test(rGood.price_label) && /772\.20/.test(rGood.price_label),
+    test('WM range: Good card spans $564.30 to $831.60',
+      !!rGood && /564\.30/.test(rGood.price_label) && /831\.60/.test(rGood.price_label),
       rGood ? rGood.price_label : '(no good card)');
-    test('WM range: Best card spans $1,164.60 to $1,682.20',
-      !!rBest && /1,164\.60/.test(rBest.price_label) && /1,682\.20/.test(rBest.price_label),
+    test('WM range: Best card spans $1,229.30 to $1,811.60',
+      !!rBest && /1,229\.30/.test(rBest.price_label) && /1,811\.60/.test(rBest.price_label),
       rBest ? rBest.price_label : '(no best card)');
+    test('WM range: Better card shows pooled hours range 6 to 9 (full hours per site)',
+      !!rBetter && /6 to 9 pooled hours/.test(rBetter.included_hours_label || ''),
+      rBetter ? rBetter.included_hours_label : '(no hours label)');
     test('WM range: subline shows one-time setup + depending on the option',
       !!rBetter && /800 one-time setup, depending on the option you pick/.test(rBetter.price_subline || ''),
       rBetter ? rBetter.price_subline : '');
@@ -163,19 +166,19 @@ async function run() {
   // Linear, no compounding. Same discount applies to monthly AND
   // onboarding.
   // -------------------------------------------------------------------
-  test('WM MULTI_SITE_DISCOUNT = 0.80', MULTI_SITE_DISCOUNT === 0.80);
+  test('WM MULTI_SITE_DISCOUNT = 0.90', MULTI_SITE_DISCOUNT === 0.90);
 
   // computeMultiSiteSum: per-site array of bases, primary first.
   test('WM sum: empty = 0', computeMultiSiteSum([]) === 0);
   test('WM sum: single site [797] = 797', computeMultiSiteSum([797]) === 797);
-  test('WM sum: 2 sites [797, 797] = 797 + 797*0.8 = 1434.6',
-    computeMultiSiteSum([797, 797]) === 1434.6,
+  test('WM sum: 2 sites [797, 797] = 797 + 797*0.9 = 1514.3',
+    computeMultiSiteSum([797, 797]) === 1514.3,
     `got ${computeMultiSiteSum([797, 797])}`);
   // Mixed ecosystem: primary Eco B Better $797, site2 Eco A Better
   // $497, site3 Eco C Better $1497. Per the locked formula:
-  // 797 + 497*0.8 + 1497*0.8 = 797 + 397.6 + 1197.6 = 2392.2
-  test('WM sum: mixed-eco [797, 497, 1497] = 2392.2',
-    computeMultiSiteSum([797, 497, 1497]) === 2392.2,
+  // 797 + 497*0.9 + 1497*0.9 = 797 + 447.3 + 1347.3 = 2591.6
+  test('WM sum: mixed-eco [797, 497, 1497] = 2591.6',
+    computeMultiSiteSum([797, 497, 1497]) === 2591.6,
     `got ${computeMultiSiteSum([797, 497, 1497])}`);
 
   // -------------------------------------------------------------------
@@ -188,11 +191,11 @@ async function run() {
     computeMultiSiteSumWithOverrides([]) === 0);
   test('override sum: single formula site = full base',
     computeMultiSiteSumWithOverrides([{ base: 797, isOverride: false }]) === 797);
-  test('override sum: 2 formula sites = primary + 0.80x additional',
+  test('override sum: 2 formula sites = primary + 0.90x additional',
     computeMultiSiteSumWithOverrides([
       { base: 797, isOverride: false },
       { base: 797, isOverride: false },
-    ]) === 1434.6);
+    ]) === 1514.3);
   test('override sum: pro-bono ($0) additional contributes nothing',
     computeMultiSiteSumWithOverrides([
       { base: 797, isOverride: false },
@@ -207,10 +210,10 @@ async function run() {
   test('override sum: mixed formula + override + pro-bono',
     computeMultiSiteSumWithOverrides([
       { base: 797, isOverride: false },  // primary, formula: 797
-      { base: 497, isOverride: false },  // additional formula: 497 * 0.8 = 397.6
-      { base: 500, isOverride: true },   // grandfathered: 500 (no 0.80)
+      { base: 497, isOverride: false },  // additional formula: 497 * 0.9 = 447.3
+      { base: 500, isOverride: true },   // grandfathered: 500 (no discount)
       { base: 0,   isOverride: true },   // pro-bono: 0
-    ]) === 1694.6,
+    ]) === 1744.3,
     `got ${computeMultiSiteSumWithOverrides([{base:797,isOverride:false},{base:497,isOverride:false},{base:500,isOverride:true},{base:0,isOverride:true}])}`);
   test('override sum: primary as override still gets full base (idx 0 always full)',
     computeMultiSiteSumWithOverrides([{ base: 1000, isOverride: true }]) === 1000);
@@ -240,11 +243,11 @@ async function run() {
   // as the sum form with all sites at the same base.
   test('WM monthly (legacy 1-eco): 1 site at base 497 = 497',
     computeMultiSiteMonthly(497, 1) === 497);
-  test('WM monthly (legacy 1-eco): 2 sites at base 497 = 894.6',
-    computeMultiSiteMonthly(497, 2) === 894.6,
+  test('WM monthly (legacy 1-eco): 2 sites at base 497 = 944.3',
+    computeMultiSiteMonthly(497, 2) === 944.3,
     `got ${computeMultiSiteMonthly(497, 2)}`);
-  test('WM monthly (legacy 1-eco): 3 sites at base 497 = 1292.2',
-    computeMultiSiteMonthly(497, 3) === 1292.2,
+  test('WM monthly (legacy 1-eco): 3 sites at base 497 = 1391.6',
+    computeMultiSiteMonthly(497, 3) === 1391.6,
     `got ${computeMultiSiteMonthly(497, 3)}`);
 
   // Onboarding now uses the SAME discount as monthly (per Cody's
@@ -252,11 +255,11 @@ async function run() {
   // per additional site, primary at full base.
   test('WM onboarding (locked formula): 1 site at base 1200 = 1200',
     computeMultiSiteOnboarding(1200, 1) === 1200);
-  test('WM onboarding (locked formula): 2 sites at base 1200 = 1200 + 0.8*1200 = 2160',
-    computeMultiSiteOnboarding(1200, 2) === 2160,
+  test('WM onboarding (locked formula): 2 sites at base 1200 = 1200 + 0.9*1200 = 2280',
+    computeMultiSiteOnboarding(1200, 2) === 2280,
     `got ${computeMultiSiteOnboarding(1200, 2)}`);
-  test('WM onboarding (locked formula): 3 sites at base 1200 = 1200 + 2*0.8*1200 = 3120',
-    computeMultiSiteOnboarding(1200, 3) === 3120,
+  test('WM onboarding (locked formula): 3 sites at base 1200 = 1200 + 2*0.9*1200 = 3360',
+    computeMultiSiteOnboarding(1200, 3) === 3360,
     `got ${computeMultiSiteOnboarding(1200, 3)}`);
 
   // buildPerSiteBases: given managedSites + tier + primary ecosystem,
@@ -318,14 +321,13 @@ async function run() {
     variables: { page_count: 80, site_count: 3 },
     otherProducts: [],
   });
-  // 797 + 2*0.8*797 = 797 + 1275.2 = 2072.2
-  test('WM 3 sites at Eco B Better (single-eco fallback): monthly = 2072.2',
-    wmPricing3Sites.monthly === 2072.2,
+  // 797 + 2*0.9*797 = 797 + 1434.6 = 2231.6
+  test('WM 3 sites at Eco B Better (single-eco fallback): monthly = 2231.6',
+    wmPricing3Sites.monthly === 2231.6,
     `got ${wmPricing3Sites.monthly}`);
-  // 1200 + 2*0.8*1200 = 1200 + 1920 = 3120 (locked formula, same
-  // discount as monthly; previously 3600 with full-base-per-site)
-  test('WM 3 sites at Eco B Better (single-eco fallback): onboarding = 3120',
-    wmPricing3Sites.oneTime === 3120,
+  // 1200 + 2*0.9*1200 = 1200 + 2160 = 3360 (same discount as monthly)
+  test('WM 3 sites at Eco B Better (single-eco fallback): onboarding = 3360',
+    wmPricing3Sites.oneTime === 3360,
     `got ${wmPricing3Sites.oneTime}`);
 
   // Per-site ecosystem path: managedSites with page_count values
@@ -341,11 +343,11 @@ async function run() {
       { domain: 'big.com', is_primary: false, page_count: 200 },      // Eco C
     ],
   });
-  test('WM 3 sites mixed-eco (Eco B/A/C) Better: monthly = 2392.2',
-    wmPricingMixed.monthly === 2392.2,
+  test('WM 3 sites mixed-eco (Eco B/A/C) Better: monthly = 2591.6',
+    wmPricingMixed.monthly === 2591.6,
     `got ${wmPricingMixed.monthly}`);
-  test('WM 3 sites mixed-eco (Eco B/A/C) Better: onboarding = 3440',
-    wmPricingMixed.oneTime === 3440,
+  test('WM 3 sites mixed-eco (Eco B/A/C) Better: onboarding = 3720',
+    wmPricingMixed.oneTime === 3720,
     `got ${wmPricingMixed.oneTime}`);
 
   // -------------------------------------------------------------------
@@ -372,18 +374,18 @@ async function run() {
     `got ${mcPricing.oneTime}`);
 
   // -------------------------------------------------------------------
-  // Build subsequent-build discount: first at full, each subsequent at 80%
+  // Build subsequent-build discount: first at full, each subsequent at 90%
   // -------------------------------------------------------------------
   test('Build small x1 = 5625', computeBuildTotal('small', 1) === 5625);
   test('Build mid x1 = 11875', computeBuildTotal('mid', 1) === 11875);
   test('Build large x1 = 22500', computeBuildTotal('large', 1) === 22500);
-  // small x2 = 5625 + 0.8*5625 = 10125
-  test('Build small x2 = 10125 (first full, second 80% of base)',
-    computeBuildTotal('small', 2) === 10125,
+  // small x2 = 5625 + 0.9*5625 = 10687.5
+  test('Build small x2 = 10687.5 (first full, second 90% of base)',
+    computeBuildTotal('small', 2) === 10687.5,
     `got ${computeBuildTotal('small', 2)}`);
-  // small x3 = 5625 + 2*0.8*5625 = 14625
-  test('Build small x3 = 14625',
-    computeBuildTotal('small', 3) === 14625,
+  // small x3 = 5625 + 2*0.9*5625 = 15750
+  test('Build small x3 = 15750',
+    computeBuildTotal('small', 3) === 15750,
     `got ${computeBuildTotal('small', 3)}`);
   test('Build with no size = 0', computeBuildTotal(null, 1) === 0);
 
@@ -1643,17 +1645,17 @@ async function run() {
   test('cross-product o1: oneTime = 1200 + 5625 = 6825 (no Build/WM delta)',
     o1Pricing.oneTime === 6825, `got ${o1Pricing?.oneTime}`);
 
-  // Pricing on o2: WM base 797 + added Eco A Better site at 0.80
-  // (497 * .80 = 397.60) = 1194.60; Build base 5625 +
-  // pricing_delta 4500 = 10125; WM onboarding remains 1200 because
-  // the build fee replaces WM onboarding for the built micro-site.
+  // Pricing on o2: WM base 797 + added Eco A Better site at 0.90
+  // (497 * .90 = 447.30) = 1244.30; Build base 5625 +
+  // fixture pricing_delta 4500 = 10125; WM onboarding remains 1200
+  // because the build fee replaces WM onboarding for the built site.
   const o2Pricing = computePricing(
     jasonCfg.pricing_formula,
     { wm_tier: 'better', build_options: 'o2' },
     jasonCfg,
   );
-  test('cross-product o2: monthly = 1194.6 (WM tier-selected dynamic added site)',
-    o2Pricing.monthly === 1194.6, `got ${o2Pricing?.monthly}`);
+  test('cross-product o2: monthly = 1244.3 (WM tier-selected dynamic added site)',
+    o2Pricing.monthly === 1244.3, `got ${o2Pricing?.monthly}`);
   test('cross-product o2: oneTime = 1200 + 5625 + 4500 = 11325 (build replaces added-site WM onboarding)',
     o2Pricing.oneTime === 11325, `got ${o2Pricing?.oneTime}`);
   test('cross-product o2: breakdown does not include legacy static WM adjustment lines',
@@ -1685,7 +1687,7 @@ async function run() {
     `got ${o2Schedule.web_management?.site_count}`);
   const microRow = o2WmSites.find(s => (s.domain || '').includes('micro.example.com'));
   test('cross-product o2: added build site has dynamic monthly contribution at selected tier',
-    microRow?.monthly_contribution === 397.6,
+    microRow?.monthly_contribution === 447.3,
     `got ${JSON.stringify(microRow)}`);
   test('cross-product o2: added build site has zero WM onboarding contribution',
     microRow?.onboarding_contribution === 0,

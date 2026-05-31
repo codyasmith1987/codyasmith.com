@@ -107,7 +107,7 @@ const productManifest = PRODUCT_ORDER.map(id => {
 // src/lib/products/build.ts BUILD_FEES + SUBSEQUENT_BUILD_DISCOUNT;
 // these values must stay in sync.
 const BUILD_FEES = { small: 5625, mid: 11875, large: 22500 };
-const BUILD_SUBSEQUENT_DISCOUNT = 0.20;
+const BUILD_SUBSEQUENT_DISCOUNT = 0.10;
 
 const todayLong = new Date().toLocaleDateString('en-US', {
   year: 'numeric', month: 'long', day: 'numeric',
@@ -1631,7 +1631,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
         // is treated as fully self-contained: the option's sites
         // define the entire build for that option, not extras on
         // top of a base. First site = full BUILD_FEES[size]; each
-        // subsequent site = × 0.80 (subsequent-build discount,
+        // subsequent site = × 0.90 (subsequent-build discount,
         // matches src/lib/products/build.ts SUBSEQUENT_BUILD_DISCOUNT).
         let optionBuildCost = 0;
         let buildSkipped = 0;
@@ -1644,13 +1644,13 @@ const todayISO = new Date().toISOString().slice(0, 10);
             buildSkipped++;
             continue;
           }
-          // First valid site = full fee. Each subsequent = × 0.80.
+          // First valid site = full fee. Each subsequent = × 0.90.
           const fee = buildIdx === 0
             ? BUILD_FEES[sizeId]
             : BUILD_FEES[sizeId] * (1 - BUILD_SUBSEQUENT_DISCOUNT);
           optionBuildCost += fee;
           const labelText = site.label || site.domain || '(new site)';
-          const tag = buildIdx === 0 ? 'first build' : 'subsequent (-20%)';
+          const tag = buildIdx === 0 ? 'first build' : 'subsequent (-10%)';
           buildBreakdownParts.push(`${labelText} ${sizeId} build $${Math.round(fee).toLocaleString()} ${tag}`);
           buildIdx++;
         }
@@ -2076,7 +2076,7 @@ const todayISO = new Date().toISOString().slice(0, 10);
       wrap.appendChild(header);
       const desc = document.createElement('p');
       desc.className = 'text-[11px] text-neutral-400 mb-3 leading-relaxed';
-      desc.textContent = 'Each site routes to its own ecosystem by its own page count. Primary pays full base. Each additional site pays 0.80 of its own ecosystem base. Empty page count falls back to the primary site’s ecosystem for that site.';
+      desc.textContent = 'Each site routes to its own ecosystem by its own page count. Primary pays full base. Each additional site pays 0.90 of its own ecosystem base. Empty page count falls back to the primary site’s ecosystem for that site.';
       wrap.appendChild(desc);
 
       const sorted = [...managedSites].sort((a, b) => {

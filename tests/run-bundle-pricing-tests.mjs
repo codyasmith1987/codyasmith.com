@@ -13,8 +13,8 @@
 // add-on, with and without a client discount.
 //
 // Verified targets (Ecosystem A WM 297/497/647 + Ecosystem B MC
-// 497/997/1497, 0.80 multi-site, build-produced sites onboarding-waived):
-//   monthly  Good 1,031.60  Better 1,891.60  Best 2,661.60
+// 497/997/1497, 0.90 multi-site, build-produced sites onboarding-waived):
+//   monthly  Good 1,061.30  Better 1,941.30  Best 2,726.30
 //   to start Good 7,925     Better 8,925     Best 10,625
 // Runs via tsx because the modules are TypeScript.
 
@@ -52,8 +52,8 @@ function bundleConfig(discount_rate = 0) {
           {
             id: 'rb_tailwater',
             name: 'Add the Tailwater pre-sell site',
-            pitch: 'A dedicated Tailwater pre-sell micro-site alongside the two managed sites.',
-            pricing_delta: 4500,
+            pitch: 'A dedicated Tailwater pre-sell site alongside the two managed sites.',
+            pricing_delta: 5062.50,
             wm_sites_added: [{ domain: 'tailwaterhailey.com', label: 'Tailwater', page_count_estimate: 20 }],
           },
         ],
@@ -77,12 +77,12 @@ function bundleConfig(discount_rate = 0) {
 // Expected per (tier, addon). monthly = WM(sites,tier) + MC(tier);
 // oneTime = WM onboarding + MC audit + build fee.
 const CASES = [
-  { tier: 'good',   addon: 'skip', monthly: 1031.60, oneTime: 7925,  wmMonthly: 534.60,  wmOnb: 800,  sites: 2, mcRetainer: 497,  mcAudit: 1500 },
-  { tier: 'better', addon: 'skip', monthly: 1891.60, oneTime: 8925,  wmMonthly: 894.60,  wmOnb: 800,  sites: 2, mcRetainer: 997,  mcAudit: 2500 },
-  { tier: 'best',   addon: 'skip', monthly: 2661.60, oneTime: 10625, wmMonthly: 1164.60, wmOnb: 1000, sites: 2, mcRetainer: 1497, mcAudit: 4000 },
-  { tier: 'good',   addon: 'add',  monthly: 1269.20, oneTime: 12425, wmMonthly: 772.20,  wmOnb: 800,  sites: 3, mcRetainer: 497,  mcAudit: 1500 },
-  { tier: 'better', addon: 'add',  monthly: 2289.20, oneTime: 13425, wmMonthly: 1292.20, wmOnb: 800,  sites: 3, mcRetainer: 997,  mcAudit: 2500 },
-  { tier: 'best',   addon: 'add',  monthly: 3179.20, oneTime: 15125, wmMonthly: 1682.20, wmOnb: 1000, sites: 3, mcRetainer: 1497, mcAudit: 4000 },
+  { tier: 'good',   addon: 'skip', monthly: 1061.30, oneTime: 7925,     wmMonthly: 564.30,  wmOnb: 800,  sites: 2, mcRetainer: 497,  mcAudit: 1500 },
+  { tier: 'better', addon: 'skip', monthly: 1941.30, oneTime: 8925,     wmMonthly: 944.30,  wmOnb: 800,  sites: 2, mcRetainer: 997,  mcAudit: 2500 },
+  { tier: 'best',   addon: 'skip', monthly: 2726.30, oneTime: 10625,    wmMonthly: 1229.30, wmOnb: 1000, sites: 2, mcRetainer: 1497, mcAudit: 4000 },
+  { tier: 'good',   addon: 'add',  monthly: 1328.60, oneTime: 12987.50, wmMonthly: 831.60,  wmOnb: 800,  sites: 3, mcRetainer: 497,  mcAudit: 1500 },
+  { tier: 'better', addon: 'add',  monthly: 2388.60, oneTime: 13987.50, wmMonthly: 1391.60, wmOnb: 800,  sites: 3, mcRetainer: 997,  mcAudit: 2500 },
+  { tier: 'best',   addon: 'add',  monthly: 3308.60, oneTime: 15687.50, wmMonthly: 1811.60, wmOnb: 1000, sites: 3, mcRetainer: 1497, mcAudit: 4000 },
 ];
 
 function run() {
@@ -134,7 +134,7 @@ function run() {
     const pricing = computePricing('product_driven_v1', raw, config10);
     const sa = buildScheduleA({ proposalConfig: config10, draftSelections: raw, pricing, clientMetadata: {}, effectiveDate: '2026-06-01' });
     const saMonthly = (sa.web_management?.monthly_total ?? 0) + (sa.marketing_consulting?.monthly_retainer ?? 0);
-    test('discount 10%: price path monthly = 1702.44', near(pricing?.monthly, 1702.44), `got ${pricing?.monthly}`);
+    test('discount 10%: price path monthly = 1747.17', near(pricing?.monthly, 1747.17), `got ${pricing?.monthly}`);
     test('discount 10%: price/Schedule A monthly parity', near(pricing?.monthly, saMonthly), `price ${pricing?.monthly} vs schedule ${saMonthly}`);
   }
 

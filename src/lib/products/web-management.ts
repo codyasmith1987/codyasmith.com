@@ -32,7 +32,7 @@ export const WM_ECOSYSTEMS: Record<EcosystemId, Ecosystem> = {
     id: 'A',
     label: 'Ecosystem A',
     band: 'Under 30 pages',
-    multi_unit_monthly_discount: 0.80,
+    multi_unit_monthly_discount: 0.90,
     multi_unit_onb_discount: 1.0, // per-site full base; no discount on onboarding
     tiers: {
       good: {
@@ -90,7 +90,7 @@ export const WM_ECOSYSTEMS: Record<EcosystemId, Ecosystem> = {
     id: 'B',
     label: 'Ecosystem B',
     band: '30 to 150 pages',
-    multi_unit_monthly_discount: 0.80,
+    multi_unit_monthly_discount: 0.90,
     multi_unit_onb_discount: 1.0,
     tiers: {
       good: {
@@ -148,7 +148,7 @@ export const WM_ECOSYSTEMS: Record<EcosystemId, Ecosystem> = {
     id: 'C',
     label: 'Ecosystem C',
     band: '150 or more pages',
-    multi_unit_monthly_discount: 0.80,
+    multi_unit_monthly_discount: 0.90,
     multi_unit_onb_discount: 1.0,
     tiers: {
       good: {
@@ -329,7 +329,7 @@ export const WM_ECOSYSTEM_CLAUSE =
 // contributes its base × MULTI_SITE_DISCOUNT. Linear, no compounding.
 // Same discount applies to monthly and onboarding.
 
-export const MULTI_SITE_DISCOUNT = 0.80;
+export const MULTI_SITE_DISCOUNT = 0.90;
 
 // Sum a per-site array of bases with the multi-site discount. The
 // FIRST element is the primary (full base); the rest are additional
@@ -465,6 +465,7 @@ export function buildPerSiteBases(args: {
 }): {
   monthlyBases: number[];
   onboardingBases: number[];
+  hoursBases: number[];
   monthlyPerSite: PerSiteBase[];
   onboardingPerSite: PerSiteBase[];
 } {
@@ -475,6 +476,7 @@ export function buildPerSiteBases(args: {
   });
   const monthlyBases: number[] = [];
   const onboardingBases: number[] = [];
+  const hoursBases: number[] = [];
   const monthlyPerSite: PerSiteBase[] = [];
   const onboardingPerSite: PerSiteBase[] = [];
   for (const site of sorted) {
@@ -494,10 +496,14 @@ export function buildPerSiteBases(args: {
     const onbBase = onbIsOverride ? site.onboarding_override! : formulaOnb;
     monthlyBases.push(monthlyBase);
     onboardingBases.push(onbBase);
+    // Hours are NOT discounted (Cody 2026-05-30): each site contributes
+    // its full tier hours, pooled across all sites. So a multi-site
+    // client's pool = the simple sum of every site's full tier hours.
+    hoursBases.push(tier?.hours || 0);
     monthlyPerSite.push({ base: monthlyBase, isOverride: monthlyIsOverride });
     onboardingPerSite.push({ base: onbBase, isOverride: onbIsOverride });
   }
-  return { monthlyBases, onboardingBases, monthlyPerSite, onboardingPerSite };
+  return { monthlyBases, onboardingBases, hoursBases, monthlyPerSite, onboardingPerSite };
 }
 
 // Apply a picked BuildOption's wm_site_modifications to a managedSites
@@ -641,7 +647,7 @@ function baseManagedSitesForBuildOption(args: ProductContext): ManagedSiteForPri
 // A multi-site WM monthly + onboarding range across build options. min===max
 // means a single value (one option, or all options the same total).
 interface TierMoneyRange {
-  monthlyMin: number; monthlyMax: number; onbMin: number; onbMax: number;
+  monthlyMin: number; monthlyMax: number; onbMin: number; onbMax: number; hoursMin: number; hoursMax: number;
 }
 
 // Money formatter that shows cents only when present ($894.60), whole
@@ -690,18 +696,20 @@ function buildTierOption(args: {
   // is present. Path B: legacy single-eco fallback otherwise.
   let monthly: number;
   let onb: number;
+  let cardHours: number;
   let perSiteBreakdown: string | null = null;
   const hasPerSiteData = Array.isArray(args.managedSites)
     && args.managedSites.length > 0
     && args.managedSites.some(s => s.page_count != null);
   if (hasPerSiteData) {
-    const { monthlyPerSite, onboardingPerSite } = buildPerSiteBases({
+    const { monthlyPerSite, onboardingPerSite, hoursBases } = buildPerSiteBases({
       managedSites: args.managedSites!,
       tierId: args.tierId,
       primaryEcosystemId: args.ecosystem.id,
     });
     monthly = computeMultiSiteSumWithOverrides(monthlyPerSite);
     onb = computeMultiSiteSumWithOverrides(onboardingPerSite);
+    cardHours = hoursBases.reduce((a, b) => a + b, 0);
     // Build the per-site breakdown line for the features list.
     // Primary's contribution + each additional site's contribution.
     // Overridden sites contribute their override amount as-is; non-
@@ -721,6 +729,9 @@ function buildTierOption(args: {
   } else {
     monthly = computeMultiSiteMonthly(tier.monthly || 0, args.sites);
     onb = computeMultiSiteOnboarding(tier.onb || 0, args.sites);
+    // Hours pool at full rate per site (no discount): full tier hours
+    // times the site count.
+    cardHours = (tier.hours || 0) * Math.max(1, args.sites);
   }
 
   // AI's per-prospect tier recommendation overrides the static product
@@ -749,7 +760,7 @@ function buildTierOption(args: {
   // show min-to-max monthly + a "depending on your site setup" subline. Takes
   // precedence over the single-total path above when supplied.
   if (args.range) {
-    const { monthlyMin, monthlyMax, onbMin, onbMax } = args.range;
+    const { monthlyMin, monthlyMax, onbMin, onbMax, hoursMin, hoursMax } = args.range;
     const isMonthlyRange = Math.round(monthlyMin * 100) !== Math.round(monthlyMax * 100);
     const onbLabel = (Math.round(onbMin * 100) !== Math.round(onbMax * 100))
       ? `${formatMoneyAuto(onbMin)} – ${formatMoneyAuto(onbMax)} one-time setup`
@@ -767,7 +778,10 @@ function buildTierOption(args: {
       price_subline: args.waiveOnboarding
         ? 'Setup waived'
         : (isMonthlyRange ? `${onbLabel}, depending on the option you pick` : onbLabel),
-      included_hours: tier.hours,
+      included_hours: hoursMin === hoursMax ? hoursMin : undefined,
+      included_hours_label: hoursMin === hoursMax
+        ? undefined
+        : `${hoursMin} to ${hoursMax} pooled hours per month, depending on the option you pick`,
       features: tier.features ? [...tier.features] : [],
     };
   }
@@ -787,7 +801,7 @@ function buildTierOption(args: {
       : (args.sites > 1
           ? `${formatMoney(onb)} one-time setup, ${args.sites} sites`
           : `${formatMoney(onb)} one-time setup`),
-    included_hours: tier.hours,
+    included_hours: cardHours,
     features,
   };
 }
@@ -911,12 +925,13 @@ export const webManagementProduct: ProductDefinition = {
       const totals = rangeSiteLists
         .filter(sl => sl && sl.length > 0 && sl.some(s => s.page_count != null))
         .map(sl => {
-          const { monthlyPerSite, onboardingPerSite } = buildPerSiteBases({ managedSites: sl, tierId, primaryEcosystemId: ctx.ecosystemId! });
-          return { monthly: computeMultiSiteSumWithOverrides(monthlyPerSite), onb: computeMultiSiteSumWithOverrides(onboardingPerSite) };
+          const { monthlyPerSite, onboardingPerSite, hoursBases } = buildPerSiteBases({ managedSites: sl, tierId, primaryEcosystemId: ctx.ecosystemId! });
+          const hours = hoursBases.reduce((a, b) => a + b, 0);
+          return { monthly: computeMultiSiteSumWithOverrides(monthlyPerSite), onb: computeMultiSiteSumWithOverrides(onboardingPerSite), hours };
         });
       if (totals.length === 0) return undefined;
-      const m = totals.map(t => t.monthly), o = totals.map(t => t.onb);
-      return { monthlyMin: Math.min(...m), monthlyMax: Math.max(...m), onbMin: Math.min(...o), onbMax: Math.max(...o) };
+      const m = totals.map(t => t.monthly), o = totals.map(t => t.onb), h = totals.map(t => t.hours);
+      return { monthlyMin: Math.min(...m), monthlyMax: Math.max(...m), onbMin: Math.min(...o), onbMax: Math.max(...o), hoursMin: Math.min(...h), hoursMax: Math.max(...h) };
     };
     const step: ProposalStep = {
       id: 'wm_tier',
@@ -1036,6 +1051,7 @@ export const webManagementProduct: ProductDefinition = {
     };
     let siteRows: SiteRow[];
     let sites: number;
+    let pooledHours: number;
     const effectiveManagedSites = applyBuildOptionManagedSiteChanges({
       managedSites: baseManagedSitesForBuildOption(ctx),
       allProductVars: ctx.allProductVars,
@@ -1085,6 +1101,14 @@ export const webManagementProduct: ProductDefinition = {
         };
       });
       sites = sorted.length;
+      // Pooled hours = sum of every site's FULL tier hours (no discount,
+      // each by that site's own ecosystem+tier). Cody 2026-05-30.
+      pooledHours = sorted.reduce((sum, s) => {
+        const siteEco = s.page_count != null
+          ? (routeWebManagementEcosystem(s.page_count) || ctx.ecosystemId!)
+          : ctx.ecosystemId!;
+        return sum + (WM_ECOSYSTEMS[siteEco]?.tiers[ctx.tierId!]?.hours || 0);
+      }, 0);
     } else {
       sites = numberFromVar(ctx.variables.site_count, 1);
       // No per-site data; placeholder rows at primary's ecosystem.
@@ -1101,6 +1125,7 @@ export const webManagementProduct: ProductDefinition = {
           is_primary: i === 0,
         };
       });
+      pooledHours = (tier.hours || 0) * Math.max(1, sites);
     }
     return {
       products_purchased: { web_management: true },
@@ -1111,7 +1136,7 @@ export const webManagementProduct: ProductDefinition = {
         site_count: sites,
         monthly_base: tier.monthly || 0,
         monthly_total: Math.round(pricing.monthly * 100) / 100,
-        included_hours: tier.hours || 0,
+        included_hours: pooledHours,
         onboarding_fee: waived ? 0 : (tier.onb || 0),
         onboarding_total: Math.round(pricing.oneTime * 100) / 100,
         update_cadence: tier.update_cadence || 'monthly',
@@ -1121,7 +1146,7 @@ export const webManagementProduct: ProductDefinition = {
         // cadence across all sites under one agreement.
         billing_cadence_note: 'Per-site Web Management monthly fees are prorated at each site\'s go-live date to align with this engagement\'s monthly billing cadence. All sites under this agreement bill on the same monthly date thereafter, on one consolidated invoice.',
       },
-      hours_addendum: { included_hours: tier.hours || 0 },
+      hours_addendum: { included_hours: pooledHours },
       pass_through_items: siteRows.map(site => ({
         name: `Plugin and software management (${site.domain})`,
         monthly_cost: 15,

@@ -3,7 +3,7 @@
 // Project pricing per build-and-rush-pricing.md and 05 Section 2.
 // Fixed-fee per site by size band. Replaces onboarding for the site it
 // produces. Site moves to Web Management retainer at launch. Subsequent
-// builds in the same engagement at 20 percent off the first.
+// builds in the same engagement at 10 percent off the first.
 //
 // Per Cody's directive: site_setup-style binary pickers are NOT a
 // primary step. They only appear when Build is in scope AND the build
@@ -72,7 +72,7 @@ const BUILD_FEES: Record<string, number> = {
   large: 22500,
 };
 
-const SUBSEQUENT_BUILD_DISCOUNT = 0.20; // 20% off for builds 2+
+const SUBSEQUENT_BUILD_DISCOUNT = 0.10; // 10% off for builds 2+
 
 // =========================================================================
 // Variable schema

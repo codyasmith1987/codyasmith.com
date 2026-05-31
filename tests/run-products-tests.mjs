@@ -109,10 +109,11 @@ async function run() {
       deriveEcosystemCeilings([{ domain: 'x.com', page_count: null }], 'A').length === 1);
     test('ceilings: empty input -> empty', deriveEcosystemCeilings([]).length === 0);
 
-    test('clause: WM_ECOSYSTEM_CLAUSE defines all three bands + written notice + per-site',
-      WM_ECOSYSTEM_CLAUSE.includes('Ecosystem A') && WM_ECOSYSTEM_CLAUSE.includes('fewer than 30')
+    test('clause: WM_ECOSYSTEM_CLAUSE defines all three bands + written notice + per-site, no Ecosystem label',
+      WM_ECOSYSTEM_CLAUSE.includes('size band') && WM_ECOSYSTEM_CLAUSE.includes('fewer than 30')
       && WM_ECOSYSTEM_CLAUSE.includes('30 to 150') && WM_ECOSYSTEM_CLAUSE.includes('150 or more')
-      && WM_ECOSYSTEM_CLAUSE.includes('written notice') && WM_ECOSYSTEM_CLAUSE.includes('per site'),
+      && WM_ECOSYSTEM_CLAUSE.includes('written notice') && WM_ECOSYSTEM_CLAUSE.includes('per site')
+      && !WM_ECOSYSTEM_CLAUSE.includes('Ecosystem') && !WM_ECOSYSTEM_CLAUSE.includes('re-route'),
       WM_ECOSYSTEM_CLAUSE.slice(0, 80));
   }
 
@@ -149,8 +150,8 @@ async function run() {
     test('WM range: Best card spans $1,164.60 to $1,682.20',
       !!rBest && /1,164\.60/.test(rBest.price_label) && /1,682\.20/.test(rBest.price_label),
       rBest ? rBest.price_label : '(no best card)');
-    test('WM range: subline shows onboarding + depending on site setup',
-      !!rBetter && /800 onboarding, depending on your site setup/.test(rBetter.price_subline || ''),
+    test('WM range: subline shows one-time setup + depending on the option',
+      !!rBetter && /800 one-time setup, depending on the option you pick/.test(rBetter.price_subline || ''),
       rBetter ? rBetter.price_subline : '');
   }
 

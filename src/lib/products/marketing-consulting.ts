@@ -437,7 +437,7 @@ export const marketingConsultingProduct: ProductDefinition = {
           {
             id: 'no',
             name: 'Skip Marketing Consulting for now',
-            html: `Keep the engagement focused on the other products picked above. You can add Marketing Consulting later at any time without re-papering.`,
+            html: `Keep the engagement focused on the other products picked above. You can add Marketing Consulting later at any time, with no new contract required.`,
           },
           {
             id: 'yes',

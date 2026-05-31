@@ -117,7 +117,7 @@ function generateBundleSteps(bundle: BundleConfig, contexts: Record<ProductId, P
       recommended: level === 'better',
       price_label: pricing ? bundleMoney(pricing.monthly) : undefined,
       price_suffix: '/ month',
-      price_subline: pricing ? `${bundleMoney(pricing.oneTime)} to start` : undefined,
+      price_subline: pricing ? `${bundleMoney(pricing.oneTime)} at signing` : undefined,
       included_hours: wmOpt?.included_hours,
       features,
     };
@@ -127,7 +127,7 @@ function generateBundleSteps(bundle: BundleConfig, contexts: Record<ProductId, P
     id: 'bundle_tier',
     type: 'tier_picker',
     h2: 'Pick your engagement level',
-    prompt: 'Each level sets both your web management and your marketing consulting in one number. Better is the recommendation.',
+    prompt: 'Each level sets your web management and your marketing consulting together. Better fits most clients.',
     options,
   }];
 
@@ -138,8 +138,8 @@ function generateBundleSteps(bundle: BundleConfig, contexts: Record<ProductId, P
       h2: bundle.addon.label,
       prompt: 'An optional add-on, on top of the level you pick above.',
       options: [
-        { id: 'skip', name: 'Not now', html: 'Keep the unified setup. You can add this later without re-papering.' },
-        { id: 'add', name: `Add ${bundle.addon.label}`, html: 'Splits this into its own dedicated site with its own build. Adds to your to-start and your monthly while it runs.' },
+        { id: 'skip', name: 'Not now', html: 'Keep the unified setup. You can add this later, with no new contract required.' },
+        { id: 'add', name: `Add ${bundle.addon.label}`, html: 'Splits this into its own dedicated site with its own build. Adds to your at-signing total and your monthly while it runs.' },
       ],
     });
   }

@@ -412,7 +412,7 @@ function renderScheduleAPage(doc: any, s: ScheduleA): void {
   // Schedule A, mirroring the HTML render so the archived PDF carries the
   // same protective terms.
   if (s.wm_ecosystem_clause) {
-    doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.13 Ecosystem and page ceiling');
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.13 Site size and page ceiling');
     doc.font('Helvetica').fontSize(10).fillColor('#222').text(s.wm_ecosystem_clause);
     doc.moveDown(0.5);
   }

@@ -108,10 +108,10 @@ function run() {
       /already on file|continues where we left off|already been onboarded|already onboarded/i.test(waived));
 
     // Tier cards: WM + MC sublines must not advertise a fee when waived.
-    test('Tier cards: default WM card shows a "$X onboarding" subline', /\$[\d,]+ onboarding/i.test(plain));
-    test('Tier cards (waived): no "$X onboarding" subline anywhere', !/\$[\d,]+ onboarding/i.test(waived),
-      'waived config still shows a dollar onboarding amount on a tier card');
-    test('Tier cards (waived): WM card shows "Onboarding waived"', /Onboarding waived/i.test(waived));
+    test('Tier cards: default WM card shows a "$X one-time setup" subline', /\$[\d,]+ one-time setup/i.test(plain));
+    test('Tier cards (waived): no "$X one-time setup" subline anywhere', !/\$[\d,]+ one-time setup/i.test(waived),
+      'waived config still shows a dollar setup amount on a tier card');
+    test('Tier cards (waived): WM card shows "Setup waived"', /Setup waived/i.test(waived));
   }
 
   const failed = results.filter(r => !r.pass);

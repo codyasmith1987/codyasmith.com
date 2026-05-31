@@ -398,7 +398,7 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
   // when WM is in scope (the WM contribution sets wm_ecosystem_clause). The
   // A.5 per-site table above still shows NO ecosystem column (de-leak intact).
   if (scheduleA.wm_ecosystem_clause) {
-    parts.push(`<h3>A.13 Ecosystem and page ceiling</h3>`);
+    parts.push(`<h3>A.13 Site size and page ceiling</h3>`);
     parts.push(`<p>${escapeHtml(scheduleA.wm_ecosystem_clause)}</p>`);
   }
 

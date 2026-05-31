@@ -55,10 +55,14 @@ export interface TierDefaults {
   update_cadence?: string;               // 'monthly' | 'bi-weekly' | 'weekly' | etc.
   response_time?: string;                // free-text description per tier
   training_sessions?: number | null;     // quarterly training sessions included
-  call_frequency?: string;               // consulting call cadence
-  advisories?: string;                   // deep-advisory cadence per cycle
-  reporting?: string;                    // reporting cadence
-  hiring_guidance?: boolean;             // consulting hiring guidance included
+  call_frequency?: string;               // consulting scheduled-call cadence
+  advisories?: string;                   // research-advisory cadence per cycle
+  reporting?: string;                    // monthly performance report cadence
+  hiring_guidance?: boolean;             // legacy; folded into operations_consulting
+  access_pool?: string;                  // consulting direct phone access per month
+  portal_reporting_access?: boolean;     // live portal reporting access included
+  operations_consulting?: boolean;       // Best tier, Ecosystem B/C only
+  includes_research?: boolean;           // tier runs research advisories (Better/Best)
 }
 
 export interface Ecosystem<E extends EcosystemId = EcosystemId> {
@@ -261,6 +265,12 @@ export interface ProductScheduleAContribution {
   // Web Management ecosystem + page-ceiling disclosure clause (Schedule A
   // A.13). Set by the WM contribution; the renderer prints it verbatim.
   wm_ecosystem_clause?: string;
+  // Marketing Consulting research-ownership/methodology clause (Schedule A
+  // A.14) and scope-limit clause (A.15). Set by the MC contribution; the
+  // renderer prints them verbatim. Ownership clause is present only when
+  // the tier runs research advisories.
+  mc_research_ownership_clause?: string;
+  mc_scope_clause?: string;
 }
 
 // =========================================================================

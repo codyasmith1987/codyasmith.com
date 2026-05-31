@@ -294,11 +294,17 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
     parts.push('<ul>');
     parts.push(`<li>Tier: <strong>${escapeHtml(mc.tier_name || '')}</strong></li>`);
     if (mc.monthly_retainer) parts.push(`<li>Monthly retainer: ${fmtMoney(mc.monthly_retainer)}</li>`);
-    if (mc.initial_audit_fee) parts.push(`<li>Initial audit fee: ${fmtMoney(mc.initial_audit_fee)}</li>`);
-    if (mc.strategy_call_frequency) parts.push(`<li>Strategy call frequency: ${escapeHtml(mc.strategy_call_frequency)}</li>`);
-    if (mc.deep_advisories_per_cycle) parts.push(`<li>Deep advisories per cycle: ${escapeHtml(mc.deep_advisories_per_cycle)}</li>`);
-    if (mc.performance_reporting_cadence) parts.push(`<li>Performance reporting cadence: ${escapeHtml(mc.performance_reporting_cadence)}</li>`);
-    parts.push(`<li>Hiring guidance: ${mc.hiring_guidance ? 'included' : 'not included'}</li>`);
+    if (mc.initial_audit_fee) parts.push(`<li>Fee at signing (month-one discovery and research): ${fmtMoney(mc.initial_audit_fee)}</li>`);
+    if (mc.access_pool) parts.push(`<li>Direct phone access: ${escapeHtml(mc.access_pool)}</li>`);
+    if (mc.strategy_call_frequency) parts.push(`<li>Scheduled strategy call: ${escapeHtml(mc.strategy_call_frequency)}</li>`);
+    if (mc.deep_advisories_per_cycle) parts.push(`<li>Research advisories: ${escapeHtml(mc.deep_advisories_per_cycle)}</li>`);
+    if (mc.performance_reporting_cadence) parts.push(`<li>Performance reporting: ${escapeHtml(mc.performance_reporting_cadence)}</li>`);
+    if (mc.portal_reporting_access !== undefined) parts.push(`<li>Portal reporting access: ${mc.portal_reporting_access ? 'included' : 'not included'}</li>`);
+    if (mc.operations_consulting !== undefined) {
+      parts.push(`<li>Operations consulting: ${mc.operations_consulting ? 'included' : 'not included'}</li>`);
+    } else if (mc.hiring_guidance !== undefined) {
+      parts.push(`<li>Hiring guidance: ${mc.hiring_guidance ? 'included' : 'not included'}</li>`);
+    }
     parts.push('</ul>');
   }
 
@@ -394,6 +400,18 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
   if (scheduleA.wm_ecosystem_clause) {
     parts.push(`<h3>A.13 Ecosystem and page ceiling</h3>`);
     parts.push(`<p>${escapeHtml(scheduleA.wm_ecosystem_clause)}</p>`);
+  }
+
+  // A.14 Research ownership and methodology: rendered only when the
+  // purchased MC tier runs research advisories (Better/Best). A.15
+  // Consulting scope and limits: rendered whenever MC is purchased.
+  if (scheduleA.mc_research_ownership_clause) {
+    parts.push(`<h3>A.14 Research ownership and methodology</h3>`);
+    parts.push(`<p>${escapeHtml(scheduleA.mc_research_ownership_clause)}</p>`);
+  }
+  if (scheduleA.mc_scope_clause) {
+    parts.push(`<h3>A.15 Consulting scope and limits</h3>`);
+    parts.push(`<p>${escapeHtml(scheduleA.mc_scope_clause)}</p>`);
   }
 
   parts.push('</section>');

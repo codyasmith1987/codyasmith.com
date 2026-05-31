@@ -1,11 +1,18 @@
 // Marketing Consulting product definition.
 //
-// Encodes business-design-v2 Section 4: three ecosystems (A small, B
-// mid, C large) routed by client annual revenue, three tiers (Good /
-// Better / Best) per ecosystem. Per 04 Section 3, Marketing Consulting
-// is "broader-advisory in practice" — it covers marketing, operations,
-// hiring guidance, and vendor selection, not just marketing topics.
-// The format constraint is advise/strategize/recommend, never execute.
+// Three ecosystems (A small, B mid, C large) routed by client annual
+// revenue, three tiers (Good / Better / Best) per ecosystem. Marketing
+// Consulting is broader-advisory in practice: marketing, search and
+// content strategy, brand, operations, and growth, advise and recommend
+// only, never execute.
+//
+// The structure is deliberately bounded (per the May 2026 lessons: the
+// prior open-ended consulting scope let a client request unlimited
+// advisories). Each tier caps direct phone access, the scheduled call,
+// research advisories, and reporting. Better and Best run research
+// advisories whose outputs and methodology remain the Practice's
+// property (see MC_RESEARCH_OWNERSHIP_CLAUSE). Best adds operations
+// consulting at Ecosystem B and C only.
 
 import type {
   ProductDefinition,
@@ -38,14 +45,18 @@ export const MC_ECOSYSTEMS: Record<EcosystemId, Ecosystem> = {
         tagline: 'The lightest consulting engagement.',
         monthly: 297,
         audit: 750,
-        call_frequency: 'no scheduled call; written advisories on request',
-        advisories: 'one or two per quarter as requested',
+        access_pool: 'up to one hour a month',
+        call_frequency: 'one 30-minute strategy call a month',
+        advisories: 'none at this level',
         reporting: 'not included',
+        portal_reporting_access: true,
+        operations_consulting: false,
+        includes_research: false,
         hiring_guidance: false,
         features: [
-          'A baseline competitive and keyword read at the start of the engagement.',
-          'Written advisories on request, no fixed monthly cadence.',
-          'Designed to open the door; most clients move up once the cycle is real.',
+          'Up to an hour a month of direct phone time to think a decision through with me, plus a 30-minute strategy call each month.',
+          'My read on marketing, search, brand, and the adjacent calls, by conversation.',
+          'Full access to your reporting in the portal. No formal research deliverable at this level.',
         ],
       },
       better: {
@@ -55,30 +66,38 @@ export const MC_ECOSYSTEMS: Record<EcosystemId, Ecosystem> = {
         recommended: true,
         monthly: 497,
         audit: 1500,
-        call_frequency: 'one 30-minute call per month',
-        advisories: 'one per quarter',
-        reporting: 'quarterly',
+        access_pool: 'up to ninety minutes a month',
+        call_frequency: 'one 60-minute strategy call a month',
+        advisories: 'one research advisory a month',
+        reporting: 'monthly',
+        portal_reporting_access: true,
+        operations_consulting: false,
+        includes_research: true,
         hiring_guidance: false,
         features: [
-          'A research-grade audit at the start, then a quarterly cycle of competitive analysis, SEO and content roadmap, and brand positioning.',
-          'A 30-minute monthly strategy call. Quarterly performance reporting.',
-          'For a business that is actively trying to grow.',
+          'One research-backed advisory a month: a real question taken apart, with competitive, search, and market data behind the answer.',
+          'Up to ninety minutes a month of direct phone time, plus a 60-minute strategy call each month.',
+          'Full reporting access in the portal and a monthly performance report.',
         ],
       },
       best: {
         id: 'best',
         name: 'Best',
-        tagline: 'Monthly cycle. Hiring guidance included.',
+        tagline: 'The deepest cycle. Two advisories a month.',
         monthly: 797,
         audit: 2500,
-        call_frequency: 'one 60-minute call per month',
-        advisories: 'one per month',
+        access_pool: 'up to two hours a month',
+        call_frequency: 'one 90-minute strategy call a month',
+        advisories: 'up to two research advisories a month',
         reporting: 'monthly',
-        hiring_guidance: true,
+        portal_reporting_access: true,
+        operations_consulting: false,
+        includes_research: true,
+        hiring_guidance: false,
         features: [
-          'The deepest audit at the start, then a monthly cycle of competitive analysis, SEO and content roadmap, and ongoing brand work.',
-          'A 60-minute strategy call every month. Monthly performance reporting.',
-          'Hiring guidance when you bring marketing or web roles in-house.',
+          'Up to two research-backed advisories a month on the questions that move the business.',
+          'Up to two hours a month of direct phone time, plus a 90-minute strategy call each month.',
+          'Full reporting access and a monthly performance report. You can keep the research output; the research itself and the methods behind it stay mine.',
         ],
       },
       custom: { id: 'custom', name: 'Custom' },
@@ -95,14 +114,18 @@ export const MC_ECOSYSTEMS: Record<EcosystemId, Ecosystem> = {
         tagline: 'The lightest consulting engagement.',
         monthly: 497,
         audit: 1500,
-        call_frequency: 'no scheduled call; written advisories on request',
-        advisories: 'one or two per quarter as requested',
+        access_pool: 'up to one hour a month',
+        call_frequency: 'one 30-minute strategy call a month',
+        advisories: 'none at this level',
         reporting: 'not included',
+        portal_reporting_access: true,
+        operations_consulting: false,
+        includes_research: false,
         hiring_guidance: false,
         features: [
-          'A baseline competitive and keyword read at the start of the engagement.',
-          'Written advisories on request, no fixed monthly cadence.',
-          'Designed to open the door; most clients move up once the cycle is real.',
+          'Up to an hour a month of direct phone time to think a decision through with me, plus a 30-minute strategy call each month.',
+          'My read on marketing, search, brand, and the adjacent calls, by conversation.',
+          'Full access to your reporting in the portal. No formal research deliverable at this level.',
         ],
       },
       better: {
@@ -112,30 +135,39 @@ export const MC_ECOSYSTEMS: Record<EcosystemId, Ecosystem> = {
         recommended: true,
         monthly: 997,
         audit: 2500,
-        call_frequency: 'one 30-minute call per month',
-        advisories: 'one per quarter',
-        reporting: 'quarterly',
+        access_pool: 'up to ninety minutes a month',
+        call_frequency: 'one 60-minute strategy call a month',
+        advisories: 'one research advisory a month',
+        reporting: 'monthly',
+        portal_reporting_access: true,
+        operations_consulting: false,
+        includes_research: true,
         hiring_guidance: false,
         features: [
-          'A research-grade audit at the start, then a quarterly cycle of competitive analysis, SEO and content roadmap, and brand positioning.',
-          'A 30-minute monthly strategy call. Quarterly performance reporting.',
-          'For a business that is actively trying to grow.',
+          'One research-backed advisory a month: a real question taken apart, with competitive, search, and market data behind the answer.',
+          'Up to ninety minutes a month of direct phone time, plus a 60-minute strategy call each month.',
+          'Full reporting access in the portal and a monthly performance report.',
         ],
       },
       best: {
         id: 'best',
         name: 'Best',
-        tagline: 'Monthly cycle. Hiring guidance included.',
+        tagline: 'The deepest cycle. Operations consulting included.',
         monthly: 1497,
         audit: 4000,
-        call_frequency: 'one 60-minute call per month',
-        advisories: 'one per month',
+        access_pool: 'up to two hours a month',
+        call_frequency: 'one 90-minute strategy call a month',
+        advisories: 'up to two research advisories a month',
         reporting: 'monthly',
-        hiring_guidance: true,
+        portal_reporting_access: true,
+        operations_consulting: true,
+        includes_research: true,
+        hiring_guidance: false,
         features: [
-          'The deepest audit at the start, then a monthly cycle of competitive analysis, SEO and content roadmap, and ongoing brand work.',
-          'A 60-minute strategy call every month. Monthly performance reporting.',
-          'Hiring guidance when you bring marketing or web roles in-house.',
+          'Up to two research-backed advisories a month on the questions that move the business.',
+          'Up to two hours a month of direct phone time, plus a 90-minute strategy call each month.',
+          'Operations consulting on workflows, tooling, and the calls that come with growth, including bringing roles in-house.',
+          'Full reporting access and a monthly performance report. You can keep the research output; the research itself and the methods behind it stay mine.',
         ],
       },
       custom: { id: 'custom', name: 'Custom' },
@@ -152,14 +184,18 @@ export const MC_ECOSYSTEMS: Record<EcosystemId, Ecosystem> = {
         tagline: 'The lightest consulting engagement.',
         monthly: 1497,
         audit: 4000,
-        call_frequency: 'no scheduled call; written advisories on request',
-        advisories: 'one or two per quarter as requested',
+        access_pool: 'up to one hour a month',
+        call_frequency: 'one 30-minute strategy call a month',
+        advisories: 'none at this level',
         reporting: 'not included',
+        portal_reporting_access: true,
+        operations_consulting: false,
+        includes_research: false,
         hiring_guidance: false,
         features: [
-          'A baseline competitive and keyword read at the start of the engagement.',
-          'Written advisories on request, no fixed monthly cadence.',
-          'Designed to open the door; most clients move up once the cycle is real.',
+          'Up to an hour a month of direct phone time to think a decision through with me, plus a 30-minute strategy call each month.',
+          'My read on marketing, search, brand, and the adjacent calls, by conversation.',
+          'Full access to your reporting in the portal. No formal research deliverable at this level.',
         ],
       },
       better: {
@@ -169,36 +205,64 @@ export const MC_ECOSYSTEMS: Record<EcosystemId, Ecosystem> = {
         recommended: true,
         monthly: 2497,
         audit: 6000,
-        call_frequency: 'one 30-minute call per month',
-        advisories: 'one per quarter',
-        reporting: 'quarterly',
+        access_pool: 'up to ninety minutes a month',
+        call_frequency: 'one 60-minute strategy call a month',
+        advisories: 'one research advisory a month',
+        reporting: 'monthly',
+        portal_reporting_access: true,
+        operations_consulting: false,
+        includes_research: true,
         hiring_guidance: false,
         features: [
-          'A research-grade audit at the start, then a quarterly cycle of competitive analysis, SEO and content roadmap, and brand positioning.',
-          'A 30-minute monthly strategy call. Quarterly performance reporting.',
-          'For a business that is actively trying to grow.',
+          'One research-backed advisory a month: a real question taken apart, with competitive, search, and market data behind the answer.',
+          'Up to ninety minutes a month of direct phone time, plus a 60-minute strategy call each month.',
+          'Full reporting access in the portal and a monthly performance report.',
         ],
       },
       best: {
         id: 'best',
         name: 'Best',
-        tagline: 'Monthly cycle. Hiring guidance included.',
+        tagline: 'The deepest cycle. Operations consulting included.',
         monthly: 3997,
         audit: 10000,
-        call_frequency: 'one 60-minute call per month',
-        advisories: 'one per month',
+        access_pool: 'up to two hours a month',
+        call_frequency: 'one 90-minute strategy call a month',
+        advisories: 'up to two research advisories a month',
         reporting: 'monthly',
-        hiring_guidance: true,
+        portal_reporting_access: true,
+        operations_consulting: true,
+        includes_research: true,
+        hiring_guidance: false,
         features: [
-          'The deepest audit at the start, then a monthly cycle of competitive analysis, SEO and content roadmap, and ongoing brand work.',
-          'A 60-minute strategy call every month. Monthly performance reporting.',
-          'Hiring guidance when you bring marketing or web roles in-house.',
+          'Up to two research-backed advisories a month on the questions that move the business.',
+          'Up to two hours a month of direct phone time, plus a 90-minute strategy call each month.',
+          'Operations consulting on workflows, tooling, and the calls that come with growth, including bringing roles in-house.',
+          'Full reporting access and a monthly performance report. You can keep the research output; the research itself and the methods behind it stay mine.',
         ],
       },
       custom: { id: 'custom', name: 'Custom' },
     },
   },
 };
+
+// =========================================================================
+// Contract clauses (Schedule A). Modeled on WM_ECOSYSTEM_CLAUSE: the MC
+// contribution sets these strings; the contract renderer prints them
+// verbatim as gated Schedule A clauses. Party terms: "the Practice" =
+// Cody A Smith LLC, "the Client" = the buyer (standard-v5.md section 1).
+// =========================================================================
+
+// Consulting scope and limits. Closes the open-ended-scope gap from the
+// May 2026 lessons by tying what is included to the specific caps set for
+// the purchased tier in Schedule A, and routing anything beyond to a
+// quote. Set whenever Marketing Consulting is purchased.
+export const MC_SCOPE_CLAUSE = 'Marketing Consulting is advisory. The Practice provides strategy, research, and recommendations and does not execute on them. The engagement includes only what is set for the chosen level in this Schedule: the monthly direct phone access, the scheduled strategy call, the number of research advisories, the reporting, and, where included, operations consulting. The monthly fee secures the Practice\'s attention and thinking for that defined cadence, not unlimited production. Any request beyond it, including additional research advisories, additional access, or execution of any recommendation, is new work that the Practice scopes and quotes before any work begins, under the change-order mechanism in section 8.';
+
+// Research ownership and methodology. Closes the "nothing protects the
+// Practice's methods/tools as property" and "deliverables ownership
+// written too broadly" gaps. Set only when the tier includes research
+// advisories (Better and Best).
+export const MC_RESEARCH_OWNERSHIP_CLAUSE = 'Research advisories, the analysis behind them, and the methods, frameworks, tools, and processes the Practice uses to produce them are and remain the sole property of the Practice. The Client receives the Practice\'s recommendations, and at the Best level may receive the research output itself for the Client\'s internal use. That delivery grants the Client a license to use the output for its own business and transfers no ownership. The Client acquires no right in the Practice\'s research methodology, data models, or process, and may not reproduce, resell, license, or repackage them.';
 
 // =========================================================================
 // Variable schema
@@ -234,22 +298,6 @@ export function routeMarketingConsultingEcosystem(revenueBand: string | null): E
 // Step generation
 // =========================================================================
 
-// Rewrite an audit-promising feature line for the reissue waiver, where
-// the initial audit was already paid on a prior engagement and is priced
-// $0. Keeps the ongoing cycle (still delivered); only the "audit at the
-// start" claim is restated as already-on-file. Phrases are controlled
-// (defined in MC_ECOSYSTEMS above), so matching them is safe.
-function waiveAuditFeature(feature: string): string {
-  if (feature.includes('baseline competitive and keyword read at the start')) {
-    return 'Your competitive and keyword baseline is already on file from the prior engagement; the cycle picks up from there.';
-  }
-  const m = feature.match(/audit at the start, then (.+)\.$/);
-  if (m) {
-    return `The audit is already on file from the prior engagement; ${m[1]} picks up from there.`;
-  }
-  return feature;
-}
-
 function buildTierOption(tierId: TierId, ecosystem: Ecosystem, aiRecommendedTier?: TierId | null, aiRecommendedRationale?: string, waiveOnboarding?: boolean): ProposalStepOption {
   const tier = ecosystem.tiers[tierId];
   // AI's per-prospect tier recommendation overrides the static product
@@ -273,11 +321,9 @@ function buildTierOption(tierId: TierId, ecosystem: Ecosystem, aiRecommendedTier
     price_label: formatMoney(tier.monthly || 0),
     price_suffix: '/ month',
     price_subline: waiveOnboarding
-      ? `Audit waived (existing client)`
-      : `${formatMoney(tier.audit || 0)} audit at signing`,
-    features: tier.features
-      ? (waiveOnboarding ? tier.features.map(waiveAuditFeature) : [...tier.features])
-      : [],
+      ? `Waived for existing client`
+      : `${formatMoney(tier.audit || 0)} at signing`,
+    features: tier.features ? [...tier.features] : [],
   };
 }
 
@@ -300,7 +346,7 @@ function buildMarketingConsultingNarrative(ctx: ProductContext): NarrativeSnippe
   // when the synthesis points to a clear consulting shape. Does NOT
   // name tiers; steers the framing.
   const what_i_see_paragraphs: string[] = [
-    `The tier you pick sets the depth of the cycle: how often we meet, how many deep advisories per cycle, and whether monthly performance reporting is in scope.`,
+    `The tier you pick sets the depth of the cycle: how much direct access you have to me, how many research advisories I run each month, and whether a monthly performance report is in scope.`,
   ];
   const strategy = ctx.engagementStrategy;
   if (strategy?.clv_horizon === 'long-term-stable') {
@@ -354,8 +400,8 @@ export const marketingConsultingProduct: ProductDefinition = {
       : null;
     // Per audit move 5: AI rationale on the recommended card.
     const aiRecommendedRationale = ctx.engagementStrategy?.recommended_tier_per_product?.marketing_consulting?.rationale;
-    // Reissue waiver: the audit is already paid/on file, so tier cards must
-    // not promise it as a new deliverable while it is priced $0.
+    // Reissue waiver: the initial fee is already paid/on file, so tier
+    // cards must not promise it as a new charge while it is priced $0.
     const waiveOnboarding = ctx.waiveOnboarding === true;
 
     // If MC is the only product in scope, present a single tier_picker.
@@ -430,13 +476,13 @@ export const marketingConsultingProduct: ProductDefinition = {
     if (!tier || tier.monthly == null || tier.audit == null) {
       return { monthly: 0, oneTime: 0, breakdown: [], displaySummary: {} };
     }
-    // Reissue / already-onboarded: zero the initial audit fee. The
-    // retainer is unaffected. A labeled $0 line keeps the waiver visible.
+    // Reissue / already-onboarded: zero the initial fee. The retainer is
+    // unaffected. A labeled $0 line keeps the waiver visible.
     const waived = ctx.waiveOnboarding === true;
     const finalAudit = waived ? 0 : tier.audit;
     const auditLabel = waived
-      ? `Marketing Consulting initial audit (waived, existing client)`
-      : `Marketing Consulting ${tier.name} initial audit (${eco.label})`;
+      ? `Marketing Consulting fee at signing (waived, existing client)`
+      : `Marketing Consulting ${tier.name} fee at signing`;
     return {
       monthly: tier.monthly,
       oneTime: finalAudit,
@@ -462,14 +508,20 @@ export const marketingConsultingProduct: ProductDefinition = {
       marketing_consulting: {
         tier_name: tier.name,
         monthly_retainer: tier.monthly || 0,
-        // Reissue / already-onboarded waiver zeros the initial audit so
+        // Reissue / already-onboarded waiver zeros the initial fee so
         // Schedule A's A.6 agrees with the at-signing block.
         initial_audit_fee: ctx.waiveOnboarding === true ? 0 : (tier.audit || 0),
+        access_pool: tier.access_pool || '',
         strategy_call_frequency: tier.call_frequency || 'as agreed',
-        deep_advisories_per_cycle: tier.advisories || 'as requested',
-        performance_reporting_cadence: tier.reporting || 'as agreed',
-        hiring_guidance: !!tier.hiring_guidance,
+        deep_advisories_per_cycle: tier.advisories || 'none',
+        performance_reporting_cadence: tier.reporting || 'not included',
+        portal_reporting_access: tier.portal_reporting_access !== false,
+        operations_consulting: !!tier.operations_consulting,
       },
+      // Scope-limit clause always; research-ownership clause only when the
+      // tier actually runs research advisories (Better and Best).
+      mc_scope_clause: MC_SCOPE_CLAUSE,
+      mc_research_ownership_clause: tier.includes_research ? MC_RESEARCH_OWNERSHIP_CLAUSE : undefined,
     };
   },
 };

@@ -114,6 +114,11 @@ export interface ScheduleA {
   // Web Management ecosystem + page-ceiling disclosure (Schedule A A.13).
   // Set verbatim from the WM contribution; absent/null when WM not in scope.
   wm_ecosystem_clause?: string | null;
+  // Marketing Consulting research-ownership/methodology clause (A.14) and
+  // scope-limit clause (A.15). Set verbatim from the MC contribution;
+  // ownership clause is absent unless the tier runs research advisories.
+  mc_research_ownership_clause?: string | null;
+  mc_scope_clause?: string | null;
   // Itemized amount due at signing per section 5.2: one-time fees plus
   // the first month of every recurring fee. Total equals the pricing
   // result's atSigning (post-discount). Null until pricing is known
@@ -165,10 +170,18 @@ export interface MarketingConsultingSection {
   tier_name: string;
   monthly_retainer: number;
   initial_audit_fee: number;
+  // Direct phone access pool per month (e.g. "up to one hour a month").
+  access_pool?: string;
   strategy_call_frequency: string;
+  // Research-advisory cadence per cycle (now monthly; "none" at Good).
   deep_advisories_per_cycle: string;
   performance_reporting_cadence: string;
-  hiring_guidance: boolean;
+  // Live portal reporting access (all tiers) and operations consulting
+  // (Best, Ecosystem B/C only). hiring_guidance is legacy, retained
+  // optional so the legacy raised_bar_v1 section still type-checks.
+  portal_reporting_access?: boolean;
+  operations_consulting?: boolean;
+  hiring_guidance?: boolean;
 }
 
 export interface HoursAndRates {
@@ -331,6 +344,8 @@ function buildScheduleAForProductDrivenV1(ctx: ScheduleAContext): ScheduleA {
     if (contribution.build_sow_ref) composed.build_sow_ref = contribution.build_sow_ref;
     if (contribution.other_sow_ref) composed.other_sow_ref = contribution.other_sow_ref;
     if (contribution.wm_ecosystem_clause) composed.wm_ecosystem_clause = contribution.wm_ecosystem_clause;
+    if (contribution.mc_research_ownership_clause) composed.mc_research_ownership_clause = contribution.mc_research_ownership_clause;
+    if (contribution.mc_scope_clause) composed.mc_scope_clause = contribution.mc_scope_clause;
     if (Array.isArray(contribution.pass_through_items)) {
       composed.pass_through_items.push(...contribution.pass_through_items);
     }

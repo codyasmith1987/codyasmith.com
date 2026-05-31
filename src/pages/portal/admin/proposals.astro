@@ -233,6 +233,16 @@ import { PROPOSAL_STATUS, badgeClass, lookupStatus, STATUS_PILL_BASE } from '../
                   >
                     View as client
                   </a>
+                  {!p.finalized_at && (
+                    <button
+                      data-publish-proposal={p.slug}
+                      data-publish-status={p.status}
+                      data-proposal-title={p.title}
+                      class={`text-xs font-medium px-2.5 py-1 rounded border transition-colors duration-300 ${p.status === 'published' ? 'border-neutral-500/40 text-neutral-300 hover:bg-neutral-500/10 hover:text-neutral-100' : 'border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300'}`}
+                    >
+                      {p.status === 'published' ? 'Unpublish' : 'Publish'}
+                    </button>
+                  )}
                   <button
                     data-delete-proposal={p.slug}
                     data-proposal-title={p.title}
@@ -309,6 +319,50 @@ import { PROPOSAL_STATUS, badgeClass, lookupStatus, STATUS_PILL_BASE } from '../
           button.disabled = true;
           const prev = button.textContent;
           button.textContent = 'Deleting…';
+          try { await run(); } finally { button.disabled = false; button.textContent = prev; }
+        }
+      });
+    });
+
+    // Publish / unpublish: flips the proposal status. Publishing surfaces
+    // the client's dashboard "Review your proposal" notification; drafts
+    // stay silent so the owner can preview first.
+    document.querySelectorAll('[data-publish-proposal]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const button = btn as HTMLButtonElement;
+        const slug = button.dataset.publishProposal!;
+        const current = button.dataset.publishStatus || 'draft';
+        const title = button.dataset.proposalTitle || slug;
+        const next = current === 'published' ? 'draft' : 'published';
+
+        const toast = (msg: string, kind: string) => {
+          const fn = (window as any).__toast;
+          if (typeof fn === 'function') fn(msg, kind);
+          else if (kind === 'error') alert(msg);
+        };
+
+        const run = async () => {
+          const res = await fetch(`/portal/api/admin/proposals/${encodeURIComponent(slug)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ status: next }),
+          });
+          if (res.ok) {
+            toast(next === 'published' ? `Published "${title}"` : `Returned "${title}" to draft`, 'success');
+            location.reload();
+          } else {
+            const data = await res.json().catch(() => ({ error: 'Failed to update' }));
+            toast(data.error || 'Failed to update proposal', 'error');
+          }
+        };
+
+        const withLoading = (window as any).__withButtonLoading;
+        if (typeof withLoading === 'function') {
+          await withLoading(button, next === 'published' ? 'Publishing…' : 'Updating…', run);
+        } else {
+          button.disabled = true;
+          const prev = button.textContent;
+          button.textContent = next === 'published' ? 'Publishing…' : 'Updating…';
           try { await run(); } finally { button.disabled = false; button.textContent = prev; }
         }
       });

@@ -61,11 +61,12 @@ if (!isAdmin && user.client_id) {
 
     // Proposals not yet LOI-accepted.
     const propRes = await turso.execute({
-      sql: `SELECT id, slug, title, finalized_at FROM proposals WHERE client_id = ? ORDER BY created_at DESC`,
+      sql: `SELECT id, slug, title, finalized_at, status FROM proposals WHERE client_id = ? ORDER BY created_at DESC`,
       args: [user.client_id],
     });
     for (const r of (propRes.rows as any[])) {
       if (r[3]) continue; // already finalized
+      if (r[4] !== 'published') continue; // drafts stay silent until the owner publishes
       actionItems.push({
         kind: 'accept-proposal',
         icon: '📄',

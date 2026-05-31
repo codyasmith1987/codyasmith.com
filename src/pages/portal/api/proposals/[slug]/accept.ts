@@ -299,6 +299,8 @@ function pickPublicPricing(config: any, draft: ProposalDraft | null) {
     // Expose the canonical at-signing total so the proposal page renders
     // it directly instead of re-deriving oneTime + monthly client-side.
     atSigning: pricing.atSigning,
+    // Per-step cost groups for the summary panel (WM/build/MC lines).
+    groups: pricing.groups || [],
   };
 }
 
@@ -491,7 +493,12 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
       preview: true,
       signer: 'admin',
       pricing: previewPricing
-        ? { oneTime: previewPricing.oneTime, monthly: previewPricing.monthly, atSigning: previewPricing.atSigning }
+        ? {
+            oneTime: previewPricing.oneTime,
+            monthly: previewPricing.monthly,
+            atSigning: previewPricing.atSigning,
+            groups: previewPricing.groups || [],
+          }
         : null,
     });
   }

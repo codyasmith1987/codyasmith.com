@@ -15,7 +15,7 @@
 import type { APIRoute } from 'astro';
 import turso from '../../../lib/turso';
 import { logger } from '../../../lib/logger';
-import { markOverdueInvoices, generateRecurringInvoices, sendDueReminders } from '../../../lib/billing';
+import { markOverdueInvoices, generateRecurringInvoices, sendDueReminders, previewDailyCron } from '../../../lib/billing';
 
 export const prerender = false;
 
@@ -34,6 +34,15 @@ export const POST: APIRoute = async ({ request }) => {
     mismatch |= expected.charCodeAt(i) ^ provided.charCodeAt(i);
   }
   if (mismatch !== 0) return json({ error: 'Forbidden' }, 403);
+
+  // Read-only dry run (?dry=1): report exactly what each task would do,
+  // writing nothing and sending no email. Lets the trigger be verified
+  // before it ever generates or sends a real invoice. Per the Production
+  // Safety SOP: verify without writing to prod.
+  if (new URL(request.url).searchParams.get('dry') === '1') {
+    const preview = await previewDailyCron();
+    return json({ ok: true, dry_run: true, ran_at: new Date().toISOString(), preview });
+  }
 
   // generateRecurringInvoices stamps created_by, which is a FK to users.
   // Run invoice generation as the earliest admin (a system actor).

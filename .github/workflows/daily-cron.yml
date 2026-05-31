@@ -1,0 +1,49 @@
+name: Daily billing cron
+
+# Triggers /api/cron/daily once a day so recurring invoices generate,
+# overdue invoices get marked, and due reminders send. Without this the
+# billing automation is dormant (the endpoint only acts when called).
+#
+# Requires the repo secret ADMIN_API_TOKEN, set to the same value as the
+# server's ADMIN_API_TOKEN env var. Until that secret exists the job fails
+# fast on a 403 and nothing fires, so merging this is safe.
+#
+# The daily schedule runs for REAL. A manual run (workflow_dispatch)
+# defaults to a dry run (?dry=1): it reports what would happen and writes
+# nothing, so you can verify before turning real billing loose.
+
+on:
+  schedule:
+    - cron: '0 13 * * *' # 13:00 UTC daily (~7am Mountain)
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run only (report what would happen, write nothing)'
+        type: boolean
+        default: true
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST /api/cron/daily
+        env:
+          ADMIN_TOKEN: ${{ secrets.ADMIN_API_TOKEN }}
+        run: |
+          if [ -z "$ADMIN_TOKEN" ]; then
+            echo "ADMIN_API_TOKEN secret is not set. Add it in repo Settings > Secrets and variables > Actions." >&2
+            exit 1
+          fi
+          # Manual runs default to a dry run; the daily schedule runs for real.
+          QS=""
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
+            QS="?dry=1"
+          fi
+          echo "Calling /api/cron/daily$QS (event=${{ github.event_name }})"
+          code=$(curl -sS -o /tmp/resp.json -w "%{http_code}" -X POST \
+            -H "X-Admin-Token: $ADMIN_TOKEN" \
+            "https://codyasmith.com/api/cron/daily$QS")
+          echo "HTTP $code"
+          cat /tmp/resp.json
+          echo
+          test "$code" = "200"

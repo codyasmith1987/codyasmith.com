@@ -410,3 +410,54 @@ export async function checkAndSendReminders(): Promise<void> {
     logger.error('Auto-send reminders check failed', err);
   }
 }
+
+// Read-only preview of what the daily cron WOULD do, for verifying the
+// trigger before it fires real invoices. Mirrors the gating in
+// generateInvoiceForContract, markOverdueInvoices, and getDueInvoices, but
+// issues no INSERT/UPDATE and sends no email. Backs /api/cron/daily?dry=1.
+export async function previewDailyCron(): Promise<{
+  would_generate: Array<{ contract_id: string; title: string; client_id: string; period_start: string; period_end: string; amount: number }>;
+  would_mark_overdue: Array<{ id: string; invoice_number: string; due_date: string | null }>;
+  would_remind: Array<{ id: string; invoice_number: string; due_date: string | null; total: number }>;
+}> {
+  const now = new Date();
+
+  const would_generate: Array<{ contract_id: string; title: string; client_id: string; period_start: string; period_end: string; amount: number }> = [];
+  const contracts = await getAllContracts();
+  for (const c of contracts) {
+    if (c.status !== 'active' || c.billing_cadence !== 'monthly' || !c.billing_day || !c.recurring_amount) continue;
+    const period = getUpcomingBillingPeriod(c.billing_day, now);
+    if (await invoiceExistsForPeriod(c.id, period.start, period.end)) continue;
+    const issueThreshold = new Date(period.start + 'T00:00:00');
+    issueThreshold.setDate(issueThreshold.getDate() - 7);
+    if (now < issueThreshold) continue;
+    would_generate.push({
+      contract_id: c.id,
+      title: c.title,
+      client_id: c.client_id,
+      period_start: period.start,
+      period_end: period.end,
+      amount: c.recurring_amount,
+    });
+  }
+
+  const overdueRes = await turso.execute({
+    sql: `SELECT id, invoice_number, due_date FROM invoices
+           WHERE status = 'sent' AND amount_paid < total AND due_date < date('now')`,
+  });
+  const would_mark_overdue = (overdueRes.rows as any[]).map(r => ({
+    id: r[0] as string,
+    invoice_number: r[1] as string,
+    due_date: (r[2] as string | null) ?? null,
+  }));
+
+  const due = await getDueInvoices(3);
+  const would_remind = (due as any[]).map(i => ({
+    id: i.id as string,
+    invoice_number: i.invoice_number as string,
+    due_date: (i.due_date as string | null) ?? null,
+    total: i.total as number,
+  }));
+
+  return { would_generate, would_mark_overdue, would_remind };
+}

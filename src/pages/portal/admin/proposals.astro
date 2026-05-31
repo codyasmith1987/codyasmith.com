@@ -224,12 +224,12 @@ import { PROPOSAL_STATUS, badgeClass, lookupStatus, STATUS_PILL_BASE } from '../
                   );
                 })()}
 
-                <div class="flex items-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <div class="flex items-center gap-3">
                   <a
                     href={`/portal/proposals/${p.slug}`}
                     target="_blank"
                     rel="noopener"
-                    class="text-xs text-neutral-400 hover:text-amber-600 transition-colors duration-300"
+                    class="text-xs text-neutral-300 hover:text-amber-600 transition-colors duration-300"
                   >
                     View as client
                   </a>
@@ -237,7 +237,7 @@ import { PROPOSAL_STATUS, badgeClass, lookupStatus, STATUS_PILL_BASE } from '../
                     data-delete-proposal={p.slug}
                     data-proposal-title={p.title}
                     data-client-name={p.client_name}
-                    class="text-xs text-neutral-400 hover:text-red-400 transition-colors duration-300"
+                    class="text-xs font-medium px-2.5 py-1 rounded border border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors duration-300"
                   >
                     Delete
                   </button>
@@ -265,34 +265,52 @@ import { PROPOSAL_STATUS, badgeClass, lookupStatus, STATUS_PILL_BASE } from '../
         const title = button.dataset.proposalTitle || slug;
         const clientName = button.dataset.clientName || '';
 
-        const confirmed = await (window as any).__confirm({
-          title: `Delete proposal`,
-          message: `Permanently delete "${title}"${clientName ? ` for ${clientName}` : ''}? This removes the proposal row and any draft/signature state. Cannot be undone.`,
-          confirmLabel: 'Delete proposal',
-          danger: true,
-        });
+        const message = `Permanently delete "${title}"${clientName ? ` for ${clientName}` : ''}? This removes the proposal row and any draft/signature state. Cannot be undone.`;
+        // Use the portal confirm modal when available; fall back to a
+        // native confirm so the button always works.
+        const confirmFn = (window as any).__confirm;
+        const confirmed = typeof confirmFn === 'function'
+          ? await confirmFn({ title: 'Delete proposal', message, confirmLabel: 'Delete proposal', danger: true })
+          : window.confirm(message);
         if (!confirmed) return;
 
-        await (window as any).__withButtonLoading(button, 'Deleting…', async () => {
+        const toast = (msg: string, kind: string) => {
+          const fn = (window as any).__toast;
+          if (typeof fn === 'function') fn(msg, kind);
+          else if (kind === 'error') alert(msg);
+        };
+
+        const run = async () => {
           const res = await fetch(`/portal/api/admin/proposals/${encodeURIComponent(slug)}`, {
             method: 'DELETE',
             headers: { 'X-CSRF-Token': csrfToken },
           });
-
           if (res.ok) {
-            (window as any).__toast(`Deleted "${title}"`, 'success');
+            toast(`Deleted "${title}"`, 'success');
             const row = document.querySelector(`[data-proposal-row="${slug}"]`) as HTMLElement | null;
             if (row) {
               row.style.opacity = '0';
               row.style.transform = 'translateY(-8px)';
               row.style.transition = 'all 0.3s ease';
               setTimeout(() => row.remove(), 300);
+            } else {
+              location.reload();
             }
           } else {
             const data = await res.json().catch(() => ({ error: 'Failed to delete' }));
-            (window as any).__toast(data.error || 'Failed to delete proposal', 'error');
+            toast(data.error || 'Failed to delete proposal', 'error');
           }
-        });
+        };
+
+        const withLoading = (window as any).__withButtonLoading;
+        if (typeof withLoading === 'function') {
+          await withLoading(button, 'Deleting…', run);
+        } else {
+          button.disabled = true;
+          const prev = button.textContent;
+          button.textContent = 'Deleting…';
+          try { await run(); } finally { button.disabled = false; button.textContent = prev; }
+        }
       });
     });
   </script>

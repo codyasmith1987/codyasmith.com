@@ -279,7 +279,10 @@ export function deriveEcosystemCeilings(
     if (!eco) continue;
     const name = (s.label && s.label.trim()) ? s.label.trim() : (s.domain || '').trim();
     const list = byEco.get(eco) || [];
-    if (name) list.push(name);
+    // Dedup: the same site can appear across multiple build options
+    // (e.g. a Builders site in both o1 and o2), so guard against listing
+    // it twice in the ceiling disclosure.
+    if (name && !list.includes(name)) list.push(name);
     byEco.set(eco, list);
   }
   const order: EcosystemId[] = ['A', 'B', 'C'];

@@ -91,13 +91,16 @@ function run() {
     const plain = JSON.stringify(composeProposal({ ...composeArgs, waive_onboarding: false }));
     const waived = JSON.stringify(composeProposal({ ...composeArgs, waive_onboarding: true }));
 
-    // Sanity: the default proposal DOES carry the first-time language.
-    test('Narrative: default proposal promises an audit at the start', /audit at the start/i.test(plain));
+    // Sanity: the default proposal DOES carry the first-time fee. Under the
+    // bounded MC model the signing fee is the month-one discovery/research
+    // fee, shown as a "$X at signing" subline on the MC cards (the old
+    // "audit at the start" feature copy was removed in the restructure).
+    test('Narrative: default proposal shows a MC fee at signing', /\$[\d,]+ at signing/i.test(plain));
     test('Narrative: default proposal says "Month one is onboarding"', /Month one is onboarding/i.test(plain));
 
     // Waived proposal must drop both.
-    test('Narrative (waived): no "audit at the start" promise', !/audit at the start/i.test(waived),
-      'waived config still contains "audit at the start"');
+    test('Narrative (waived): no "$X at signing" MC fee promise', !/\$[\d,]+ at signing/i.test(waived),
+      'waived config still shows a dollar MC fee at signing');
     test('Narrative (waived): no "Month one is onboarding"', !/Month one is onboarding/i.test(waived),
       'waived config still contains "Month one is onboarding"');
     // And carries the waiver-aware framing instead.

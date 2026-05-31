@@ -311,11 +311,15 @@ function renderScheduleAPage(doc: any, s: ScheduleA): void {
     doc.list([
       `Tier: ${mc.tier_name}`,
       `Monthly retainer: $${mc.monthly_retainer.toLocaleString('en-US')}`,
-      `Initial audit fee: $${mc.initial_audit_fee.toLocaleString('en-US')}`,
-      `Strategy call frequency: ${mc.strategy_call_frequency}`,
-      `Deep advisories per cycle: ${mc.deep_advisories_per_cycle}`,
-      `Performance reporting cadence: ${mc.performance_reporting_cadence}`,
-      `Hiring guidance: ${mc.hiring_guidance ? 'included' : 'not included'}`,
+      `Fee at signing (month-one discovery and research): $${mc.initial_audit_fee.toLocaleString('en-US')}`,
+      ...(mc.access_pool ? [`Direct phone access: ${mc.access_pool}`] : []),
+      `Scheduled strategy call: ${mc.strategy_call_frequency}`,
+      `Research advisories: ${mc.deep_advisories_per_cycle}`,
+      `Performance reporting: ${mc.performance_reporting_cadence}`,
+      ...(mc.portal_reporting_access !== undefined ? [`Portal reporting access: ${mc.portal_reporting_access ? 'included' : 'not included'}`] : []),
+      ...(mc.operations_consulting !== undefined
+        ? [`Operations consulting: ${mc.operations_consulting ? 'included' : 'not included'}`]
+        : (mc.hiring_guidance !== undefined ? [`Hiring guidance: ${mc.hiring_guidance ? 'included' : 'not included'}`] : [])),
     ]);
     doc.moveDown(0.5);
   }
@@ -401,6 +405,27 @@ function renderScheduleAPage(doc: any, s: ScheduleA): void {
     'Guaranteed uptime, rankings, lead volume, or attribution accuracy (see section 11)',
     'Correction of problems caused by undocumented third-party systems, legacy custom code, or hidden vendor dependencies discovered after work begins',
   ]);
+  doc.moveDown(0.5);
+
+  // A.13 ecosystem/page-ceiling disclosure (WM), A.14 research ownership
+  // and A.15 consulting scope (MC). Each gated on its clause being set in
+  // Schedule A, mirroring the HTML render so the archived PDF carries the
+  // same protective terms.
+  if (s.wm_ecosystem_clause) {
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.13 Ecosystem and page ceiling');
+    doc.font('Helvetica').fontSize(10).fillColor('#222').text(s.wm_ecosystem_clause);
+    doc.moveDown(0.5);
+  }
+  if (s.mc_research_ownership_clause) {
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.14 Research ownership and methodology');
+    doc.font('Helvetica').fontSize(10).fillColor('#222').text(s.mc_research_ownership_clause);
+    doc.moveDown(0.5);
+  }
+  if (s.mc_scope_clause) {
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('#111').text('A.15 Consulting scope and limits');
+    doc.font('Helvetica').fontSize(10).fillColor('#222').text(s.mc_scope_clause);
+    doc.moveDown(0.5);
+  }
 }
 
 function renderSignatureSummary(doc: any, input: ContractPdfInput): void {

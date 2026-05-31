@@ -336,7 +336,7 @@ async function onAtSigningInvoicePaid(contractId: string): Promise<void> {
     contract_id: contractId,
     client_id: contract.client_id,
     title: 'Engagement kickoff',
-    description: 'Auto-created when the at-signing payment cleared. Add milestones and tasks to begin.',
+    description: 'Your engagement is underway. Milestones will appear here as the work plan is set.',
     client_visible: true,
   });
 

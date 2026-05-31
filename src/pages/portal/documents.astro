@@ -58,6 +58,18 @@ function fmtDate(s: string | null): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+// Client-facing status labels: never show the raw DB enum to a client.
+const agreementStatusLabel: Record<string, string> = {
+  issued: 'Ready to sign',
+  partially_signed: 'Awaiting the other signer',
+  executed: 'Fully executed',
+};
+const proposalStatusLabel: Record<string, string> = {
+  finalized: 'Accepted',
+  published: 'Ready to review',
+  draft: 'Draft',
+};
+
 const statusBadge: Record<string, string> = {
   draft: 'bg-neutral-700/30 text-neutral-400',
   issued: 'bg-blue-500/10 text-blue-400',
@@ -135,7 +147,7 @@ const empty = agreements.length === 0 && proposals.length === 0 && reports.lengt
                 <div class="min-w-0 flex-1">
                   <div class="flex items-baseline gap-3 flex-wrap">
                     <p class="text-sm font-medium text-neutral-200">{a.title}</p>
-                    <span class={`px-2 py-0.5 text-[10px] font-mono uppercase rounded ${statusBadge[a.status] || statusBadge.draft}`}>{a.status === 'executed' ? 'Fully executed' : a.status}</span>
+                    <span class={`px-2 py-0.5 text-[10px] font-mono uppercase rounded ${statusBadge[a.status] || statusBadge.draft}`}>{agreementStatusLabel[a.status] || a.status}</span>
                   </div>
                   <div class="flex items-center gap-4 mt-2 text-[10px] font-mono text-neutral-500">
                     {a.finalized_at && <span>Executed {fmtDate(a.finalized_at)}</span>}
@@ -169,7 +181,7 @@ const empty = agreements.length === 0 && proposals.length === 0 && reports.lengt
                 <div class="min-w-0 flex-1">
                   <div class="flex items-baseline gap-3 flex-wrap">
                     <p class="text-sm font-medium text-neutral-200">{p.title}</p>
-                    <span class={`px-2 py-0.5 text-[10px] font-mono uppercase rounded ${statusBadge[p.status] || statusBadge.draft}`}>{p.status}</span>
+                    <span class={`px-2 py-0.5 text-[10px] font-mono uppercase rounded ${statusBadge[p.status] || statusBadge.draft}`}>{proposalStatusLabel[p.status] || p.status}</span>
                   </div>
                   <div class="flex items-center gap-4 mt-2 text-[10px] font-mono text-neutral-500">
                     {p.finalized_at && <span>Accepted {fmtDate(p.finalized_at)}</span>}

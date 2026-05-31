@@ -397,7 +397,11 @@ const clients = isAdmin ? await getAllClients() : [];
                     structured_data_urls: 'Screaming Frog Structured Data bulk export (structured_data_all.csv)',
                   };
                   let emptyMsg;
-                  if (data.source === 'derived') {
+                  if (!isAdmin) {
+                    // Clients never see tool names, filenames, or upload
+                    // instructions (those are Cody's operational steps).
+                    emptyMsg = `The detailed page list for this item is being prepared.`;
+                  } else if (data.source === 'derived') {
                     emptyMsg = `No URLs in your latest data match this pattern. The audit summary may have flagged it from an older upload or a slightly different rule than the portal's derivation.`;
                   } else if (data.derivable && !data.has_expected_source) {
                     const tableHint = data.expected_source ? TABLE_LABELS[data.expected_source] : 'the relevant SF export';
@@ -413,7 +417,7 @@ const clients = isAdmin ? await getAllClients() : [];
                 // When the list was derived rather than pulled from
                 // a per-issue CSV, surface that — counts may differ
                 // slightly from the audit's affected_urls value.
-                const sourceBanner = data.source === 'derived'
+                const sourceBanner = (data.source === 'derived' && isAdmin)
                   ? `<p class="text-[10px] font-mono text-amber-600 mb-2 leading-relaxed">Derived from your ${escapeHtml((data.source_table || '').replace(/_/g, ' '))} data. Count may differ slightly from the audit's affected_urls value because the audit applies edge-case rules (pixel widths, whitespace handling, etc.) the portal doesn't replicate exactly.</p>`
                   : '';
                 // Each row carries the URL, a classification from the

@@ -1129,7 +1129,7 @@ export function composePricing(args: {
   const wmStepId = firstStepId('wm_tier', 'mgmt_tier');
   if (wmStepId) {
     const lines: PricingGroupLine[] = [];
-    if (wmOneTime > 0) lines.push({ label: 'Onboarding', amount: wmOneTime, recurring: false });
+    if (wmOneTime > 0) lines.push({ label: 'One-time', amount: wmOneTime, recurring: false });
     if (mgmtMonthly > 0) lines.push({ label: 'Monthly', amount: mgmtMonthly, recurring: true });
     if (lines.length) groups.push({ stepId: wmStepId, lines });
   }
@@ -1165,7 +1165,7 @@ export function composePricing(args: {
   const mcStepId = firstStepId('mc_yes_no', 'consulting');
   if (mcStepId) {
     const lines: PricingGroupLine[] = [];
-    if (mcOneTime > 0) lines.push({ label: 'Onboarding', amount: mcOneTime, recurring: false });
+    if (mcOneTime > 0) lines.push({ label: 'One-time', amount: mcOneTime, recurring: false });
     if (consultingMonthly > 0) lines.push({ label: 'Monthly', amount: consultingMonthly, recurring: true });
     if (lines.length) groups.push({ stepId: mcStepId, lines });
   }

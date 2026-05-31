@@ -135,21 +135,12 @@ export function computeBuildTotal(size: string | null, count: number): number {
 // =========================================================================
 
 function buildNarrative(ctx: ProductContext): NarrativeSnippetSet {
-  const size = routeBuildSize(ctx.variables);
   const desc = typeof ctx.variables.build_description === 'string' ? ctx.variables.build_description : '';
 
-  const sizeLabel = size === 'small' ? 'small'
-    : size === 'mid' ? 'mid-sized'
-    : size === 'large' ? 'large'
-    : 'sized at signing';
-
-  // Always describe the base as one build at the routed size; shape
-  // options (when present) carry their own description in the
-  // rollout scenario step. The narrative here is the default copy.
-  const fee = computeBuildTotal(size, 1);
-  const feeStr = fee > 0 ? `$${Math.round(fee).toLocaleString('en-US')}` : '';
-
-  const whatRecommend = `<strong>Build work</strong> for the site${desc ? ' (' + desc + ')' : ''}. Fixed-fee project, ${sizeLabel}${feeStr ? ', total ' + feeStr : ''}. The build replaces onboarding for the site it produces; the site moves onto Web Management at launch.`;
+  // Build price and per-option detail live on the build option cards (see
+  // generateSteps), not in this narrative. The paragraph just frames the
+  // build and how it hands off to Web Management.
+  const whatRecommend = `<strong>Build work</strong> for the site${desc ? ' (' + desc + ')' : ''}. A fixed-fee project; the build replaces onboarding for the site it produces, and the site moves onto Web Management at launch.`;
 
   return {
     intro_lines: [`A net-new build is part of the engagement.`],
@@ -220,23 +211,30 @@ export const buildProduct: ProductDefinition = {
     const options = getBuildOptions(ctx);
     if (options.length === 0) return [];
 
+    // Absolute per-option build fee = base (one build at the routed size)
+    // + the option's precomputed pricing delta (which carries the full
+    // multi-site math for that shape). Surfaced on the card so the buyer
+    // sees the real price per option; the narrative no longer carries it.
+    const baseTotal = computeBuildTotal(routeBuildSize(ctx.variables), 1);
+
     const step: ProposalStep = {
       id: 'build_options',
       type: options.length === 2 ? 'binary_picker' : 'tier_picker',
       h2: 'Pick a build approach',
-      prompt: 'The build can ship in more than one shape. Pick the option that fits; the rollout, the pricing, and Schedule A will reflect your pick.',
-      options: options.map((opt, i) => ({
-        id: opt.id,
-        name: opt.name,
-        html: opt.pitch,
-        recommended: i === 0, // first option is the default recommendation
-        // Pricing delta surfaces as a small detail line per card.
-        price_subline: opt.pricing_delta !== undefined && opt.pricing_delta !== 0
-          ? (opt.pricing_delta > 0
-            ? `+${formatMoney(opt.pricing_delta)} vs default`
-            : `${formatMoney(opt.pricing_delta)} vs default`)
-          : undefined,
-      })),
+      prompt: 'The build can ship in more than one shape. Pick the option that fits; the pricing and Schedule A will reflect your pick.',
+      options: options.map((opt, i) => {
+        const optTotal = baseTotal + (typeof opt.pricing_delta === 'number' ? opt.pricing_delta : 0);
+        const priceLabel = optTotal > 0 ? formatMoney(optTotal) : undefined;
+        return {
+          id: opt.id,
+          name: opt.name,
+          html: opt.pitch,
+          recommended: i === 0, // first option is the default recommendation
+          price_label: priceLabel,
+          price_suffix: priceLabel ? 'one-time build' : undefined,
+          price_detail_html: priceLabel ? 'One-time build fee, paid at signing.' : undefined,
+        };
+      }),
     };
     return [step];
   },

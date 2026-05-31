@@ -558,9 +558,14 @@ async function run() {
       && buildSteps[0].options[1].id === 'split');
   test('Build options: first option marked recommended (default)',
     buildSteps[0].options[0].recommended === true && buildSteps[0].options[1].recommended === false);
-  test('Build options: pricing_delta surfaces as price_subline',
-    buildSteps[0].options[1].price_subline === '+$4,500 vs default',
-    `got ${buildSteps[0].options[1].price_subline}`);
+  test('Build options: absolute build fee surfaces as price_label',
+    buildSteps[0].options[0].price_label === '$11,875'
+      && buildSteps[0].options[1].price_label === '$16,375',
+    `got opt1 ${buildSteps[0].options[0].price_label}, opt2 ${buildSteps[0].options[1].price_label}`);
+  test('Build options: one-time build detail on card, no relative subline',
+    buildSteps[0].options[1].price_detail_html === 'One-time build fee, paid at signing.'
+      && buildSteps[0].options[1].price_subline === undefined,
+    `detail ${buildSteps[0].options[1].price_detail_html}, subline ${buildSteps[0].options[1].price_subline}`);
 
   // Single option = no picker emitted
   const buildSingleOptCtx = {
@@ -791,12 +796,14 @@ async function run() {
   test('Phase 2: closer mentions MC strategy cadence',
     (() => {
       const closer = strategySections.find(s => s.h2 === 'How this works in practice');
-      return !!closer && closer.paragraphs.some(p => /strategy-call/i.test(p));
+      return !!closer && closer.paragraphs.some(p => /research advisories|strategy call/i.test(p));
     })());
-  test('Phase 2: closer mentions decision turnaround (5 business days)',
+  // The "five business days" turnaround claim was cut (2026-05-31); the
+  // closer should no longer commit to a specific decision-turnaround SLA.
+  test('Phase 2: closer dropped the five-business-days turnaround claim',
     (() => {
       const closer = strategySections.find(s => s.h2 === 'How this works in practice');
-      return !!closer && closer.paragraphs.some(p => /five business days/i.test(p));
+      return !!closer && !closer.paragraphs.some(p => /five business days/i.test(p));
     })());
   test('Phase 2: closer mentions change orders',
     (() => {
@@ -1066,14 +1073,12 @@ async function run() {
       const rec = sn5.narrative.sections.find(s => s.h2 === 'What I recommend');
       return !!rec && rec.paragraphs.some(p => p.includes('build is the entry'));
     })());
-  test('Phase 3 #5: rollout phases present (3 phases)',
-    (() => {
-      const phases = sn5.narrative.rollout?.phases || [];
-      return phases.length === 3
-        && phases[0].h3 === 'Scoping, design, and build'
-        && phases[1].h3 === 'Launch and handoff to management'
-        && phases[2].h3 === 'Ongoing site management';
-    })());
+  // "How it rolls out" was cut (2026-05-31): composeProposal no longer
+  // emits narrative.rollout. Build rollout detail lives on the build
+  // option cards now. Verify the section is gone.
+  test('Phase 3 #5: rollout section cut (no narrative.rollout)',
+    sn5.narrative.rollout === undefined,
+    `rollout ${JSON.stringify(sn5.narrative.rollout)}`);
 
   // (f) Snippet 6 (MC only / B) fires.
   const sn6 = composeProposal({

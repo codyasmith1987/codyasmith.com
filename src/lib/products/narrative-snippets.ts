@@ -71,7 +71,7 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
         `What I see you buying out of is the unevenness. The site goes well when you can get to it. It goes quiet when you cannot. Per-task work means a new estimate, a new invoice, a new wait every time something small comes up, and the smallest items end up taking the longest to get done. There is no one whose week the site sits inside. That gap is what the engagement closes.`,
       ],
       what_i_recommend_paragraphs: [
-        `I recommend <strong>Web Management</strong> on a monthly basis for the ${clientName} site. The monthly fee covers hosting, daily backups, security and uptime monitoring, and software updates on the contracted cadence. A pool of hands-on hours sits ready every month for active work: edits, page builds, small fixes, content updates, the running list of things the site actually needs. I am the one whose week it sits inside.`,
+        `I recommend <strong>Web Management</strong> on a monthly basis for the ${clientName} site. The monthly fee covers hosting, daily backups, security and uptime monitoring, and updates on the contracted cadence. A pool of hands-on hours sits ready every month for active work: edits, page builds, small fixes, content updates, the running list of things the site actually needs. I am the one whose week it sits inside.`,
         `The trade is worth naming plainly. The monthly is predictable. The hours are use-it-or-lose-it. A month with light work does not roll its hours into a heavier month later. That is how the math holds. You get a known number every month, a known cadence of work, a known response window. I get a steady relationship instead of a string of one-off estimates. Predictability is the trade.`,
       ],
       closer_tie_back: angle
@@ -100,7 +100,7 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
         `The ${industry} businesses I see at this stage are usually a step ahead of their own systems. You can feel the next stage of the business before the website, the content, or the in-room thinking has caught up to it. That gap is not a problem so long as it is named. The operator who built the business is the same operator carrying the next set of choices. The day there is no outside thinker in the conversation is the day those choices start running on instinct alone.`,
       ],
       what_i_recommend_paragraphs: [
-        `I recommend <strong>Web Management</strong> as the execution layer for the ${clientName} site. The monthly fee covers hosting, daily backups, security and uptime monitoring, and software updates on the contracted cadence. A monthly pool of hands-on hours covers active work: edits, page builds, small fixes, content updates, the running list a working site accumulates. The cadence is known. The number is known. The site stops being a thing you have to remember to think about.`,
+        `I recommend <strong>Web Management</strong> as the execution layer for the ${clientName} site. The monthly fee covers hosting, daily backups, security and uptime monitoring, and updates on the contracted cadence. A monthly pool of hands-on hours covers active work: edits, page builds, small fixes, content updates, the running list a working site accumulates. The cadence is known. The number is known. The site stops being a thing you have to remember to think about.`,
         `I recommend <strong>Marketing Consulting</strong> as the strategic layer applied to the whole business, not just the site. Scope is marketing, search and content strategy, brand positioning, plus adjacent advisory like operations or hiring guidance for marketing or web roles when you want outside thinking on the questions that fall outside the day-to-day. The engagement opens with a research-grade audit and runs on an ongoing cadence of strategy work after that. Sold once for the whole business. Never multiplied across sites or entities.`,
         `<strong>Marketing Consulting</strong> is advice. That is the format and it is what makes it work. The fee buys attention and research, not unlimited production. When consulting work needs to be executed on the site, those hours come out of the <strong>Web Management</strong> pool. When it needs to be executed off the site, it gets a separate statement of work. Strategy is named in one place. Executed somewhere else. The boundary is what keeps either one from getting watered down.`,
       ],
@@ -127,8 +127,8 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
         `${clientName}'s site is established and working. It carries the company's story and holds the pages a customer or a search engine expects to find. A site like this does not need rescuing. It needs ongoing attention. Software ages. Security surface area widens with every plugin. Content drifts out of date a paragraph at a time. The risk is slow erosion.`,
       ],
       what_i_recommend_paragraphs: [
-        `I recommend <strong>Web Management</strong> on a monthly basis for the ${clientName} site. The monthly fee covers hosting, daily backups, security and uptime monitoring, and software updates on the contracted cadence. Those four lines run in the background every day. They are how a site this size stays running while nobody is looking at it, and they are also how it stays out of the moments where one missed update turns into a recovery weekend.`,
-        `A pool of hands-on hours sits ready every month for active work. A monthly health report comes with it, so you can see what was touched, what was found, and what is coming. A known cadence. A known number. A known place to send things when they come up. Nothing about this is reactive. It is the version of the relationship where the site stops being a thing you have to remember to think about.`,
+        `I recommend <strong>Web Management</strong> on a monthly basis for the ${clientName} site. The monthly fee covers hosting, daily backups, security and uptime monitoring, and updates on the contracted cadence. Those four lines run in the background every day. They are how a site this size stays running while nobody is looking at it, and they are also how it stays out of the moments where one missed update turns into a recovery weekend.`,
+        `A pool of hands-on hours sits ready every month for active work. Your reporting lives in the portal, so you can see what was touched, what was found, and what is coming, whenever you want it. A known cadence. A known number. A known place to send things when they come up. Nothing about this is reactive. It is the version of the relationship where the site stops being a thing you have to remember to think about.`,
       ],
       closer_tie_back: angle
         ? `Your own pitch leads with this: ${angle} Slow erosion is what undoes a claim like that. Ongoing attention is what keeps it true.`
@@ -147,7 +147,7 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
     const angle = firstSalesAngleFromCtx(ctx);
     return {
       what_i_recommend_paragraphs: [
-        `I recommend <strong>Web Management</strong> as the execution layer for the ${clientName} site. The monthly fee covers hosting, daily backups, security and uptime monitoring, and software updates on the contracted cadence. A monthly pool of hands-on hours covers active site work. The site runs and improves every month on a known cadence, not as a string of one-off estimates.`,
+        `I recommend <strong>Web Management</strong> as the execution layer for the ${clientName} site. The monthly fee covers hosting, daily backups, security and uptime monitoring, and updates on the contracted cadence. A monthly pool of hands-on hours covers active site work. The site runs and improves every month on a known cadence, not as a string of one-off estimates.`,
         `I recommend <strong>Marketing Consulting</strong> as the strategic layer for the business as a whole. Scope is marketing, search and content strategy, brand positioning, plus adjacent advisory when you want outside thinking on operations, hiring, or vendor selection. The format is what makes it work. <strong>Marketing Consulting</strong> is advice. Execution on the site comes out of <strong>Web Management</strong> hours. Execution off the site gets its own statement of work.`,
       ],
       closer_tie_back: angle
@@ -193,7 +193,7 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
         {
           phase_num: 'Phase 3',
           h3: 'Ongoing site management',
-          html: `From launch forward, the site sits inside the standard <strong>Web Management</strong> cadence: hosting, daily backups, security and uptime monitoring, and software updates on the contracted cadence. A pool of hands-on hours every month covers active work. Edits, page additions, content updates, small fixes all draw from that pool. There is no second onboarding.`,
+          html: `From launch forward, the site sits inside the standard <strong>Web Management</strong> cadence: hosting, daily backups, security and uptime monitoring, and updates on the contracted cadence. A pool of hands-on hours every month covers active work. Edits, page additions, content updates, small fixes all draw from that pool. There is no second onboarding.`,
         },
       ],
       closer_tie_back: angle
@@ -244,8 +244,8 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
         `The ${clientName} site carries ${pageCount} pages. That is a real, deep site, not a brochure site, and the math changes at this size. More pages means more places a link can break. More content means more drift between what a page says and what the business does today. More plugins and integrations means more security surface area. The work to keep all of it running is steady and ongoing, not a quarterly cleanup.`,
       ],
       what_i_recommend_paragraphs: [
-        `I recommend <strong>Web Management</strong> on a monthly basis for the ${clientName} site, at the higher hours pool a larger footprint requires. The monthly fee covers hosting, daily backups, security and uptime monitoring, and software updates on the contracted cadence. The hours pool is sized to the site itself. More updates to vet before they ship. More pages to keep current. More places to check when something upstream has shifted. The hours match the site, not the average.`,
-        `The monthly health report and the maintenance cadence run as an operational rhythm, not a reactive one. You see what was touched. What was found. What is queued for the next cycle. What is being watched. What is being deferred, and why. A site this size goes off the rails when nobody is paying attention. It stays running when someone is paying attention every week. The shape of the engagement is what holds that posture in place.`,
+        `I recommend <strong>Web Management</strong> on a monthly basis for the ${clientName} site, at the higher hours pool a larger footprint requires. The monthly fee covers hosting, daily backups, security and uptime monitoring, and updates on the contracted cadence. The hours pool is sized to the site itself. More updates to vet before they ship. More pages to keep current. More places to check when something upstream has shifted. The hours match the site, not the average.`,
+        `The reporting in your portal and the maintenance cadence run as an operational rhythm, not a reactive one. You see what was touched. What was found. What is queued for the next cycle. What is being watched. What is being deferred, and why. A site this size goes off the rails when nobody is paying attention. It stays running when someone is paying attention every week. The shape of the engagement is what holds that posture in place.`,
       ],
       closer_tie_back: angle
         ? `Your own pitch leads with this: ${angle} A site this size goes quiet about a promise like that the moment nobody is paying attention to it. The engagement is how someone keeps paying attention.`
@@ -267,10 +267,10 @@ const SNIPPET_REGISTRY: Record<string, (ctx: ProductContext) => NarrativeSnippet
         `A small site is the right shape for what the business needs. The engagement should match it, not pad it out.`,
       ],
       what_i_see_paragraphs: [
-        `The ${clientName} site is small by design. ${pageCount} pages doing one or two things well is a clean shape for a focused business. Sites at this scale do not benefit from being managed as if they were bigger. They benefit from being managed honestly. The things a small site needs. On a steady cadence. Nothing on top of that.`,
+        `The ${clientName} site is small by design. ${pageCount} pages doing one or two things well is a clean shape for a focused business. The things a small site needs, on a steady cadence. Nothing on top of that.`,
       ],
       what_i_recommend_paragraphs: [
-        `I recommend <strong>Web Management</strong> on a monthly basis for the ${clientName} site, sized to the site itself. The monthly fee covers hosting, daily backups, security and uptime monitoring, and monthly software updates. A small but real pool of hands-on hours covers active work: edits, small fixes, content updates, the things a working site picks up across a month. The shape of the engagement matches the shape of the site. Nothing about that is a compromise.`,
+        `I recommend <strong>Web Management</strong> on a monthly basis for the ${clientName} site, sized to the site itself. The monthly fee covers hosting, daily backups, security and uptime monitoring, and monthly updates. A small pool of hands-on hours covers active work: edits, small fixes, content updates, the things a working site picks up across a month.`,
       ],
       closer_tie_back: angle
         ? `Your own pitch leads with this: ${angle} A small site managed honestly is the shape that promise takes online without padding around it.`

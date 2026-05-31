@@ -44,11 +44,14 @@ export const PRODUCT_REGISTRY: Record<ProductId, ProductDefinition> = {
 };
 
 // Order matters: the composed proposal lists products in this order in
-// narrative and on the page. Matches the priority Cody sells.
+// narrative and on the page. Web Management first, then the Build that
+// produces the sites it manages, then Marketing Consulting. Reordering
+// this array re-sequences steps, per-product narrative paragraphs, and
+// Schedule A.
 export const PRODUCT_ORDER: ProductId[] = [
   'web-management',
-  'marketing-consulting',
   'build',
+  'marketing-consulting',
   'training',
   'other-sow',
 ];
@@ -332,25 +335,6 @@ export function composeProposal(args: ComposeArgs): ProposalConfig {
   const prepared_on = overrides.prepared_on || preparedOnDefault;
   const intro = overrides.intro || narrative.intro;
   const sections = overrides.sections || narrative.sections;
-  let rollout = overrides.rollout || narrative.rollout;
-  // In bundle mode the build's own option picker is replaced by the bundle
-  // add-on step (id 'bundle_addon', options 'skip'/'add'). The build narrative
-  // keyed its rollout scenarios to the build_options step ids (o1/o2); remap
-  // them to the add-on step so the "how it rolls out" phases actually render
-  // (otherwise the scenario_step never matches a real step and the rollout,
-  // i.e. the build/options section, silently disappears).
-  if (
-    bundleMode && bundleConfig?.addon
-    && rollout && (rollout as any).scenario_step === 'build_options'
-    && (rollout as any).scenarios
-  ) {
-    const addon = bundleConfig.addon;
-    const srcScenarios = (rollout as any).scenarios as Record<string, any>;
-    const remapped: Record<string, any> = {};
-    if (srcScenarios[addon.skip_option_id]) remapped['skip'] = srcScenarios[addon.skip_option_id];
-    if (srcScenarios[addon.build_option_id]) remapped['add'] = srcScenarios[addon.build_option_id];
-    rollout = { ...(rollout as any), scenario_step: 'bundle_addon', scenarios: remapped };
-  }
   const steps = overrides.steps || composedSteps;
 
   // Domains the proposal proposes to TAKE OVER (existing unmanaged sites).
@@ -414,7 +398,6 @@ export function composeProposal(args: ComposeArgs): ProposalConfig {
     narrative: {
       intro,
       sections,
-      rollout,
     },
     steps,
     signers,
@@ -637,28 +620,12 @@ function composeNarrative(args: ComposeNarrativeArgs): {
     sections.push({ h2: 'How this works in practice', paragraphs: closerParagraphs });
   }
 
-  // Rollout: if any product contributes scenarios, use the first
-  // product's scenarios + scenario_step (Raised Bar style). Otherwise
-  // concatenate single-scenario rollout_phases across products.
-  const productWithScenarios = contributions.find(c => c.set.rollout_scenarios);
-  let rollout: ProposalConfig['narrative']['rollout'] | undefined;
-  if (productWithScenarios) {
-    rollout = {
-      h2: 'How it rolls out',
-      scenario_step: productWithScenarios.set.rollout_scenario_step,
-      scenarios: productWithScenarios.set.rollout_scenarios,
-    };
-  } else {
-    const phases: NarrativePhase[] = contributions.flatMap(c => c.set.rollout_phases || []);
-    if (phases.length > 0) {
-      rollout = {
-        h2: 'How it rolls out',
-        phases,
-      };
-    }
-  }
-
-  return { intro, sections, rollout };
+  // The "How it rolls out" section was cut (2026-05-31): build rollout
+  // detail now lives on the build option cards, not a separate phased
+  // narrative. composeNarrative no longer emits narrative.rollout; the
+  // renderer's rollout block self-hides when the field is absent. Stored
+  // pre-cut drafts that still carry a rollout keep rendering it.
+  return { intro, sections };
 }
 
 function composeIntro(args: {
@@ -927,7 +894,7 @@ function composeHowItWorksCloser(args: {
     ? [`<strong>Month one continues where we left off.</strong> Because this picks up an existing engagement, there is no onboarding or initial audit to repeat; those were completed previously.`]
     : [`<strong>Month one is onboarding.</strong> The work in the first weeks is concentrated so you can see what is changing.`];
   if (hasBuild) {
-    monthOneParts.push(`If a build is in scope, scoping conversations and the first design pass happen here.`);
+    monthOneParts.push(`If a build is in scope, month one is scoping and the first design pass; the build itself runs on its own schedule past month one.`);
   }
   if (hasWM) {
     monthOneParts.push(waived
@@ -936,38 +903,36 @@ function composeHowItWorksCloser(args: {
   }
   if (hasMC && !hasBuild && !hasWM) {
     monthOneParts.push(waived
-      ? `The consulting audit is already on file; the strategy cycle picks up where it left off.`
-      : `If consulting is in scope on its own, the initial audit and the first strategy cycle land in this window.`);
+      ? `The consulting discovery is already on file; the strategy cycle picks up where it left off.`
+      : `If consulting is in scope on its own, month one is discovery and the market research that grounds the work, then the first strategy cycle.`);
   } else if (hasMC) {
     monthOneParts.push(waived
-      ? `The consulting audit is already on file; the strategy cycle continues.`
-      : `If consulting is in scope, the initial audit lands in this window too.`);
+      ? `The consulting discovery is already on file; the strategy cycle continues.`
+      : `If consulting is in scope, month one is discovery and the market research that grounds the work, with the depth of what you receive scaled to your level.`);
   }
   paragraphs.push(monthOneParts.join(' '));
 
   // Paragraph 2: steady state. The cadence agreed to in writing.
-  // Hours capped per cycle, do not roll over. Decisions in writing
-  // turn around in five business days.
+  // Hours capped per cycle, do not roll over.
   const steadyParts: string[] = [
     `<strong>After month one is the steady cadence we agree to in writing.</strong>`,
   ];
   if (hasWM) {
-    steadyParts.push(`Web Management runs on a pool of hours per cycle. Unused hours do not roll over to the next cycle; that is the trade for a predictable monthly fee.`);
+    steadyParts.push(`Web Management runs on a pool of hours per cycle that grows with each site under management. Unused hours do not roll over to the next cycle.`);
   }
   if (hasMC) {
-    steadyParts.push(`Marketing Consulting runs on the strategy-call cadence and advisory schedule in your level. Consulting is advice; execution routes through Web Management hours or a separate statement of work.`);
+    steadyParts.push(`Marketing Consulting runs on the direct access, the strategy call, and the research advisories set in your level.`);
   }
   if (hasTraining && !hasMC && !hasWM) {
     steadyParts.push(`Training runs on the session cadence in your level.`);
   }
-  steadyParts.push(`Decisions I send in writing turn around in five business days; that is what keeps the cycle moving.`);
   paragraphs.push(steadyParts.join(' '));
 
   // Paragraph 3: change orders for anything outside scope. Easy to
   // add; gets papered separately. (07 §8.)
   const changeOrderParts: string[] = [
     `<strong>New work that falls outside the agreed scope is a change order.</strong>`,
-    `Easy to add and quick to paper. It keeps every party clear on what was bought and what is new.`,
+    `It keeps every party clear on what was bought and what is new.`,
   ];
   if (hasBuild) {
     changeOrderParts.push(`Subsequent builds in this engagement carry a 20 percent discount off the first.`);

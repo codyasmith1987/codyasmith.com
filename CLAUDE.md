@@ -10,7 +10,7 @@ The portal is LIVE with real paying clients in it: Jason Roth and Kevin Adams (R
 
 **Never test against production.** No test writes to the prod database or the live portal: no recompose or create POSTs, no admin API mutations (publish, status flips, draft writes), no manual database edits "just to check," no clicking flows that persist. Earlier sessions did exactly this. Stop.
 
-- Work happens **local** (your machine, a throwaway DB; logic checks via `tsx`) or on **staging** (a deployed mirror with its OWN Turso DB on a private URL). Staging is not built yet. Stand it up (a second DO app on a `staging` branch, a separate Turso DB, a private URL) before any testing that writes data. Until then, test locally.
+- Work happens **local** (your machine, a throwaway DB; logic checks via `tsx`) or on **staging** (a deployed mirror with its OWN Turso DB on a private URL). Staging does not exist yet, and creating it is Cody's one-time call, not yours: do not stand one up on your own, and never build a second. Until it exists, test locally and behind admin/flag gates. If something genuinely needs staging, flag it to Cody.
 - **Production** (codyasmith.com) changes ONLY by merging a PR to main. Never poke it directly.
 - **Deploy is not release.** Ship unfinished or risky code to prod whenever, but keep it invisible to clients behind an admin/role gate or a feature flag until it is proven. `if (isAdmin)` is the crude version. Use it.
 - Schema only through backward-compatible migrations (expand, migrate, then contract). Never hand-edit prod's schema.

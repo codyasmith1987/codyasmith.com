@@ -299,19 +299,20 @@ export function deriveEcosystemCeilings(
     }));
 }
 
-// Contract Schedule A A.13 clause (locked 2026-05-31, variant A): defines the
-// three ecosystems by navigable-page ceiling and the per-site escalation
-// mechanism with written notice. The ONLY place the contract names the
-// ecosystems and ceilings (scoped re-exposure; the de-leak boundary otherwise
-// holds). "the Practice" matches the contract's party term.
+// Contract Schedule A A.13 clause (2026-05-31, variant B, client-jargon pass):
+// defines the three page-count SIZE BANDS by navigable-page ceiling and the
+// per-site escalation mechanism with written notice. No internal "Ecosystem
+// A/B/C" label reaches the client; the bands are described by page count only
+// (Cody decision 2026-05-31: drop the label, price by page size). "the
+// Practice" matches the contract's party term.
 export const WM_ECOSYSTEM_CLAUSE =
-  'Each site under this agreement is priced in an ecosystem set by its navigable page count. '
-  + 'Ecosystem A covers sites with fewer than 30 navigable pages; Ecosystem B covers 30 to 150 navigable pages; '
-  + 'Ecosystem C covers 150 or more navigable pages. "Navigable pages" are indexable, publicly reachable HTML pages, '
-  + 'excluding system, archive, feed, and pagination URLs. If a managed site\'s navigable page count grows beyond '
-  + 'its current ecosystem\'s ceiling, the Practice will re-route that site and adjust its recurring fee on the same '
-  + 'per-site basis stated in Section A.5, effective the next billing cycle. The Practice will give the Client '
-  + 'written notice before any such adjustment takes effect. This applies per site; other sites are unaffected.';
+  'Each site under this agreement is priced by its navigable page count in one of three size bands: '
+  + 'fewer than 30 navigable pages, 30 to 150 navigable pages, and 150 or more navigable pages. '
+  + '"Navigable pages" are indexable, publicly reachable HTML pages, excluding system, archive, feed, and '
+  + 'pagination URLs. If a managed site\'s navigable page count grows beyond the ceiling of its current band, '
+  + 'the Practice will re-price that site at the next band and adjust its recurring fee on the same per-site '
+  + 'basis stated in Section A.5, effective the next billing cycle. The Practice will give the Client written '
+  + 'notice before any such adjustment takes effect. This applies per site; other sites are unaffected.';
 
 // =========================================================================
 // Pricing math
@@ -751,8 +752,8 @@ function buildTierOption(args: {
     const { monthlyMin, monthlyMax, onbMin, onbMax } = args.range;
     const isMonthlyRange = Math.round(monthlyMin * 100) !== Math.round(monthlyMax * 100);
     const onbLabel = (Math.round(onbMin * 100) !== Math.round(onbMax * 100))
-      ? `${formatMoneyAuto(onbMin)} – ${formatMoneyAuto(onbMax)} onboarding`
-      : `${formatMoneyAuto(onbMin)} onboarding`;
+      ? `${formatMoneyAuto(onbMin)} – ${formatMoneyAuto(onbMax)} one-time setup`
+      : `${formatMoneyAuto(onbMin)} one-time setup`;
     return {
       id: args.tierId,
       name: tier.name,
@@ -764,8 +765,8 @@ function buildTierOption(args: {
         : formatMoneyAuto(monthlyMin),
       price_suffix: '/ month',
       price_subline: args.waiveOnboarding
-        ? 'Onboarding waived (existing client)'
-        : (isMonthlyRange ? `${onbLabel}, depending on your site setup` : onbLabel),
+        ? 'Setup waived'
+        : (isMonthlyRange ? `${onbLabel}, depending on the option you pick` : onbLabel),
       included_hours: tier.hours,
       features: tier.features ? [...tier.features] : [],
     };
@@ -781,11 +782,11 @@ function buildTierOption(args: {
     price_suffix: '/ month',
     price_subline: args.waiveOnboarding
       ? (args.sites > 1
-          ? `Onboarding waived (existing client), ${args.sites} sites`
-          : `Onboarding waived (existing client)`)
+          ? `Setup waived, ${args.sites} sites`
+          : `Setup waived`)
       : (args.sites > 1
-          ? `${formatMoney(onb)} onboarding total, ${args.sites} sites`
-          : `${formatMoney(onb)} onboarding`),
+          ? `${formatMoney(onb)} one-time setup, ${args.sites} sites`
+          : `${formatMoney(onb)} one-time setup`),
     included_hours: tier.hours,
     features,
   };

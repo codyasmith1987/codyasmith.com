@@ -33,7 +33,7 @@ import type {
 export const BUILD_SIZES: Record<EcosystemId, Ecosystem> = {
   small: {
     id: 'small',
-    label: 'Small build (Ecosystem A)',
+    label: 'Small build (under 30 pages)',
     band: 'Under 30 pages',
     tiers: {
       good: { id: 'good', name: 'Small build', monthly: 0, onb: 5625 },
@@ -44,7 +44,7 @@ export const BUILD_SIZES: Record<EcosystemId, Ecosystem> = {
   },
   mid: {
     id: 'mid',
-    label: 'Mid build (Ecosystem B)',
+    label: 'Mid build (30 to 150 pages)',
     band: '30 to 150 pages',
     tiers: {
       good: { id: 'good', name: 'Mid build', monthly: 0, onb: 11875 },
@@ -55,7 +55,7 @@ export const BUILD_SIZES: Record<EcosystemId, Ecosystem> = {
   },
   large: {
     id: 'large',
-    label: 'Large build (Ecosystem C)',
+    label: 'Large build (150 or more pages)',
     band: '150 or more pages',
     tiers: {
       good: { id: 'good', name: 'Large build', monthly: 0, onb: 22500 },

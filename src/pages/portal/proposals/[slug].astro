@@ -79,22 +79,22 @@ const config = proposalRow.config || {};
 // cards only. "Pages" means real navigable pages. This + the contract A.13
 // clause are the only places the ecosystem label/ceiling reach the client.
 function ecoRangePhrase(eid: string): string {
-  if (eid === 'A') return 'up to 29 navigable pages';
-  if (eid === 'B') return '30 to 150 navigable pages';
-  return '150 or more navigable pages';
+  if (eid === 'A') return 'up to 29 pages';
+  if (eid === 'B') return '30 to 150 pages';
+  return '150 or more pages';
 }
 function buildEcosystemNotice(ceilings: any[]): string {
   if (!Array.isArray(ceilings) || ceilings.length === 0) return '';
   if (ceilings.length === 1) {
     const c = ceilings[0];
     if (c.ceilingPages == null) {
-      return `This pricing reflects ${c.label}, which fits sites with ${ecoRangePhrase(c.ecosystemId)}, the largest ecosystem. Full terms are in your agreement.`;
+      return `This pricing is set for a site of ${ecoRangePhrase(c.ecosystemId)}, the largest size I manage at this rate, so there is no further page-based adjustment. Full terms are in your agreement.`;
     }
-    return `This pricing reflects ${c.label}, which fits sites with ${ecoRangePhrase(c.ecosystemId)}. If a managed site exceeds ${c.ceilingPages} pages, that site moves into the next ecosystem and its monthly fee adjusts to match. Full terms are in your agreement.`;
+    return `This pricing is set for a site of ${ecoRangePhrase(c.ecosystemId)}. If a managed site grows past ${c.ceilingPages} pages, its monthly adjusts to the next size band. Full terms are in your agreement.`;
   }
-  const items = ceilings.map((c: any) => `sites with ${ecoRangePhrase(c.ecosystemId)} are in ${c.label}`);
-  const listed = items.join('; ');
-  return `Each site is priced for its size. ${listed.charAt(0).toUpperCase()}${listed.slice(1)}. If a site grows past its ecosystem's page count, that site's monthly adjusts to the next ecosystem. Full terms are in your agreement.`;
+  const items = ceilings.map((c: any) => `sites of ${ecoRangePhrase(c.ecosystemId)}`);
+  const listed = items.join(', ');
+  return `Each site is priced for its size: ${listed} each price differently. If a site grows past its size band, that site's monthly adjusts to the next band. Full terms are in your agreement.`;
 }
 const ecosystemNoticeText = buildEcosystemNotice(config.ecosystem_ceilings);
 const narrative = config.narrative || {};

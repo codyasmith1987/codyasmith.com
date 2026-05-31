@@ -635,7 +635,7 @@ function composeIntro(args: {
 }): string {
   // One short paragraph, Cody-voice. Names the products in scope and
   // sets the framing.
-  const opener = `Here is the engagement I recommend, the numbers behind it, and the order it rolls out in.`;
+  const opener = `Here is the engagement I recommend and the real numbers behind it.`;
   const productList = args.productNames.length > 0
     ? `The engagement runs on ${joinList(args.productNames)}.`
     : '';

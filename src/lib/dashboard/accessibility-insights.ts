@@ -33,14 +33,16 @@ export function emptyAccessibility(): AccessibilityInsights {
 
 // Given a map of { bucketColumn: pageCount }, return an ordered
 // { label: count } object containing only buckets with a positive count.
-// NULL / undefined / non-numeric counts coalesce to 0 and are dropped.
+// NULL / undefined / non-finite / negative counts coalesce to 0 and are dropped.
 export function buildAccessibilityByLevel(
   counts: Record<string, number | null | undefined>,
 ): Record<string, number> {
   const out: Record<string, number> = {};
   for (const { column, label } of WCAG_BUCKETS) {
     const raw = counts[column];
-    const n = typeof raw === 'number' && Number.isFinite(raw) ? raw : 0;
+    // Coalesce NULL/undefined/non-finite AND negative to 0; only positive
+    // page counts make it into the output.
+    const n = typeof raw === 'number' && Number.isFinite(raw) ? Math.max(0, raw) : 0;
     if (n > 0) out[label] = n;
   }
   return out;

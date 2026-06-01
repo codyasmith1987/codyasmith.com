@@ -6,7 +6,11 @@ import {
 } from '../src/lib/dashboard/accessibility-insights.ts';
 
 let passed = 0;
-function test(name, fn) { fn(); console.log(`[PASS] ${name}`); passed++; }
+let failed = 0;
+function test(name, fn) {
+  try { fn(); console.log(`[PASS] ${name}`); passed++; }
+  catch (err) { console.error(`[FAIL] ${name}: ${err.message}`); failed++; }
+}
 
 test('WCAG_BUCKETS has the seven per-URL columns', () => {
   assert.strictEqual(WCAG_BUCKETS.length, 7);
@@ -47,4 +51,13 @@ test('buildAccessibilityByLevel returns {} for all-zero input', () => {
   assert.deepStrictEqual(buildAccessibilityByLevel({ wcag_20a_violations: 0 }), {});
 });
 
-console.log(`\n${passed}/${passed} passed`);
+test('buildAccessibilityByLevel treats negative counts as 0 and drops them', () => {
+  const out = buildAccessibilityByLevel({
+    wcag_20a_violations: -4,
+    wcag_21a_violations: 2,
+  });
+  assert.deepStrictEqual(out, { 'WCAG 2.1 A': 2 });
+});
+
+console.log(`\n${passed}/${passed + failed} passed`);
+if (failed > 0) process.exit(1);

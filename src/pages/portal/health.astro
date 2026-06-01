@@ -879,7 +879,7 @@ const clients = isAdmin ? await getAllClients() : [];
           title: 'Structured data',
           description: 'Schema markup tells search engines what your pages are about and powers rich results (star ratings, FAQs, breadcrumbs). These pages have markup errors or warnings worth reviewing.',
           stat_lines: [
-            { count: sd.pages_with_errors, label: 'pages with errors', severity: sd.pages_with_errors > 0 ? 'medium' : 'ok' },
+            { count: sd.pages_with_errors, label: 'pages with errors', severity: sd.pages_with_errors > 0 ? 'high' : 'ok' },
             { count: sd.pages_with_warnings, label: 'pages with warnings', severity: 'low' },
           ],
           sample_html: typesHtml + renderUrlList(sd.samples,

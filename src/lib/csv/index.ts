@@ -159,6 +159,16 @@ export async function ingestCSV(
     // index (migration 055) is never violated by a legitimate re-upload.
     // clearPreviousData no-ops for non-FORMAT_SOURCES formats, so use
     // a direct UPDATE here.
+    //
+    // Capture the prior live row's id BEFORE superseding it so we can
+    // restore it in the parse-failure catch below (mirrors the typed-branch
+    // rollback ordering: new row errored first, then prior row restored).
+    const priorUnknown = await turso.execute({
+      sql: `SELECT id FROM csv_uploads WHERE client_id = ? AND month = ? AND detected_format = 'unknown_stored' AND original_name = ? AND error IS NULL LIMIT 1`,
+      args: [clientId, month, filename],
+    });
+    const clearedUnknownId: string | null = priorUnknown.rows.length > 0 ? (priorUnknown.rows[0][0] as string) : null;
+
     await turso.execute({
       sql: `UPDATE csv_uploads SET error = 'Superseded by newer upload'
             WHERE client_id = ? AND month = ? AND detected_format = 'unknown_stored'
@@ -187,10 +197,27 @@ export async function ingestCSV(
       });
       return { uploadId, format: 'unknown_stored' as CsvFormat, rowCount, headers };
     } catch (err: any) {
+      // Error the new (failed) row FIRST — removes it from the partial unique
+      // index — then restore the prior row to live. Same invariant as the
+      // typed-branch catch: new row must leave the index before prior re-enters.
       await turso.execute({
         sql: 'UPDATE csv_uploads SET error = ? WHERE id = ?',
         args: [`Stored as raw but encountered: ${err.message}`, uploadId],
       });
+      if (clearedUnknownId) {
+        try {
+          await turso.execute({
+            sql: 'UPDATE csv_uploads SET error = NULL WHERE id = ?',
+            args: [clearedUnknownId],
+          });
+        } catch (restoreErr: any) {
+          // Swallow: the failed upload is already errored above. If the
+          // restore fails (e.g. a residual concurrent live row exists), the
+          // prior row stays superseded but no live row is left in a corrupt
+          // state. Log for diagnostics.
+          console.error('[ingestCSV] unknown branch: failed to restore prior upload', clearedUnknownId, restoreErr?.message);
+        }
+      }
       return { uploadId, format, rowCount: 0, headers, error: err.message };
     }
   }
@@ -324,18 +351,39 @@ export async function ingestCSV(
       }
     }
 
-    // If we cleared a previous upload's data, un-mark it as superseded
-    if (clearedUploadId) {
-      await turso.execute({
-        sql: 'UPDATE csv_uploads SET error = NULL WHERE id = ?',
-        args: [clearedUploadId],
-      });
-    }
-
+    // CRITICAL ordering: error the new (failed) upload row FIRST so it
+    // leaves the partial unique index (ux_csv_uploads_live) BEFORE we
+    // attempt to restore the prior superseded row. If the prior row's
+    // restore runs while the new row still has error IS NULL, both rows
+    // share the same (client_id, month, detected_format, original_name)
+    // key and the partial index fires a UNIQUE constraint violation,
+    // aborting the rollback and leaving the prior row permanently
+    // superseded with its child rows already deleted — silent data loss.
     await turso.execute({
       sql: 'UPDATE csv_uploads SET error = ? WHERE id = ?',
       args: [err.message, uploadId],
     });
+
+    // With the new row now errored (out of the live index), it is safe
+    // to restore the prior superseded upload. Wrapped in its own
+    // try/catch so that even if some residual concurrent live row exists
+    // (which would re-fire the unique constraint), the failed upload
+    // stays correctly errored and ingestCSV always returns cleanly.
+    if (clearedUploadId) {
+      try {
+        await turso.execute({
+          sql: 'UPDATE csv_uploads SET error = NULL WHERE id = ?',
+          args: [clearedUploadId],
+        });
+      } catch (restoreErr: any) {
+        // Swallow: the failed upload is already marked errored above. If
+        // the restore fails (e.g. a residual concurrent live row exists),
+        // the prior row stays superseded but no live row is left in a
+        // corrupt state. Log for diagnostics.
+        console.error('[ingestCSV] typed branch: failed to restore prior upload', clearedUploadId, restoreErr?.message);
+      }
+    }
+
     return { uploadId, format, rowCount: 0, headers, error: err.message };
   }
 }

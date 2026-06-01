@@ -56,5 +56,115 @@ await test('partial unique index allows one LIVE upload per key, rejects a secon
   assert.strictEqual(Number(live.rows[0][0]), 1, 'exactly one live upload after supersede + re-upload');
 });
 
+// ─── Rollback ordering regression ───────────────────────────────────────────
+//
+// Reproduces the data-loss bug introduced when the supersede-before-insert
+// reorder was added without updating the catch block. The partial unique index
+// ux_csv_uploads_live enforces at most ONE row with error IS NULL per
+// (client_id, month, detected_format, original_name). On parse failure the
+// catch block must:
+//   1. Error the NEW (failed) upload → removes it from the index.
+//   2. THEN restore the prior superseded upload to error IS NULL → safe,
+//      only one live row exists.
+// The OLD (buggy) order did step 2 before step 1, causing a UNIQUE violation
+// that aborted the whole rollback and left the prior row stuck superseded
+// with its child rows already deleted.
+
+async function seedWithIndex() {
+  const db = createClient({ url: 'file::memory:' });
+  await db.execute(`CREATE TABLE csv_uploads (
+    id TEXT PRIMARY KEY,
+    client_id TEXT,
+    original_name TEXT,
+    detected_format TEXT,
+    month TEXT,
+    row_count INTEGER,
+    error TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  )`);
+  await db.execute(`CREATE UNIQUE INDEX ux_csv_uploads_live
+    ON csv_uploads (client_id, month, detected_format, original_name)
+    WHERE error IS NULL`);
+  return db;
+}
+
+await test('FIXED rollback order: error new row first, then restore prior — no unique violation', async () => {
+  const db = await seedWithIndex();
+
+  // Insert a prior live upload (the "good" upload that was superseded).
+  await db.execute({
+    sql: `INSERT INTO csv_uploads (id, client_id, original_name, detected_format, month) VALUES ('prior','c1','report.csv','crawl_internal','2026-05')`,
+    args: [],
+  });
+
+  // Simulate the supersede step: prior row is marked superseded.
+  await db.execute({
+    sql: `UPDATE csv_uploads SET error = 'Superseded by newer upload' WHERE id = 'prior'`,
+    args: [],
+  });
+
+  // Insert the new (failed) upload row — it is currently live (error IS NULL).
+  await db.execute({
+    sql: `INSERT INTO csv_uploads (id, client_id, original_name, detected_format, month) VALUES ('newup','c1','report.csv','crawl_internal','2026-05')`,
+    args: [],
+  });
+
+  // FIXED ORDER: error the new row first, then restore prior.
+  // Step 1 — new row leaves the index.
+  await db.execute({
+    sql: `UPDATE csv_uploads SET error = 'parse failed' WHERE id = 'newup'`,
+    args: [],
+  });
+  // Step 2 — prior row re-enters the index; safe now.
+  await db.execute({
+    sql: `UPDATE csv_uploads SET error = NULL WHERE id = 'prior'`,
+    args: [],
+  });
+
+  const live = await db.execute(
+    `SELECT id, error FROM csv_uploads WHERE client_id='c1' AND original_name='report.csv' AND error IS NULL`,
+  );
+  assert.strictEqual(live.rows.length, 1, 'exactly one live row after rollback');
+  assert.strictEqual(live.rows[0][0], 'prior', 'the live row must be the restored prior upload');
+
+  const newRow = await db.execute(`SELECT error FROM csv_uploads WHERE id = 'newup'`);
+  assert.strictEqual(newRow.rows[0][0], 'parse failed', 'the new (failed) row must be errored');
+});
+
+await test('INVERSE assertion: OLD buggy order (restore prior while new still live) throws unique violation', async () => {
+  const db = await seedWithIndex();
+
+  // Same setup: prior superseded, new row live.
+  await db.execute({
+    sql: `INSERT INTO csv_uploads (id, client_id, original_name, detected_format, month) VALUES ('prior2','c1','report.csv','crawl_internal','2026-06')`,
+    args: [],
+  });
+  await db.execute({
+    sql: `UPDATE csv_uploads SET error = 'Superseded by newer upload' WHERE id = 'prior2'`,
+    args: [],
+  });
+  await db.execute({
+    sql: `INSERT INTO csv_uploads (id, client_id, original_name, detected_format, month) VALUES ('newup2','c1','report.csv','crawl_internal','2026-06')`,
+    args: [],
+  });
+
+  // OLD (buggy) order: attempt to restore prior while the new row is STILL live.
+  // This must throw a UNIQUE constraint violation — that's exactly the bug.
+  let threw = false;
+  try {
+    await db.execute({
+      sql: `UPDATE csv_uploads SET error = NULL WHERE id = 'prior2'`,
+      args: [],
+    });
+  } catch (e) {
+    threw = true;
+    assert.ok(
+      e.message?.includes('UNIQUE') || e.message?.includes('unique'),
+      `expected a UNIQUE constraint error, got: ${e.message}`,
+    );
+  }
+  assert.ok(threw, 'restoring prior row while new row is still live MUST violate the partial unique index');
+});
+
 console.log(`\n${passed}/${passed + failed} passed`);
 if (failed > 0) process.exit(1);

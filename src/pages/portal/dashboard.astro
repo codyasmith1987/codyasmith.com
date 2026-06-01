@@ -386,7 +386,15 @@ actionItems.sort((a, b) => a.urgency - b.urgency);
       const month = summary.current_month || kwData.month;
       const dateEl = document.getElementById('data-date');
       if (month) {
-        dateEl.textContent = new Date(month + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+        // month is "YYYY-MM". Build the date from explicit local parts so it
+        // renders as that calendar month. Parsing the "YYYY-MM-01" string
+        // directly is treated as UTC midnight, which renders as the PRIOR
+        // month in negative-offset timezones (e.g. Mountain showed April for
+        // a May period). Splitting into local Date(year, monthIndex, 1) avoids that.
+        const [y, m] = month.split('-').map(Number);
+        dateEl.textContent = (Number.isFinite(y) && Number.isFinite(m))
+          ? new Date(y, m - 1, 1).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })
+          : 'Date unavailable';
       } else {
         dateEl.textContent = 'Date unavailable';
       }

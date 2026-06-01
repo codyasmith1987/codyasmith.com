@@ -842,8 +842,12 @@ const clients = isAdmin ? await getAllClients() : [];
       }
 
       // ----- Accessibility (WCAG) -----
-      if (data.has_accessibility_data && data.accessibility.pages_with_violations > 0) {
+      // Render whenever accessibility data was ingested, even if clean: a
+      // checked-and-clean result must be visibly distinct from "not run".
+      // The no-findings state shows a neutral line, not a green "all clear".
+      if (data.has_accessibility_data) {
         const ac = data.accessibility;
+        const clean = ac.pages_with_violations === 0;
         const byLevelItems = Object.entries(ac.by_level)
           .map(([k, v]) => `<li>${escapeHtml(k)} <span class="text-neutral-400">${v} page${v !== 1 ? 's' : ''}</span></li>`)
           .join('');
@@ -856,17 +860,23 @@ const clients = isAdmin ? await getAllClients() : [];
           title: 'Accessibility',
           description: 'Pages with accessibility issues that can affect visitors who use assistive technology such as screen readers. Each count is the number of issues the audit flagged on that page.',
           stat_lines: [
-            { count: ac.pages_with_violations, label: 'pages with issues', severity: 'medium' },
+            { count: ac.pages_with_violations, label: 'pages with issues', severity: clean ? 'ok' : 'medium' },
             { count: ac.total_violations, label: 'total issues found', severity: ac.total_violations > 0 ? 'medium' : 'ok' },
           ],
-          sample_html: byLevelHtml + renderUrlList(ac.samples,
-            x => `<li>${urlLink(x.url)} <span class="text-neutral-400">${x.all_violations} issue${x.all_violations !== 1 ? 's' : ''}</span></li>`),
+          sample_html: clean
+            ? `<p class="text-xs text-neutral-400">No accessibility issues flagged in the latest crawl data.</p>`
+            : byLevelHtml + renderUrlList(ac.samples,
+                x => `<li>${urlLink(x.url)} <span class="text-neutral-400">${x.all_violations} issue${x.all_violations !== 1 ? 's' : ''}</span></li>`),
         }));
       }
 
       // ----- Structured data (schema markup) -----
-      if (data.has_structured_data && (data.structured_data.pages_with_errors > 0 || data.structured_data.pages_with_warnings > 0)) {
+      // Render whenever structured-data was ingested. The "types found" list
+      // is useful even with zero errors (shows what schema the site has), and
+      // a clean result must read as checked, not missing.
+      if (data.has_structured_data) {
         const sd = data.structured_data;
+        const clean = sd.pages_with_errors === 0 && sd.pages_with_warnings === 0;
         const typeItems = Object.entries(sd.top_types)
           .map(([k, v]) => `<li>${escapeHtml(k)} <span class="text-neutral-400">${v} page${v !== 1 ? 's' : ''}</span></li>`)
           .join('');
@@ -874,22 +884,29 @@ const clients = isAdmin ? await getAllClients() : [];
           ? `<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">Schema types found</p>
              <ul class="mt-2 space-y-1.5 text-[11px] font-mono text-neutral-400">${typeItems}</ul>`
           : '';
+        const cleanHtml = clean
+          ? `<p class="text-xs text-neutral-400">No schema markup errors or warnings flagged in the latest crawl data.</p>`
+          : renderUrlList(sd.samples,
+              x => `<li>${urlLink(x.url)} <span class="text-neutral-400">${x.error_count} error${x.error_count !== 1 ? 's' : ''}, ${x.warning_count} warning${x.warning_count !== 1 ? 's' : ''}</span></li>`);
         cards.push(widgetCard({
           id: 'widget-structured-data',
           title: 'Structured data',
-          description: 'Schema markup tells search engines what your pages are about and powers rich results (star ratings, FAQs, breadcrumbs). These pages have markup errors or warnings worth reviewing.',
+          description: 'Schema markup tells search engines what your pages are about and powers rich results (star ratings, FAQs, breadcrumbs). Errors or warnings here are worth reviewing.',
           stat_lines: [
             { count: sd.pages_with_errors, label: 'pages with errors', severity: sd.pages_with_errors > 0 ? 'high' : 'ok' },
             { count: sd.pages_with_warnings, label: 'pages with warnings', severity: 'low' },
           ],
-          sample_html: typesHtml + renderUrlList(sd.samples,
-            x => `<li>${urlLink(x.url)} <span class="text-neutral-400">${x.error_count} error${x.error_count !== 1 ? 's' : ''}, ${x.warning_count} warning${x.warning_count !== 1 ? 's' : ''}</span></li>`),
+          sample_html: typesHtml + cleanHtml,
         }));
       }
 
       // ----- Content quality -----
-      if (data.has_content_quality && (data.content_quality.near_duplicate_count > 0 || data.content_quality.spelling_grammar_count > 0 || data.content_quality.hard_to_read_count > 0)) {
+      // Render whenever content data was ingested. Each sub-section shows
+      // only when it has samples; a fully-clean result shows a neutral line
+      // so the client sees the content was checked.
+      if (data.has_content_quality) {
         const cq = data.content_quality;
+        const clean = cq.near_duplicate_count === 0 && cq.spelling_grammar_count === 0 && cq.hard_to_read_count === 0;
         const sections = [];
         if (cq.near_duplicate_samples.length) {
           sections.push(`<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">Near-duplicate content</p>` +
@@ -912,7 +929,9 @@ const clients = isAdmin ? await getAllClients() : [];
             { count: cq.spelling_grammar_count, label: 'pages with spelling/grammar', severity: cq.spelling_grammar_count > 0 ? 'medium' : 'ok' },
             { count: cq.hard_to_read_count, label: 'dense for a general reader', severity: 'low' },
           ],
-          sample_html: sections.join(''),
+          sample_html: clean
+            ? `<p class="text-xs text-neutral-400">No content issues flagged in the latest crawl data.</p>`
+            : sections.join(''),
         }));
       }
 

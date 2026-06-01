@@ -45,6 +45,8 @@ test('topSchemaTypes ignores null/undefined/blank and trims', () => {
 test('topSchemaTypes respects the limit', () => {
   const out = topSchemaTypes(['A, B, C, D'], 2);
   assert.deepStrictEqual(Object.keys(out).length, 2);
+  // All four tie at count 1; alphabetical tie-break selects A and B.
+  assert.deepStrictEqual(out, { A: 1, B: 1 });
 });
 
 test('topSchemaTypes returns {} for all-empty input', () => {

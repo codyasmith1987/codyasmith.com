@@ -9,6 +9,12 @@
 import type { APIRoute } from 'astro';
 import turso from '../../../../lib/turso';
 import { logger } from '../../../../lib/logger';
+import {
+  WCAG_BUCKETS,
+  emptyAccessibility,
+  buildAccessibilityByLevel,
+  type AccessibilityInsights,
+} from '../../../../lib/dashboard/accessibility-insights';
 
 export const prerender = false;
 
@@ -36,6 +42,7 @@ interface UrlInsightsResponse {
   has_image_data: boolean;
   has_redirect_data: boolean;
   has_link_data: boolean;
+  has_accessibility_data: boolean;
   title_quality: {
     missing_count: number;
     too_long_count: number;
@@ -94,6 +101,7 @@ interface UrlInsightsResponse {
       sample_source_urls: string[]; // top 5 source pages, capped
     }>;
   };
+  accessibility: AccessibilityInsights;
 }
 
 export const GET: APIRoute = async ({ locals, url }) => {
@@ -137,12 +145,18 @@ export const GET: APIRoute = async ({ locals, url }) => {
       args: [clientId],
     });
     const linkMonth = (linkMonthRow.rows[0]?.[0] as string | null) ?? null;
+    const accessibilityMonthRow = await turso.execute({
+      sql: 'SELECT MAX(month) FROM accessibility_urls WHERE client_id = ?',
+      args: [clientId],
+    });
+    const accessibilityMonth = (accessibilityMonthRow.rows[0]?.[0] as string | null) ?? null;
 
     const response: UrlInsightsResponse = {
       has_crawl_data: !!crawlMonth,
       has_image_data: !!imageMonth,
       has_redirect_data: !!redirectMonth,
       has_link_data: !!linkMonth,
+      has_accessibility_data: !!accessibilityMonth,
       title_quality: {
         missing_count: 0, too_long_count: 0, too_short_count: 0, duplicate_count: 0,
         sample_missing: [], sample_too_long: [], sample_too_short: [], sample_duplicates: [],
@@ -155,6 +169,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       orphan_pages: { count: 0, samples: [] },
       deep_pages: { over_5_count: 0, over_10_count: 0, samples: [] },
       inbound_broken_links: { broken_destination_count: 0, total_inbound_links: 0, samples: [] },
+      accessibility: emptyAccessibility(),
     };
 
     // Crawl-derived widgets only run when crawl_urls has data for
@@ -483,6 +498,54 @@ export const GET: APIRoute = async ({ locals, url }) => {
           sample_source_urls: sources,
         };
       });
+    }
+
+    // Accessibility (WCAG) widget. Per-URL violation counts from
+    // accessibility_urls. by_level coalesces NULL buckets to 0 via the
+    // pure helper so a partial export cannot miscount or throw.
+    if (accessibilityMonth) {
+      const aCounts = await turso.execute({
+        sql: `SELECT
+                SUM(CASE WHEN all_violations > 0 THEN 1 ELSE 0 END) AS pages_with,
+                COALESCE(SUM(all_violations), 0) AS total
+              FROM accessibility_urls
+              WHERE client_id = ? AND month = ?`,
+        args: [clientId, accessibilityMonth],
+      });
+      const ac = aCounts.rows[0] as any;
+      response.accessibility.pages_with_violations = Number(ac?.[0] || 0);
+      response.accessibility.total_violations = Number(ac?.[1] || 0);
+
+      // Per-bucket page counts: one SUM(CASE...) per WCAG column. The
+      // column names come from the WCAG_BUCKETS constant (no user input),
+      // so interpolating them is safe; clientId/month stay parameterized.
+      const levelSelects = WCAG_BUCKETS
+        .map(b => `SUM(CASE WHEN ${b.column} > 0 THEN 1 ELSE 0 END) AS ${b.column}`)
+        .join(',\n                ');
+      const levelRow = await turso.execute({
+        sql: `SELECT
+                ${levelSelects}
+              FROM accessibility_urls
+              WHERE client_id = ? AND month = ?`,
+        args: [clientId, accessibilityMonth],
+      });
+      const lr = levelRow.rows[0] as any;
+      const countsByColumn: Record<string, number> = {};
+      WCAG_BUCKETS.forEach((b, i) => { countsByColumn[b.column] = Number(lr?.[i] || 0); });
+      response.accessibility.by_level = buildAccessibilityByLevel(countsByColumn);
+
+      const aSamples = await turso.execute({
+        sql: `SELECT url, all_violations, status_code FROM accessibility_urls
+              WHERE client_id = ? AND month = ?
+                AND all_violations > 0
+              ORDER BY all_violations DESC, url LIMIT ?`,
+        args: [clientId, accessibilityMonth, SAMPLE_LIMIT],
+      });
+      response.accessibility.samples = (aSamples.rows as any[]).map(r => ({
+        url: String(r[0]),
+        all_violations: Number(r[1] || 0),
+        status_code: r[2] != null ? Number(r[2]) : null,
+      }));
     }
 
     return json(response);

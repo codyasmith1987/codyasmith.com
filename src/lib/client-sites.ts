@@ -273,6 +273,20 @@ export async function setSitePageCount(clientId: string, siteId: string, pageCou
 // indexable, minus taxonomy/utility/noindex URLs. This is the pricing input
 // for WM ecosystem routing, so it MUST match the dashboard/report count and
 // the F3=6 / ZipKit=70 benchmarks — NOT a raw "text/html rows" count.
+//
+// Crawl data is authoritative for page_count. A fresh crawl's strict
+// real-user-page count always overwrites whatever is stored, because the
+// stored value may reflect an outdated crawl, a raw-html estimate, or a
+// stale admin entry. Manual admin page_count entry (setSitePageCount) is
+// the fallback for when no crawl data exists; when crawl data is present
+// it wins unconditionally (per feedback_connect_to_data principle).
+//
+// Zero-write safety: the SELECT uses GROUP BY hostname over the strict
+// real-user-page filters. COUNT(DISTINCT url) with GROUP BY only returns
+// a row for a hostname when at least one URL matched, so cnt is always
+// >= 1 for every entry in `counts`. A hostname with no real-user-pages is
+// simply absent from the results and its stored value is left untouched.
+// No explicit zero-guard is needed; the structure enforces it.
 export async function syncPerSitePageCounts(clientId: string): Promise<number> {
   let updated = 0;
   let counts: Array<{ hostname: string; count: number }>;
@@ -300,16 +314,8 @@ export async function syncPerSitePageCounts(clientId: string): Promise<number> {
       sql: `UPDATE client_sites
             SET page_count = ?
             WHERE client_id = ?
-              AND domain = ?
-              AND (
-                page_count IS NULL
-                OR page_count = 0
-                OR (
-                  page_count > ?
-                  AND page_count >= ? * 2
-                )
-              )`,
-      args: [c.count, clientId, c.hostname, c.count, c.count],
+              AND domain = ?`,
+      args: [c.count, clientId, c.hostname],
     });
     if (result.rowsAffected && result.rowsAffected > 0) updated++;
   }

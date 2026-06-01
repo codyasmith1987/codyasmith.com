@@ -34,11 +34,13 @@ export function emptyContentQuality(): ContentQualityInsights {
   };
 }
 
-// Flesch reading-ease threshold below which a page is counted "hard to
-// read" (advisory only). 50 is the conventional boundary between
-// "fairly difficult" and easier bands. Exported so the endpoint query
-// and any test share one number.
-export const HARD_TO_READ_FLESCH_MAX = 50;
+// Pages with flesch_reading_ease STRICTLY BELOW this threshold are counted
+// "hard to read" (advisory only). Use strict less-than (<): score 50 itself
+// maps to 'fairly difficult' and is NOT included. 50 is the conventional
+// boundary between "fairly difficult" and easier bands; the existing
+// issue-urls.ts readability filter uses the same `< 50`. Exported so the
+// endpoint query and any test share one number.
+export const HARD_TO_READ_FLESCH_THRESHOLD = 50;
 
 // Map a Flesch reading-ease score to a short, neutral band label.
 // Returns null for null/undefined/non-finite input (no data -> no claim).

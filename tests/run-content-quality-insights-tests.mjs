@@ -2,7 +2,7 @@ import assert from 'node:assert';
 import {
   emptyContentQuality,
   readabilityBand,
-  HARD_TO_READ_FLESCH_MAX,
+  HARD_TO_READ_FLESCH_THRESHOLD,
 } from '../src/lib/dashboard/content-quality-insights.ts';
 
 let passed = 0;
@@ -23,8 +23,8 @@ test('emptyContentQuality is fully zeroed', () => {
   });
 });
 
-test('HARD_TO_READ_FLESCH_MAX is 50', () => {
-  assert.strictEqual(HARD_TO_READ_FLESCH_MAX, 50);
+test('HARD_TO_READ_FLESCH_THRESHOLD is 50', () => {
+  assert.strictEqual(HARD_TO_READ_FLESCH_THRESHOLD, 50);
 });
 
 test('readabilityBand maps the Flesch bands', () => {
@@ -38,6 +38,13 @@ test('readabilityBand maps the Flesch bands', () => {
   assert.strictEqual(readabilityBand(30), 'difficult');
   assert.strictEqual(readabilityBand(10), 'very dense');
   assert.strictEqual(readabilityBand(0), 'very dense');
+  // exclusive upper side of each band
+  assert.strictEqual(readabilityBand(79), 'easy');
+  assert.strictEqual(readabilityBand(59), 'fairly difficult');
+  assert.strictEqual(readabilityBand(49), 'difficult');
+  assert.strictEqual(readabilityBand(29), 'very dense');
+  // negative Flesch (real for very dense technical text) -> very dense
+  assert.strictEqual(readabilityBand(-10), 'very dense');
 });
 
 test('readabilityBand returns null for null/undefined/NaN/Infinity', () => {
@@ -45,6 +52,7 @@ test('readabilityBand returns null for null/undefined/NaN/Infinity', () => {
   assert.strictEqual(readabilityBand(undefined), null);
   assert.strictEqual(readabilityBand(NaN), null);
   assert.strictEqual(readabilityBand(Infinity), null);
+  assert.strictEqual(readabilityBand(-Infinity), null);
 });
 
 console.log(`\n${passed}/${passed + failed} passed`);

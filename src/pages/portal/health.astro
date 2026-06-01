@@ -646,7 +646,7 @@ const clients = isAdmin ? await getAllClients() : [];
       // If no per-URL data exists at all for this client, do not
       // render the section. The existing empty state handles "no
       // health data".
-      if (!data.has_crawl_data && !data.has_image_data && !data.has_redirect_data && !data.has_link_data && !data.has_accessibility_data && !data.has_structured_data) return;
+      if (!data.has_crawl_data && !data.has_image_data && !data.has_redirect_data && !data.has_link_data && !data.has_accessibility_data && !data.has_structured_data && !data.has_content_quality) return;
 
       const cards = [];
 
@@ -884,6 +884,35 @@ const clients = isAdmin ? await getAllClients() : [];
           ],
           sample_html: typesHtml + renderUrlList(sd.samples,
             x => `<li>${urlLink(x.url)} <span class="text-neutral-400">${x.error_count} error${x.error_count !== 1 ? 's' : ''}, ${x.warning_count} warning${x.warning_count !== 1 ? 's' : ''}</span></li>`),
+        }));
+      }
+
+      // ----- Content quality -----
+      if (data.has_content_quality && (data.content_quality.near_duplicate_count > 0 || data.content_quality.spelling_grammar_count > 0 || data.content_quality.hard_to_read_count > 0)) {
+        const cq = data.content_quality;
+        const sections = [];
+        if (cq.near_duplicate_samples.length) {
+          sections.push(`<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">Near-duplicate content</p>` +
+            renderUrlList(cq.near_duplicate_samples, x => `<li>${urlLink(x.url)} <span class="text-neutral-400">${escapeHtml(x.detail)}</span></li>`));
+        }
+        if (cq.spelling_grammar_samples.length) {
+          sections.push(`<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">Spelling and grammar</p>` +
+            renderUrlList(cq.spelling_grammar_samples, x => `<li>${urlLink(x.url)} <span class="text-neutral-400">${escapeHtml(x.detail)}</span></li>`));
+        }
+        if (cq.hard_to_read_samples.length) {
+          sections.push(`<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">Readability (for a general audience)</p>` +
+            renderUrlList(cq.hard_to_read_samples, x => `<li>${urlLink(x.url)} <span class="text-neutral-400">${escapeHtml(x.detail)}</span></li>`));
+        }
+        cards.push(widgetCard({
+          id: 'widget-content-quality',
+          title: 'Content quality',
+          description: 'Pages worth a content review: close duplicates of other pages, spelling or grammar errors, and pages that read dense for a general audience. Dense reading is only a flag worth a look, not a problem on its own (technical pages are expected to read dense).',
+          stat_lines: [
+            { count: cq.near_duplicate_count, label: 'near-duplicate pages', severity: cq.near_duplicate_count > 0 ? 'medium' : 'ok' },
+            { count: cq.spelling_grammar_count, label: 'pages with spelling/grammar', severity: cq.spelling_grammar_count > 0 ? 'medium' : 'ok' },
+            { count: cq.hard_to_read_count, label: 'dense for a general reader', severity: 'low' },
+          ],
+          sample_html: sections.join(''),
         }));
       }
 

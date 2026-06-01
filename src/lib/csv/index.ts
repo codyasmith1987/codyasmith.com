@@ -75,38 +75,58 @@ const FORMAT_SOURCES: Record<string, { tables: string[]; source: string }> = {
   // same filename twice replaces, while sibling unknowns coexist.
 };
 
-async function clearPreviousData(clientId: string, month: string, format: string, currentUploadId: string): Promise<string | null> {
+async function clearPreviousData(
+  clientId: string,
+  month: string,
+  format: string,
+  filename: string,
+  currentUploadId: string,
+  db: typeof turso = turso,
+): Promise<string | null> {
   const config = FORMAT_SOURCES[format];
   if (!config) return null;
 
-  // Find previous upload IDs for this client+month+format (not the current one)
-  const prevUploads = await turso.execute({
-    sql: 'SELECT id FROM csv_uploads WHERE client_id = ? AND month = ? AND detected_format = ? AND id != ? ORDER BY created_at ASC',
-    args: [clientId, month, format, currentUploadId],
+  // Find previous uploads for this client+month+format+FILENAME (not the
+  // current one). Keying on original_name is what lets sibling files of the
+  // same detected_format (e.g. internal_all.csv vs internal_html.csv, or the
+  // 60+ accessibility_*.csv per-issue files) coexist instead of wiping each
+  // other. Mirrors the per-key dedup proven for issue_urls (by issue_name)
+  // and links (by source_file).
+  const prevUploads = await db.execute({
+    sql: 'SELECT id FROM csv_uploads WHERE client_id = ? AND month = ? AND detected_format = ? AND original_name = ? AND id != ? ORDER BY created_at ASC',
+    args: [clientId, month, format, filename, currentUploadId],
   });
 
   if (prevUploads.rows.length === 0) return null;
 
   const prevIds = prevUploads.rows.map(r => r[0] as string);
 
-  // Only clear data from the MOST RECENT previous upload of this format,
+  // Only clear data from the MOST RECENT previous upload of this key,
   // not ALL previous uploads. This prevents accumulating stale data while
   // preserving intentional multi-file uploads within the same month.
   const latestPrevId = prevIds[prevIds.length - 1];
   for (const table of config.tables) {
-    await turso.execute({
+    await db.execute({
       sql: `DELETE FROM ${table} WHERE client_id = ? AND month = ? AND csv_upload_id = ?`,
       args: [clientId, month, latestPrevId],
     });
   }
 
   // Mark old upload records as superseded (keep for history, don't delete)
-  await turso.execute({
+  await db.execute({
     sql: 'UPDATE csv_uploads SET error = ? WHERE id = ?',
     args: ['Superseded by newer upload', latestPrevId],
   });
 
   return latestPrevId;
+}
+
+// Test-only seam: lets the unit test exercise clearPreviousData against an
+// in-memory libsql db without prod. Not used in app code.
+export async function __clearPreviousDataForTest(
+  db: typeof turso, clientId: string, month: string, format: string, filename: string, currentUploadId: string,
+): Promise<string | null> {
+  return clearPreviousData(clientId, month, format, filename, currentUploadId, db);
 }
 
 export interface IngestResult {
@@ -127,20 +147,39 @@ export async function ingestCSV(
   const { format, headers } = detectFormat(raw, filename);
   const uploadId = nanoid();
 
-  // Create upload record
-  await turso.execute({
-    sql: 'INSERT INTO csv_uploads (id, client_id, original_name, detected_format, month, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)',
-    args: [uploadId, clientId, filename, format, month, uploadedBy],
-  });
-
   if (format === 'unknown') {
     // Don't reject. Store the raw text + headers so a later parser
     // can be added and process this file retroactively without
     // re-upload. The detector ran first to confirm this is a CSV
     // shape; if Papa.parse failed to extract headers the file may
     // still be malformed but we'd rather store it than lose it.
+    //
+    // Supersede any prior live 'unknown_stored' row for this exact
+    // filename BEFORE inserting the new row, so the partial unique
+    // index (migration 055) is never violated by a legitimate re-upload.
+    // clearPreviousData no-ops for non-FORMAT_SOURCES formats, so use
+    // a direct UPDATE here.
+    await turso.execute({
+      sql: `UPDATE csv_uploads SET error = 'Superseded by newer upload'
+            WHERE client_id = ? AND month = ? AND detected_format = 'unknown_stored'
+              AND original_name = ? AND error IS NULL`,
+      args: [clientId, month, filename],
+    });
+
+    // Create upload record
     try {
-      const clearedUploadId = await clearPreviousData(clientId, month, 'unknown_stored', uploadId);
+      await turso.execute({
+        sql: 'INSERT INTO csv_uploads (id, client_id, original_name, detected_format, month, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)',
+        args: [uploadId, clientId, filename, format, month, uploadedBy],
+      });
+    } catch (insertErr: any) {
+      if (insertErr.message?.includes('UNIQUE constraint')) {
+        return { uploadId, format, rowCount: 0, headers, error: 'A concurrent upload of this file is already being processed' };
+      }
+      throw insertErr;
+    }
+
+    try {
       const rowCount = await parseRawCsv(raw, clientId, month, uploadId, filename);
       await turso.execute({
         sql: 'UPDATE csv_uploads SET detected_format = ?, row_count = ?, processed_at = datetime(\'now\') WHERE id = ?',
@@ -156,10 +195,36 @@ export async function ingestCSV(
     }
   }
 
+  // Supersede any prior LIVE upload of this exact key BEFORE inserting the
+  // new row, so the partial unique index (migration 055) is never violated
+  // by a legitimate re-upload. Also clears the prior upload's child rows
+  // for formats in FORMAT_SOURCES (per-filename key from Task 1).
+  // Track what was cleared so we can undo if parsing fails.
+  const clearedUploadId = await clearPreviousData(clientId, month, format, filename, uploadId);
+
+  // Create upload record (after supersede so the partial unique index is satisfied)
   try {
-    // Clear old data for this client+month+source before inserting.
-    // Track what was cleared so we can undo if parsing fails.
-    const clearedUploadId = await clearPreviousData(clientId, month, format, uploadId);
+    await turso.execute({
+      sql: 'INSERT INTO csv_uploads (id, client_id, original_name, detected_format, month, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)',
+      args: [uploadId, clientId, filename, format, month, uploadedBy],
+    });
+  } catch (insertErr: any) {
+    if (insertErr.message?.includes('UNIQUE constraint')) {
+      // A concurrent upload raced in between our supersede and this insert.
+      // Un-supersede the prior row we just marked, since we're not taking over.
+      if (clearedUploadId) {
+        await turso.execute({
+          sql: 'UPDATE csv_uploads SET error = NULL WHERE id = ?',
+          args: [clearedUploadId],
+        });
+      }
+      return { uploadId, format, rowCount: 0, headers, error: 'A concurrent upload of this file is already being processed' };
+    }
+    throw insertErr;
+  }
+
+  try {
+    // Clear has already happened above. Parse and write child rows.
 
     let rowCount = 0;
 

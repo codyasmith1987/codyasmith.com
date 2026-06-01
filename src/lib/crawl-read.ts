@@ -8,6 +8,7 @@
 // unlike the dashboard which resolves each table's month independently.
 
 import turso from './turso';
+import { realUserPageRowFilters, realUserPageUrlExclusions } from './csv/page-count-sql';
 
 export interface SiteIssueRow {
   issue_name: string;
@@ -30,41 +31,6 @@ export interface HealthMonthData {
 export interface ResponseCodeCount {
   code: string;          // '2xx' | '3xx' | '4xx' | '5xx'
   count: number | null;
-}
-
-// Utility-URL exclusions and crawl-row filters, lifted verbatim from
-// dashboard/crawl-stats.ts so the report's "navigable pages" count matches
-// the dashboard's exactly (the count a client would make by hand).
-function urlPatternExclusions(col: string): string {
-  return `
-    AND ${col} NOT LIKE '%/tag/%'
-    AND ${col} NOT LIKE '%/category/%'
-    AND ${col} NOT LIKE '%/author/%'
-    AND ${col} NOT LIKE '%/feed/%'
-    AND ${col} NOT LIKE '%/feed'
-    AND ${col} NOT LIKE '%/embed/%'
-    AND ${col} NOT LIKE '%/embed'
-    AND ${col} NOT LIKE '%/attachment/%'
-    AND ${col} NOT LIKE '%/wp-content/%'
-    AND ${col} NOT LIKE '%/wp-includes/%'
-    AND ${col} NOT LIKE '%/wp-admin/%'
-    AND ${col} NOT LIKE '%/wp-json/%'
-    AND ${col} NOT LIKE '%/cdn-cgi/%'
-    AND ${col} NOT LIKE '%?attachment_id=%'
-    AND ${col} NOT LIKE '%?attachment=%'
-    AND ${col} NOT LIKE '%?replytocom=%'
-    AND ${col} NOT LIKE '%?p=%'
-    AND ${col} NOT LIKE '%?paged=%'
-    AND ${col} NOT GLOB '*/page/[0-9]*'
-  `;
-}
-function pageRowFilters(prefix = ''): string {
-  const p = prefix ? `${prefix}.` : '';
-  return `
-    AND ${p}status_code = 200
-    AND LOWER(IFNULL(${p}content_type, '')) LIKE '%html%'
-    AND LOWER(IFNULL(${p}indexability, '')) != 'non-indexable'
-  `;
 }
 
 // Canonical priority bucketing, matching score.ts: critical|high -> high,
@@ -142,8 +108,8 @@ export async function getNavigablePageCount(clientId: string, month?: string): P
           FROM crawl_urls
           WHERE client_id = ?
           ${monthClause}
-          ${pageRowFilters()}
-          ${urlPatternExclusions('url')}`,
+          ${realUserPageRowFilters()}
+          ${realUserPageUrlExclusions('url')}`,
     args,
   });
   return (res.rows[0]?.[0] as number) || 0;

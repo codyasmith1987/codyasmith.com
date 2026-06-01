@@ -646,7 +646,7 @@ const clients = isAdmin ? await getAllClients() : [];
       // If no per-URL data exists at all for this client, do not
       // render the section. The existing empty state handles "no
       // health data".
-      if (!data.has_crawl_data && !data.has_image_data && !data.has_redirect_data) return;
+      if (!data.has_crawl_data && !data.has_image_data && !data.has_redirect_data && !data.has_link_data && !data.has_accessibility_data) return;
 
       const cards = [];
 
@@ -838,6 +838,29 @@ const clients = isAdmin ? await getAllClients() : [];
                 </ul>`;
             return `<li>${urlLink(x.destination_url)} <span class="text-neutral-400">${x.status_code}, ${x.inbound_count} inbound</span>${sources}</li>`;
           }),
+        }));
+      }
+
+      // ----- Accessibility (WCAG) -----
+      if (data.has_accessibility_data && data.accessibility.pages_with_violations > 0) {
+        const ac = data.accessibility;
+        const byLevelItems = Object.entries(ac.by_level)
+          .map(([k, v]) => `<li>${escapeHtml(k)} <span class="text-neutral-400">${v} page${v !== 1 ? 's' : ''}</span></li>`)
+          .join('');
+        const byLevelHtml = byLevelItems
+          ? `<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">By standard</p>
+             <ul class="mt-2 space-y-1.5 text-[11px] font-mono text-neutral-400">${byLevelItems}</ul>`
+          : '';
+        cards.push(widgetCard({
+          id: 'widget-accessibility',
+          title: 'Accessibility',
+          description: 'Pages with accessibility issues that can affect visitors who use assistive technology such as screen readers. Each count is the number of issues the audit flagged on that page.',
+          stat_lines: [
+            { count: ac.pages_with_violations, label: 'pages with issues', severity: 'medium' },
+            { count: ac.total_violations, label: 'total issues found', severity: ac.total_violations > 0 ? 'medium' : 'ok' },
+          ],
+          sample_html: byLevelHtml + renderUrlList(ac.samples,
+            x => `<li>${urlLink(x.url)} <span class="text-neutral-400">${x.all_violations} issue${x.all_violations !== 1 ? 's' : ''}</span></li>`),
         }));
       }
 

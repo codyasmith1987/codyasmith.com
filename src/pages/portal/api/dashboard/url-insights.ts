@@ -20,6 +20,12 @@ import {
   topSchemaTypes,
   type StructuredDataInsights,
 } from '../../../../lib/dashboard/structured-data-insights';
+import {
+  emptyContentQuality,
+  readabilityBand,
+  HARD_TO_READ_FLESCH_THRESHOLD,
+  type ContentQualityInsights,
+} from '../../../../lib/dashboard/content-quality-insights';
 
 export const prerender = false;
 
@@ -49,6 +55,7 @@ interface UrlInsightsResponse {
   has_link_data: boolean;
   has_accessibility_data: boolean;
   has_structured_data: boolean;
+  has_content_quality: boolean;
   title_quality: {
     missing_count: number;
     too_long_count: number;
@@ -109,6 +116,7 @@ interface UrlInsightsResponse {
   };
   accessibility: AccessibilityInsights;
   structured_data: StructuredDataInsights;
+  content_quality: ContentQualityInsights;
 }
 
 export const GET: APIRoute = async ({ locals, url }) => {
@@ -162,6 +170,11 @@ export const GET: APIRoute = async ({ locals, url }) => {
       args: [clientId],
     });
     const structuredMonth = (structuredMonthRow.rows[0]?.[0] as string | null) ?? null;
+    const contentMonthRow = await turso.execute({
+      sql: 'SELECT MAX(month) FROM content_urls WHERE client_id = ?',
+      args: [clientId],
+    });
+    const contentMonth = (contentMonthRow.rows[0]?.[0] as string | null) ?? null;
 
     const response: UrlInsightsResponse = {
       has_crawl_data: !!crawlMonth,
@@ -170,6 +183,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       has_link_data: !!linkMonth,
       has_accessibility_data: !!accessibilityMonth,
       has_structured_data: !!structuredMonth,
+      has_content_quality: !!contentMonth,
       title_quality: {
         missing_count: 0, too_long_count: 0, too_short_count: 0, duplicate_count: 0,
         sample_missing: [], sample_too_long: [], sample_too_short: [], sample_duplicates: [],
@@ -184,6 +198,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       inbound_broken_links: { broken_destination_count: 0, total_inbound_links: 0, samples: [] },
       accessibility: emptyAccessibility(),
       structured_data: emptyStructuredData(),
+      content_quality: emptyContentQuality(),
     };
 
     // Crawl-derived widgets only run when crawl_urls has data for
@@ -607,6 +622,72 @@ export const GET: APIRoute = async ({ locals, url }) => {
         error_count: Number(r[1] || 0),
         warning_count: Number(r[2] || 0),
       }));
+    }
+
+    // Content-quality widget. Three independent signals from content_urls:
+    // near-duplicate content, spelling/grammar errors, and (advisory)
+    // readability via Flesch reading-ease. "Hard to read" uses STRICT
+    // less-than the threshold; score 50 is "fairly difficult", not hard.
+    if (contentMonth) {
+      const cqCounts = await turso.execute({
+        sql: `SELECT
+                SUM(CASE WHEN near_duplicate_count > 0 THEN 1 ELSE 0 END) AS dupes,
+                SUM(CASE WHEN COALESCE(spelling_errors,0) > 0 OR COALESCE(grammar_errors,0) > 0 THEN 1 ELSE 0 END) AS spellgram,
+                SUM(CASE WHEN flesch_reading_ease IS NOT NULL AND flesch_reading_ease < ? THEN 1 ELSE 0 END) AS hardread
+              FROM content_urls
+              WHERE client_id = ? AND month = ?`,
+        args: [HARD_TO_READ_FLESCH_THRESHOLD, clientId, contentMonth],
+      });
+      const cq = cqCounts.rows[0] as any;
+      response.content_quality.near_duplicate_count = Number(cq?.[0] || 0);
+      response.content_quality.spelling_grammar_count = Number(cq?.[1] || 0);
+      response.content_quality.hard_to_read_count = Number(cq?.[2] || 0);
+
+      // Near-duplicate samples: worst (most duplicates) first.
+      const dupeSamples = await turso.execute({
+        sql: `SELECT url, near_duplicate_count, closest_near_duplicate_url FROM content_urls
+              WHERE client_id = ? AND month = ?
+                AND near_duplicate_count > 0
+              ORDER BY near_duplicate_count DESC, url LIMIT ?`,
+        args: [clientId, contentMonth, SAMPLE_LIMIT],
+      });
+      response.content_quality.near_duplicate_samples = (dupeSamples.rows as any[]).map(r => {
+        const n = Number(r[1] || 0);
+        const match = r[2] != null ? String(r[2]) : '';
+        const detail = match
+          ? `${n} near-duplicate${n !== 1 ? 's' : ''}, closest: ${match}`
+          : `${n} near-duplicate${n !== 1 ? 's' : ''}`;
+        return { url: String(r[0]), detail };
+      });
+
+      // Spelling/grammar samples: worst (most combined errors) first.
+      const sgSamples = await turso.execute({
+        sql: `SELECT url, COALESCE(spelling_errors,0) AS sp, COALESCE(grammar_errors,0) AS gr FROM content_urls
+              WHERE client_id = ? AND month = ?
+                AND (COALESCE(spelling_errors,0) > 0 OR COALESCE(grammar_errors,0) > 0)
+              ORDER BY (COALESCE(spelling_errors,0) + COALESCE(grammar_errors,0)) DESC, url LIMIT ?`,
+        args: [clientId, contentMonth, SAMPLE_LIMIT],
+      });
+      response.content_quality.spelling_grammar_samples = (sgSamples.rows as any[]).map(r => {
+        const sp = Number(r[1] || 0);
+        const gr = Number(r[2] || 0);
+        return { url: String(r[0]), detail: `${sp} spelling, ${gr} grammar` };
+      });
+
+      // Hard-to-read samples: lowest Flesch (densest) first. Detail carries
+      // the neutral band label from the pure helper.
+      const hrSamples = await turso.execute({
+        sql: `SELECT url, flesch_reading_ease FROM content_urls
+              WHERE client_id = ? AND month = ?
+                AND flesch_reading_ease IS NOT NULL AND flesch_reading_ease < ?
+              ORDER BY flesch_reading_ease ASC, url LIMIT ?`,
+        args: [clientId, contentMonth, HARD_TO_READ_FLESCH_THRESHOLD, SAMPLE_LIMIT],
+      });
+      response.content_quality.hard_to_read_samples = (hrSamples.rows as any[]).map(r => {
+        const flesch = r[1] != null ? Number(r[1]) : null;
+        const band = readabilityBand(flesch);
+        return { url: String(r[0]), detail: band ? `reads ${band}` : 'low readability score' };
+      });
     }
 
     return json(response);

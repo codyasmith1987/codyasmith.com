@@ -15,6 +15,11 @@ import {
   buildAccessibilityByLevel,
   type AccessibilityInsights,
 } from '../../../../lib/dashboard/accessibility-insights';
+import {
+  emptyStructuredData,
+  topSchemaTypes,
+  type StructuredDataInsights,
+} from '../../../../lib/dashboard/structured-data-insights';
 
 export const prerender = false;
 
@@ -43,6 +48,7 @@ interface UrlInsightsResponse {
   has_redirect_data: boolean;
   has_link_data: boolean;
   has_accessibility_data: boolean;
+  has_structured_data: boolean;
   title_quality: {
     missing_count: number;
     too_long_count: number;
@@ -102,6 +108,7 @@ interface UrlInsightsResponse {
     }>;
   };
   accessibility: AccessibilityInsights;
+  structured_data: StructuredDataInsights;
 }
 
 export const GET: APIRoute = async ({ locals, url }) => {
@@ -150,6 +157,11 @@ export const GET: APIRoute = async ({ locals, url }) => {
       args: [clientId],
     });
     const accessibilityMonth = (accessibilityMonthRow.rows[0]?.[0] as string | null) ?? null;
+    const structuredMonthRow = await turso.execute({
+      sql: 'SELECT MAX(month) FROM structured_data_urls WHERE client_id = ?',
+      args: [clientId],
+    });
+    const structuredMonth = (structuredMonthRow.rows[0]?.[0] as string | null) ?? null;
 
     const response: UrlInsightsResponse = {
       has_crawl_data: !!crawlMonth,
@@ -157,6 +169,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       has_redirect_data: !!redirectMonth,
       has_link_data: !!linkMonth,
       has_accessibility_data: !!accessibilityMonth,
+      has_structured_data: !!structuredMonth,
       title_quality: {
         missing_count: 0, too_long_count: 0, too_short_count: 0, duplicate_count: 0,
         sample_missing: [], sample_too_long: [], sample_too_short: [], sample_duplicates: [],
@@ -170,6 +183,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       deep_pages: { over_5_count: 0, over_10_count: 0, samples: [] },
       inbound_broken_links: { broken_destination_count: 0, total_inbound_links: 0, samples: [] },
       accessibility: emptyAccessibility(),
+      structured_data: emptyStructuredData(),
     };
 
     // Crawl-derived widgets only run when crawl_urls has data for
@@ -545,6 +559,53 @@ export const GET: APIRoute = async ({ locals, url }) => {
         url: String(r[0]),
         all_violations: Number(r[1] || 0),
         status_code: r[2] != null ? Number(r[2]) : null,
+      }));
+    }
+
+    // Structured-data (schema markup) widget. Per-URL error/warning
+    // counts from structured_data_urls; top_types tallies the most
+    // common schema types across the sampled pages.
+    if (structuredMonth) {
+      const sdCounts = await turso.execute({
+        sql: `SELECT
+                SUM(CASE WHEN error_count > 0 THEN 1 ELSE 0 END) AS pages_err,
+                SUM(CASE WHEN warning_count > 0 THEN 1 ELSE 0 END) AS pages_warn,
+                COALESCE(SUM(error_count), 0) AS total_err,
+                COALESCE(SUM(warning_count), 0) AS total_warn
+              FROM structured_data_urls
+              WHERE client_id = ? AND month = ?`,
+        args: [clientId, structuredMonth],
+      });
+      const sd = sdCounts.rows[0] as any;
+      response.structured_data.pages_with_errors = Number(sd?.[0] || 0);
+      response.structured_data.pages_with_warnings = Number(sd?.[1] || 0);
+      response.structured_data.total_errors = Number(sd?.[2] || 0);
+      response.structured_data.total_warnings = Number(sd?.[3] || 0);
+
+      // top_types: gather types_list across pages that declare any schema
+      // type, then tally page-counts per type via the pure helper.
+      const typeRows = await turso.execute({
+        sql: `SELECT types_list FROM structured_data_urls
+              WHERE client_id = ? AND month = ?
+                AND types_list IS NOT NULL AND types_list != ''`,
+        args: [clientId, structuredMonth],
+      });
+      response.structured_data.top_types = topSchemaTypes(
+        (typeRows.rows as any[]).map(r => (r[0] != null ? String(r[0]) : null)),
+      );
+
+      // samples: worst pages by error then warning count.
+      const sdSamples = await turso.execute({
+        sql: `SELECT url, error_count, warning_count FROM structured_data_urls
+              WHERE client_id = ? AND month = ?
+                AND (error_count > 0 OR warning_count > 0)
+              ORDER BY error_count DESC, warning_count DESC, url LIMIT ?`,
+        args: [clientId, structuredMonth, SAMPLE_LIMIT],
+      });
+      response.structured_data.samples = (sdSamples.rows as any[]).map(r => ({
+        url: String(r[0]),
+        error_count: Number(r[1] || 0),
+        warning_count: Number(r[2] || 0),
       }));
     }
 

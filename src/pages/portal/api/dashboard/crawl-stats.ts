@@ -39,56 +39,12 @@
 
 import type { APIRoute } from 'astro';
 import turso from '../../../../lib/turso';
+import { realUserPageRowFilters, realUserPageUrlExclusions } from '../../../../lib/csv/page-count-sql';
 
 export const prerender = false;
 
 const json = (data: any, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
-
-// URL-shape exclusions for utility URLs. Same patterns apply to any
-// column holding a URL, so the helper takes the qualified column
-// expression. LIKE handles literal substring matches; GLOB lets us
-// match digits in pagination paths.
-//
-// Adding a pattern: add the LIKE / GLOB line here. Both queries that
-// use this helper (the page count and the affected-page count) get
-// the new exclusion automatically.
-function urlPatternExclusions(col: string): string {
-  return `
-    AND ${col} NOT LIKE '%/tag/%'
-    AND ${col} NOT LIKE '%/category/%'
-    AND ${col} NOT LIKE '%/author/%'
-    AND ${col} NOT LIKE '%/feed/%'
-    AND ${col} NOT LIKE '%/feed'
-    AND ${col} NOT LIKE '%/embed/%'
-    AND ${col} NOT LIKE '%/embed'
-    AND ${col} NOT LIKE '%/attachment/%'
-    AND ${col} NOT LIKE '%/wp-content/%'
-    AND ${col} NOT LIKE '%/wp-includes/%'
-    AND ${col} NOT LIKE '%/wp-admin/%'
-    AND ${col} NOT LIKE '%/wp-json/%'
-    AND ${col} NOT LIKE '%/cdn-cgi/%'
-    AND ${col} NOT LIKE '%?attachment_id=%'
-    AND ${col} NOT LIKE '%?attachment=%'
-    AND ${col} NOT LIKE '%?replytocom=%'
-    AND ${col} NOT LIKE '%?p=%'
-    AND ${col} NOT LIKE '%?paged=%'
-    AND ${col} NOT GLOB '*/page/[0-9]*'
-  `;
-}
-
-// Crawl-row filters: status 200, HTML content-type, not flagged
-// "Non-Indexable" by Screaming Frog. SF tags non-indexable for
-// canonicalised, noindex, and robots-blocked URLs — none of which a
-// client would list as a page.
-function pageRowFilters(prefix: string = ''): string {
-  const p = prefix ? `${prefix}.` : '';
-  return `
-    AND ${p}status_code = 200
-    AND LOWER(IFNULL(${p}content_type, '')) LIKE '%html%'
-    AND LOWER(IFNULL(${p}indexability, '')) != 'non-indexable'
-  `;
-}
 
 export const GET: APIRoute = async ({ locals, url }) => {
   if (!locals.user) return json({ error: 'Unauthorized' }, 401);
@@ -104,8 +60,8 @@ export const GET: APIRoute = async ({ locals, url }) => {
     sql: `SELECT COUNT(DISTINCT url) AS n
           FROM crawl_urls
           WHERE client_id = ?
-          ${pageRowFilters()}
-          ${urlPatternExclusions('url')}`,
+          ${realUserPageRowFilters()}
+          ${realUserPageUrlExclusions('url')}`,
     args: [clientId],
   });
   const navigablePages = (pagesResult.rows[0]?.[0] as number) || 0;
@@ -126,7 +82,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
   // Distinct affected URLs: pages with at least one issue at the
   // latest month, run through the same utility filter so the X
   // numerator and the Y denominator describe the same set. Joined
-  // back to crawl_urls so we can apply pageRowFilters (status,
+  // back to crawl_urls so we can apply realUserPageRowFilters (status,
   // content-type, indexability live there, not on site_issue_urls).
   const monthResult = await turso.execute({
     sql: 'SELECT DISTINCT month FROM site_issue_urls WHERE client_id = ? ORDER BY month DESC LIMIT 1',
@@ -143,8 +99,8 @@ export const GET: APIRoute = async ({ locals, url }) => {
               ON cu.url = siu.url AND cu.client_id = siu.client_id
             WHERE siu.client_id = ?
               AND siu.month = ?
-            ${pageRowFilters('cu')}
-            ${urlPatternExclusions('siu.url')}`,
+            ${realUserPageRowFilters('cu')}
+            ${realUserPageUrlExclusions('siu.url')}`,
       args: [clientId, month],
     });
     distinctAffectedUrls = (affectedResult.rows[0]?.[0] as number) || 0;

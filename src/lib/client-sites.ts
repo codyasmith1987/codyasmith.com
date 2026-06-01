@@ -15,6 +15,7 @@
 import { nanoid } from 'nanoid';
 import turso from './turso';
 import { getClientDomainsFromData } from './client-domains';
+import { realUserPageRowFilters, realUserPageUrlExclusions } from './csv/page-count-sql';
 
 export interface ClientSite {
   id: string;
@@ -267,20 +268,21 @@ export async function setSitePageCount(clientId: string, siteId: string, pageCou
   });
 }
 
-// Auto-bind per-site page_count from uploaded crawl data. Groups
-// canonical HTML page rows by hostname and writes the count to each
-// matching client_sites row. Resource URLs (images, CSS, JS, PDFs)
-// are deliberately excluded: page_count is a pricing input, not a
-// "URLs encountered" metric.
+// Auto-bind per-site page_count from uploaded crawl data using the SINGLE
+// real-user-page definition (page-count-sql.ts): status 200 + html +
+// indexable, minus taxonomy/utility/noindex URLs. This is the pricing input
+// for WM ecosystem routing, so it MUST match the dashboard/report count and
+// the F3=6 / ZipKit=70 benchmarks — NOT a raw "text/html rows" count.
 export async function syncPerSitePageCounts(clientId: string): Promise<number> {
   let updated = 0;
   let counts: Array<{ hostname: string; count: number }>;
   try {
     const result = await turso.execute({
-      sql: `SELECT hostname, COUNT(*) as cnt
+      sql: `SELECT hostname, COUNT(DISTINCT url) as cnt
             FROM crawl_urls
             WHERE client_id = ?
-              AND lower(COALESCE(content_type, '')) LIKE 'text/html%'
+            ${realUserPageRowFilters()}
+            ${realUserPageUrlExclusions('url')}
             GROUP BY hostname`,
       args: [clientId],
     });

@@ -41,7 +41,7 @@ Engagement-strategy synthesis. The proposal is a sales tool. Beyond raw research
 
 The practice sells three products plus separately-scoped Build work:
 
-  - Web Management (WM): per-site recurring fee, keeps an existing site running, secure, monitored, updated, backed up. Includes a pool of hands-on hours for site work. Sold per site; multi-site formula applies (additional sites at 80% of base monthly).
+  - Web Management (WM): per-site recurring fee, keeps an existing site running, secure, monitored, updated, backed up. Includes a pool of hands-on hours for site work. Sold per site; multi-site formula applies (additional sites at 90% of base monthly, a 10% multi-site discount).
   - Marketing Consulting (MC): per-business recurring fee, advisory only, broader-advisory scope (marketing, search and content strategy, brand positioning, operations, hiring guidance, vendor selection, organizational design, growth planning). Constraint is FORMAT (advise, never execute), not subject. Tier sets call frequency and deep-advisory cadence.
   - Training: per-business recurring fee, sold on its own; bundled free with Best-tier WM or MC.
   - Build: separately-scoped fixed-fee project. Not part of WM or MC. Build replaces onboarding for the site it produces; the site moves onto WM at launch.

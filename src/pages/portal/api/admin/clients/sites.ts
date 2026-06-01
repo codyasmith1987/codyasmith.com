@@ -173,7 +173,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       // Per-site pricing override. null/empty value clears so the
       // site falls back to formula pricing. Any non-null number
       // (including 0) sets the exact per-site contribution and
-      // bypasses the multi-site 0.80 multiplier for that site.
+      // bypasses the multi-site 0.90 multiplier for that site.
       // Use cases: pro-bono ($0), grandfathered legacy rates.
       const siteId = (body?.site_id || '').toString().trim();
       if (!siteId) return json({ error: 'site_id is required' }, 400);

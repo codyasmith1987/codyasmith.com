@@ -71,7 +71,7 @@ export interface Ecosystem<E extends EcosystemId = EcosystemId> {
   band?: string;                         // routing band description (e.g., "<30 pages")
   tiers: Record<TierId, TierDefaults>;   // good/better/best (custom is optional)
   // Per-product extras. Optional so other products can extend.
-  multi_unit_monthly_discount?: number;  // 0.80 for WM's 80% multi-site
+  multi_unit_monthly_discount?: number;  // 0.90 for WM's 10%-off multi-site
   multi_unit_onb_discount?: number;      // 1.0 = no discount (per 05 §4 takeover rule)
 }
 
@@ -395,7 +395,7 @@ export interface ProductContext {
     is_primary?: boolean;
     page_count?: number | null;
     // Per-site overrides. NULL = use formula. Non-null (including 0)
-    // = use this exact amount; multi-site 0.80 multiplier is skipped
+    // = use this exact amount; multi-site 0.90 multiplier is skipped
     // for this site because the override IS the price. Pro-bono and
     // grandfathered carve-outs.
     monthly_override?: number | null;
@@ -661,7 +661,7 @@ export interface ComposeArgs {
     is_primary?: boolean;
     page_count?: number | null;
     // Per-site overrides. NULL = use formula. Non-null (including 0)
-    // = use this exact amount; multi-site 0.80 multiplier is skipped
+    // = use this exact amount; multi-site 0.90 multiplier is skipped
     // for this site because the override IS the price. Pro-bono and
     // grandfathered carve-outs.
     monthly_override?: number | null;

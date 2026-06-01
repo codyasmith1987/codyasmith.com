@@ -43,7 +43,7 @@ export interface ClientSite {
   went_live_at: string | null;
   // Per-site pricing overrides. NULL = use the formula. Any non-null
   // value (including 0) = use that exact amount as the per-site
-  // contribution; the multi-site 0.80 multiplier is skipped for this
+  // contribution; the multi-site 0.90 multiplier is skipped for this
   // site because the override IS the price. Use cases: pro-bono ($0),
   // grandfathered legacy rates, per-site sweetheart deals. Client-
   // level discount_rate still applies uniformly per existing pricing

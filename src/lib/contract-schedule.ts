@@ -137,7 +137,7 @@ export interface WebManagementSection {
   // Each site carries its own ecosystem and per-site monthly + onboarding
   // contribution per the locked multi-site formula (2026-05-24):
   // primary pays full base for its own ecosystem; each additional site
-  // pays 0.80 of its own ecosystem base. The contract renders these
+  // pays 0.90 of its own ecosystem base. The contract renders these
   // per-site rows so the buyer sees how the total breaks down.
   sites: Array<{
     domain: string;

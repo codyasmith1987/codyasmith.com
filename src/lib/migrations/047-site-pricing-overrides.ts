@@ -7,10 +7,10 @@
 //   - Per-site sweetheart deals carved out from the standard formula.
 //
 // Semantics:
-//   - NULL = use the formula (multi-site 0.80 multiplier + ecosystem
+//   - NULL = use the formula (multi-site 0.90 multiplier + ecosystem
 //     routing apply as normal).
 //   - Any non-null value (including 0) = use that exact amount as the
-//     site's per-site contribution. The 0.80 multi-site multiplier is
+//     site's per-site contribution. The 0.90 multi-site multiplier is
 //     skipped for that site because the override IS the price.
 //   - Client-level discount_rate still applies uniformly per existing
 //     pricing pipeline behavior; clients with grandfathered overrides

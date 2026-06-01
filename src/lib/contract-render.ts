@@ -60,6 +60,12 @@ export const PRACTICE: PracticeInfo = {
 };
 
 const INTERNAL_BLOCK_RE = /<!--\s*internal:start\s*-->[\s\S]*?<!--\s*internal:end\s*-->/g;
+// Any remaining generic HTML comment. Stripped from every client-facing
+// render so a stray note left in a template source (e.g. an internal file
+// path in a `<!-- ... -->`) never reaches a client. Must run AFTER
+// INTERNAL_BLOCK_RE so the internal:start/end markers are removed as whole
+// units first and this cannot expose the content between them.
+const HTML_COMMENT_RE = /<!--[\s\S]*?-->/g;
 const PLACEHOLDER_RE = /\{\{\s*([\w.]+)\s*\}\}/g;
 const IF_BLOCK_RE = /\{\{#if\s+([\w.]+)\s*\}\}([\s\S]*?)\{\{\/if\}\}/g;
 const PENDING_FIELD_HTML = '<span class="metadata-pending">[to be completed at signing]</span>';
@@ -75,8 +81,11 @@ export function renderTemplate(body: string, ctx: RenderContext, mode: RenderMod
   let text = body;
 
   // Internal-only blocks: stripped in every mode except admin-source.
+  // Then strip any remaining generic HTML comment so stray notes never
+  // surface to a client. admin-source keeps both for Cody's reference.
   if (mode !== 'admin-source') {
     text = text.replace(INTERNAL_BLOCK_RE, '');
+    text = text.replace(HTML_COMMENT_RE, '');
   }
 
   // Resolve conditional blocks first so nested placeholders inside an
@@ -124,8 +133,11 @@ export function renderTemplate(body: string, ctx: RenderContext, mode: RenderMod
 export function renderTemplateToMarkdown(body: string, ctx: RenderContext): string {
   let text = body;
 
-  // Internal-only blocks never reach a client-facing PDF.
+  // Internal-only blocks never reach a client-facing PDF. Strip any remaining
+  // generic HTML comment too, so a stray note in the template source cannot
+  // print into the legally retained document. Internal blocks first.
   text = text.replace(INTERNAL_BLOCK_RE, '');
+  text = text.replace(HTML_COMMENT_RE, '');
 
   // Conditional blocks first, so placeholders inside an omitted block do
   // not leave stray pending markers.
@@ -240,7 +252,7 @@ export function renderScheduleA(scheduleA: any, mode: RenderMode): string {
     parts.push(`<li>Tier: <strong>${escapeHtml(wm.tier_name || '')}</strong></li>`);
     // Per-site breakdown table. Each site shows its own monthly +
     // onboarding contributions under the locked 2026-05-24 multi-site
-    // formula (primary at full base; each additional at 0.80 of its own
+    // formula (primary at full base; each additional at 0.90 of its own
     // base). The internal ecosystem routing is NOT shown to the client.
     if (Array.isArray(wm.sites) && wm.sites.length > 0) {
       const hasContributions = wm.sites.some(s => typeof s.monthly_contribution === 'number');

@@ -340,9 +340,9 @@ export const MULTI_SITE_DISCOUNT = 0.90;
 // engagement tier's monthly or onb value at that ecosystem.
 //
 // Rounds to cents (2 decimals) per-step so float artifacts from
-// multiplying integer-dollar bases by 0.80 do not accumulate. Money
+// multiplying integer-dollar bases by 0.90 do not accumulate. Money
 // math is decimal; the bases are always whole or half-cent dollar
-// figures, and the discount is exactly 0.80.
+// figures, and the discount factor is exactly 0.90.
 export function computeMultiSiteSum(perSiteBases: number[]): number {
   if (perSiteBases.length === 0) return 0;
   const [primary, ...additional] = perSiteBases;
@@ -354,7 +354,7 @@ export function computeMultiSiteSum(perSiteBases: number[]): number {
 }
 
 // Override-aware sum. Per-site shape: { base, isOverride }. Primary
-// (index 0) always gets full base. Additional sites get 0.80x UNLESS
+// (index 0) always gets full base. Additional sites get 0.90x UNLESS
 // isOverride is true, in which case they get full base because the
 // override IS the price (no multi-site discount on top of a
 // grandfathered or pro-bono carve-out). Used by the WM pricing
@@ -651,7 +651,7 @@ interface TierMoneyRange {
 }
 
 // Money formatter that shows cents only when present ($894.60), whole
-// otherwise ($800). Used for multi-site ranges where the 0.80 additional-site
+// otherwise ($800). Used for multi-site ranges where the 0.90 additional-site
 // factor yields cents, matching the hand-built Raised Bar sample.
 function formatMoneyAuto(n: number): string {
   return (Math.round(n * 100) % 100 === 0)
@@ -713,7 +713,7 @@ function buildTierOption(args: {
     // Build the per-site breakdown line for the features list.
     // Primary's contribution + each additional site's contribution.
     // Overridden sites contribute their override amount as-is; non-
-    // overridden additional sites get the 0.80 multi-site factor.
+    // overridden additional sites get the 0.90 multi-site factor.
     const sortedSites = [...args.managedSites!].sort((a, b) => {
       if (!!a.is_primary === !!b.is_primary) return 0;
       return a.is_primary ? -1 : 1;
@@ -1068,10 +1068,10 @@ export const webManagementProduct: ProductDefinition = {
       });
       // Compute per-site monthly + onboarding contributions using the
       // locked formula. First site (primary) at full base; each
-      // additional at base * 0.80, with base routed from that site's
+      // additional at base * 0.90, with base routed from that site's
       // own page_count (or primary's ecosystem if null). Per-site
       // monthly_override / onboarding_override (when non-null) replace
-      // the formula base AND skip the 0.80 multiplier for that site.
+      // the formula base AND skip the 0.90 multiplier for that site.
       siteRows = sorted.map((s, idx) => {
         const siteEco = s.page_count != null
           ? (routeWebManagementEcosystem(s.page_count) || ctx.ecosystemId!)

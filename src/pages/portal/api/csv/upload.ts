@@ -41,6 +41,48 @@ interface PerFileResult {
   headers?: string[];
 }
 
+// Retry wrapper for per-file ingest. Exported so tests can exercise it in
+// isolation without importing the full Astro route.
+//
+// Only retries when the result carries the exact "concurrent upload" conflict
+// string that ingestCSV returns on a partial-unique-index collision. Every
+// other error (parse failure, size limit, etc.) is returned immediately — the
+// caller must NOT retry those.
+//
+// ingestFn: () => Promise<{ error?: string }>  — factory that produces one
+//   attempt. Re-called on each retry; must be stateless (ingestCSV generates
+//   its own uploadId per call, so re-calling is safe).
+// maxRetries: how many additional attempts after the first (default 4).
+// baseDelayMs: base for the exponential back-off (default 150ms).
+// _sleep: injectable for tests to skip real delays (pass () => Promise.resolve()).
+export async function ingestWithRetry<T extends { error?: string }>(
+  ingestFn: () => Promise<T>,
+  {
+    maxRetries = 4,
+    baseDelayMs = 150,
+    _sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms)),
+  }: { maxRetries?: number; baseDelayMs?: number; _sleep?: (ms: number) => Promise<void> } = {},
+): Promise<T> {
+  let lastResult: T | undefined;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const result = await ingestFn();
+    if (!result.error?.includes('concurrent upload')) {
+      // Success, or a non-conflict error — return immediately, no retry.
+      return result;
+    }
+    lastResult = result;
+    if (attempt < maxRetries) {
+      // Exponential back-off with a small random jitter so two racing
+      // uploads don't keep re-colliding at the same interval.
+      const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 50;
+      await _sleep(delay);
+    }
+  }
+  // All attempts exhausted — still conflicting. Surface the error so the
+  // UI shows it (should be vanishingly rare after retries).
+  return lastResult as T;
+}
+
 // Ingest one raw CSV string. Shared between the direct .csv path and
 // the unzip path so the size + row checks + activity log + result
 // shape are identical for both.
@@ -61,14 +103,14 @@ async function ingestOneCsv(
     return { filename, error: `CSV exceeds ${MAX_ROWS_PER_FILE} row maximum (${lineCount} rows submitted)` };
   }
   try {
-    const result = await ingestCSV(raw, clientId, month, filename, userId);
+    const result = await ingestWithRetry(() => ingestCSV(raw, clientId, month, filename, userId));
     await logActivity({
       clientId,
       userId,
       action: 'uploaded',
       entityType: 'csv_upload',
       entityId: result.uploadId,
-      summary: `${userName} uploaded CSV "${filename}" (${result.format}${result.error ? ', failed' : `, ${result.rowCount} rows`})`,
+      summary: `${userName} uploaded CSV "${filename.split(/[\\/]/).pop()}" (${result.format}${result.error ? ', failed' : `, ${result.rowCount} rows`})`,
     });
     return {
       filename,
@@ -122,12 +164,14 @@ async function processOne(
     const results: PerFileResult[] = [];
     for (const entry of csvEntries) {
       const raw = await entry.async('string');
-      // Strip any path inside the ZIP — the filename downstream is
-      // just the basename so the detector's filename-based routing
-      // works the same as if the file had been uploaded standalone.
-      const baseName = entry.name.replace(/^.*[\\/]/, '');
+      // Pass the full ZIP-entry path as the identity key so that two
+      // same-basename files in different subfolders (e.g. a Screaming
+      // Frog folder export with issues_reports/foo.csv and top-level
+      // foo.csv) get DISTINCT original_name values and both ingest.
+      // detectFormat strips the path internally before routing, so
+      // detection is unaffected.
       const sizeBytes = raw.length; // approximate; rows still bounded
-      results.push(await ingestOneCsv(`${file.name}:${baseName}`, raw, sizeBytes, clientId, month, userId, userName));
+      results.push(await ingestOneCsv(`${file.name}:${entry.name}`, raw, sizeBytes, clientId, month, userId, userName));
     }
     return results;
   }
@@ -137,13 +181,14 @@ async function processOne(
     return { filename: file.name, error: 'Only CSV or ZIP files are accepted' };
   }
   const raw = await file.text();
-  // The folder-picker (webkitdirectory) hands back a name like
-  // "2026.05.24.15.21.38/issues_reports/response_codes_external_client_error_(4xx)_inlinks.csv"
-  // — relative path included. The detector and parsers expect the
-  // basename only. Strip the directory prefix so filename-based
-  // routing matches the same way it would for a single-file pick.
-  const baseName = file.name.replace(/^.*[\\/]/, '');
-  return ingestOneCsv(baseName, raw, file.size, clientId, month, userId, userName);
+  // Pass the full relative path as the identity key. The folder-picker
+  // (webkitdirectory) hands back a name like
+  // "2026.05.24.15.21.38/issues_reports/foo.csv", and the same basename
+  // can appear under multiple subfolders in one Screaming Frog export.
+  // Preserving the path makes each file a DISTINCT dedup key so both
+  // ingest. detectFormat and all parsers strip/normalize paths
+  // internally before routing and keying, so they are unaffected.
+  return ingestOneCsv(file.name, raw, file.size, clientId, month, userId, userName);
 }
 
 export const POST: APIRoute = async ({ locals, request }) => {
@@ -193,16 +238,19 @@ export const POST: APIRoute = async ({ locals, request }) => {
     const userId = locals.user!.id;
     const userName = locals.user!.name;
 
-    // Process the batch in parallel. Earlier comment claimed sequential
-    // was required to avoid hammering Turso and to keep supersede
-    // semantics simple; in practice Turso handles concurrent writes
-    // fine and supersede operates per-filename per-client per-month
-    // (no contention between different filenames). Sequential was the
-    // direct cause of the Cloudflare 524 timeouts on large SF batches
-    // where 4-5 big link CSVs (6000+ rows each) would push a 25-file
-    // batch past CF's 100s origin response window even though no
-    // single file is slow. Parallel makes the batch limited by the
-    // SLOWEST file, not the sum.
+    // Process the batch in parallel. Sequential was the direct cause of
+    // Cloudflare 524 timeouts on large SF batches: 4-5 big link CSVs
+    // (6000+ rows each) pushed a 25-file batch past CF's 100s origin
+    // response window even though no single file was slow. Parallel
+    // makes the batch bounded by the SLOWEST file, not the sum.
+    //
+    // Same-key conflicts (two files with the same full relative path,
+    // which is now the dedup key) are healed by ingestWithRetry inside
+    // ingestOneCsv: the losing race detects the "concurrent upload"
+    // conflict error, backs off briefly, and retries. Different
+    // subfolders with the same basename (e.g. Screaming Frog exports
+    // with top-level foo.csv and issues_reports/foo.csv) produce DISTINCT
+    // keys now that the full path is preserved, so they never collide.
     //
     // processOne can return a single result OR an array (for ZIPs
     // that fan out to multiple CSV uploads); flatten so the UI gets

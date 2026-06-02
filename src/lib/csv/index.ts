@@ -307,19 +307,6 @@ export async function ingestCSV(
     // into the atomic batch — empty if there is no prior upload of this key.
     const { clearStatements } = await collectClearStatements(clientId, month, format, filename, uploadId);
 
-    // The accessibility format runs a SECOND, separate parser: the legacy
-    // aggregate metrics writer. It upserts 5 rows into the `metrics` table via
-    // ON CONFLICT DO UPDATE, so it is idempotent and safe to run BEFORE the
-    // atomic batch — if the batch later rolls back, the re-uploaded metrics are
-    // simply overwritten on the next successful ingest. The per-URL rows
-    // (accessibility_urls) go through the builder + atomic batch like every
-    // other Class-A format. clearStatements already deletes the prior upload's
-    // metrics + accessibility_urls (both tables are in FORMAT_SOURCES) inside
-    // the batch, so the supersede stays consistent.
-    if (format === 'accessibility') {
-      await parseAccessibility(raw, clientId, month, uploadId);
-    }
-
     const parserStatements = builder(raw, clientId, month, uploadId);
 
     try {
@@ -345,6 +332,23 @@ export async function ingestCSV(
         return { uploadId, format, rowCount: 0, headers, error: 'A concurrent upload of this file is already being processed' };
       }
       return { uploadId, format, rowCount: 0, headers, error: err.message };
+    }
+
+    // The accessibility format runs a SECOND, separate parser: the aggregate
+    // metrics writer. It upserts 5 rows into `metrics` via ON CONFLICT DO UPDATE
+    // (idempotent). It MUST run AFTER the atomic batch commits because metrics
+    // has a FK to csv_uploads(id) — writing metrics before the csv_uploads row
+    // exists throws SQLITE_CONSTRAINT: FOREIGN KEY constraint failed.
+    // clearStatements (inside the batch) already deleted the prior upload's
+    // metrics rows; this post-batch write re-populates them for the new uploadId.
+    // Wrap so a metrics-write failure does not fail the whole upload: the
+    // per-URL data (accessibility_urls) is already committed.
+    if (format === 'accessibility') {
+      try {
+        await parseAccessibility(raw, clientId, month, uploadId);
+      } catch (metricsErr: any) {
+        console.error('[ingestCSV] accessibility aggregate metrics write failed (per-URL data committed OK)', metricsErr?.message);
+      }
     }
 
     return { uploadId, format, rowCount: parserStatements.length, headers };

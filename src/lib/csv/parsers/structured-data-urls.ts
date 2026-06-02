@@ -96,8 +96,8 @@ export function buildStructuredDataUrlsStatements(
 // Thin executor — back-compat for direct callers.
 export async function parse(raw: string, clientId: string, month: string, uploadId: string): Promise<number> {
   const stmts = buildStructuredDataUrlsStatements(raw, clientId, month, uploadId);
-  for (let i = 0; i < stmts.length; i += 100) {
-    await turso.batch(stmts.slice(i, i + 100), 'write');
+  for (let i = 0; i < stmts.length; i += 450) {
+    await turso.batch(stmts.slice(i, i + 450), 'write');
   }
   return stmts.length;
 }

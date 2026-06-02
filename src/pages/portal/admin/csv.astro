@@ -270,30 +270,51 @@ function formatLabel(format: string): string {
       // window even when the slowest file is a 7000-row SF link
       // export. The server's hard cap is 50.
       const MAX_BATCH_FILES = 10;
+      // Third cap: estimated DB ROWS per batch. A folder of byte-small
+      // but row-DENSE link files (success_(2xx)_inlinks 6799 rows,
+      // https_urls_inlinks 6367, *_inlinks 3138 each) would pack 10 deep
+      // under the byte + count caps and become tens of thousands of rows
+      // in one request — hundreds of sequential turso.batch round-trips
+      // that blow Cloudflare's 100s origin window (the 524 we hit on the
+      // 155-file ZKH reupload). We can't read row counts client-side, so
+      // estimate from byte size with a conservative ~120-bytes-per-row
+      // floor: /120 OVER-estimates rows, making batches smaller/safer.
+      // DRIFT-LOCK: this mirrors planUploadBatches() in
+      // src/lib/csv/upload-batching.ts (the inline browser script can't
+      // import the TS module). run-upload-batching-tests.mjs asserts both
+      // copies stay in lockstep. Change one, change the other.
+      const MAX_BATCH_ROWS = 2500;
+      const estimateRows = (size: number) => Math.ceil((size || 0) / 120);
       const batches: File[][] = [];
       let currentBatch: File[] = [];
       let currentBatchBytes = 0;
+      let currentBatchRows = 0;
       for (const f of files) {
         const fileBytes = f.size || 0;
-        // Single oversize file gets its own batch.
-        if (fileBytes > MAX_BATCH_BYTES) {
+        const fileRows = estimateRows(fileBytes);
+        // Single file that busts a cap on its own gets its own batch.
+        if (fileBytes > MAX_BATCH_BYTES || fileRows > MAX_BATCH_ROWS) {
           if (currentBatch.length > 0) {
             batches.push(currentBatch);
             currentBatch = [];
             currentBatchBytes = 0;
+            currentBatchRows = 0;
           }
           batches.push([f]);
           continue;
         }
         const wouldExceedBytes = currentBatchBytes + fileBytes > MAX_BATCH_BYTES;
         const wouldExceedCount = currentBatch.length >= MAX_BATCH_FILES;
-        if ((wouldExceedBytes || wouldExceedCount) && currentBatch.length > 0) {
+        const wouldExceedRows = currentBatchRows + fileRows > MAX_BATCH_ROWS;
+        if ((wouldExceedBytes || wouldExceedCount || wouldExceedRows) && currentBatch.length > 0) {
           batches.push(currentBatch);
           currentBatch = [];
           currentBatchBytes = 0;
+          currentBatchRows = 0;
         }
         currentBatch.push(f);
         currentBatchBytes += fileBytes;
+        currentBatchRows += fileRows;
       }
       if (currentBatch.length > 0) batches.push(currentBatch);
 

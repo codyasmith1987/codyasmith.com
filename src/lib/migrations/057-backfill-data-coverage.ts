@@ -23,10 +23,13 @@
 // upload), distinct from the ingest path's source = 'csv_upload'.
 
 import type { Client } from '@libsql/client';
-import { nanoid } from 'nanoid';
 import turso from '../turso';
 import type { Migration } from '../migrate';
-import { COVERAGE_CATEGORIES, FORMAT_TO_CATEGORY } from '../csv/coverage-signals';
+import {
+  COVERAGE_CATEGORIES,
+  FORMAT_TO_CATEGORY,
+  recomputeCategoryCoverage,
+} from '../csv/coverage-signals';
 
 // Invert FORMAT_TO_CATEGORY -> the set of detected_format values that feed each
 // category, so the file-present csv_uploads UNION stays sourced from the one
@@ -37,83 +40,42 @@ function formatsForCategory(category: string): string[] {
     .map(([fmt]) => fmt);
 }
 
-// The backfill upsert. source = 'backfill', csv_upload_id = NULL. Same
-// ON CONFLICT(client_id, month, category) clause as the ingest upsert, so the
-// two paths reconcile to the same unique key.
-const UPSERT_SQL = `INSERT INTO data_coverage
-    (id, client_id, month, category, measured, rows_total, rows_measured, source, csv_upload_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'backfill', NULL)
-    ON CONFLICT(client_id, month, category) DO UPDATE SET
-      measured = excluded.measured, rows_total = excluded.rows_total,
-      rows_measured = excluded.rows_measured, source = 'backfill',
-      csv_upload_id = NULL, detected_at = datetime('now')`;
-
-function upsertArgs(p: {
-  clientId: string; month: string; category: string;
-  measured: 0 | 1; rowsTotal: number; rowsMeasured: number;
-}): any[] {
-  return [nanoid(), p.clientId, p.month, p.category, p.measured, p.rowsTotal, p.rowsMeasured];
-}
-
 // Recompute coverage for every existing (client_id, month, category). Exported
 // so the in-memory test can exercise the exact logic up() runs against turso.
+//
+// The per-(client, month, category) count + upsert is delegated to the shared
+// recomputeCategoryCoverage helper so the coverage DEFINITION lives in exactly
+// one place (the same single-sourcing lesson as the page-count SQL). This
+// migration only enumerates which (client, month) pairs to recompute for each
+// category; recomputeCategoryCoverage does the table-state aggregate and the
+// upsert. Rows written here carry source = 'backfill', csv_upload_id = NULL.
 export async function backfillCoverage(db: Client): Promise<void> {
   for (const cat of Object.values(COVERAGE_CATEGORIES)) {
+    let pairs: Array<{ clientId: string; month: string }>;
+
     if (cat.kind === 'file-present') {
       // Union of (client, month) seen in the data table OR in a live upload for
-      // any format feeding this category. LEFT JOIN the per-pair table count so
-      // a 0-row upload yields rows_total = 0, measured = 1 still.
+      // any format feeding this category, so a 0-row upload still records
+      // measured = 1 ("we looked, there was nothing").
       const formats = formatsForCategory(cat.category);
       const placeholders = formats.map(() => '?').join(', ');
       const sql = `
-        WITH pairs AS (
-          SELECT DISTINCT client_id, month FROM ${cat.table}
-          UNION
-          SELECT DISTINCT client_id, month FROM csv_uploads
-            WHERE error IS NULL AND detected_format IN (${placeholders})
-        )
-        SELECT p.client_id AS client_id, p.month AS month,
-               (SELECT COUNT(*) FROM ${cat.table} t
-                  WHERE t.client_id = p.client_id AND t.month = p.month) AS cnt
-        FROM pairs p`;
+        SELECT DISTINCT client_id AS client_id, month AS month FROM ${cat.table}
+        UNION
+        SELECT DISTINCT client_id AS client_id, month AS month FROM csv_uploads
+          WHERE error IS NULL AND detected_format IN (${placeholders})`;
       const res = await db.execute({ sql, args: formats });
-      for (const row of res.rows) {
-        const clientId = row.client_id as string;
-        const month = row.month as string;
-        const count = Number(row.cnt) || 0;
-        await db.execute({
-          sql: UPSERT_SQL,
-          args: upsertArgs({
-            clientId, month, category: cat.category,
-            measured: 1, rowsTotal: count, rowsMeasured: count,
-          }),
-        });
-      }
+      pairs = res.rows.map(r => ({ clientId: r.client_id as string, month: r.month as string }));
     } else {
-      // Signal category: per (client, month) with rows in the table, count rows
-      // with ANY real (non-NULL) signal value. measured = rows_measured > 0.
-      const cols = cat.dbSignalColumns ?? [];
-      const realPredicate = cols.map(c => `${c} IS NOT NULL`).join(' OR ');
-      const sql = `
-        SELECT client_id AS client_id, month AS month,
-               COUNT(*) AS total,
-               SUM(CASE WHEN ${realPredicate} THEN 1 ELSE 0 END) AS measured_rows
-        FROM ${cat.table}
-        GROUP BY client_id, month`;
+      // Signal category: only (client, month) pairs that actually have rows in
+      // the table (absence of rows == not provided -> no coverage row).
+      const sql = `SELECT DISTINCT client_id AS client_id, month AS month FROM ${cat.table}`;
       const res = await db.execute(sql);
-      for (const row of res.rows) {
-        const clientId = row.client_id as string;
-        const month = row.month as string;
-        const rowsTotal = Number(row.total) || 0;
-        const rowsMeasured = Number(row.measured_rows) || 0;
-        await db.execute({
-          sql: UPSERT_SQL,
-          args: upsertArgs({
-            clientId, month, category: cat.category,
-            measured: rowsMeasured > 0 ? 1 : 0, rowsTotal, rowsMeasured,
-          }),
-        });
-      }
+      pairs = res.rows.map(r => ({ clientId: r.client_id as string, month: r.month as string }));
+    }
+
+    for (const { clientId, month } of pairs) {
+      await recomputeCategoryCoverage(db, clientId, month, cat.category, 'backfill', null);
     }
   }
 }

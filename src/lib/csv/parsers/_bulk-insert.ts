@@ -6,7 +6,12 @@ import turso from '../../turso';
 // 524'd at the Cloudflare edge. turso.batch sends many statements atomically
 // in a single request (same pattern as crawl-overview.ts and migration 001).
 // The `db` param defaults to the prod singleton; tests inject an in-memory client.
-export const BATCH_CHUNK = 100;
+//
+// Raised 100 -> 450: the dense Class-B link/inlinks files run 6000+ rows, so
+// at chunk=100 a single file was ~68 sequential round-trips and 524'd. libsql
+// handles 450-statement write batches fine (these are single-row INSERTs, so
+// the per-batch param count stays small), cutting the round-trips ~4.5x.
+export const BATCH_CHUNK = 450;
 
 export async function bulkInsert(
   sql: string,

@@ -30,26 +30,13 @@
 import Papa from 'papaparse';
 import { nanoid } from 'nanoid';
 import turso from '../../turso';
+import { bulkInsert } from './_bulk-insert';
 
 interface Block {
   startDate: string | null;
   endDate: string | null;
   headers: string[];
   rows: string[][];
-}
-
-// Batch size for parallel INSERTs. Tuned to keep Turso responsive
-// without blowing the per-file ingest budget on a Cloudflare-fronted
-// POST (100s edge timeout). The pre-batch implementation timed out
-// at ~300 row-by-row INSERTs; 50 in parallel chunks finishes in
-// well under 10 seconds for 1000+ rows.
-const INSERT_BATCH = 50;
-
-async function bulkInsert(sql: string, allArgs: any[][]) {
-  for (let i = 0; i < allArgs.length; i += INSERT_BATCH) {
-    const chunk = allArgs.slice(i, i + INSERT_BATCH);
-    await Promise.all(chunk.map(args => turso.execute({ sql, args })));
-  }
 }
 
 // AI referral source patterns — used by the dashboard endpoint, kept
@@ -66,19 +53,30 @@ export const AI_REFERRAL_PATTERNS = [
 // `# Start date:` comment line and ends at the next one (or EOF).
 // The first non-comment, non-empty line in each block is the column
 // header; subsequent non-empty non-comment lines are data rows.
+//
+// Implementation: single Papa.parse of the whole file (was: one
+// Papa.parse per line — O(n) parses for n lines). GA4 exports embed
+// `# ...` comment lines; Papa keeps them as single-field rows, so we
+// re-detect markers on the joined cell text after the parse.
 function splitIntoBlocks(raw: string): Block[] {
-  const lines = raw.split(/\r?\n/);
+  const parsed = Papa.parse(raw, { header: false });
+  const rows = parsed.data as string[][];
   const blocks: Block[] = [];
   let current: Block | null = null;
   let pendingStart: string | null = null;
   let pendingEnd: string | null = null;
-  let inHeader = false;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
+  for (const cells of rows) {
+    // A row is "blank" if every cell is empty.
+    const joinedEmpty = cells.every(c => (c ?? '').toString().trim() === '');
+    if (joinedEmpty) continue;
 
-    // Date markers carry into the next block's metadata.
+    // Comment lines come through as a single-cell row whose value
+    // begins with '#'. Reconstruct the line text for marker matching.
+    const first = (cells[0] ?? '').toString();
+    const trimmed = first.trim();
+
+    // Date markers carry metadata into the next block.
     const startMatch = trimmed.match(/^#\s*Start date:\s*(\d+)/i);
     if (startMatch) {
       pendingStart = startMatch[1];
@@ -87,7 +85,6 @@ function splitIntoBlocks(raw: string): Block[] {
         blocks.push(current);
       }
       current = null;
-      inHeader = false;
       continue;
     }
     const endMatch = trimmed.match(/^#\s*End date:\s*(\d+)/i);
@@ -95,33 +92,32 @@ function splitIntoBlocks(raw: string): Block[] {
       pendingEnd = endMatch[1];
       continue;
     }
-    // Skip all other comment lines + blank lines.
-    if (trimmed.startsWith('#') || trimmed === '') continue;
+    // Skip all other comment lines.
+    if (trimmed.startsWith('#')) continue;
 
-    // First non-comment line after a Start date marker → block header.
+    // First non-comment row after a Start date marker → block header.
     if (!current) {
-      const parsedHeader = Papa.parse(line, { header: false });
-      const headerRow = (parsedHeader.data[0] as string[]) || [];
       current = {
         startDate: pendingStart,
         endDate: pendingEnd,
-        headers: headerRow.map(h => (h || '').trim()),
+        headers: cells.map(h => (h || '').trim()),
         rows: [],
       };
-      inHeader = true;
       continue;
     }
 
     // Data rows after the header.
-    const parsedRow = Papa.parse(line, { header: false });
-    const dataRow = (parsedRow.data[0] as string[]) || [];
-    current.rows.push(dataRow);
+    current.rows.push(cells);
   }
   if (current && current.headers.length > 0) {
     blocks.push(current);
   }
   return blocks;
 }
+
+// Exported for testing only — allows tests to call splitIntoBlocks
+// without going through the full parse pipeline or a DB.
+export { splitIntoBlocks as splitIntoBlocksForTest };
 
 // Header-index lookup tolerant of trailing modifiers GA4 adds on
 // some exports ("Sessions" vs "Sessions per active user").
@@ -278,11 +274,16 @@ export async function parseReportsSnapshot(
 // Single block. The first column is "Session primary channel group"
 // (or close variants on different GA4 versions); subsequent columns
 // are the canonical traffic-acquisition metrics.
+//
+// The optional `db` parameter is used only in tests to inject an
+// in-memory client. Production callers use the default turso singleton
+// inside bulkInsert.
 export async function parseTrafficAcquisition(
   raw: string,
   clientId: string,
   month: string,
   uploadId: string,
+  db?: typeof turso,
 ): Promise<number> {
   const blocks = splitIntoBlocks(raw);
   const inserts: any[][] = [];
@@ -319,9 +320,13 @@ export async function parseTrafficAcquisition(
         event_count, key_events, session_key_event_rate, total_revenue)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     inserts,
+    db,
   );
   return inserts.length;
 }
+
+// Exported for testing only — allows tests to inject an in-memory db.
+export { parseTrafficAcquisition as parseTrafficAcquisitionWithDb };
 
 // --------- Pages and screens (or Landing page) ---------
 //

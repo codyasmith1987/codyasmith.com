@@ -4,13 +4,13 @@ import { detectFormat, type CsvFormat } from './detector';
 import { parse as parsePositionTracking } from './parsers/position-tracking';
 import { parse as parseIssuesOverview } from './parsers/issues-overview';
 import { parse as parseCrawlOverview } from './parsers/crawl-overview';
-import { parse as parseCrawlInternal } from './parsers/crawl-internal';
-import { parse as parseRedirects } from './parsers/redirects';
-import { parse as parseImages } from './parsers/images';
-import { parse as parseContentUrls } from './parsers/content-urls';
-import { parse as parseSecurityUrls } from './parsers/security-urls';
-import { parse as parseStructuredDataUrls } from './parsers/structured-data-urls';
-import { parse as parseAccessibilityUrls } from './parsers/accessibility-urls';
+import { buildCrawlInternalStatements } from './parsers/crawl-internal';
+import { buildRedirectsStatements } from './parsers/redirects';
+import { buildImagesStatements } from './parsers/images';
+import { buildContentUrlsStatements } from './parsers/content-urls';
+import { buildSecurityUrlsStatements } from './parsers/security-urls';
+import { buildStructuredDataUrlsStatements } from './parsers/structured-data-urls';
+import { buildAccessibilityUrlsStatements } from './parsers/accessibility-urls';
 import { parse as parseImageOptimization } from './parsers/image-optimization';
 import { parse as parseKeywordResearch } from './parsers/keyword-research';
 import { parse as parseKeywordSuggestions } from './parsers/keyword-suggestions';
@@ -75,6 +75,77 @@ const FORMAT_SOURCES: Record<string, { tables: string[]; source: string }> = {
   // same filename twice replaces, while sibling unknowns coexist.
 };
 
+// Map Class-A (supersede) formats to their pure statement builders. These
+// formats route through the atomic per-file transaction in ingestCSV:
+// supersede + delete-prior + csv_uploads insert + parser inserts + rowcount
+// run in ONE turso.batch('write'), so a parser failure rolls back the whole
+// thing and the prior upload's data is never half-deleted. Class-B formats
+// (everything else) keep the self-executing parser path.
+const CLASS_A_BUILDERS: Record<string, (raw: string, clientId: string, month: string, uploadId: string) => Array<{ sql: string; args: any[] }>> = {
+  crawl_internal: buildCrawlInternalStatements,
+  content_urls: buildContentUrlsStatements,
+  security_urls: buildSecurityUrlsStatements,
+  structured_data_urls: buildStructuredDataUrlsStatements,
+  accessibility: buildAccessibilityUrlsStatements,
+  images: buildImagesStatements,
+  redirects: buildRedirectsStatements,
+};
+
+// READ-ONLY collector: runs ONLY the SELECT for the prior live upload of this
+// key and RETURNS the DELETE/supersede statements to run, without executing
+// them. The caller decides whether to execute them directly (Class-B) or fold
+// them into an atomic batch (Class-A). Splitting the SELECT out is required
+// because libsql write-batches cannot contain reads.
+//
+// Keying on original_name is what lets sibling files of the same
+// detected_format (e.g. internal_all.csv vs internal_html.csv, or the 60+
+// accessibility_*.csv per-issue files) coexist instead of wiping each other.
+// Mirrors the per-key dedup proven for issue_urls (by issue_name) and links
+// (by source_file).
+async function collectClearStatements(
+  clientId: string,
+  month: string,
+  format: string,
+  filename: string,
+  currentUploadId: string,
+  db: typeof turso = turso,
+): Promise<{ latestPrevId: string | null; clearStatements: Array<{ sql: string; args: any[] }> }> {
+  const config = FORMAT_SOURCES[format];
+  if (!config) return { latestPrevId: null, clearStatements: [] };
+
+  const prevUploads = await db.execute({
+    sql: 'SELECT id FROM csv_uploads WHERE client_id = ? AND month = ? AND detected_format = ? AND original_name = ? AND id != ? ORDER BY created_at ASC',
+    args: [clientId, month, format, filename, currentUploadId],
+  });
+
+  if (prevUploads.rows.length === 0) return { latestPrevId: null, clearStatements: [] };
+
+  const prevIds = prevUploads.rows.map(r => r[0] as string);
+
+  // Only clear data from the MOST RECENT previous upload of this key,
+  // not ALL previous uploads. This prevents accumulating stale data while
+  // preserving intentional multi-file uploads within the same month.
+  const latestPrevId = prevIds[prevIds.length - 1];
+
+  const clearStatements: Array<{ sql: string; args: any[] }> = [];
+  for (const table of config.tables) {
+    clearStatements.push({
+      sql: `DELETE FROM ${table} WHERE client_id = ? AND month = ? AND csv_upload_id = ?`,
+      args: [clientId, month, latestPrevId],
+    });
+  }
+  // Mark old upload record as superseded (keep for history, don't delete).
+  clearStatements.push({
+    sql: 'UPDATE csv_uploads SET error = ? WHERE id = ?',
+    args: ['Superseded by newer upload', latestPrevId],
+  });
+
+  return { latestPrevId, clearStatements };
+}
+
+// Executing version for the Class-B path: collect the statements then run them
+// as separate executes (Class-B parsers self-execute their inserts afterward,
+// so these clears do not need to share a transaction with them).
 async function clearPreviousData(
   clientId: string,
   month: string,
@@ -83,42 +154,39 @@ async function clearPreviousData(
   currentUploadId: string,
   db: typeof turso = turso,
 ): Promise<string | null> {
-  const config = FORMAT_SOURCES[format];
-  if (!config) return null;
-
-  // Find previous uploads for this client+month+format+FILENAME (not the
-  // current one). Keying on original_name is what lets sibling files of the
-  // same detected_format (e.g. internal_all.csv vs internal_html.csv, or the
-  // 60+ accessibility_*.csv per-issue files) coexist instead of wiping each
-  // other. Mirrors the per-key dedup proven for issue_urls (by issue_name)
-  // and links (by source_file).
-  const prevUploads = await db.execute({
-    sql: 'SELECT id FROM csv_uploads WHERE client_id = ? AND month = ? AND detected_format = ? AND original_name = ? AND id != ? ORDER BY created_at ASC',
-    args: [clientId, month, format, filename, currentUploadId],
-  });
-
-  if (prevUploads.rows.length === 0) return null;
-
-  const prevIds = prevUploads.rows.map(r => r[0] as string);
-
-  // Only clear data from the MOST RECENT previous upload of this key,
-  // not ALL previous uploads. This prevents accumulating stale data while
-  // preserving intentional multi-file uploads within the same month.
-  const latestPrevId = prevIds[prevIds.length - 1];
-  for (const table of config.tables) {
-    await db.execute({
-      sql: `DELETE FROM ${table} WHERE client_id = ? AND month = ? AND csv_upload_id = ?`,
-      args: [clientId, month, latestPrevId],
-    });
+  const { latestPrevId, clearStatements } = await collectClearStatements(
+    clientId, month, format, filename, currentUploadId, db,
+  );
+  for (const stmt of clearStatements) {
+    await db.execute(stmt);
   }
-
-  // Mark old upload records as superseded (keep for history, don't delete)
-  await db.execute({
-    sql: 'UPDATE csv_uploads SET error = ? WHERE id = ?',
-    args: ['Superseded by newer upload', latestPrevId],
-  });
-
   return latestPrevId;
+}
+
+// Assemble + run the atomic per-file ingest transaction. Extracted as an
+// exported helper so the atomicity test can exercise the exact statement
+// ordering against an in-memory libsql db. The whole array runs in ONE
+// turso.batch(..., 'write'): if ANY statement fails (e.g. a parser INSERT
+// violates a constraint, or a concurrent same-key insert races the unique
+// index) libsql rolls back the entire batch. Because nothing was actually
+// committed, the prior upload's row stays live and its child rows stay
+// present — no manual restore is needed (the win over the old non-atomic path).
+export async function runAtomicIngest(
+  db: typeof turso,
+  parts: {
+    clearStatements: Array<{ sql: string; args: any[] }>;
+    uploadInsert: { sql: string; args: any[] };
+    parserStatements: Array<{ sql: string; args: any[] }>;
+    rowCountUpdate: { sql: string; args: any[] };
+  },
+): Promise<void> {
+  const statements = [
+    ...parts.clearStatements,
+    parts.uploadInsert,
+    ...parts.parserStatements,
+    parts.rowCountUpdate,
+  ];
+  await db.batch(statements, 'write');
 }
 
 // Test-only seam: lets the unit test exercise clearPreviousData against an
@@ -222,6 +290,70 @@ export async function ingestCSV(
     }
   }
 
+  // ── Class-A (supersede) formats: ONE atomic transaction ──────────────────
+  // crawl_internal, content_urls, security_urls, structured_data_urls,
+  // accessibility, images, redirects. The prior upload's supersede+delete, the
+  // new csv_uploads insert, the parser's INSERTs, and the rowcount update all
+  // run in a single turso.batch('write'). If any statement fails (parser error
+  // OR a concurrent same-key insert racing the partial unique index) libsql
+  // rolls the WHOLE batch back: the prior row stays live, its child rows stay
+  // present, no new row is written. No catch-and-restore is needed because
+  // nothing was ever half-committed — that is the fix for the old non-atomic
+  // half-write + race.
+  const builder = CLASS_A_BUILDERS[format];
+  if (builder) {
+    // SELECT the prior live upload OUTSIDE the batch (reads cannot be part of a
+    // libsql write-batch) and get back the DELETE/supersede statements to fold
+    // into the atomic batch — empty if there is no prior upload of this key.
+    const { clearStatements } = await collectClearStatements(clientId, month, format, filename, uploadId);
+
+    // The accessibility format runs a SECOND, separate parser: the legacy
+    // aggregate metrics writer. It upserts 5 rows into the `metrics` table via
+    // ON CONFLICT DO UPDATE, so it is idempotent and safe to run BEFORE the
+    // atomic batch — if the batch later rolls back, the re-uploaded metrics are
+    // simply overwritten on the next successful ingest. The per-URL rows
+    // (accessibility_urls) go through the builder + atomic batch like every
+    // other Class-A format. clearStatements already deletes the prior upload's
+    // metrics + accessibility_urls (both tables are in FORMAT_SOURCES) inside
+    // the batch, so the supersede stays consistent.
+    if (format === 'accessibility') {
+      await parseAccessibility(raw, clientId, month, uploadId);
+    }
+
+    const parserStatements = builder(raw, clientId, month, uploadId);
+
+    try {
+      await runAtomicIngest(turso, {
+        clearStatements,
+        uploadInsert: {
+          sql: 'INSERT INTO csv_uploads (id, client_id, original_name, detected_format, month, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)',
+          args: [uploadId, clientId, filename, format, month, uploadedBy],
+        },
+        parserStatements,
+        rowCountUpdate: {
+          sql: 'UPDATE csv_uploads SET row_count = ?, processed_at = datetime(\'now\') WHERE id = ?',
+          args: [parserStatements.length, uploadId],
+        },
+      });
+    } catch (err: any) {
+      // The batch rolled back atomically: prior upload still live, prior child
+      // rows still present, no new row, no new child rows. Nothing to restore.
+      if (err.message?.includes('UNIQUE constraint')) {
+        // A concurrent same-key upload raced the partial unique index. The
+        // batch (incl. our supersede UPDATE) was rolled back, so the prior live
+        // row is untouched.
+        return { uploadId, format, rowCount: 0, headers, error: 'A concurrent upload of this file is already being processed' };
+      }
+      return { uploadId, format, rowCount: 0, headers, error: err.message };
+    }
+
+    return { uploadId, format, rowCount: parserStatements.length, headers };
+  }
+
+  // ── Class-B formats: clear (if in FORMAT_SOURCES) then the parser ─────────
+  // self-executes its own inserts via turso.batch. These are self-dedup or
+  // append-only and do not need the all-in-one atomic transaction.
+  //
   // Supersede any prior LIVE upload of this exact key BEFORE inserting the
   // new row, so the partial unique index (migration 055) is never violated
   // by a legitimate re-upload. Also clears the prior upload's child rows
@@ -265,24 +397,9 @@ export async function ingestCSV(
       case 'crawl_overview':
         rowCount = await parseCrawlOverview(raw, clientId, month, uploadId);
         break;
-      case 'crawl_internal':
-        rowCount = await parseCrawlInternal(raw, clientId, month, uploadId);
-        break;
-      case 'redirects':
-        rowCount = await parseRedirects(raw, clientId, month, uploadId);
-        break;
-      case 'images':
-        rowCount = await parseImages(raw, clientId, month, uploadId);
-        break;
-      case 'content_urls':
-        rowCount = await parseContentUrls(raw, clientId, month, uploadId);
-        break;
-      case 'security_urls':
-        rowCount = await parseSecurityUrls(raw, clientId, month, uploadId);
-        break;
-      case 'structured_data_urls':
-        rowCount = await parseStructuredDataUrls(raw, clientId, month, uploadId);
-        break;
+      // NOTE: crawl_internal, redirects, images, content_urls, security_urls,
+      // structured_data_urls, and accessibility are Class-A and handled by the
+      // atomic-batch branch above (CLASS_A_BUILDERS); they never reach here.
       case 'image_optimization':
         rowCount = await parseImageOptimization(raw, clientId, month, uploadId);
         break;
@@ -295,16 +412,6 @@ export async function ingestCSV(
       case 'site_audit':
         rowCount = await parseSiteAudit(raw, clientId, month, uploadId, filename);
         break;
-      case 'accessibility': {
-        // Two parsers on the same file: the legacy one writes 5
-        // aggregate metric rows; the new one writes per-URL rows to
-        // accessibility_urls so the portal can drill into which page
-        // has which WCAG violation. rowCount reports the per-URL
-        // count which is the more useful signal for the upload UI.
-        await parseAccessibility(raw, clientId, month, uploadId);
-        rowCount = await parseAccessibilityUrls(raw, clientId, month, uploadId);
-        break;
-      }
       case 'issue_urls':
         rowCount = await parseIssueUrls(raw, clientId, month, uploadId, filename);
         break;

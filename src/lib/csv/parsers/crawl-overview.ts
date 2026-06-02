@@ -187,7 +187,10 @@ export async function parse(raw: string, clientId: string, month: string, upload
     statements.push({ sql, args: [nanoid(), clientId, month, category, key, value, uploadId] });
   }
 
-  const CHUNK = 100;
+  // Match the 450-statement write chunk used across the ingest write path
+  // (_bulk-insert.BATCH_CHUNK and the Class-A executors): fewer round-trips so
+  // a dense file cannot push a batch toward Cloudflare's 100s origin window.
+  const CHUNK = 450;
   for (let i = 0; i < statements.length; i += CHUNK) {
     const chunk = statements.slice(i, i + CHUNK);
     await turso.batch(chunk, 'write');

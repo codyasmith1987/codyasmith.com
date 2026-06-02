@@ -20,6 +20,7 @@
 //     analysis columns blank). measured = 1 only if >=1 row has a real
 //     (non-null) value in the signal column(s).
 
+import type { Client } from '@libsql/client';
 import { nanoid } from 'nanoid';
 
 export type CoverageKind = 'file-present' | 'signal';
@@ -181,4 +182,77 @@ export function buildCoverageUpsert(p: {
     p.measured, p.rowsTotal, p.rowsMeasured, p.uploadId,
   ];
   return { sql, args };
+}
+
+// Recompute coverage for ONE (client, month, category) from the TABLE STATE —
+// the canonical aggregate, single-sourced for both the ingest path and the 057
+// backfill so the definition never drifts.
+//
+// WHY aggregate, not per-file (the PR #256 fix): coverage was written per FILE
+// from that file's own statements and upserted last-writer-wins. When several
+// files feed one category in a month (content_quality is fed by content_all.csv
+// — the file with real flesch/spelling/near-dup signal — AND by the
+// internal_css/images/javascript resource lists with NO signal), a no-signal
+// resource file ingesting AFTER content_all overwrote coverage to measured=0,
+// so a fully-measured category read as "not measured." Reading the whole table
+// for the category makes the result independent of file count and order.
+//
+//   signal:        rows_total = COUNT(*); rows_measured = COUNT(rows where ANY
+//                  dbSignalColumn IS NOT NULL); measured = rows_measured > 0.
+//   file-present:  rows_total = rows_measured = COUNT(*) in the table; measured
+//                  = 1 (a live upload exists because we just ingested one — the
+//                  file was provided, even with zero data rows).
+//
+// This performs its own SELECT then upsert (it READS the table), so it must NOT
+// run inside an atomic libsql write-batch — call it AFTER the batch commits.
+// source/uploadId are parameterized: ingest passes ('csv_upload', uploadId),
+// the 057 backfill passes ('backfill', null).
+export async function recomputeCategoryCoverage(
+  db: Client,
+  clientId: string,
+  month: string,
+  category: string,
+  source: 'csv_upload' | 'backfill',
+  uploadId: string | null,
+): Promise<void> {
+  const cat = COVERAGE_CATEGORIES[category];
+  if (!cat) throw new Error(`recomputeCategoryCoverage: unknown category ${category}`);
+
+  let rowsTotal = 0;
+  let rowsMeasured = 0;
+  let measured: 0 | 1;
+
+  if (cat.kind === 'file-present') {
+    const res = await db.execute({
+      sql: `SELECT COUNT(*) AS cnt FROM ${cat.table} WHERE client_id = ? AND month = ?`,
+      args: [clientId, month],
+    });
+    rowsTotal = Number(res.rows[0]?.cnt) || 0;
+    rowsMeasured = rowsTotal;
+    measured = 1; // a live upload exists (we just ingested one) -> file provided
+  } else {
+    const cols = cat.dbSignalColumns ?? [];
+    const realPredicate = cols.map(c => `${c} IS NOT NULL`).join(' OR ');
+    const res = await db.execute({
+      sql: `SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN ${realPredicate} THEN 1 ELSE 0 END) AS measured_rows
+            FROM ${cat.table} WHERE client_id = ? AND month = ?`,
+      args: [clientId, month],
+    });
+    rowsTotal = Number(res.rows[0]?.total) || 0;
+    rowsMeasured = Number(res.rows[0]?.measured_rows) || 0;
+    measured = rowsMeasured > 0 ? 1 : 0;
+  }
+
+  const sql = `INSERT INTO data_coverage
+    (id, client_id, month, category, measured, rows_total, rows_measured, source, csv_upload_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(client_id, month, category) DO UPDATE SET
+      measured = excluded.measured, rows_total = excluded.rows_total,
+      rows_measured = excluded.rows_measured, source = excluded.source,
+      csv_upload_id = excluded.csv_upload_id, detected_at = datetime('now')`;
+  await db.execute({
+    sql,
+    args: [nanoid(), clientId, month, category, measured, rowsTotal, rowsMeasured, source, uploadId],
+  });
 }

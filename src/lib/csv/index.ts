@@ -23,9 +23,7 @@ import { parseGa4 } from './parsers/ga4';
 import { parseGsc } from './parsers/gsc';
 import {
   FORMAT_TO_CATEGORY,
-  coverageCountsFromStatements,
-  coverageCountsFilePresent,
-  buildCoverageUpsert,
+  recomputeCategoryCoverage,
 } from './coverage-signals';
 
 // Maps CSV formats to the source tags they write, so we can clear old data before re-importing
@@ -345,22 +343,6 @@ export async function ingestCSV(
 
     const parserStatements = builder(raw, clientId, month, uploadId);
 
-    // Build the coverage upsert for this category (if tracked) so it commits in
-    // the SAME atomic batch as the per-URL data it describes — coverage can
-    // never disagree with the data it records. Signal categories count rows
-    // with a real (non-null) signal value; file-present categories set
-    // rows_measured = rows_total. row_count still = parserStatements.length
-    // (coverage is not a parser row).
-    const coverageCategory = FORMAT_TO_CATEGORY[format];
-    let coverageStatement: { sql: string; args: any[] } | undefined;
-    if (coverageCategory) {
-      const { rowsTotal, rowsMeasured, measured } = coverageCountsFromStatements(coverageCategory, parserStatements);
-      coverageStatement = buildCoverageUpsert({
-        clientId, month, category: coverageCategory, uploadId,
-        rowsTotal, rowsMeasured, measured,
-      });
-    }
-
     try {
       await runAtomicIngest(turso, {
         clearStatements,
@@ -369,7 +351,6 @@ export async function ingestCSV(
           args: [uploadId, clientId, filename, format, month, uploadedBy],
         },
         parserStatements,
-        coverageStatement,
         rowCountUpdate: {
           sql: 'UPDATE csv_uploads SET row_count = ?, processed_at = datetime(\'now\') WHERE id = ?',
           args: [parserStatements.length, uploadId],
@@ -401,6 +382,26 @@ export async function ingestCSV(
         await parseAccessibility(raw, clientId, month, uploadId);
       } catch (metricsErr: any) {
         console.error('[ingestCSV] accessibility aggregate metrics write failed (per-URL data committed OK)', metricsErr?.message);
+      }
+    }
+
+    // Recompute coverage from the FULL table state for this category, AFTER the
+    // atomic batch commits. This MUST be post-commit because it READS the table
+    // (its own SELECT then upsert) and reads cannot live in a libsql
+    // write-batch. Aggregating the whole table — not this one file's statements
+    // — fixes the PR #256 last-writer-wins bug: when several files feed one
+    // category in a month (content_quality is fed by content_all.csv AND by the
+    // internal_css/images/javascript resource lists), a no-signal resource file
+    // ingesting after content_all used to overwrite coverage to measured=0.
+    // Now the result reflects every row regardless of file count or order.
+    // Wrapped in try/catch so a coverage-recompute failure never fails the
+    // upload — the per-URL data is already committed (same guard as metrics).
+    const coverageCategory = FORMAT_TO_CATEGORY[format];
+    if (coverageCategory) {
+      try {
+        await recomputeCategoryCoverage(turso, clientId, month, coverageCategory, 'csv_upload', uploadId);
+      } catch (coverageErr: any) {
+        console.error('[ingestCSV] coverage recompute failed (upload data committed OK)', format, coverageErr?.message);
       }
     }
 
@@ -502,21 +503,22 @@ export async function ingestCSV(
       args: [rowCount, uploadId],
     });
 
-    // Write coverage on the standalone write path. All Class-B tracked
-    // categories (keywords, ga4, gsc, issues) are file-present: the file was
-    // provided, so measured = 1 even with zero data rows. Wrapped in its own
-    // try/catch so a coverage-write failure never fails the upload — the data
-    // is already committed (mirrors the accessibility metrics guard).
+    // Recompute coverage from the FULL table state for this category, after the
+    // data parser and rowcount update. All Class-B tracked categories
+    // (keywords, ga4, gsc, issues) are file-present, so recomputeCategoryCoverage
+    // records measured = 1 (the file was provided) with rows_total = COUNT(*) in
+    // the table — even with zero data rows. Aggregating the table rather than
+    // this one file's row count means multiple files feeding the same category
+    // (e.g. several GSC dimension exports into gsc_dimensions) no longer wipe
+    // each other's coverage. Wrapped in its own try/catch so a coverage failure
+    // never fails the upload — the data is already committed (mirrors the
+    // accessibility metrics guard).
     const coverageCategory = FORMAT_TO_CATEGORY[format];
     if (coverageCategory) {
       try {
-        const { rowsTotal, rowsMeasured, measured } = coverageCountsFilePresent(rowCount);
-        await turso.execute(buildCoverageUpsert({
-          clientId, month, category: coverageCategory, uploadId,
-          rowsTotal, rowsMeasured, measured,
-        }));
+        await recomputeCategoryCoverage(turso, clientId, month, coverageCategory, 'csv_upload', uploadId);
       } catch (coverageErr: any) {
-        console.error('[ingestCSV] coverage write failed (upload data committed OK)', format, coverageErr?.message);
+        console.error('[ingestCSV] coverage recompute failed (upload data committed OK)', format, coverageErr?.message);
       }
     }
 

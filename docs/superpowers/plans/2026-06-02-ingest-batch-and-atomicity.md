@@ -22,7 +22,9 @@ for (let i = 0; i < statements.length; i += 100) {
 }
 ```
 
-**Row-parity test pattern (every parser task uses this):** spin up `createClient({ url: 'file::memory:?cache=shared' })`, create the target table, run the parser against a real sample CSV (committed fixtures in `src/data/raised-bar-f3-csvs/`), then assert the resulting table rows (count + every column value, order-independent) equal a hard-coded expected set derived by reading the sample CSV by hand. The test proves the batch path writes exactly what the data says — independent of the implementation.
+**Row-parity test pattern (every parser task uses this) — THE ORACLE IS THE RAW CSV, NOT THE OLD CODE:** spin up `createClient({ url: 'file::memory:?cache=shared' })`, create the target table, run the parser against a real sample CSV (committed fixtures in `src/data/raised-bar-f3-csvs/`), then assert the resulting table rows (count + specific column values) equal an expected set **derived independently by reading the raw CSV file directly** — count the data lines in the file for the row count; open the file and read the literal cell value for a named column on a named URL/row to assert specific values.
+
+**DO NOT** derive "expected" by running the OLD parser and snapshotting its output, and DO NOT assert merely that new-batch-output == old-parser-output. The old per-row path is KNOWN-SUSPECT (it 524'd mid-write leaving partial data, accumulated superseded rows, and produced wrong downstream values like ZKH page_count=25 and empty F3 tables). Bug-for-bug parity with a broken path is not correctness. The only trustworthy oracle is what the source file actually contains, counted by hand from the raw file — the same standard that validated F3 = 5 real pages three independent ways. Each parser test must be able to fail if the parser (old OR new) drops a row or mis-maps a column relative to the raw file.
 
 ---
 

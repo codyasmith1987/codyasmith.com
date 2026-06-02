@@ -23,6 +23,7 @@
 import Papa from 'papaparse';
 import { nanoid } from 'nanoid';
 import turso from '../../turso';
+import { bulkInsert } from './_bulk-insert';
 
 function parseCtrPercent(raw: string | undefined): number | null {
   if (!raw) return null;
@@ -49,22 +50,6 @@ function parseFloat0(raw: string | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-// Batch size for parallel INSERTs. Tuned to keep Turso happy without
-// blowing the per-file ingest budget on a Cloudflare-fronted POST.
-// 50 mirrors the crawl_internal parser, which has shipped fine for
-// 5000+ row SF crawls.
-const INSERT_BATCH = 50;
-
-// Run INSERTs in parallel chunks. One Promise.all per chunk so a
-// single failure rejects fast rather than the for-loop swallowing
-// hundreds of round-trips one at a time.
-async function bulkInsert(sql: string, allArgs: any[][]) {
-  for (let i = 0; i < allArgs.length; i += INSERT_BATCH) {
-    const chunk = allArgs.slice(i, i + INSERT_BATCH);
-    await Promise.all(chunk.map(args => turso.execute({ sql, args })));
-  }
-}
-
 // Dimension files all share the same shape. The first column header
 // tells us the dimension type (Top pages vs Top queries vs Country
 // vs Device vs Search Appearance). Pass the dimension_type in
@@ -76,6 +61,7 @@ async function parseDimensionFile(
   month: string,
   uploadId: string,
   dimensionType: string,
+  db?: typeof turso,
 ): Promise<number> {
   const result = Papa.parse(raw, { header: true, skipEmptyLines: true });
   const sql = `INSERT INTO gsc_dimensions
@@ -99,7 +85,7 @@ async function parseDimensionFile(
       parseFloat0(row['Position']),
     ]);
   }
-  await bulkInsert(sql, inserts);
+  await bulkInsert(sql, inserts, db);
   return inserts.length;
 }
 
@@ -117,6 +103,11 @@ export async function parseGscDevices(raw: string, clientId: string, month: stri
 }
 export async function parseGscSearchAppearance(raw: string, clientId: string, month: string, uploadId: string): Promise<number> {
   return parseDimensionFile(raw, clientId, month, uploadId, 'search_appearance');
+}
+
+// Exported for testing only — allows tests to inject an in-memory db.
+export async function parseGscQueriesWithDb(raw: string, clientId: string, month: string, uploadId: string, db: typeof turso): Promise<number> {
+  return parseDimensionFile(raw, clientId, month, uploadId, 'query', db);
 }
 
 // Chart.csv — Date, Clicks, Impressions, CTR, Position. One row per
@@ -146,23 +137,26 @@ export async function parseGscChart(raw: string, clientId: string, month: string
 
 // Filters.csv — Filter, Value. Small metadata table.
 export async function parseGscFilters(raw: string, clientId: string, month: string, uploadId: string): Promise<number> {
+  return parseGscFiltersWithDb(raw, clientId, month, uploadId);
+}
+
+// Exported for testing only — allows tests to inject an in-memory db.
+export async function parseGscFiltersWithDb(raw: string, clientId: string, month: string, uploadId: string, db?: typeof turso): Promise<number> {
   const result = Papa.parse(raw, { header: true, skipEmptyLines: true });
-  let count = 0;
+  const sql = `INSERT INTO gsc_filters
+                 (id, client_id, csv_upload_id, month, filter_key, filter_value)
+               VALUES (?, ?, ?, ?, ?, ?)`;
+  const inserts: any[][] = [];
   for (const row of result.data as any[]) {
     const key = row['Filter']?.toString().trim();
     if (!key) continue;
-    await turso.execute({
-      sql: `INSERT INTO gsc_filters
-              (id, client_id, csv_upload_id, month, filter_key, filter_value)
-            VALUES (?, ?, ?, ?, ?, ?)`,
-      args: [
-        nanoid(), clientId, uploadId, month, key,
-        row['Value']?.toString().trim() || null,
-      ],
-    });
-    count++;
+    inserts.push([
+      nanoid(), clientId, uploadId, month, key,
+      row['Value']?.toString().trim() || null,
+    ]);
   }
-  return count;
+  await bulkInsert(sql, inserts, db);
+  return inserts.length;
 }
 
 // Top-level dispatcher used by the ingest pipeline.

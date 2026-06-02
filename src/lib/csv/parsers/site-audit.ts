@@ -39,10 +39,24 @@ export async function parse(raw: string, clientId: string, month: string, upload
     return 0;
   }
 
-  // Store as a single site_issue with count
+  // Store as a single site_issue with count. Upsert on
+  // (client_id, month, issue_name) for the same reason issues-overview
+  // does: a plain INSERT throws the UNIQUE constraint when the derived
+  // issue_name already exists for this (client, month): a re-uploaded
+  // audit file, or a derived name that collides with an issues_overview
+  // row. Last-writer-wins refreshes the count instead of erroring.
   await turso.execute({
     sql: `INSERT INTO site_issues (id, client_id, month, issue_name, issue_type, priority, affected_urls, pct_of_total, description, how_to_fix, csv_upload_id)
-          VALUES (?, ?, ?, ?, 'audit', 'medium', ?, ?, ?, ?, ?)`,
+          VALUES (?, ?, ?, ?, 'audit', 'medium', ?, ?, ?, ?, ?)
+          ON CONFLICT(client_id, month, issue_name)
+          DO UPDATE SET
+            issue_type = excluded.issue_type,
+            priority = excluded.priority,
+            affected_urls = excluded.affected_urls,
+            pct_of_total = excluded.pct_of_total,
+            description = excluded.description,
+            how_to_fix = excluded.how_to_fix,
+            csv_upload_id = excluded.csv_upload_id`,
     args: [
       nanoid(),
       clientId,

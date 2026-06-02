@@ -108,6 +108,20 @@ const CLASS_A_BUILDERS: Record<string, (raw: string, clientId: string, month: st
 // accessibility_*.csv per-issue files) coexist instead of wiping each other.
 // Mirrors the per-key dedup proven for issue_urls (by issue_name) and links
 // (by source_file).
+//
+// The UPLOAD-ROW supersession is UNIVERSAL (runs for every format), while the
+// DATA-TABLE clearing stays scoped to FORMAT_SOURCES. Formats deliberately kept
+// out of FORMAT_SOURCES (links, issue_urls) still own a LIVE csv_uploads row
+// under the partial unique index ux_csv_uploads_live (client_id, month,
+// detected_format, original_name). If we skip superseding their prior live row,
+// a legitimate re-upload's INSERT collides with the stale live row and is
+// rejected as "A concurrent upload of this file is already being processed".
+// So we ALWAYS emit the supersede UPDATE for the prior live row of this exact
+// key, but only emit per-table DELETEs when config exists — links self-dedups
+// by source_file and issue_urls by issue_name inside their own parsers, so
+// adding a format-level data sweep for them would wipe sibling files' rows.
+// Keying on original_name means sibling files (h1_missing.csv vs
+// h2_missing.csv, both issue_urls, different paths) are NOT superseded.
 async function collectClearStatements(
   clientId: string,
   month: string,
@@ -117,7 +131,6 @@ async function collectClearStatements(
   db: typeof turso = turso,
 ): Promise<{ latestPrevId: string | null; clearStatements: Array<{ sql: string; args: any[] }> }> {
   const config = FORMAT_SOURCES[format];
-  if (!config) return { latestPrevId: null, clearStatements: [] };
 
   const prevUploads = await db.execute({
     sql: 'SELECT id FROM csv_uploads WHERE client_id = ? AND month = ? AND detected_format = ? AND original_name = ? AND id != ? ORDER BY created_at ASC',
@@ -134,13 +147,20 @@ async function collectClearStatements(
   const latestPrevId = prevIds[prevIds.length - 1];
 
   const clearStatements: Array<{ sql: string; args: any[] }> = [];
-  for (const table of config.tables) {
-    clearStatements.push({
-      sql: `DELETE FROM ${table} WHERE client_id = ? AND month = ? AND csv_upload_id = ?`,
-      args: [clientId, month, latestPrevId],
-    });
+  // Per-table DELETEs ONLY when this format is tracked in FORMAT_SOURCES.
+  // Non-FORMAT_SOURCES formats (links, issue_urls) self-dedup inside their
+  // parsers, so a format-level data sweep would wipe sibling files.
+  if (config) {
+    for (const table of config.tables) {
+      clearStatements.push({
+        sql: `DELETE FROM ${table} WHERE client_id = ? AND month = ? AND csv_upload_id = ?`,
+        args: [clientId, month, latestPrevId],
+      });
+    }
   }
   // Mark old upload record as superseded (keep for history, don't delete).
+  // ALWAYS emitted, for every format — this is what frees the live unique
+  // index slot so the re-upload's INSERT can succeed.
   clearStatements.push({
     sql: 'UPDATE csv_uploads SET error = ? WHERE id = ?',
     args: ['Superseded by newer upload', latestPrevId],
@@ -239,8 +259,10 @@ export async function ingestCSV(
     // Supersede any prior live 'unknown_stored' row for this exact
     // filename BEFORE inserting the new row, so the partial unique
     // index (migration 055) is never violated by a legitimate re-upload.
-    // clearPreviousData no-ops for non-FORMAT_SOURCES formats, so use
-    // a direct UPDATE here.
+    // The unknown branch supersedes by (client, month, 'unknown_stored',
+    // original_name) with its own inline SELECT+UPDATE (plus parse-failure
+    // restore below) rather than calling clearPreviousData, so it stays
+    // self-contained here.
     //
     // Capture the prior live row's id BEFORE superseding it so we can
     // restore it in the parse-failure catch below (mirrors the typed-branch

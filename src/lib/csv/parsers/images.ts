@@ -7,12 +7,15 @@
 // Writes to image_urls (distinct from crawl_urls because internal_html
 // only covers HTML pages; images warrant per-image queries: oversized,
 // missing alt text, etc.).
+//
+// Pure builder: buildImagesStatements returns INSERT statements without
+// executing them (for the atomic-ingest path, Task 8).
+// Back-compat executor: parse() calls the builder and runs via
+// turso.batch so direct callers still work.
 
 import Papa from 'papaparse';
 import { nanoid } from 'nanoid';
 import turso from '../../turso';
-
-const BATCH_SIZE = 50;
 
 function safeText(v: string | undefined, maxLen = 2000): string | null {
   if (v === undefined || v === null) return null;
@@ -50,16 +53,20 @@ function findIdx(headers: string[], wanted: string): number {
   return -1;
 }
 
-export async function parse(raw: string, clientId: string, month: string, uploadId: string): Promise<number> {
+// PURE: parse raw -> array of INSERT statements. No DB calls. Exported
+// for the atomic-ingest path (Task 8) and the thin parse() executor below.
+export function buildImagesStatements(
+  raw: string, clientId: string, month: string, uploadId: string,
+): Array<{ sql: string; args: any[] }> {
   const result = Papa.parse(raw, { header: false, skipEmptyLines: true });
   const rows = result.data as string[][];
-  if (rows.length < 2) return 0;
+  if (rows.length < 2) return [];
 
   const headers = rows[0].map(h => (h || '').toString());
   const dataRows = rows.slice(1);
 
   const idxAddress = findIdx(headers, 'address');
-  if (idxAddress < 0) return 0;
+  if (idxAddress < 0) return [];
 
   const idxContentType = findIdx(headers, 'content type');
   const idxSize = findIdx(headers, 'size (bytes)');
@@ -106,12 +113,16 @@ export async function parse(raw: string, clientId: string, month: string, upload
      content_type, size_bytes, inlinks_count, indexability, dimensions, raw_json)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
-  for (let i = 0; i < inserts.length; i += BATCH_SIZE) {
-    const chunk = inserts.slice(i, i + BATCH_SIZE);
-    await Promise.all(chunk.map(args => turso.execute({ sql, args })));
-  }
+  return inserts.map(args => ({ sql, args }));
+}
 
-  return inserts.length;
+// Thin executor — back-compat for direct callers.
+export async function parse(raw: string, clientId: string, month: string, uploadId: string): Promise<number> {
+  const stmts = buildImagesStatements(raw, clientId, month, uploadId);
+  for (let i = 0; i < stmts.length; i += 100) {
+    await turso.batch(stmts.slice(i, i + 100), 'write');
+  }
+  return stmts.length;
 }
 
 export { extractHostname, findIdx };

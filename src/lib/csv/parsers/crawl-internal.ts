@@ -14,19 +14,19 @@
 // Description 1" style suffixes; we match by leading label
 // (case-insensitive) and fall back to null.
 //
-// Bulk insert: rows are inserted in batches via Promise.all chunks
-// to stay under libSQL request-size limits on large crawls.
+// Pure builder: buildCrawlInternalStatements returns INSERT statements
+// without executing them (for the atomic-ingest path, Task 8).
+// Back-compat executor: parse() calls the builder and runs via
+// turso.batch so direct callers (F3 ingest, etc.) still work.
 
 import Papa from 'papaparse';
 import { nanoid } from 'nanoid';
 import turso from '../../turso';
 
-const BATCH_SIZE = 50;
-
 function findHeaderIndex(headers: string[], wanted: string): number {
   const w = wanted.toLowerCase();
   for (let i = 0; i < headers.length; i++) {
-    const h = (headers[i] || '').replace(/^\uFEFF/, '').toLowerCase().trim();
+    const h = (headers[i] || '').replace(/^﻿/, '').toLowerCase().trim();
     if (h === w) return i;
     if (h === `${w} 1`) return i;
     if (h.startsWith(`${w}-1`)) return i;
@@ -77,16 +77,20 @@ function extractHostname(url: string): string | null {
   }
 }
 
-export async function parse(raw: string, clientId: string, month: string, uploadId: string): Promise<number> {
+// PURE: parse raw -> array of INSERT statements. No DB calls. Exported
+// for the atomic-ingest path (Task 8) and the thin parse() executor below.
+export function buildCrawlInternalStatements(
+  raw: string, clientId: string, month: string, uploadId: string,
+): Array<{ sql: string; args: any[] }> {
   const result = Papa.parse(raw, { header: false, skipEmptyLines: true });
   const rows = result.data as string[][];
-  if (rows.length < 2) return 0;
+  if (rows.length < 2) return [];
 
   const headers = rows[0].map(h => (h || '').toString());
   const dataRows = rows.slice(1);
 
   const idxAddress = findHeaderIndex(headers, 'address');
-  if (idxAddress < 0) return 0;
+  if (idxAddress < 0) return [];
 
   // Hot column indexes. Anything not found stays at -1 and yields
   // null in the row tuple below.
@@ -181,12 +185,16 @@ export async function parse(raw: string, clientId: string, month: string, upload
      canonical_url, response_time_ms, size_bytes, last_modified, raw_json)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
-  for (let i = 0; i < inserts.length; i += BATCH_SIZE) {
-    const chunk = inserts.slice(i, i + BATCH_SIZE);
-    await Promise.all(chunk.map(args => turso.execute({ sql, args })));
-  }
+  return inserts.map(args => ({ sql, args }));
+}
 
-  return inserts.length;
+// Thin executor — back-compat for direct callers (F3 ingest, etc.).
+export async function parse(raw: string, clientId: string, month: string, uploadId: string): Promise<number> {
+  const stmts = buildCrawlInternalStatements(raw, clientId, month, uploadId);
+  for (let i = 0; i < stmts.length; i += 100) {
+    await turso.batch(stmts.slice(i, i + 100), 'write');
+  }
+  return stmts.length;
 }
 
 // Exported for unit tests.

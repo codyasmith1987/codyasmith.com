@@ -5,6 +5,11 @@
 // Features, Feature-1..N, Total Types, Unique Types, Type-1..N.
 // We capture summary counts as hot columns and roll the Feature-N
 // and Type-N columns into comma-joined strings.
+//
+// Pure builder: buildStructuredDataUrlsStatements returns INSERT
+// statements without executing them (for the atomic-ingest path,
+// Task 8). Back-compat executor: parse() calls the builder and
+// runs via turso.batch so direct callers still work.
 
 import { nanoid } from 'nanoid';
 import turso from '../../turso';
@@ -12,8 +17,6 @@ import {
   parseCsvHeaderAndRows, findIdx, safeText, safeInt,
   extractHostname, rowToJson,
 } from './_url-parser-helpers';
-
-const BATCH = 50;
 
 function collectIndexed(headers: string[], row: string[], prefix: string, maxN = 10): string {
   // Pulls every "Prefix-N" column value (e.g., "Feature-1", "Type-1")
@@ -29,9 +32,13 @@ function collectIndexed(headers: string[], row: string[], prefix: string, maxN =
   return values.join(', ').slice(0, 2000);
 }
 
-export async function parse(raw: string, clientId: string, month: string, uploadId: string): Promise<number> {
+// PURE: parse raw -> array of INSERT statements. No DB calls. Exported
+// for the atomic-ingest path (Task 8) and the thin parse() executor below.
+export function buildStructuredDataUrlsStatements(
+  raw: string, clientId: string, month: string, uploadId: string,
+): Array<{ sql: string; args: any[] }> {
   const parsed = parseCsvHeaderAndRows(raw);
-  if (!parsed) return 0;
+  if (!parsed) return [];
   const { headers, rows } = parsed;
 
   const idx = {
@@ -44,7 +51,7 @@ export async function parse(raw: string, clientId: string, month: string, upload
     uniqueTypes: findIdx(headers, 'unique types'),
     indexability: findIdx(headers, 'indexability'),
   };
-  if (idx.address < 0) return 0;
+  if (idx.address < 0) return [];
 
   const seen = new Set<string>();
   const inserts: any[][] = [];
@@ -83,9 +90,14 @@ export async function parse(raw: string, clientId: string, month: string, upload
      indexability, raw_json)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
-  for (let i = 0; i < inserts.length; i += BATCH) {
-    const chunk = inserts.slice(i, i + BATCH);
-    await Promise.all(chunk.map(args => turso.execute({ sql, args })));
+  return inserts.map(args => ({ sql, args }));
+}
+
+// Thin executor — back-compat for direct callers.
+export async function parse(raw: string, clientId: string, month: string, uploadId: string): Promise<number> {
+  const stmts = buildStructuredDataUrlsStatements(raw, clientId, month, uploadId);
+  for (let i = 0; i < stmts.length; i += 100) {
+    await turso.batch(stmts.slice(i, i + 100), 'write');
   }
-  return inserts.length;
+  return stmts.length;
 }

@@ -7,6 +7,11 @@
 // Address, Semantic Similarity Score, No. Semantically Similar,
 // Semantic Relevance Score, Spelling Errors, Grammar Errors,
 // Language.
+//
+// Pure builder: buildContentUrlsStatements returns INSERT statements
+// without executing them (for the atomic-ingest path, Task 8).
+// Back-compat executor: parse() calls the builder and runs via
+// turso.batch so direct callers still work.
 
 import { nanoid } from 'nanoid';
 import turso from '../../turso';
@@ -15,11 +20,13 @@ import {
   extractHostname, rowToJson,
 } from './_url-parser-helpers';
 
-const BATCH = 50;
-
-export async function parse(raw: string, clientId: string, month: string, uploadId: string): Promise<number> {
+// PURE: parse raw -> array of INSERT statements. No DB calls. Exported
+// for the atomic-ingest path (Task 8) and the thin parse() executor below.
+export function buildContentUrlsStatements(
+  raw: string, clientId: string, month: string, uploadId: string,
+): Array<{ sql: string; args: any[] }> {
   const parsed = parseCsvHeaderAndRows(raw);
-  if (!parsed) return 0;
+  if (!parsed) return [];
   const { headers, rows } = parsed;
 
   const idx = {
@@ -38,7 +45,7 @@ export async function parse(raw: string, clientId: string, month: string, upload
     grammar: findIdx(headers, 'grammar errors'),
     language: findIdx(headers, 'language'),
   };
-  if (idx.address < 0) return 0;
+  if (idx.address < 0) return [];
 
   const seen = new Set<string>();
   const inserts: any[][] = [];
@@ -79,9 +86,14 @@ export async function parse(raw: string, clientId: string, month: string, upload
      spelling_errors, grammar_errors, language, raw_json)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
-  for (let i = 0; i < inserts.length; i += BATCH) {
-    const chunk = inserts.slice(i, i + BATCH);
-    await Promise.all(chunk.map(args => turso.execute({ sql, args })));
+  return inserts.map(args => ({ sql, args }));
+}
+
+// Thin executor — back-compat for direct callers.
+export async function parse(raw: string, clientId: string, month: string, uploadId: string): Promise<number> {
+  const stmts = buildContentUrlsStatements(raw, clientId, month, uploadId);
+  for (let i = 0; i < stmts.length; i += 100) {
+    await turso.batch(stmts.slice(i, i + 100), 'write');
   }
-  return inserts.length;
+  return stmts.length;
 }

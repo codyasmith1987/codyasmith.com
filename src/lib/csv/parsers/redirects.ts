@@ -9,12 +9,15 @@
 // We materialize the first 5 hops as hot columns (URL + status per
 // hop). The full chain stays in raw_json for analysis of pathological
 // 8+ hop chains.
+//
+// Pure builder: buildRedirectsStatements returns INSERT statements
+// without executing them (for the atomic-ingest path, Task 8).
+// Back-compat executor: parse() calls the builder and runs via
+// turso.batch so direct callers still work.
 
 import Papa from 'papaparse';
 import { nanoid } from 'nanoid';
 import turso from '../../turso';
-
-const BATCH_SIZE = 50;
 
 function safeText(v: string | undefined, maxLen = 2000): string | null {
   if (v === undefined || v === null) return null;
@@ -58,10 +61,14 @@ function findIdx(headers: string[], wanted: string): number {
   return -1;
 }
 
-export async function parse(raw: string, clientId: string, month: string, uploadId: string): Promise<number> {
+// PURE: parse raw -> array of INSERT statements. No DB calls. Exported
+// for the atomic-ingest path (Task 8) and the thin parse() executor below.
+export function buildRedirectsStatements(
+  raw: string, clientId: string, month: string, uploadId: string,
+): Array<{ sql: string; args: any[] }> {
   const result = Papa.parse(raw, { header: false, skipEmptyLines: true });
   const rows = result.data as string[][];
-  if (rows.length < 2) return 0;
+  if (rows.length < 2) return [];
 
   const headers = rows[0].map(h => (h || '').toString());
   const dataRows = rows.slice(1);
@@ -88,7 +95,7 @@ export async function parse(raw: string, clientId: string, month: string, upload
   }
 
   // Each chain needs a Source. Without one, the row is unusable.
-  if (idxSource < 0) return 0;
+  if (idxSource < 0) return [];
 
   function rowToJson(row: string[]): string {
     const obj: Record<string, string> = {};
@@ -144,12 +151,16 @@ export async function parse(raw: string, clientId: string, month: string, upload
      hop3_url, hop3_status, hop4_url, hop4_status, hop5_url, hop5_status, raw_json)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
-  for (let i = 0; i < inserts.length; i += BATCH_SIZE) {
-    const chunk = inserts.slice(i, i + BATCH_SIZE);
-    await Promise.all(chunk.map(args => turso.execute({ sql, args })));
-  }
+  return inserts.map(args => ({ sql, args }));
+}
 
-  return inserts.length;
+// Thin executor — back-compat for direct callers.
+export async function parse(raw: string, clientId: string, month: string, uploadId: string): Promise<number> {
+  const stmts = buildRedirectsStatements(raw, clientId, month, uploadId);
+  for (let i = 0; i < stmts.length; i += 100) {
+    await turso.batch(stmts.slice(i, i + 100), 'write');
+  }
+  return stmts.length;
 }
 
 export { extractHostname, findIdx };

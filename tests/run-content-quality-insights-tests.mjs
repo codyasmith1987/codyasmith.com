@@ -12,7 +12,7 @@ function test(name, fn) {
   catch (err) { console.error(`[FAIL] ${name}: ${err.message}`); failed++; }
 }
 
-test('emptyContentQuality is fully zeroed', () => {
+test('emptyContentQuality is fully zeroed with all sub-metrics unmeasured', () => {
   assert.deepStrictEqual(emptyContentQuality(), {
     near_duplicate_count: 0,
     near_duplicate_samples: [],
@@ -20,6 +20,11 @@ test('emptyContentQuality is fully zeroed', () => {
     spelling_grammar_samples: [],
     hard_to_read_count: 0,
     hard_to_read_samples: [],
+    measured: {
+      near_duplicate: false,
+      spelling_grammar: false,
+      readability: false,
+    },
   });
 });
 

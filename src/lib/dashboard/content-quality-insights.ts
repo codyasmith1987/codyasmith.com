@@ -21,6 +21,17 @@ export interface ContentQualityInsights {
   // Readability (soft/advisory): pages scoring low on Flesch reading ease.
   hard_to_read_count: number;
   hard_to_read_samples: ContentQualitySample[];
+  // Per-sub-metric coverage. A content_urls month can be measured overall
+  // while one sub-metric column is entirely blank (the paid analysis populated
+  // some columns but not others). Each sub-metric is `measured` only when at
+  // least one row has a real (non-NULL) value in its source column(s); when no
+  // row carries the value, the sub-metric is { measured: false }, NEVER a
+  // misleading clean 0. Counts above are computed only over the non-NULL rows.
+  measured: {
+    near_duplicate: boolean;
+    spelling_grammar: boolean;
+    readability: boolean;
+  };
 }
 
 export function emptyContentQuality(): ContentQualityInsights {
@@ -31,6 +42,11 @@ export function emptyContentQuality(): ContentQualityInsights {
     spelling_grammar_samples: [],
     hard_to_read_count: 0,
     hard_to_read_samples: [],
+    measured: {
+      near_duplicate: false,
+      spelling_grammar: false,
+      readability: false,
+    },
   };
 }
 

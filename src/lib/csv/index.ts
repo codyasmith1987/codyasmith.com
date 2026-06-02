@@ -21,6 +21,12 @@ import { parse as parseRawCsv } from './parsers/raw-csv';
 import { parse as parseLinks } from './parsers/links';
 import { parseGa4 } from './parsers/ga4';
 import { parseGsc } from './parsers/gsc';
+import {
+  FORMAT_TO_CATEGORY,
+  coverageCountsFromStatements,
+  coverageCountsFilePresent,
+  buildCoverageUpsert,
+} from './coverage-signals';
 
 // Maps CSV formats to the source tags they write, so we can clear old data before re-importing
 const FORMAT_SOURCES: Record<string, { tables: string[]; source: string }> = {
@@ -177,13 +183,21 @@ export async function runAtomicIngest(
     clearStatements: Array<{ sql: string; args: any[] }>;
     uploadInsert: { sql: string; args: any[] };
     parserStatements: Array<{ sql: string; args: any[] }>;
+    coverageStatement?: { sql: string; args: any[] };
     rowCountUpdate: { sql: string; args: any[] };
   },
 ): Promise<void> {
+  // coverageStatement (when present) goes AFTER parserStatements and before
+  // rowCountUpdate, so it runs after uploadInsert — its FK parent
+  // (csv_uploads.id via csv_upload_id) already exists in the same tx (same
+  // ordering lesson as the accessibility metrics FK fix). It commits in the
+  // SAME batch as the data it describes and can never disagree with it: a
+  // parser failure rolls back both the data and the coverage row.
   const statements = [
     ...parts.clearStatements,
     parts.uploadInsert,
     ...parts.parserStatements,
+    ...(parts.coverageStatement ? [parts.coverageStatement] : []),
     parts.rowCountUpdate,
   ];
   await db.batch(statements, 'write');
@@ -309,6 +323,22 @@ export async function ingestCSV(
 
     const parserStatements = builder(raw, clientId, month, uploadId);
 
+    // Build the coverage upsert for this category (if tracked) so it commits in
+    // the SAME atomic batch as the per-URL data it describes — coverage can
+    // never disagree with the data it records. Signal categories count rows
+    // with a real (non-null) signal value; file-present categories set
+    // rows_measured = rows_total. row_count still = parserStatements.length
+    // (coverage is not a parser row).
+    const coverageCategory = FORMAT_TO_CATEGORY[format];
+    let coverageStatement: { sql: string; args: any[] } | undefined;
+    if (coverageCategory) {
+      const { rowsTotal, rowsMeasured, measured } = coverageCountsFromStatements(coverageCategory, parserStatements);
+      coverageStatement = buildCoverageUpsert({
+        clientId, month, category: coverageCategory, uploadId,
+        rowsTotal, rowsMeasured, measured,
+      });
+    }
+
     try {
       await runAtomicIngest(turso, {
         clearStatements,
@@ -317,6 +347,7 @@ export async function ingestCSV(
           args: [uploadId, clientId, filename, format, month, uploadedBy],
         },
         parserStatements,
+        coverageStatement,
         rowCountUpdate: {
           sql: 'UPDATE csv_uploads SET row_count = ?, processed_at = datetime(\'now\') WHERE id = ?',
           args: [parserStatements.length, uploadId],
@@ -448,6 +479,24 @@ export async function ingestCSV(
       sql: 'UPDATE csv_uploads SET row_count = ?, processed_at = datetime(\'now\') WHERE id = ?',
       args: [rowCount, uploadId],
     });
+
+    // Write coverage on the standalone write path. All Class-B tracked
+    // categories (keywords, ga4, gsc, issues) are file-present: the file was
+    // provided, so measured = 1 even with zero data rows. Wrapped in its own
+    // try/catch so a coverage-write failure never fails the upload — the data
+    // is already committed (mirrors the accessibility metrics guard).
+    const coverageCategory = FORMAT_TO_CATEGORY[format];
+    if (coverageCategory) {
+      try {
+        const { rowsTotal, rowsMeasured, measured } = coverageCountsFilePresent(rowCount);
+        await turso.execute(buildCoverageUpsert({
+          clientId, month, category: coverageCategory, uploadId,
+          rowsTotal, rowsMeasured, measured,
+        }));
+      } catch (coverageErr: any) {
+        console.error('[ingestCSV] coverage write failed (upload data committed OK)', format, coverageErr?.message);
+      }
+    }
 
     return { uploadId, format, rowCount, headers };
   } catch (err: any) {

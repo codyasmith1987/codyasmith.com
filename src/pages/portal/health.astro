@@ -598,6 +598,7 @@ const clients = isAdmin ? await getAllClients() : [];
       const sev = (s) => s === 'high' ? 'text-red-400'
         : s === 'medium' ? 'text-amber-600'
         : s === 'low' ? 'text-neutral-300'
+        : s === 'none' ? 'text-neutral-600'
         : 'text-emerald-400';
       const stats = (opts.stat_lines || []).map(s => `
         <div>
@@ -625,6 +626,79 @@ const clients = isAdmin ? await getAllClients() : [];
       `;
     }
 
+    // Pick the honest display state for a signal category from its
+    // category_coverage block (from url-insights). Mirrors
+    // src/lib/portal/coverage-display.ts verbatim inside the DRIFT-LOCK
+    // markers; a guard test asserts the two are byte-identical. This inline
+    // copy exists because the page's script runs under define:vars and is not
+    // bundled, so it cannot import the module.
+    //   'measured'     -> render the widget (a real 0 reads as clean)
+    //   'not_measured' -> file provided but the analysis was blank; show a
+    //                     neutral muted line, NOT the green all-clear
+    //   'omit'         -> never provided; render nothing
+    // DRIFT-LOCK:START — mirrored verbatim in src/pages/portal/health.astro
+    function coverageDisplayState(cov) {
+      if (!cov) return 'omit';
+      if (cov.measured === 1) return 'measured';
+      if ((cov.rows_total || 0) > 0) return 'not_measured';
+      return 'omit';
+    }
+    // Content-quality has three INDEPENDENT sub-metrics (near-duplicate,
+    // spelling/grammar, readability). A content export can be measured overall
+    // while one sub-metric column was never populated (the paid analysis filled
+    // some columns but not others). An unmeasured sub-metric must render as a
+    // neutral "not checked" dash, never a green 0, and the all-clear may only fire
+    // when ALL THREE sub-metrics were measured AND clean — otherwise the page
+    // would imply a passing result for a sub-metric that never ran.
+    function contentStatLine(measured, count, label, activeSeverity) {
+      if (!measured) return { count: 'n/a', label: label + ' (not checked)', severity: 'none' };
+      return { count: count, label: label, severity: count > 0 ? activeSeverity : 'ok' };
+    }
+    function contentStatLines(cq) {
+      const m = (cq && cq.measured) || {};
+      return [
+        contentStatLine(!!m.near_duplicate, cq.near_duplicate_count, 'near-duplicate pages', 'medium'),
+        contentStatLine(!!m.spelling_grammar, cq.spelling_grammar_count, 'pages with spelling/grammar', 'medium'),
+        m.readability
+          ? { count: cq.hard_to_read_count, label: 'dense for a general reader', severity: 'low' }
+          : { count: 'n/a', label: 'dense for a general reader (not checked)', severity: 'none' },
+      ];
+    }
+    function contentAllClear(cq) {
+      const m = (cq && cq.measured) || {};
+      if (!(m.near_duplicate && m.spelling_grammar && m.readability)) return false;
+      return cq.near_duplicate_count === 0 && cq.spelling_grammar_count === 0 && cq.hard_to_read_count === 0;
+    }
+    // DRIFT-LOCK:END
+
+    // Client-facing copy for the not-measured state. Frames the category as
+    // not part of this crawl — no tool names, no filenames, no jargon, and
+    // nothing that reads as a clean all-clear.
+    const NOT_MEASURED_COPY = {
+      accessibility: "Accessibility wasn't part of this crawl, so there's nothing to report here yet.",
+      structured_data: "Schema markup wasn't part of this crawl, so there's nothing to report here yet.",
+      content_quality: "A content-quality review wasn't part of this crawl, so there's nothing to report here yet.",
+    };
+
+    // A muted card that says a category was not measured. Visually distinct
+    // from a measured-clean widget (no green stat numbers, no "no issues
+    // flagged"): a single neutral line under the title.
+    function notMeasuredCard(opts) {
+      const copy = NOT_MEASURED_COPY[opts.category]
+        || "This wasn't part of the latest crawl, so there's nothing to report here yet.";
+      return `
+        <div class="health-animate bg-neutral-900/30 border border-white/5 rounded-2xl overflow-hidden" id="${opts.id}">
+          <div class="px-6 py-5 border-b border-white/5">
+            <h3 class="text-sm font-medium text-neutral-200">${escapeHtml(opts.title)}</h3>
+            ${opts.description ? `<p class="text-xs text-neutral-400 mt-0.5">${escapeHtml(opts.description)}</p>` : ''}
+          </div>
+          <div class="px-6 py-5">
+            <p class="text-xs text-neutral-500">${escapeHtml(copy)}</p>
+          </div>
+        </div>
+      `;
+    }
+
     async function loadUrlInsights() {
       const cid = activeClientId;
       const container = document.getElementById('url-insights');
@@ -643,10 +717,25 @@ const clients = isAdmin ? await getAllClients() : [];
         return;
       }
 
+      // Honest display state per signal category, read from the explicit
+      // coverage block (never re-derived from NULLs). 'not_measured' means the
+      // file was provided but the analysis columns were blank, so we surface a
+      // neutral muted line instead of a green all-clear; 'omit' means it was
+      // never provided and we render nothing, as before.
+      const cov = data.category_coverage || {};
+      const accessibilityState = coverageDisplayState(cov.accessibility);
+      const structuredState = coverageDisplayState(cov.structured_data);
+      const contentState = coverageDisplayState(cov.content_quality);
+
       // If no per-URL data exists at all for this client, do not
       // render the section. The existing empty state handles "no
-      // health data".
-      if (!data.has_crawl_data && !data.has_image_data && !data.has_redirect_data && !data.has_link_data && !data.has_accessibility_data && !data.has_structured_data && !data.has_content_quality) return;
+      // health data". A provided-but-unmeasured signal category
+      // ('not_measured') still counts as something to show.
+      if (
+        !data.has_crawl_data && !data.has_image_data && !data.has_redirect_data && !data.has_link_data &&
+        !data.has_accessibility_data && !data.has_structured_data && !data.has_content_quality &&
+        accessibilityState !== 'not_measured' && structuredState !== 'not_measured' && contentState !== 'not_measured'
+      ) return;
 
       const cards = [];
 
@@ -842,10 +931,14 @@ const clients = isAdmin ? await getAllClients() : [];
       }
 
       // ----- Accessibility (WCAG) -----
-      // Render whenever accessibility data was ingested, even if clean: a
-      // checked-and-clean result must be visibly distinct from "not run".
-      // The no-findings state shows a neutral line, not a green "all clear".
-      if (data.has_accessibility_data) {
+      // Three honest states, driven by the explicit coverage record:
+      //   measured     -> render the widget (a clean 0 reads as checked-clean,
+      //                   visibly distinct from "not run")
+      //   not_measured -> the export was provided but the analysis was blank;
+      //                   a neutral muted line, NOT a green "all clear"
+      //   omit         -> never provided; render nothing
+      const accessibilityDesc = 'Pages with accessibility issues that can affect visitors who use assistive technology such as screen readers. Each count is the number of issues the audit flagged on that page.';
+      if (accessibilityState === 'measured') {
         const ac = data.accessibility;
         const clean = ac.pages_with_violations === 0;
         const byLevelItems = Object.entries(ac.by_level)
@@ -858,7 +951,7 @@ const clients = isAdmin ? await getAllClients() : [];
         cards.push(widgetCard({
           id: 'widget-accessibility',
           title: 'Accessibility',
-          description: 'Pages with accessibility issues that can affect visitors who use assistive technology such as screen readers. Each count is the number of issues the audit flagged on that page.',
+          description: accessibilityDesc,
           stat_lines: [
             { count: ac.pages_with_violations, label: 'pages with issues', severity: clean ? 'ok' : 'medium' },
             { count: ac.total_violations, label: 'total issues found', severity: ac.total_violations > 0 ? 'medium' : 'ok' },
@@ -868,13 +961,22 @@ const clients = isAdmin ? await getAllClients() : [];
             : byLevelHtml + renderUrlList(ac.samples,
                 x => `<li>${urlLink(x.url)} <span class="text-neutral-400">${x.all_violations} issue${x.all_violations !== 1 ? 's' : ''}</span></li>`),
         }));
+      } else if (accessibilityState === 'not_measured') {
+        cards.push(notMeasuredCard({
+          id: 'widget-accessibility',
+          category: 'accessibility',
+          title: 'Accessibility',
+          description: accessibilityDesc,
+        }));
       }
 
       // ----- Structured data (schema markup) -----
-      // Render whenever structured-data was ingested. The "types found" list
-      // is useful even with zero errors (shows what schema the site has), and
-      // a clean result must read as checked, not missing.
-      if (data.has_structured_data) {
+      // measured     -> render the widget (the "types found" list is useful
+      //                 even with zero errors; a clean result reads as checked)
+      // not_measured -> provided but the validation did not run; neutral line
+      // omit         -> never provided; render nothing
+      const structuredDesc = 'Schema markup tells search engines what your pages are about and powers rich results (star ratings, FAQs, breadcrumbs). Errors or warnings here are worth reviewing.';
+      if (structuredState === 'measured') {
         const sd = data.structured_data;
         const clean = sd.pages_with_errors === 0 && sd.pages_with_warnings === 0;
         const typeItems = Object.entries(sd.top_types)
@@ -891,22 +993,35 @@ const clients = isAdmin ? await getAllClients() : [];
         cards.push(widgetCard({
           id: 'widget-structured-data',
           title: 'Structured data',
-          description: 'Schema markup tells search engines what your pages are about and powers rich results (star ratings, FAQs, breadcrumbs). Errors or warnings here are worth reviewing.',
+          description: structuredDesc,
           stat_lines: [
             { count: sd.pages_with_errors, label: 'pages with errors', severity: sd.pages_with_errors > 0 ? 'high' : 'ok' },
             { count: sd.pages_with_warnings, label: 'pages with warnings', severity: 'low' },
           ],
           sample_html: typesHtml + cleanHtml,
         }));
+      } else if (structuredState === 'not_measured') {
+        cards.push(notMeasuredCard({
+          id: 'widget-structured-data',
+          category: 'structured_data',
+          title: 'Structured data',
+          description: structuredDesc,
+        }));
       }
 
       // ----- Content quality -----
-      // Render whenever content data was ingested. Each sub-section shows
-      // only when it has samples; a fully-clean result shows a neutral line
-      // so the client sees the content was checked.
-      if (data.has_content_quality) {
+      // measured     -> render the widget; each sub-section shows only when it
+      //                 has samples; a fully-clean result shows a neutral line
+      //                 so the client sees the content was checked
+      // not_measured -> provided but the content review did not run; neutral line
+      // omit         -> never provided; render nothing
+      const contentDesc = 'Pages worth a content review: close duplicates of other pages, spelling or grammar errors, and pages that read dense for a general audience. Dense reading is only a flag worth a look, not a problem on its own (technical pages are expected to read dense).';
+      if (contentState === 'measured') {
         const cq = data.content_quality;
-        const clean = cq.near_duplicate_count === 0 && cq.spelling_grammar_count === 0 && cq.hard_to_read_count === 0;
+        // Per-sub-metric honesty: an unmeasured sub-metric renders a neutral
+        // "not checked" dash (never a green 0), and the all-clear only fires
+        // when all three sub-metrics were measured AND clean.
+        const clean = contentAllClear(cq);
         const sections = [];
         if (cq.near_duplicate_samples.length) {
           sections.push(`<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">Near-duplicate content</p>` +
@@ -923,15 +1038,18 @@ const clients = isAdmin ? await getAllClients() : [];
         cards.push(widgetCard({
           id: 'widget-content-quality',
           title: 'Content quality',
-          description: 'Pages worth a content review: close duplicates of other pages, spelling or grammar errors, and pages that read dense for a general audience. Dense reading is only a flag worth a look, not a problem on its own (technical pages are expected to read dense).',
-          stat_lines: [
-            { count: cq.near_duplicate_count, label: 'near-duplicate pages', severity: cq.near_duplicate_count > 0 ? 'medium' : 'ok' },
-            { count: cq.spelling_grammar_count, label: 'pages with spelling/grammar', severity: cq.spelling_grammar_count > 0 ? 'medium' : 'ok' },
-            { count: cq.hard_to_read_count, label: 'dense for a general reader', severity: 'low' },
-          ],
+          description: contentDesc,
+          stat_lines: contentStatLines(cq),
           sample_html: clean
             ? `<p class="text-xs text-neutral-400">No content issues flagged in the latest crawl data.</p>`
             : sections.join(''),
+        }));
+      } else if (contentState === 'not_measured') {
+        cards.push(notMeasuredCard({
+          id: 'widget-content-quality',
+          category: 'content_quality',
+          title: 'Content quality',
+          description: contentDesc,
         }));
       }
 

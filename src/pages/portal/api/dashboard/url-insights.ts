@@ -117,6 +117,32 @@ interface UrlInsightsResponse {
   accessibility: AccessibilityInsights;
   structured_data: StructuredDataInsights;
   content_quality: ContentQualityInsights;
+  // Explicit measured-vs-missing record for the three signal categories,
+  // read from data_coverage (NOT re-derived from NULLs at read time). Lets the
+  // client render a neutral "not measured" state distinct from a measured
+  // "0 issues / all clear." `measured = 0` with `rows_total > 0` means the file
+  // was provided but the analysis columns were blank (e.g. free Screaming Frog);
+  // `rows_total = 0` means it was never provided. Either way the surface is the
+  // same neutral "not measured" — `rows_total` preserves the internal distinction.
+  category_coverage: {
+    accessibility: CategoryCoverage;
+    structured_data: CategoryCoverage;
+    content_quality: CategoryCoverage;
+  };
+}
+
+interface CategoryCoverage {
+  measured: 0 | 1;
+  rows_total: number;
+  rows_measured: number;
+}
+
+// Absent coverage reads as "not measured" (never an inferred clean 0). The
+// three signal categories (accessibility / structured_data / content_quality)
+// gate on data_coverage.measured; file-present categories (crawl / images /
+// redirects / links) keep month-presence gating.
+function emptyCategoryCoverage(): CategoryCoverage {
+  return { measured: 0, rows_total: 0, rows_measured: 0 };
 }
 
 export const GET: APIRoute = async ({ locals, url }) => {
@@ -138,43 +164,93 @@ export const GET: APIRoute = async ({ locals, url }) => {
   }
 
   try {
+    const response = await loadUrlInsights(turso, clientId);
+    return json(response);
+  } catch (err: any) {
+    logger.error('url-insights endpoint failed', err);
+    return json({ error: err?.message || 'Failed to load URL insights' }, 500);
+  }
+};
+
+// Read seam: all DB work lives here so it can be exercised against an in-memory
+// libsql client in tests (the GET handler calls it with the turso singleton).
+// Mirrors the runAtomicIngest(db, ...) / backfillCoverage(db) seams.
+export async function loadUrlInsights(
+  db: typeof turso,
+  clientId: string,
+): Promise<UrlInsightsResponse> {
+  {
     // Resolve the latest month present for each table; widgets fall
     // back to "no data" when a table is empty for this client.
-    const crawlMonthRow = await turso.execute({
+    const crawlMonthRow = await db.execute({
       sql: 'SELECT MAX(month) FROM crawl_urls WHERE client_id = ?',
       args: [clientId],
     });
     const crawlMonth = (crawlMonthRow.rows[0]?.[0] as string | null) ?? null;
-    const imageMonthRow = await turso.execute({
+    const imageMonthRow = await db.execute({
       sql: 'SELECT MAX(month) FROM image_urls WHERE client_id = ?',
       args: [clientId],
     });
     const imageMonth = (imageMonthRow.rows[0]?.[0] as string | null) ?? null;
-    const redirectMonthRow = await turso.execute({
+    const redirectMonthRow = await db.execute({
       sql: 'SELECT MAX(month) FROM redirect_chains WHERE client_id = ?',
       args: [clientId],
     });
     const redirectMonth = (redirectMonthRow.rows[0]?.[0] as string | null) ?? null;
-    const linkMonthRow = await turso.execute({
+    const linkMonthRow = await db.execute({
       sql: 'SELECT MAX(month) FROM link_graph WHERE client_id = ?',
       args: [clientId],
     });
     const linkMonth = (linkMonthRow.rows[0]?.[0] as string | null) ?? null;
-    const accessibilityMonthRow = await turso.execute({
-      sql: 'SELECT MAX(month) FROM accessibility_urls WHERE client_id = ?',
+
+    // Signal categories (accessibility / structured_data / content_quality)
+    // gate on data_coverage.measured, NOT on table-row presence. A free
+    // Screaming Frog export leaves rows present with blank analysis columns;
+    // ingest records that as measured = 0 so this read layer never surfaces a
+    // measured "0 / all clear" for data that was never actually measured. We
+    // read the latest coverage row per category (the month it points at is the
+    // month whose data the widget queries). Absent coverage == not measured.
+    const coverageByCategory: Record<string, { measured: 0 | 1; rows_total: number; rows_measured: number; month: string }> = {};
+    const coverageRows = await db.execute({
+      sql: `SELECT dc.category, dc.month, dc.measured, dc.rows_total, dc.rows_measured
+            FROM data_coverage dc
+            WHERE dc.client_id = ?
+              AND dc.category IN ('accessibility', 'structured_data', 'content_quality')
+              AND dc.month = (
+                SELECT MAX(d2.month) FROM data_coverage d2
+                WHERE d2.client_id = dc.client_id AND d2.category = dc.category
+              )`,
       args: [clientId],
     });
-    const accessibilityMonth = (accessibilityMonthRow.rows[0]?.[0] as string | null) ?? null;
-    const structuredMonthRow = await turso.execute({
-      sql: 'SELECT MAX(month) FROM structured_data_urls WHERE client_id = ?',
-      args: [clientId],
-    });
-    const structuredMonth = (structuredMonthRow.rows[0]?.[0] as string | null) ?? null;
-    const contentMonthRow = await turso.execute({
-      sql: 'SELECT MAX(month) FROM content_urls WHERE client_id = ?',
-      args: [clientId],
-    });
-    const contentMonth = (contentMonthRow.rows[0]?.[0] as string | null) ?? null;
+    for (const row of (coverageRows.rows as any[])) {
+      coverageByCategory[String(row[0])] = {
+        month: String(row[1]),
+        measured: Number(row[2]) === 1 ? 1 : 0,
+        rows_total: Number(row[3] ?? 0),
+        rows_measured: Number(row[4] ?? 0),
+      };
+    }
+
+    const accessibilityCov = coverageByCategory['accessibility'] ?? null;
+    const structuredCov = coverageByCategory['structured_data'] ?? null;
+    const contentCov = coverageByCategory['content_quality'] ?? null;
+
+    // The widget runs (and real counts flow) only for a measured category.
+    const accessibilityMonth = accessibilityCov?.measured === 1 ? accessibilityCov.month : null;
+    const structuredMonth = structuredCov?.measured === 1 ? structuredCov.month : null;
+    const contentMonth = contentCov?.measured === 1 ? contentCov.month : null;
+
+    const category_coverage = {
+      accessibility: accessibilityCov
+        ? { measured: accessibilityCov.measured, rows_total: accessibilityCov.rows_total, rows_measured: accessibilityCov.rows_measured }
+        : emptyCategoryCoverage(),
+      structured_data: structuredCov
+        ? { measured: structuredCov.measured, rows_total: structuredCov.rows_total, rows_measured: structuredCov.rows_measured }
+        : emptyCategoryCoverage(),
+      content_quality: contentCov
+        ? { measured: contentCov.measured, rows_total: contentCov.rows_total, rows_measured: contentCov.rows_measured }
+        : emptyCategoryCoverage(),
+    };
 
     const response: UrlInsightsResponse = {
       has_crawl_data: !!crawlMonth,
@@ -199,13 +275,14 @@ export const GET: APIRoute = async ({ locals, url }) => {
       accessibility: emptyAccessibility(),
       structured_data: emptyStructuredData(),
       content_quality: emptyContentQuality(),
+      category_coverage,
     };
 
     // Crawl-derived widgets only run when crawl_urls has data for
     // this client.
     if (crawlMonth) {
       // Title quality counts.
-      const tqRow = await turso.execute({
+      const tqRow = await db.execute({
         sql: `SELECT
                 SUM(CASE WHEN (title IS NULL OR title = '') THEN 1 ELSE 0 END) AS missing_n,
                 SUM(CASE WHEN title_length > ? THEN 1 ELSE 0 END) AS long_n,
@@ -220,7 +297,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       response.title_quality.too_long_count = Number(tq?.[1] || 0);
       response.title_quality.too_short_count = Number(tq?.[2] || 0);
 
-      const titleMissingSamples = await turso.execute({
+      const titleMissingSamples = await db.execute({
         sql: `SELECT url FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 AND content_type LIKE 'text/html%'
@@ -230,7 +307,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       });
       response.title_quality.sample_missing = (titleMissingSamples.rows as any[]).map(r => ({ url: String(r[0]) }));
 
-      const titleLongSamples = await turso.execute({
+      const titleLongSamples = await db.execute({
         sql: `SELECT url, title, title_length FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 AND content_type LIKE 'text/html%'
@@ -242,7 +319,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
         url: String(r[0]), title: String(r[1] || ''), title_length: Number(r[2] || 0),
       }));
 
-      const titleShortSamples = await turso.execute({
+      const titleShortSamples = await db.execute({
         sql: `SELECT url, title, title_length FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 AND content_type LIKE 'text/html%'
@@ -254,7 +331,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
         url: String(r[0]), title: String(r[1] || ''), title_length: Number(r[2] || 0),
       }));
 
-      const titleDupes = await turso.execute({
+      const titleDupes = await db.execute({
         sql: `SELECT title, COUNT(*) AS cnt, MIN(url) AS sample_url
               FROM crawl_urls
               WHERE client_id = ? AND month = ?
@@ -272,14 +349,14 @@ export const GET: APIRoute = async ({ locals, url }) => {
         .reduce((s, d) => s + d.count, 0);
 
       // Indexability blocks.
-      const ibCount = await turso.execute({
+      const ibCount = await db.execute({
         sql: `SELECT COUNT(*) FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 AND indexability IS NOT NULL AND indexability != 'Indexable'`,
         args: [clientId, crawlMonth],
       });
       response.indexability_blocks.total_blocked = Number((ibCount.rows[0] as any)?.[0] || 0);
-      const ibByStatus = await turso.execute({
+      const ibByStatus = await db.execute({
         sql: `SELECT indexability_status, COUNT(*) FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 AND indexability IS NOT NULL AND indexability != 'Indexable'
@@ -291,7 +368,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
         const k = row[0] ? String(row[0]) : '(unspecified)';
         response.indexability_blocks.by_status[k] = Number(row[1] || 0);
       }
-      const ibSamples = await turso.execute({
+      const ibSamples = await db.execute({
         sql: `SELECT url, indexability, indexability_status, status_code FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 AND indexability IS NOT NULL AND indexability != 'Indexable'
@@ -306,7 +383,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       }));
 
       // Thin content.
-      const tcCounts = await turso.execute({
+      const tcCounts = await db.execute({
         sql: `SELECT
                 SUM(CASE WHEN word_count < ? THEN 1 ELSE 0 END) AS under_200,
                 SUM(CASE WHEN word_count < ? THEN 1 ELSE 0 END) AS under_100
@@ -319,7 +396,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       const tc = tcCounts.rows[0] as any;
       response.thin_content.under_200_count = Number(tc?.[0] || 0);
       response.thin_content.under_100_count = Number(tc?.[1] || 0);
-      const tcSamples = await turso.execute({
+      const tcSamples = await db.execute({
         sql: `SELECT url, word_count, title FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 AND content_type LIKE 'text/html%'
@@ -334,7 +411,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       }));
 
       // Response time outliers.
-      const rtCounts = await turso.execute({
+      const rtCounts = await db.execute({
         sql: `SELECT
                 SUM(CASE WHEN response_time_ms > ? THEN 1 ELSE 0 END) AS over_slow,
                 SUM(CASE WHEN response_time_ms > ? THEN 1 ELSE 0 END) AS over_very_slow
@@ -346,7 +423,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       const rt = rtCounts.rows[0] as any;
       response.response_time.over_1500_count = Number(rt?.[0] || 0);
       response.response_time.over_3000_count = Number(rt?.[1] || 0);
-      const rtSamples = await turso.execute({
+      const rtSamples = await db.execute({
         sql: `SELECT url, response_time_ms, content_type, status_code FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 AND response_time_ms IS NOT NULL AND response_time_ms > ?
@@ -361,7 +438,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       }));
 
       // Orphan pages (inlinks_count = 0).
-      const orphanCountRow = await turso.execute({
+      const orphanCountRow = await db.execute({
         sql: `SELECT COUNT(*) FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 AND content_type LIKE 'text/html%'
@@ -369,7 +446,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
         args: [clientId, crawlMonth],
       });
       response.orphan_pages.count = Number((orphanCountRow.rows[0] as any)?.[0] || 0);
-      const orphanSamples = await turso.execute({
+      const orphanSamples = await db.execute({
         sql: `SELECT url, status_code, indexability, title FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 AND content_type LIKE 'text/html%'
@@ -385,7 +462,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       }));
 
       // Deep pages (crawl_depth > N).
-      const depthCounts = await turso.execute({
+      const depthCounts = await db.execute({
         sql: `SELECT
                 SUM(CASE WHEN crawl_depth > ? THEN 1 ELSE 0 END) AS over_5,
                 SUM(CASE WHEN crawl_depth > ? THEN 1 ELSE 0 END) AS over_10
@@ -398,7 +475,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       const dp = depthCounts.rows[0] as any;
       response.deep_pages.over_5_count = Number(dp?.[0] || 0);
       response.deep_pages.over_10_count = Number(dp?.[1] || 0);
-      const dpSamples = await turso.execute({
+      const dpSamples = await db.execute({
         sql: `SELECT url, crawl_depth, inlinks_count FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 AND content_type LIKE 'text/html%'
@@ -415,7 +492,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
 
     // Image-derived widget.
     if (imageMonth) {
-      const imgCounts = await turso.execute({
+      const imgCounts = await db.execute({
         sql: `SELECT
                 SUM(CASE WHEN size_bytes > ? THEN 1 ELSE 0 END) AS over_100,
                 SUM(CASE WHEN size_bytes > ? THEN 1 ELSE 0 END) AS over_500
@@ -427,7 +504,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       const ic = imgCounts.rows[0] as any;
       response.oversized_images.over_100kb_count = Number(ic?.[0] || 0);
       response.oversized_images.over_500kb_count = Number(ic?.[1] || 0);
-      const imgSamples = await turso.execute({
+      const imgSamples = await db.execute({
         sql: `SELECT url, size_bytes, dimensions, inlinks_count FROM image_urls
               WHERE client_id = ? AND month = ?
                 AND size_bytes IS NOT NULL AND size_bytes > ?
@@ -444,7 +521,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
 
     // Redirect chain widget.
     if (redirectMonth) {
-      const rcCounts = await turso.execute({
+      const rcCounts = await db.execute({
         sql: `SELECT
                 SUM(CASE WHEN is_loop = 1 THEN 1 ELSE 0 END) AS loops,
                 SUM(CASE WHEN hop_count >= 2 THEN 1 ELSE 0 END) AS multi
@@ -455,7 +532,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       const rc = rcCounts.rows[0] as any;
       response.redirect_chains.loop_count = Number(rc?.[0] || 0);
       response.redirect_chains.multi_hop_count = Number(rc?.[1] || 0);
-      const loopSamples = await turso.execute({
+      const loopSamples = await db.execute({
         sql: `SELECT source_url, hop_count FROM redirect_chains
               WHERE client_id = ? AND month = ? AND is_loop = 1
               ORDER BY hop_count DESC LIMIT ?`,
@@ -465,7 +542,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
         source_url: String(r[0]),
         hop_count: Number(r[1] || 0),
       }));
-      const multiSamples = await turso.execute({
+      const multiSamples = await db.execute({
         sql: `SELECT source_url, final_url, hop_count, final_status_code FROM redirect_chains
               WHERE client_id = ? AND month = ? AND is_loop = 0 AND hop_count >= 2
               ORDER BY hop_count DESC LIMIT ?`,
@@ -484,7 +561,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
     // broken destination + a top-N sample of source pages, so the
     // client can render "fix this link on these pages."
     if (linkMonth) {
-      const brokenCounts = await turso.execute({
+      const brokenCounts = await db.execute({
         sql: `SELECT
                 COUNT(DISTINCT destination_url) AS broken_destinations,
                 COUNT(*) AS total_inbound
@@ -500,7 +577,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       // Top destinations + capped concatenated source list. GROUP_CONCAT
       // truncated by SUBSTR to keep the payload bounded if a destination
       // has thousands of inbound links.
-      const topBroken = await turso.execute({
+      const topBroken = await db.execute({
         sql: `SELECT
                 destination_url,
                 MAX(status_code) AS status_code,
@@ -533,7 +610,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
     // accessibility_urls. by_level coalesces NULL buckets to 0 via the
     // pure helper so a partial export cannot miscount or throw.
     if (accessibilityMonth) {
-      const aCounts = await turso.execute({
+      const aCounts = await db.execute({
         sql: `SELECT
                 SUM(CASE WHEN all_violations > 0 THEN 1 ELSE 0 END) AS pages_with,
                 COALESCE(SUM(all_violations), 0) AS total
@@ -551,7 +628,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       const levelSelects = WCAG_BUCKETS
         .map(b => `SUM(CASE WHEN ${b.column} > 0 THEN 1 ELSE 0 END) AS ${b.column}`)
         .join(',\n                ');
-      const levelRow = await turso.execute({
+      const levelRow = await db.execute({
         sql: `SELECT
                 ${levelSelects}
               FROM accessibility_urls
@@ -563,7 +640,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       WCAG_BUCKETS.forEach((b, i) => { countsByColumn[b.column] = Number(lr?.[i] || 0); });
       response.accessibility.by_level = buildAccessibilityByLevel(countsByColumn);
 
-      const aSamples = await turso.execute({
+      const aSamples = await db.execute({
         sql: `SELECT url, all_violations, status_code FROM accessibility_urls
               WHERE client_id = ? AND month = ?
                 AND all_violations > 0
@@ -581,7 +658,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
     // counts from structured_data_urls; top_types tallies the most
     // common schema types across the sampled pages.
     if (structuredMonth) {
-      const sdCounts = await turso.execute({
+      const sdCounts = await db.execute({
         sql: `SELECT
                 SUM(CASE WHEN error_count > 0 THEN 1 ELSE 0 END) AS pages_err,
                 SUM(CASE WHEN warning_count > 0 THEN 1 ELSE 0 END) AS pages_warn,
@@ -599,7 +676,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
 
       // top_types: gather types_list across pages that declare any schema
       // type, then tally page-counts per type via the pure helper.
-      const typeRows = await turso.execute({
+      const typeRows = await db.execute({
         sql: `SELECT types_list FROM structured_data_urls
               WHERE client_id = ? AND month = ?
                 AND types_list IS NOT NULL AND types_list != ''`,
@@ -610,7 +687,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       );
 
       // samples: worst pages by error then warning count.
-      const sdSamples = await turso.execute({
+      const sdSamples = await db.execute({
         sql: `SELECT url, error_count, warning_count FROM structured_data_urls
               WHERE client_id = ? AND month = ?
                 AND (error_count > 0 OR warning_count > 0)
@@ -629,11 +706,24 @@ export const GET: APIRoute = async ({ locals, url }) => {
     // readability via Flesch reading-ease. "Hard to read" uses STRICT
     // less-than the threshold; score 50 is "fairly difficult", not hard.
     if (contentMonth) {
-      const cqCounts = await turso.execute({
+      // Per-sub-metric NULL-awareness: a content_urls month can be measured
+      // overall while one sub-metric column is entirely blank (the paid content
+      // analysis populated some columns but not others). Each sub-metric is
+      // "measured" only when at least one row carries a real (non-NULL) value
+      // in its source column(s); a sub-metric with zero non-NULL rows is
+      // measured:false (NOT a misleading clean 0). The displayed counts are
+      // computed only over the non-NULL rows. The `_present` counts below count
+      // rows with a real value (a literal 0 counts as measured); the issue
+      // counts (`dupes`, `spellgram`, `hardread`) count rows that exceed the
+      // threshold, only among the non-NULL rows.
+      const cqCounts = await db.execute({
         sql: `SELECT
-                SUM(CASE WHEN near_duplicate_count > 0 THEN 1 ELSE 0 END) AS dupes,
-                SUM(CASE WHEN COALESCE(spelling_errors,0) > 0 OR COALESCE(grammar_errors,0) > 0 THEN 1 ELSE 0 END) AS spellgram,
-                SUM(CASE WHEN flesch_reading_ease IS NOT NULL AND flesch_reading_ease < ? THEN 1 ELSE 0 END) AS hardread
+                SUM(CASE WHEN near_duplicate_count IS NOT NULL AND near_duplicate_count > 0 THEN 1 ELSE 0 END) AS dupes,
+                SUM(CASE WHEN (spelling_errors IS NOT NULL AND spelling_errors > 0) OR (grammar_errors IS NOT NULL AND grammar_errors > 0) THEN 1 ELSE 0 END) AS spellgram,
+                SUM(CASE WHEN flesch_reading_ease IS NOT NULL AND flesch_reading_ease < ? THEN 1 ELSE 0 END) AS hardread,
+                SUM(CASE WHEN near_duplicate_count IS NOT NULL THEN 1 ELSE 0 END) AS dup_present,
+                SUM(CASE WHEN spelling_errors IS NOT NULL OR grammar_errors IS NOT NULL THEN 1 ELSE 0 END) AS sg_present,
+                SUM(CASE WHEN flesch_reading_ease IS NOT NULL THEN 1 ELSE 0 END) AS read_present
               FROM content_urls
               WHERE client_id = ? AND month = ?`,
         args: [HARD_TO_READ_FLESCH_THRESHOLD, clientId, contentMonth],
@@ -642,9 +732,12 @@ export const GET: APIRoute = async ({ locals, url }) => {
       response.content_quality.near_duplicate_count = Number(cq?.[0] || 0);
       response.content_quality.spelling_grammar_count = Number(cq?.[1] || 0);
       response.content_quality.hard_to_read_count = Number(cq?.[2] || 0);
+      response.content_quality.measured.near_duplicate = Number(cq?.[3] || 0) > 0;
+      response.content_quality.measured.spelling_grammar = Number(cq?.[4] || 0) > 0;
+      response.content_quality.measured.readability = Number(cq?.[5] || 0) > 0;
 
       // Near-duplicate samples: worst (most duplicates) first.
-      const dupeSamples = await turso.execute({
+      const dupeSamples = await db.execute({
         sql: `SELECT url, near_duplicate_count, closest_near_duplicate_url FROM content_urls
               WHERE client_id = ? AND month = ?
                 AND near_duplicate_count > 0
@@ -661,7 +754,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
       });
 
       // Spelling/grammar samples: worst (most combined errors) first.
-      const sgSamples = await turso.execute({
+      const sgSamples = await db.execute({
         sql: `SELECT url, COALESCE(spelling_errors,0) AS sp, COALESCE(grammar_errors,0) AS gr FROM content_urls
               WHERE client_id = ? AND month = ?
                 AND (COALESCE(spelling_errors,0) > 0 OR COALESCE(grammar_errors,0) > 0)
@@ -676,7 +769,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
 
       // Hard-to-read samples: lowest Flesch (densest) first. Detail carries
       // the neutral band label from the pure helper.
-      const hrSamples = await turso.execute({
+      const hrSamples = await db.execute({
         sql: `SELECT url, flesch_reading_ease FROM content_urls
               WHERE client_id = ? AND month = ?
                 AND flesch_reading_ease IS NOT NULL AND flesch_reading_ease < ?
@@ -690,9 +783,6 @@ export const GET: APIRoute = async ({ locals, url }) => {
       });
     }
 
-    return json(response);
-  } catch (err: any) {
-    logger.error('url-insights endpoint failed', err);
-    return json({ error: err?.message || 'Failed to load URL insights' }, 500);
+    return response;
   }
-};
+}

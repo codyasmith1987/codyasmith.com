@@ -88,3 +88,19 @@ The per-filename key (Task 1) is correct and necessary regardless; this decision
 - Two divergent page-count formulas: `crawl-read.ts:137` (strict) vs `client-sites.ts:283` (loose, feeds pricing) (proven, first-hand read).
 - Money chain `crawl_urls`→pricing→contract traced file:line (proven).
 - Rejected the workflow's "3-client 66-95% loss" claim (compared crawl_urls vs all-URL metric; KelseyVerse has only 1 crawl upload so cannot collide).
+
+## II-6 repopulation result + NEW follow-ups (2026-06-02)
+
+F3 (raised-bar-group) repopulated via the fixed pipeline (`force=1` re-ingest of the bundle). RESULT — data goal achieved:
+- `crawl_urls`: 13 → **107** (full URL inventory restored; internal_all no longer wiped by internal_html).
+- `client_sites.page_count`: 13 → **5** (validated real-user-page count; F3 stays Ecosystem A <30 pages either way, so no band/price change).
+- accessibility / structured-data / content-quality widgets: now **populated** (were empty — the original symptom).
+- Validation: strict navigable_pages = 5, matching the sitemap + hand-count + filter oracle (the "6" benchmark was a human miscount of /projects/#testimonial; corrected to 5).
+
+TWO REAL TOOLING PROBLEMS the repopulation EXPOSED (data is correct; the ingest TOOLING is not clean):
+
+1. **Concurrency race makes a single `force` pass incomplete (~35% rejected).** The upload path runs files concurrently (`Promise.allSettled`); under `force=1` a chunk's 100 files race and ~33-49 per chunk get cleanly rejected with "A concurrent upload of this file is already being processed" (the partial unique index doing its job — SAFE, no corruption, but not ingested). Required multiple passes to land everything. FIX NEEDED: the F3 ingest (and the general batch upload under force) should process sequentially or retry-on-conflict so ONE invocation is complete + idempotent. The plan deferred this as "rare race"; it is NOT rare under force re-ingest, it is systematic.
+
+2. **`force` re-ingest accumulates superseded csv_uploads rows.** Each pass supersedes the prior live row (sets error) and inserts a new live row; superseded rows are not pruned, so multiple passes pile up dead upload-history rows (F3 csv_uploads_by_format now shows accessibility:423, unknown_stored:878 — these are COUNT(*) incl. superseded; the schema-diagnostic does NOT filter error IS NULL). NOT corruption — the unique index guarantees one LIVE row per key and child tables are correct (crawl_urls=107 is right, not inflated). But it bloats csv_uploads. FIX NEEDED: prune superseded rows (a cleanup pass / retention), and/or force should delete-then-insert rather than supersede-and-accumulate.
+
+Both are ingest-TOOLING hardening, separate from the now-correct DATA. Neither blocks F3's correctness. ZipKit is still NOT repopulated (its crawl data is corrupt/0-count; needs its own clean crawl re-uploaded — separate, and ZKH is an active managed client so its page_count sync has live pricing stakes).

@@ -18,6 +18,7 @@
 import Papa from 'papaparse';
 import { nanoid } from 'nanoid';
 import turso from '../../turso';
+import { bulkInsert } from './_bulk-insert';
 
 // Filename -> exact issue_name as it appears in site_issues.
 //
@@ -189,20 +190,25 @@ export function issueNameForFilename(filename: string): string | null {
   return ISSUE_CSV_FILENAME_MAP[normalized] || null;
 }
 
-// Parallel-insert batch size. Tuned to match the rest of the
-// ingestion pipeline (GSC, GA4, crawl_internal); 50 keeps Turso
-// responsive without throttling. The previous row-by-row loop
-// timed out on files with 400+ URLs (e.g.,
-// security_missing_contentsecuritypolicy_header.csv on a typical
-// SF crawl).
-const INSERT_BATCH = 50;
-
 export async function parse(
   raw: string,
   clientId: string,
   month: string,
   uploadId: string,
   filename: string,
+): Promise<number> {
+  return parseIssueUrlsWithDb(raw, clientId, month, uploadId, filename, turso);
+}
+
+// Test-injectable variant. The db param defaults to the prod singleton in
+// parse(); tests inject an in-memory client to avoid touching the remote DB.
+export async function parseIssueUrlsWithDb(
+  raw: string,
+  clientId: string,
+  month: string,
+  uploadId: string,
+  filename: string,
+  db: typeof turso,
 ): Promise<number> {
   const issueName = issueNameForFilename(filename);
   if (!issueName) return 0;
@@ -212,13 +218,15 @@ export async function parse(
   // Wipe any previous rows for this (client, month, issue) so re-uploads
   // do not double-insert. The same upload can supply many per-issue
   // CSVs; clearing by (client, month, issue) is the right key.
-  await turso.execute({
+  await db.execute({
     sql: `DELETE FROM site_issue_urls
           WHERE client_id = ? AND month = ? AND issue_name = ?`,
     args: [clientId, month, issueName],
   });
 
-  // Collect args first, then batch-insert in parallel chunks.
+  // Collect args first, then batch-insert via bulkInsert (turso.batch).
+  // The old Promise.all(chunk.map(execute)) did one round-trip per row,
+  // which timed out on large issue files (400+ URLs per category).
   const inserts: any[][] = [];
   for (const row of result.data as any[]) {
     const url = (row['Address'] || row['URL'] || row['url'])?.toString().trim();
@@ -242,10 +250,7 @@ export async function parse(
   const sql = `INSERT INTO site_issue_urls
                  (id, client_id, csv_upload_id, month, issue_name, url, extras)
                VALUES (?, ?, ?, ?, ?, ?, ?)`;
-  for (let i = 0; i < inserts.length; i += INSERT_BATCH) {
-    const chunk = inserts.slice(i, i + INSERT_BATCH);
-    await Promise.all(chunk.map(args => turso.execute({ sql, args })));
-  }
+  await bulkInsert(sql, inserts, db);
 
   return inserts.length;
 }

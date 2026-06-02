@@ -21,6 +21,10 @@ import { nanoid } from 'nanoid';
 import turso from '../../turso';
 
 const BATCH_SIZE = 50;
+// How many multi-row INSERT statements to bundle into one turso.batch call.
+// Each statement already covers up to BATCH_SIZE rows, so this is
+// FLUSH_CHUNK * BATCH_SIZE rows per round-trip (20 * 50 = 1000 rows).
+const FLUSH_CHUNK = 20;
 
 function safeText(v: string | undefined, maxLen = 2000): string | null {
   if (v === undefined || v === null) return null;
@@ -80,6 +84,19 @@ export async function parse(
   uploadId: string,
   filename: string,
 ): Promise<number> {
+  return parseLinksWithDb(raw, clientId, month, uploadId, filename, turso);
+}
+
+// Test-injectable variant. The db param defaults to the prod singleton in
+// parse(); tests inject an in-memory client to avoid touching the remote DB.
+export async function parseLinksWithDb(
+  raw: string,
+  clientId: string,
+  month: string,
+  uploadId: string,
+  filename: string,
+  db: typeof turso,
+): Promise<number> {
   const result = Papa.parse(raw, { header: false, skipEmptyLines: true });
   const rows = result.data as string[][];
   if (rows.length < 2) return 0;
@@ -111,13 +128,37 @@ export async function parse(
   // Per-source_file dedup: clear previous rows for this client + month
   // + source_file before inserting. Uploading all_inlinks.csv replaces
   // its own rows but leaves all_outlinks.csv's rows alone.
-  await turso.execute({
+  await db.execute({
     sql: `DELETE FROM link_graph WHERE client_id = ? AND month = ? AND source_file = ?`,
     args: [clientId, month, sourceFile],
   });
 
-  let inserted = 0;
+  // Collect all multi-row INSERT statements, then dispatch them in
+  // chunks via db.batch. Each statement covers up to BATCH_SIZE rows
+  // (multi-row VALUES syntax), so FLUSH_CHUNK statements per batch call
+  // = FLUSH_CHUNK * BATCH_SIZE rows per round-trip (20 * 50 = 1000).
+  // Previously flush() issued one db.execute per statement — an 8,013-row
+  // file produced ceil(8013/50) = 161 sequential round-trips and 524'd.
+  const statements: Array<{ sql: string; args: any[] }> = [];
   let batch: any[][] = [];
+
+  const buildStatement = (b: any[][]): { sql: string; args: any[] } => {
+    const placeholders = b.map(() =>
+      '(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+    ).join(',');
+    const flat: any[] = [];
+    for (const row of b) flat.push(...row);
+    return {
+      sql: `INSERT INTO link_graph (
+        id, client_id, csv_upload_id, month, source_file, link_type,
+        source_url, source_hostname, destination_url, destination_hostname,
+        anchor_text, alt_text, status_code, follow, target, rel,
+        link_position, link_origin, link_path, size_bytes, anchor_length,
+        raw_json
+      ) VALUES ${placeholders}`,
+      args: flat,
+    };
+  };
 
   for (const row of dataRows) {
     const source = safeText(row[idxSource]);
@@ -173,34 +214,25 @@ export async function parse(
     ]);
 
     if (batch.length >= BATCH_SIZE) {
-      await flush(batch);
-      inserted += batch.length;
+      statements.push(buildStatement(batch));
       batch = [];
     }
   }
 
   if (batch.length > 0) {
-    await flush(batch);
-    inserted += batch.length;
+    statements.push(buildStatement(batch));
   }
 
-  return inserted;
-}
+  // Send all statements in chunks via db.batch — one round-trip per chunk.
+  for (let i = 0; i < statements.length; i += FLUSH_CHUNK) {
+    await db.batch(statements.slice(i, i + FLUSH_CHUNK), 'write');
+  }
 
-async function flush(batch: any[][]) {
-  const placeholders = batch.map(() =>
-    '(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
-  ).join(',');
-  const flat: any[] = [];
-  for (const row of batch) flat.push(...row);
-  await turso.execute({
-    sql: `INSERT INTO link_graph (
-      id, client_id, csv_upload_id, month, source_file, link_type,
-      source_url, source_hostname, destination_url, destination_hostname,
-      anchor_text, alt_text, status_code, follow, target, rel,
-      link_position, link_origin, link_path, size_bytes, anchor_length,
-      raw_json
-    ) VALUES ${placeholders}`,
-    args: flat,
-  });
+  // Row count = sum of rows across all statements. Each statement's args
+  // length / 22 (columns) gives the row count for that statement.
+  let inserted = 0;
+  for (const stmt of statements) {
+    inserted += stmt.args.length / 22;
+  }
+  return inserted;
 }

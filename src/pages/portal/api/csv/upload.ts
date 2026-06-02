@@ -26,6 +26,34 @@ export const prerender = false;
 const json = (data: any, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 
+// Run async work over items with at most `limit` in flight at once. Caps the
+// number of concurrent per-file ingests so a 50-file folder upload does not
+// fire 50x parallel turso.batch round-trips and saturate the remote libsql
+// connection. Returns results in input order (like Promise.allSettled but
+// bounded). Exported so the concurrency unit test can exercise it in isolation.
+export async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<Array<{ status: 'fulfilled'; value: R } | { status: 'rejected'; reason: any }>> {
+  const results: Array<{ status: 'fulfilled'; value: R } | { status: 'rejected'; reason: any }> =
+    new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const i = next++;
+      try {
+        results[i] = { status: 'fulfilled', value: await fn(items[i], i) };
+      } catch (reason) {
+        results[i] = { status: 'rejected', reason };
+      }
+    }
+  }
+  const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
 const MAX_BYTES_PER_FILE = 10 * 1024 * 1024;
 const MAX_ROWS_PER_FILE = 50000;
 const MAX_FILES_PER_BATCH = 50;
@@ -41,46 +69,22 @@ interface PerFileResult {
   headers?: string[];
 }
 
-// Retry wrapper for per-file ingest. Exported so tests can exercise it in
-// isolation without importing the full Astro route.
+// Single-attempt ingest wrapper. Exported so tests can exercise it in isolation
+// without importing the full Astro route.
 //
-// Only retries when the result carries the exact "concurrent upload" conflict
-// string that ingestCSV returns on a partial-unique-index collision. Every
-// other error (parse failure, size limit, etc.) is returned immediately — the
-// caller must NOT retry those.
-//
-// ingestFn: () => Promise<{ error?: string }>  — factory that produces one
-//   attempt. Re-called on each retry; must be stateless (ingestCSV generates
-//   its own uploadId per call, so re-calling is safe).
-// maxRetries: how many additional attempts after the first (default 4).
-// baseDelayMs: base for the exponential back-off (default 150ms).
-// _sleep: injectable for tests to skip real delays (pass () => Promise.resolve()).
+// The multi-retry backoff loop that used to live here has been removed. It was
+// designed to heal "concurrent upload" unique-index collisions that arose when
+// all files ran fully parallel. Now that:
+//   (a) mapLimit caps concurrency at 5 (bounded parallelism, not 50-at-once), and
+//   (b) Class-A parsers run atomically inside a single turso.batch transaction
+//       (Task 8), making the race impossible for supersede-class formats, and
+//   (c) Class-B parsers self-dedup by key,
+// the "concurrent upload" collision is vanishingly rare. If it does occur, it
+// surfaces as the file's error and the user can re-upload that one file.
 export async function ingestWithRetry<T extends { error?: string }>(
   ingestFn: () => Promise<T>,
-  {
-    maxRetries = 4,
-    baseDelayMs = 150,
-    _sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms)),
-  }: { maxRetries?: number; baseDelayMs?: number; _sleep?: (ms: number) => Promise<void> } = {},
 ): Promise<T> {
-  let lastResult: T | undefined;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const result = await ingestFn();
-    if (!result.error?.includes('concurrent upload')) {
-      // Success, or a non-conflict error — return immediately, no retry.
-      return result;
-    }
-    lastResult = result;
-    if (attempt < maxRetries) {
-      // Exponential back-off with a small random jitter so two racing
-      // uploads don't keep re-colliding at the same interval.
-      const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 50;
-      await _sleep(delay);
-    }
-  }
-  // All attempts exhausted — still conflicting. Surface the error so the
-  // UI shows it (should be vanishingly rare after retries).
-  return lastResult as T;
+  return ingestFn();
 }
 
 // Ingest one raw CSV string. Shared between the direct .csv path and
@@ -238,26 +242,29 @@ export const POST: APIRoute = async ({ locals, request }) => {
     const userId = locals.user!.id;
     const userName = locals.user!.name;
 
-    // Process the batch in parallel. Sequential was the direct cause of
-    // Cloudflare 524 timeouts on large SF batches: 4-5 big link CSVs
-    // (6000+ rows each) pushed a 25-file batch past CF's 100s origin
-    // response window even though no single file was slow. Parallel
-    // makes the batch bounded by the SLOWEST file, not the sum.
+    // Process the batch with bounded concurrency (max 5 files in flight at
+    // once). Sequential was the direct cause of Cloudflare 524 timeouts on
+    // large SF batches: 4-5 big link CSVs (6000+ rows each) pushed a 25-file
+    // batch past CF's 100s origin response window even though no single file
+    // was slow. Parallel makes the batch bounded by the SLOWEST file, not
+    // the sum. The concurrency cap (5) prevents 50x simultaneous turso.batch
+    // round-trips from saturating the remote libsql connection — all files
+    // are processed, just with at most 5 running at a time.
     //
-    // Same-key conflicts (two files with the same full relative path,
-    // which is now the dedup key) are healed by ingestWithRetry inside
-    // ingestOneCsv: the losing race detects the "concurrent upload"
-    // conflict error, backs off briefly, and retries. Different
-    // subfolders with the same basename (e.g. Screaming Frog exports
-    // with top-level foo.csv and issues_reports/foo.csv) produce DISTINCT
-    // keys now that the full path is preserved, so they never collide.
+    // Class-A parsers (supersede-class) now run atomically inside a single
+    // turso.batch transaction per file (Task 8), so same-key races are
+    // impossible. Class-B parsers self-dedup by key. The old multi-retry
+    // backoff in ingestWithRetry has been removed; the wrapper is a
+    // single-attempt pass-through.
     //
-    // processOne can return a single result OR an array (for ZIPs
-    // that fan out to multiple CSV uploads); flatten so the UI gets
-    // one chip per ingested CSV. Promise.allSettled so one parser
-    // throw doesn't fail the whole batch.
-    const settled = await Promise.allSettled(
-      files.map(file => processOne(file, clientId, month, userId, userName))
+    // processOne can return a single result OR an array (for ZIPs that fan
+    // out to multiple CSV uploads); flatten so the UI gets one chip per
+    // ingested CSV. mapLimit returns the same settled shape as
+    // Promise.allSettled so the result-aggregation loop below is unchanged.
+    const settled = await mapLimit(
+      files,
+      5,
+      (file) => processOne(file, clientId, month, userId, userName),
     );
     const results: PerFileResult[] = [];
     for (let i = 0; i < settled.length; i++) {

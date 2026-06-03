@@ -112,11 +112,11 @@ function buildIssueSection(heading: string, issues: SiteIssueRow[], priorCounts:
         return [i.issue_name, fmtInt(i.affected_urls), fmtInt(prior), deltaCell(prior, i.affected_urls)];
       })));
   } else {
-    parts.push(table(['Finding', 'Affected pages'], sorted.map(i => [i.issue_name, fmtInt(i.affected_urls)])));
+    parts.push(table(['Finding', 'Affected URLs'], sorted.map(i => [i.issue_name, fmtInt(i.affected_urls)])));
   }
   const top = sorted[0];
   parts.push('');
-  parts.push(`**Finding:** ${sorted.length} issue ${pluralCat(sorted.length)} in this area this cycle. The most affected is "${escCell(top.issue_name)}" at ${fmtInt(top.affected_urls)} pages.`);
+  parts.push(`**Finding:** ${sorted.length} issue ${pluralCat(sorted.length)} in this area this cycle. The most affected is "${escCell(top.issue_name)}" at ${fmtInt(top.affected_urls)} URLs.`);
   parts.push('Interpretation:');
   parts.push('<!-- CODY: what these findings mean, the causes, and the single highest-leverage fix. The prioritized roadmap lives in the Strategic Recommendations. -->');
   parts.push('');
@@ -134,13 +134,13 @@ function buildClosedThisMonthSection(input: SiteHealthInput): string {
     if (priorN <= 0) continue;
     if (!curMap.has(p.issue_name)) {
       // Genuinely gone from the current crawl.
-      rows.push([`${escCell(p.issue_name)} cleared`, `Resolved (was ${fmtInt(priorN)} pages in the prior cycle).`]);
+      rows.push([`${escCell(p.issue_name)} cleared`, `Resolved (was ${fmtInt(priorN)} URLs in the prior cycle).`]);
     } else {
       // Still present: report a material reduction by the numbers, not a verdict.
       const currN = curMap.get(p.issue_name) ?? 0;
       const d = computeDelta(priorN, currN, { metricKind: 'count' });
       if (d.percentChange !== null && d.percentChange <= -0.5) {
-        rows.push([`${escCell(p.issue_name)} reduced`, `${fmtInt(priorN)} to ${fmtInt(currN)} pages (${fmtSignedPct(d.percentChange)}).`]);
+        rows.push([`${escCell(p.issue_name)} reduced`, `${fmtInt(priorN)} to ${fmtInt(currN)} URLs (${fmtSignedPct(d.percentChange)}).`]);
       }
     }
   }

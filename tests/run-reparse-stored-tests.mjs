@@ -146,23 +146,21 @@ await test('(1) typed file: ingestFn called with verbatim raw + reparse-backfill
   assert.strictEqual(Number(raw.rows[0].n), 1, 'raw_csv_data row preserved');
 });
 
-// ─── (2) genuinely non-CSV raw -> skipped, ingest NOT called, upload untouched ─
-await test('(2) non-CSV file (still detects unknown): skippedUnknown++, ingestFn NOT called, upload row untouched', async () => {
+// ─── (2) empty/non-CSV raw now routes to sf_generic (recognized), not skipped ─
+// 'unknown' is retired as a detection outcome: an empty file (or a report
+// header with 0 data rows) is recognized as sf_generic and recorded with 0
+// rows ("captured, 0 rows") rather than flagged unknown, so nothing in the
+// portal reads as unparsed.
+await test('(2) empty/non-CSV file routes to sf_generic (recognized), ingestFn called, NOT skipped as unknown', async () => {
   const db = await freshDb();
-  await seedStored(db, { uploadId: 'up_ps', rawId: 'raw_ps', filename: 'broken.csv', raw: NON_CSV_RAW, ordinal: 1 });
+  await seedStored(db, { uploadId: 'up_ps', rawId: 'raw_ps', filename: 'empty_report.csv', raw: NON_CSV_RAW, ordinal: 1 });
   const spy = makeSpy();
 
   const summary = await reparseStoredChunk(db, { limit: 25, offset: 0, uploadedBy: 'u_admin' }, spy.fn);
 
-  assert.strictEqual(spy.calls.length, 0, 'ingestFn must NOT be called for unknown');
   assert.strictEqual(summary.processed, 1, 'processed = 1');
-  assert.strictEqual(summary.skippedUnknown, 1, 'skippedUnknown = 1');
-  assert.strictEqual(summary.retyped.length, 0, 'nothing retyped');
-  assert.strictEqual(summary.errors.length, 0, 'no errors');
-
-  // Upload row error still NULL (untouched).
-  const up = await db.execute({ sql: `SELECT error FROM csv_uploads WHERE id = ?`, args: ['up_ps'] });
-  assert.strictEqual(up.rows[0].error, null, 'unknown upload row left untouched');
+  assert.strictEqual(summary.skippedUnknown, 0, 'no longer skipped as unknown (unknown is retired)');
+  assert.strictEqual(spy.calls.length, 1, 'ingestFn IS called — the file is recognized (sf_generic), not skipped');
 });
 
 // ─── (3) idempotent re-run: no double-supersede, no error ────────────────────

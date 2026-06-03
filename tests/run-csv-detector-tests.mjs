@@ -229,6 +229,19 @@ function run() {
     detectFormat(securityAllRaw, 'security_all.csv').format === 'security_urls',
     detectFormat(securityAllRaw, 'security_all.csv').format);
 
+  // ---- 'unknown' is retired: empty / header-only files -> sf_generic ----
+  // A recognized-but-empty SF report (header, zero data rows) and a truly
+  // empty file are captured (0 rows), never flagged 'unknown'.
+  test('header-only file (0 data rows) -> sf_generic, not unknown',
+    detectFormat('﻿"Source Page"\n', 'viewport_not_set_report.csv').format === 'sf_generic',
+    detectFormat('﻿"Source Page"\n', 'viewport_not_set_report.csv').format);
+  test('empty (BOM + newline) file -> sf_generic, not unknown',
+    detectFormat('﻿\n', 'segments_overview_report_issues.csv').format === 'sf_generic',
+    detectFormat('﻿\n', 'segments_overview_report_issues.csv').format);
+  test('empty string -> sf_generic, not unknown',
+    detectFormat('', 'whatever.csv').format === 'sf_generic',
+    detectFormat('', 'whatever.csv').format);
+
   const failed = results.filter(r => !r.pass);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);
   if (failed.length > 0) process.exit(1);

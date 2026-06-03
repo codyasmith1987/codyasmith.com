@@ -314,13 +314,17 @@ export function detectFormat(raw: string, filename: string): { format: CsvFormat
     return { format: 'issue_urls', headers: [] };
   }
 
-  // Try to parse first few rows to get headers
+  // Try to parse first few rows to get headers. A file that yields no rows at
+  // all (empty file, or a report header with zero data rows, e.g. an SF issue
+  // report that found nothing) is NOT 'unknown' — it is a recognized-but-empty
+  // export. It falls through to the sf_generic floor below, where the generic
+  // parser records it with 0 rows ("captured, 0 rows" = the report ran and
+  // found nothing). 'unknown' is no longer a routing outcome: every uploaded
+  // file is either typed, an issue list, or generically captured.
   const preview = Papa.parse(raw, { preview: 3, header: false, skipEmptyLines: true });
-  if (!preview.data || preview.data.length === 0 || (preview.errors && preview.errors.length > 0 && preview.data.length < 2)) {
-    return { format: 'unknown', headers: [] };
-  }
-
-  const headers = (preview.data[0] as string[]).map(h => cleanHeader(h));
+  const headers = (preview.data && preview.data.length > 0)
+    ? (preview.data[0] as string[]).map(h => cleanHeader(h))
+    : [];
 
   // Check each signature
   for (const sig of SIGNATURES) {
@@ -371,10 +375,10 @@ export function detectFormat(raw: string, filename: string): { format: CsvFormat
     return { format: 'site_audit', headers };
   }
 
-  // Universal capture floor: this file parsed as a CSV (preview above
-  // extracted headers) but matched no specific signature or heuristic.
-  // Route it to the generic capture instead of unknown_stored so its data
-  // is row-exploded into sf_export_rows and stays queryable. Truly
-  // unparseable files already returned 'unknown' at the preview check above.
+  // Universal capture floor: this file matched no specific signature or
+  // heuristic. Route it to the generic capture so its rows are exploded into
+  // sf_export_rows and stay queryable. Includes recognized-but-empty exports
+  // (0 data rows) — the generic parser records them with 0 rows rather than
+  // flagging them 'unknown'. This is the terminal outcome for every upload.
   return { format: 'sf_generic', headers };
 }

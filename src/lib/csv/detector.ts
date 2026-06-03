@@ -52,10 +52,13 @@ export type CsvFormat =
   | 'gsc_search_appearance'
   | 'gsc_chart'
   | 'gsc_filters'
-  // 'unknown' is still emitted by detectFormat for files that don't
-  // match a signature; the ingest pipeline routes those to the raw
-  // fallback and updates the upload row to 'unknown_stored' so
-  // anything visible in the DB is post-routing.
+  // Any CSV-shaped file that matches no specific signature. Row-exploded
+  // into sf_export_rows (queryable superset) instead of dying as
+  // unknown_stored. This is the universal-capture floor.
+  | 'sf_generic'
+  // 'unknown' is now emitted ONLY for files that do not parse as a CSV at
+  // all (Papa extracts no rows/headers). The ingest pipeline routes those
+  // to the raw fallback and updates the upload row to 'unknown_stored'.
   | 'unknown_stored'
   | 'unknown';
 
@@ -328,5 +331,10 @@ export function detectFormat(raw: string, filename: string): { format: CsvFormat
     return { format: 'site_audit', headers };
   }
 
-  return { format: 'unknown', headers };
+  // Universal capture floor: this file parsed as a CSV (preview above
+  // extracted headers) but matched no specific signature or heuristic.
+  // Route it to the generic capture instead of unknown_stored so its data
+  // is row-exploded into sf_export_rows and stays queryable. Truly
+  // unparseable files already returned 'unknown' at the preview check above.
+  return { format: 'sf_generic', headers };
 }

@@ -92,12 +92,18 @@ async function seedStored(db, { uploadId, rawId, filename, raw, ordinal }) {
 }
 
 // Spy ingestFn: records each call; behavior controllable per filename.
-function makeSpy({ throwOn } = {}) {
+function makeSpy({ throwOn, returnErrorOn } = {}) {
   const calls = [];
   const fn = async (raw, clientId, month, filename, uploadedBy) => {
     calls.push({ raw, clientId, month, filename, uploadedBy });
     if (throwOn && filename === throwOn) {
       throw new Error(`boom on ${filename}`);
+    }
+    if (returnErrorOn && filename === returnErrorOn) {
+      // The REAL ingestCSV contract: it catches its own DB errors (FK
+      // violations, racing unique index) and RETURNS { error } rather than
+      // throwing. reparse must treat this as a failure, not a success.
+      return { uploadId: 'new_' + filename, format: 'unknown', rowCount: 0, headers: [], error: 'FOREIGN KEY constraint failed' };
     }
     return { uploadId: 'new_' + filename, format: 'canonicals', rowCount: 2, headers: [] };
   };
@@ -110,7 +116,7 @@ await test('(1) typed file: ingestFn called with verbatim raw + reparse-backfill
   await seedStored(db, { uploadId: 'up_can', rawId: 'raw_can', filename: 'canonicals_all.csv', raw: CANONICALS_RAW, ordinal: 1 });
   const spy = makeSpy();
 
-  const summary = await reparseStoredChunk(db, { limit: 25, offset: 0 }, spy.fn);
+  const summary = await reparseStoredChunk(db, { limit: 25, offset: 0, uploadedBy: 'u_admin' }, spy.fn);
 
   // ingestFn called exactly once, with the row's raw/client/month/filename
   // and the 'reparse-backfill' tag.
@@ -119,7 +125,7 @@ await test('(1) typed file: ingestFn called with verbatim raw + reparse-backfill
   assert.strictEqual(spy.calls[0].clientId, CLIENT, 'client_id from the row');
   assert.strictEqual(spy.calls[0].month, MONTH, 'month from the row');
   assert.strictEqual(spy.calls[0].filename, 'canonicals_all.csv', 'filename from the row');
-  assert.strictEqual(spy.calls[0].uploadedBy, 'reparse-backfill', 'uploadedBy tag');
+  assert.strictEqual(spy.calls[0].uploadedBy, 'u_admin', 'uploadedBy threaded as the real admin user id (NOT a literal tag — it is a NOT NULL FK to users)');
 
   // Summary reflects one retyped, zero skipped, zero errors.
   assert.strictEqual(summary.processed, 1, 'processed = 1');
@@ -144,7 +150,7 @@ await test('(2) still-unknown file: skippedUnknown++, ingestFn NOT called, uploa
   await seedStored(db, { uploadId: 'up_ps', rawId: 'raw_ps', filename: 'pagespeed_all.csv', raw: PAGESPEED_RAW, ordinal: 1 });
   const spy = makeSpy();
 
-  const summary = await reparseStoredChunk(db, { limit: 25, offset: 0 }, spy.fn);
+  const summary = await reparseStoredChunk(db, { limit: 25, offset: 0, uploadedBy: 'u_admin' }, spy.fn);
 
   assert.strictEqual(spy.calls.length, 0, 'ingestFn must NOT be called for unknown');
   assert.strictEqual(summary.processed, 1, 'processed = 1');
@@ -164,7 +170,7 @@ await test('(3) idempotent: second pass over an already-retyped row does not dou
   const spy = makeSpy();
 
   // First pass supersedes the upload row.
-  await reparseStoredChunk(db, { limit: 25, offset: 0 }, spy.fn);
+  await reparseStoredChunk(db, { limit: 25, offset: 0, uploadedBy: 'u_admin' }, spy.fn);
   const afterFirst = await db.execute({ sql: `SELECT error FROM csv_uploads WHERE id = ?`, args: ['up_can'] });
   const firstError = String(afterFirst.rows[0].error);
   assert.ok(/reparsed into/i.test(firstError), 'superseded on first pass');
@@ -172,7 +178,7 @@ await test('(3) idempotent: second pass over an already-retyped row does not dou
   // Second pass: ingestFn runs again (typed path self-supersedes its own
   // upload by key — no dupes), but the unknown_stored UPDATE is a no-op
   // because error IS NULL no longer matches. No throw.
-  const summary2 = await reparseStoredChunk(db, { limit: 25, offset: 0 }, spy.fn);
+  const summary2 = await reparseStoredChunk(db, { limit: 25, offset: 0, uploadedBy: 'u_admin' }, spy.fn);
   assert.strictEqual(summary2.errors.length, 0, 'no errors on idempotent re-run');
   assert.strictEqual(summary2.retyped.length, 1, 'still routed as typed on re-run');
 
@@ -189,7 +195,7 @@ await test('(4) one row whose ingestFn throws is recorded in errors[]; the loop 
   await seedStored(db, { uploadId: 'up_ok', rawId: 'raw_ok', filename: 'canonicals_all.csv', raw: CANONICALS_RAW, ordinal: 2 });
   const spy = makeSpy({ throwOn: 'directives_all.csv' });
 
-  const summary = await reparseStoredChunk(db, { limit: 25, offset: 0 }, spy.fn);
+  const summary = await reparseStoredChunk(db, { limit: 25, offset: 0, uploadedBy: 'u_admin' }, spy.fn);
 
   // Both rows attempted; the second succeeded after the first threw.
   assert.strictEqual(spy.calls.length, 2, 'ingestFn attempted on both typed rows');
@@ -207,6 +213,30 @@ await test('(4) one row whose ingestFn throws is recorded in errors[]; the loop 
   // The good row's upload WAS superseded.
   const ok = await db.execute({ sql: `SELECT error FROM csv_uploads WHERE id = ?`, args: ['up_ok'] });
   assert.ok(/reparsed into/i.test(String(ok.rows[0].error)), 'good row upload superseded');
+});
+
+// ─── (5) ingestFn RETURNS { error } -> errors[], NOT retyped, upload NOT superseded ──
+// Regression guard for the bug that hid the uploaded_by FK failure: ingestCSV
+// catches DB errors and RETURNS { error } instead of throwing, so the throw-only
+// catch never fired and a failed ingest was counted as retyped + superseded the
+// raw row (data vanished from "unknown" without ever landing).
+await test('(5) ingestFn returns { error } (real ingestCSV contract): recorded in errors[], NOT retyped, raw upload NOT superseded', async () => {
+  const db = await freshDb();
+  await seedStored(db, { uploadId: 'up_fk', rawId: 'raw_fk', filename: 'canonicals_all.csv', raw: CANONICALS_RAW, ordinal: 1 });
+  const spy = makeSpy({ returnErrorOn: 'canonicals_all.csv' });
+
+  const summary = await reparseStoredChunk(db, { limit: 25, offset: 0, uploadedBy: 'u_admin' }, spy.fn);
+
+  assert.strictEqual(spy.calls.length, 1, 'ingestFn called once');
+  assert.strictEqual(summary.retyped.length, 0, 'a returned-error ingest is NOT counted as retyped');
+  assert.strictEqual(summary.errors.length, 1, 'returned error recorded in errors[]');
+  assert.strictEqual(summary.errors[0].filename, 'canonicals_all.csv', 'error names the file');
+  assert.ok(/foreign key/i.test(summary.errors[0].error), 'error carries the returned message');
+
+  // The unknown_stored upload row must stay LIVE — the data never landed, so
+  // the file must keep showing as stored/unparsed, not silently disappear.
+  const up = await db.execute({ sql: `SELECT error FROM csv_uploads WHERE id = ?`, args: ['up_fk'] });
+  assert.strictEqual(up.rows[0].error, null, 'upload row left live (not superseded) on a returned error');
 });
 
 console.log(`\n${passed}/${passed + failed} passed`);

@@ -46,7 +46,9 @@ export const POST: APIRoute = async ({ locals, request }) => {
       return json({ ok: true, total: 0, processed: 0, retyped: [], skippedUnknown: 0, errors: [] });
     }
 
-    const summary = await reparseStoredChunk(turso, { offset, limit });
+    // uploaded_by is a NOT NULL FK to users(id); pass the real admin id so
+    // the csv_uploads insert inside ingest does not fail the FK.
+    const summary = await reparseStoredChunk(turso, { offset, limit, uploadedBy: locals.user!.id });
 
     // Log only when this chunk actually moved something, to avoid flooding the
     // activity log with empty-tail chunks during the loop.

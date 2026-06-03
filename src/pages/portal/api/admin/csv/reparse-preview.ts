@@ -43,6 +43,10 @@ const normName = (f: string) => f.split('/').pop()!.split('\\').pop()!.trim().to
 
 export const GET: APIRoute = async ({ locals }) => {
   if (locals.user?.role !== 'admin') return json({ error: 'Forbidden' }, 403);
+  // uploaded_by is a NOT NULL FK to users(id); the dry-run probe must use a
+  // real user id (the requesting admin) or the csv_uploads insert fails the
+  // FK for an unrelated reason and masks whether the parser rows are valid.
+  const adminId = locals.user!.id;
 
   try {
     // 1. Real prod schema for the tables involved in the FK chain.
@@ -127,7 +131,7 @@ export const GET: APIRoute = async ({ locals }) => {
         // csv_upload_id).
         await tx.execute({
           sql: 'INSERT INTO csv_uploads (id, client_id, original_name, detected_format, month, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)',
-          args: [uploadId, clientId, filename, fmt, String(row.month), 'reparse-preview-dryrun'],
+          args: [uploadId, clientId, filename, fmt, String(row.month), adminId],
         });
         let stage = 'csv_uploads OK';
         try {

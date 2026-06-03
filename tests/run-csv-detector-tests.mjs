@@ -74,6 +74,85 @@ function run() {
     detectFormat(domainOverviewRaw, 'ubersuggest zipkithomes.com_3-26-26.csv').format === 'keyword_research',
     detectFormat(domainOverviewRaw, 'ubersuggest zipkithomes.com_3-26-26.csv').format);
 
+  // ---- Slice 1: four unique-data SF exports route to the new formats ----
+  // Real ZKH June scrape headers (one data row each so Papa parsing is sane).
+  // canonicals_all.csv — rel="next"/"prev" is the unique tell. Note Papa
+  // yields the CSV header `rel=""next"" 1` as `rel="next" 1` after unquoting.
+  const canonicalsRaw =
+    'Address,Occurrences,Indexability,Indexability Status,Canonical Link Element 1,HTTP Canonical,Meta Robots 1,X-Robots-Tag 1,"rel=""next"" 1","rel=""prev"" 1","HTTP rel=""next"" 1","HTTP rel=""prev"" 1"\n' +
+    'https://zipkithomes.com/,1,Indexable,,https://zipkithomes.com/,,,,,,,\n';
+  test('canonicals_all header -> canonicals',
+    detectFormat(canonicalsRaw, 'canonicals_all.csv').format === 'canonicals',
+    detectFormat(canonicalsRaw, 'canonicals_all.csv').format);
+
+  // directives_all.csv — Meta Refresh 1 is the unique tell.
+  const directivesRaw =
+    'Address,Occurrences,Meta Robots 1,X-Robots-Tag 1,Meta Refresh 1,Canonical Link Element 1,HTTP Canonical,Indexability,Indexability Status\n' +
+    'https://zipkithomes.com/,1,,,,https://zipkithomes.com/,,Indexable,\n';
+  test('directives_all header -> directives',
+    detectFormat(directivesRaw, 'directives_all.csv').format === 'directives',
+    detectFormat(directivesRaw, 'directives_all.csv').format);
+
+  // validation_all.csv — CO2 (mg) + Carbon Rating is the unique tell; format
+  // name is page_weight (size + carbon, not html/schema validation).
+  const pageWeightRaw =
+    'Address,Content Type,Status Code,Status,Indexability,Indexability Status,Size (Bytes),Transferred (Bytes),Total Transferred (Bytes),CO2 (mg),Carbon Rating\n' +
+    'https://zipkithomes.com/,text/html,200,OK,Indexable,,123456,98765,150000,0.42,A+\n';
+  test('validation_all (page weight) header -> page_weight',
+    detectFormat(pageWeightRaw, 'validation_all.csv').format === 'page_weight',
+    detectFormat(pageWeightRaw, 'validation_all.csv').format);
+
+  // sitemaps_all.csv — generic header; FILENAME rule only.
+  const sitemapsRaw =
+    'Address,Content Type,Status Code,Status,Indexability,Indexability Status\n' +
+    'https://zipkithomes.com/,text/html,200,OK,Indexable,\n';
+  test('sitemaps_all.csv (generic header) -> sitemap_urls (filename rule)',
+    detectFormat(sitemapsRaw, 'sitemaps_all.csv').format === 'sitemap_urls',
+    detectFormat(sitemapsRaw, 'sitemaps_all.csv').format);
+  // zip-tagged sitemaps_all.csv routes the same.
+  test('zip-tagged sitemaps_all.csv -> sitemap_urls',
+    detectFormat(sitemapsRaw, `${ZIP}:sitemaps_all.csv`).format === 'sitemap_urls',
+    detectFormat(sitemapsRaw, `${ZIP}:sitemaps_all.csv`).format);
+
+  // ---- Slice 1 regressions: new signatures must NOT mis-route ----
+  // security_all has meta robots + x-robots + canonical but NO meta refresh,
+  // and has HTTP Version -> stays security_urls (its own earlier signature).
+  const securityAllRaw =
+    'Address,Content Type,Status Code,Status,Indexability,HTTP Version,Canonical Link Element 1,Meta Robots 1,X-Robots-Tag 1\n' +
+    'https://zipkithomes.com/,text/html,200,OK,Indexable,HTTP/2,https://zipkithomes.com/,,\n';
+  test('REGRESSION security_all header stays security_urls (not directives)',
+    detectFormat(securityAllRaw, 'security_all.csv').format === 'security_urls',
+    detectFormat(securityAllRaw, 'security_all.csv').format);
+
+  // images_all has Size (Bytes) but also IMG Inlinks + Dimensions -> images,
+  // not page_weight (page_weight needs CO2/carbon which images lacks).
+  const imagesAllRaw =
+    'Address,Content Type,Size (Bytes),IMG Inlinks,Dimensions\n' +
+    'https://zipkithomes.com/logo.png,image/png,12345,3,200x80\n';
+  test('REGRESSION images_all header stays images (not page_weight)',
+    detectFormat(imagesAllRaw, 'images_all.csv').format === 'images',
+    detectFormat(imagesAllRaw, 'images_all.csv').format);
+
+  // internal_all stays crawl_internal (authoritative filename + signature).
+  const internalAllRaw =
+    'Address,Status Code,Indexability,Title 1\n' +
+    'https://zipkithomes.com/,200,Indexable,ZipKit Homes\n';
+  test('REGRESSION internal_all header stays crawl_internal',
+    detectFormat(internalAllRaw, 'internal_all.csv').format === 'crawl_internal',
+    detectFormat(internalAllRaw, 'internal_all.csv').format);
+
+  // A generic response_codes_* header must NOT become sitemap_urls — only
+  // the sitemaps_all.csv filename triggers that rule. This header has no
+  // first-column "url" and no source/destination, so it falls through to
+  // unknown (response_codes_all.csv has no broken_link/response_code-style
+  // substring beyond "response_code", so guard the filename to not include it).
+  const responseCodesRaw =
+    'Address,Content Type,Status Code,Status,Indexability,Indexability Status\n' +
+    'https://zipkithomes.com/,text/html,200,OK,Indexable,\n';
+  test('REGRESSION generic response_codes header does NOT become sitemap_urls',
+    detectFormat(responseCodesRaw, 'response_codes_redirection_3xx.csv').format !== 'sitemap_urls',
+    detectFormat(responseCodesRaw, 'response_codes_redirection_3xx.csv').format);
+
   const failed = results.filter(r => !r.pass);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);
   if (failed.length > 0) process.exit(1);

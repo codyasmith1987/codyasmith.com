@@ -17,6 +17,15 @@ export type CsvFormat =
   | 'security_urls'
   | 'structured_data_urls'
   | 'issue_urls'
+  // Unique-data Screaming Frog exports that otherwise land in
+  // unknown_stored. canonicals/directives/page_weight detect by a
+  // header signature with a unique tell; sitemap_urls detects by the
+  // sitemaps_all.csv filename (its header is generic). See
+  // docs/superpowers/plans/2026-06-02-unique-data-parsers.md.
+  | 'canonicals'
+  | 'directives'
+  | 'page_weight'
+  | 'sitemap_urls'
   // Link-graph rows from SF *_inlinks, *_outlinks, all_anchor_text,
   // and the issue-context-filtered inlinks variants. Each filename
   // becomes its own source_file label inside link_graph, with
@@ -135,6 +144,33 @@ const SIGNATURES: FormatSignature[] = [
     format: 'structured_data_urls',
     requiredColumns: ['address', 'errors', 'warnings', 'rich result errors', 'total types'],
   },
+  {
+    // Screaming Frog canonicals_all.csv. Per-URL canonical + pagination
+    // posture. rel="next" 1 is the unique tell: directives_all carries
+    // occurrences + canonical link element but never the rel=next/prev
+    // pagination columns. Papa unquotes the CSV header "rel=""next"" 1"
+    // to rel="next" 1, which cleanHeader lowercases to 'rel="next" 1'.
+    format: 'canonicals',
+    requiredColumns: ['address', 'occurrences', 'canonical link element 1', 'rel="next" 1'],
+  },
+  {
+    // Screaming Frog directives_all.csv. Per-URL robots/refresh
+    // directives. Meta Refresh 1 is the unique tell: security_all has
+    // meta robots + x-robots but no meta refresh (and is matched
+    // earlier by its own HTTP Version signature); canonicals_all has
+    // occurrences but no meta refresh.
+    format: 'directives',
+    requiredColumns: ['address', 'occurrences', 'meta robots 1', 'x-robots-tag 1', 'meta refresh 1'],
+  },
+  {
+    // Screaming Frog validation_all.csv — page size + carbon footprint
+    // (named page_weight by its content, not html/schema validation).
+    // CO2 (mg) + Carbon Rating is unique across all SF exports; Size
+    // (Bytes) alone would collide with images_all, which also requires
+    // IMG Inlinks + Dimensions.
+    format: 'page_weight',
+    requiredColumns: ['address', 'co2 (mg)', 'carbon rating'],
+  },
 ];
 
 function isAuthoritativeCrawlInternalFilename(filename: string): boolean {
@@ -190,6 +226,16 @@ export function detectFormat(raw: string, filename: string): { format: CsvFormat
     case 'search appearance.csv':  return { format: 'gsc_search_appearance', headers: [] };
     case 'chart.csv':              return { format: 'gsc_chart', headers: [] };
     case 'filters.csv':            return { format: 'gsc_filters', headers: [] };
+  }
+
+  // Screaming Frog sitemaps_all.csv. The header is generic (Address,
+  // Content Type, Status Code, Status, Indexability, Indexability
+  // Status) — identical to response_codes_* and other crawl
+  // sub-reports — so it cannot be detected by signature. Match on the
+  // exact filename instead, BEFORE the signature loop. Only this exact
+  // filename triggers sitemap_urls; the generic header alone never does.
+  if (normalizedName === 'sitemaps_all.csv') {
+    return { format: 'sitemap_urls', headers: [] };
   }
 
   // Screaming Frog link-relationship exports. All share the same

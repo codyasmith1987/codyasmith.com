@@ -95,6 +95,20 @@ async function freshDb() {
   await db.execute(`CREATE TABLE site_issues (
     id TEXT PRIMARY KEY, client_id TEXT, month TEXT
   )`);
+  // Unique-data SF export tables (slice 2) — file-present categories the
+  // backfill iterates over (canonicals, directives, page_weight, sitemaps).
+  await db.execute(`CREATE TABLE canonical_urls (
+    id TEXT PRIMARY KEY, client_id TEXT, month TEXT
+  )`);
+  await db.execute(`CREATE TABLE directive_urls (
+    id TEXT PRIMARY KEY, client_id TEXT, month TEXT
+  )`);
+  await db.execute(`CREATE TABLE page_weight_urls (
+    id TEXT PRIMARY KEY, client_id TEXT, month TEXT
+  )`);
+  await db.execute(`CREATE TABLE sitemap_urls (
+    id TEXT PRIMARY KEY, client_id TEXT, month TEXT
+  )`);
   return db;
 }
 
@@ -236,6 +250,27 @@ await test('(7) idempotent: running backfillCoverage twice yields exactly one ro
   assert.strictEqual(Number(acc[0].rows_total), 2, 'accessibility rows_total = 2');
   assert.strictEqual(Number(acc[0].rows_measured), 1, 'accessibility rows_measured = 1 (only the "3" row)');
   assert.strictEqual(Number(crawl[0].rows_total), 4, 'crawl rows_total = 4');
+});
+
+// ── (8) FRESH-DB ORDERING: a category whose table is created by a LATER
+//        migration is ABSENT when 057 runs. backfillCoverage must skip it,
+//        not throw "no such table" (which would halt the cold-start chain and
+//        brick a fresh deploy). Reproduces 057-before-059 by dropping the 4
+//        unique-data tables, which freshDb() otherwise pre-creates (masking it).
+await test('(8) fresh-DB ordering: missing category tables (canonical/directive/page_weight/sitemap) are skipped, no throw', async () => {
+  const db = await freshDb();
+  for (const t of ['canonical_urls', 'directive_urls', 'page_weight_urls', 'sitemap_urls']) {
+    await db.execute(`DROP TABLE ${t}`);
+  }
+  await seedCrawl(db, C, M, 3); // present category still backfills
+  // Must NOT throw despite the 4 absent tables.
+  await backfillCoverage(db);
+  // The present category was processed...
+  assert.strictEqual((await getCov(db, C, M, 'crawl')).length, 1, 'crawl still backfilled');
+  // ...and the absent-table categories simply produced no coverage row.
+  for (const cat of ['canonicals', 'directives', 'page_weight', 'sitemaps']) {
+    assert.strictEqual((await getCov(db, C, M, cat)).length, 0, `${cat} skipped (table absent), no row, no throw`);
+  }
 });
 
 console.log(`\n${passed}/${passed + failed} passed`);

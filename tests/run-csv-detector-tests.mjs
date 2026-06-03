@@ -242,6 +242,16 @@ function run() {
     detectFormat('', 'whatever.csv').format === 'sf_generic',
     detectFormat('', 'whatever.csv').format);
 
+  // M1: response-code lists no longer become fake site_audit 'medium' issues;
+  // they fall to the unscored sf_generic floor.
+  const respCodeRaw = 'Address,Content Type,Status Code,Status,Indexability,Indexability Status\nhttps://x.com/,text/html,200,OK,Indexable,\n';
+  test('response_codes_all.csv -> sf_generic (not site_audit / fake medium)',
+    detectFormat(respCodeRaw, 'response_codes_all.csv').format === 'sf_generic',
+    detectFormat(respCodeRaw, 'response_codes_all.csv').format);
+  test('response_codes_redirection_(3xx).csv -> sf_generic (not site_audit)',
+    detectFormat(respCodeRaw, 'response_codes_redirection_(3xx).csv').format === 'sf_generic',
+    detectFormat(respCodeRaw, 'response_codes_redirection_(3xx).csv').format);
+
   const failed = results.filter(r => !r.pass);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);
   if (failed.length > 0) process.exit(1);

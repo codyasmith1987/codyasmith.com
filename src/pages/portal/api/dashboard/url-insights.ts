@@ -27,6 +27,7 @@ import {
   type ContentQualityInsights,
 } from '../../../../lib/dashboard/content-quality-insights';
 import { realUserPageRowFilters, realUserPageUrlExclusions } from '../../../../lib/csv/page-count-sql';
+import { classifyUrl, isCrawlerBlockedHost, isBotBlockStatus } from '../../../../lib/url-classifier';
 
 export const prerender = false;
 
@@ -575,23 +576,16 @@ export async function loadUrlInsights(
     // broken destination + a top-N sample of source pages, so the
     // client can render "fix this link on these pages."
     if (linkMonth) {
-      const brokenCounts = await db.execute({
-        sql: `SELECT
-                COUNT(DISTINCT destination_url) AS broken_destinations,
-                COUNT(*) AS total_inbound
-              FROM link_graph
-              WHERE client_id = ? AND month = ?
-                AND status_code IS NOT NULL AND status_code >= 400`,
-        args: [clientId, linkMonth],
-      });
-      const bc = brokenCounts.rows[0] as any;
-      response.inbound_broken_links.broken_destination_count = Number(bc?.[0] || 0);
-      response.inbound_broken_links.total_inbound_links = Number(bc?.[1] || 0);
-
-      // Top destinations + capped concatenated source list. GROUP_CONCAT
-      // truncated by SUBSTR to keep the payload bounded if a destination
-      // has thousands of inbound links.
-      const topBroken = await db.execute({
+      // One grouped query over the broken (4xx/5xx) destinations, then suppress
+      // EXPECTED false positives in app code (the classifier helpers are the
+      // single source of truth; SQL host-matching on destination_url would be
+      // fragile). Broken-link rows are a small subset, so pulling them all is
+      // cheap. Suppressed: Cloudflare /cdn-cgi/ + mailto/tel (URL-shape), and
+      // crawler-blocked social/video hosts (youtube/linkedin/...) returning a
+      // bot-block code (403/429/503/999) — a genuine 404 on those hosts still
+      // counts. Suppressed links stay in link_graph for admin; they just are
+      // not shown to the client as broken.
+      const brokenRows = await db.execute({
         sql: `SELECT
                 destination_url,
                 MAX(status_code) AS status_code,
@@ -601,11 +595,21 @@ export async function loadUrlInsights(
               WHERE client_id = ? AND month = ?
                 AND status_code IS NOT NULL AND status_code >= 400
               GROUP BY destination_url
-              ORDER BY inbound_count DESC, destination_url
-              LIMIT ?`,
-        args: [clientId, linkMonth, SAMPLE_LIMIT],
+              ORDER BY inbound_count DESC, destination_url`,
+        args: [clientId, linkMonth],
       });
-      response.inbound_broken_links.samples = (topBroken.rows as any[]).map(r => {
+      const kept = (brokenRows.rows as any[]).filter(r => {
+        const dest = String(r[0]);
+        const status = r[1] != null ? Number(r[1]) : null;
+        if (classifyUrl(dest).is_expected) return false;
+        let host = '';
+        try { host = new URL(dest).hostname; } catch { /* relative/malformed: treat as on-site, keep */ }
+        if (isCrawlerBlockedHost(host) && isBotBlockStatus(status)) return false;
+        return true;
+      });
+      response.inbound_broken_links.broken_destination_count = kept.length;
+      response.inbound_broken_links.total_inbound_links = kept.reduce((s, r) => s + Number(r[2] || 0), 0);
+      response.inbound_broken_links.samples = kept.slice(0, SAMPLE_LIMIT).map(r => {
         const sources = (r[3] ? String(r[3]) : '')
           .split(',')
           .map(s => s.trim())

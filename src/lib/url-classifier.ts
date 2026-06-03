@@ -49,6 +49,14 @@ export interface UrlClassification {
   type: UrlType;
   label: string;
   is_page: boolean;
+  // True when an error/4xx on this URL is EXPECTED and benign, so it must not
+  // be shown to a client as a broken link: Cloudflare email-protection
+  // endpoints (/cdn-cgi/, routinely 4xx to crawlers) and non-fetchable schemes
+  // (mailto:/tel:/javascript:/#). NOTE: this is URL-shape only. A
+  // crawler-blocked external host (youtube/linkedin returning 403/999) is NOT
+  // detectable from the string — use isCrawlerBlockedHost + isBotBlockStatus
+  // against the destination host + status code for that case.
+  is_expected: boolean;
 }
 
 // Plain-English labels. Lowercased except the leading word; meant to
@@ -104,7 +112,12 @@ export function classifyUrl(
     indexability?: string | null;
   },
 ): UrlClassification {
-  if (!url) return { type: 'other', label: TYPE_LABELS.other, is_page: false };
+  if (!url) return { type: 'other', label: TYPE_LABELS.other, is_page: false, is_expected: false };
+
+  // Non-fetchable schemes are not pages and not real broken links.
+  if (/^(mailto|tel|javascript):/i.test(url) || url.trim() === '#') {
+    return { type: 'other', label: 'Link', is_page: false, is_expected: true };
+  }
 
   const path = pathOf(url);
   const lower = rawLower(url);
@@ -164,7 +177,31 @@ export function classifyUrl(
 }
 
 function mk(type: UrlType): UrlClassification {
-  return { type, label: TYPE_LABELS[type], is_page: type === 'page' };
+  // cdn = Cloudflare /cdn-cgi/ (email-protection etc.): present on every CF
+  // site and routinely 4xx to crawlers, so an error there is expected/benign.
+  return { type, label: TYPE_LABELS[type], is_page: type === 'page', is_expected: type === 'cdn' };
+}
+
+// External hosts that serve humans fine but block automated crawlers (return
+// 403/429/503/999 to bots). A non-200 from one of these is almost always a
+// bot block, not a dead link — so it must not be shown to a client as broken.
+// Mirrors the social list in search.ts; kept here as the single source for the
+// health/broken-link path.
+export const CRAWLER_BLOCKING_DOMAINS = [
+  'youtube.com', 'youtu.be', 'linkedin.com', 'facebook.com', 'instagram.com',
+  'x.com', 'twitter.com', 'tiktok.com', 'pinterest.com',
+];
+
+export function isCrawlerBlockedHost(hostname: string | null | undefined): boolean {
+  if (!hostname) return false;
+  const h = hostname.replace(/^www\./, '').toLowerCase();
+  return CRAWLER_BLOCKING_DOMAINS.some(d => h === d || h.endsWith('.' + d));
+}
+
+// Status codes a crawler-blocking host returns to bots (NOT a genuine 404 —
+// a real youtube.com/watch?v=missing 404 is still worth flagging).
+export function isBotBlockStatus(status: number | null | undefined): boolean {
+  return status === 403 || status === 429 || status === 503 || status === 999;
 }
 
 // Convenience for code that needs the label for a known type without

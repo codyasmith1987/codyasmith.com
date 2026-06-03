@@ -40,9 +40,16 @@ type IngestFn = (
 
 export async function reparseStoredChunk(
   db: typeof turso = turso,
-  opts: { limit: number; offset: number } = { limit: 25, offset: 0 },
+  // uploadedBy MUST be a real users.id: csv_uploads.uploaded_by is
+  // NOT NULL REFERENCES users(id), so any literal tag (the old
+  // 'reparse-backfill') fails the FK on the csv_uploads insert and the
+  // whole ingest rolls back. The endpoint threads locals.user.id here.
+  opts: { limit?: number; offset?: number; uploadedBy: string },
   ingestFn: IngestFn = ingestCSV,
 ): Promise<ReparseSummary> {
+  const limit = opts.limit ?? 25;
+  const offset = opts.offset ?? 0;
+  const uploadedBy = opts.uploadedBy;
   const summary: ReparseSummary = {
     processed: 0,
     retyped: [],
@@ -57,7 +64,7 @@ export async function reparseStoredChunk(
           FROM raw_csv_data
           ORDER BY created_at
           LIMIT ? OFFSET ?`,
-    args: [opts.limit, opts.offset],
+    args: [limit, offset],
   });
 
   for (const row of chunk.rows as any[]) {
@@ -84,7 +91,18 @@ export async function reparseStoredChunk(
       // recomputes coverage — and self-supersedes its own prior upload by
       // key, so a re-run produces no dupes. The 'reparse-backfill' tag
       // records provenance in csv_uploads.uploaded_by.
-      const result = await ingestFn(rawText, clientId, month, filename, 'reparse-backfill');
+      const result = await ingestFn(rawText, clientId, month, filename, uploadedBy);
+
+      // ingestCSV CATCHES its own DB errors and RETURNS { error } instead of
+      // throwing (FK violation, racing unique index, parser failure). If we
+      // don't check this, a failed ingest gets counted as "retyped" AND the
+      // raw row is superseded — the tally lies and the file vanishes from
+      // unknown without its data ever landing. This is exactly what hid the
+      // uploaded_by FK bug. Treat a returned error as a real failure.
+      if (result.error) {
+        summary.errors.push({ filename, error: result.error });
+        continue;
+      }
 
       // Supersede the OLD unknown_stored upload row so it stops showing as
       // "Stored, not yet visualized." WHERE error IS NULL makes this a

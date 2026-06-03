@@ -85,11 +85,15 @@ export const GET: APIRoute = async ({ locals }) => {
     // Tally detected format + 3. complete unparsed-type enumeration.
     const byFormat: Record<string, number> = {};
     const unknown_files: Record<string, number> = {};
+    // Content sniff for files that detect 'unknown' (non-tabular), so we can
+    // confirm there is no parseable data being lost rather than assuming.
+    const unknown_samples: Array<{ file: string; raw_len: number; head: string }> = [];
     let emptyRaw = 0;
     for (const row of rows) {
       const filename = String(row.filename);
       const rawText = row.raw_text == null ? '' : String(row.raw_text);
-      if ((Number(row.raw_len) || 0) === 0) emptyRaw++;
+      const rawLen = Number(row.raw_len) || 0;
+      if (rawLen === 0) emptyRaw++;
       let format = 'unknown';
       try { format = detectFormat(rawText, filename).format; }
       catch (e: any) { format = `DETECT_THREW: ${e?.message || e}`; }
@@ -97,6 +101,9 @@ export const GET: APIRoute = async ({ locals }) => {
       if (format === 'unknown') {
         const k = normName(filename);
         unknown_files[k] = (unknown_files[k] || 0) + 1;
+        if (unknown_samples.length < 12) {
+          unknown_samples.push({ file: k, raw_len: rawLen, head: rawText.slice(0, 240) });
+        }
       }
     }
     const unknown_files_sorted = Object.entries(unknown_files)
@@ -181,6 +188,7 @@ export const GET: APIRoute = async ({ locals }) => {
       by_detected_format: byFormat,
       unparsed_types_count: unknown_files_sorted.length,
       unknown_files: unknown_files_sorted,
+      unknown_samples,
       would_retype_probe,
       prod_schema,
     });

@@ -153,6 +153,43 @@ function run() {
     detectFormat(responseCodesRaw, 'response_codes_redirection_3xx.csv').format !== 'sitemap_urls',
     detectFormat(responseCodesRaw, 'response_codes_redirection_3xx.csv').format);
 
+  // ---- Issue-slice generalization (derived names + qualify/deny gate) ----
+  const addr = 'Address,X\nhttps://zipkithomes.com/a,1\n';
+  const derivedIssues = [
+    'accessibility_text_requires_higher_color_contrast_ratio.csv',
+    'amp_missing_canonical.csv',
+    'hreflang_missing_return_links.csv',
+    'javascript_pages_with_javascript_errors.csv',
+    'pagespeed_reduce_unused_javascript.csv',
+    'wcag_2_1_aa_all_violations.csv',
+  ];
+  for (const f of derivedIssues) {
+    test(`derived issue slice ${f} -> issue_urls`,
+      detectFormat(addr, f).format === 'issue_urls', detectFormat(addr, f).format);
+  }
+  // Curated map still wins (exact issues_overview name preserved for the join).
+  test('curated h1_missing.csv -> issue_urls', detectFormat(addr, 'h1_missing.csv').format === 'issue_urls');
+
+  // Masters / resources / summaries / headers must NEVER become issues
+  // (the qualify/deny gate). They route to a typed signature or the floor.
+  for (const f of ['javascript_all.csv', 'hreflang_all.csv', 'url_all.csv', 'h1_all.csv',
+    'meta_description_all.csv', 'external_css.csv', 'ai_all.csv',
+    'all_http_request_headers.csv', 'pagespeed_opportunities_summary.csv']) {
+    test(`${f} is NOT issue_urls`, detectFormat(addr, f).format !== 'issue_urls', detectFormat(addr, f).format);
+  }
+  // Link dumps stay 'links' (the documented garbage fix), never issue_urls.
+  const linkRaw = 'Source,Destination,Anchor,Status Code\nhttps://x/a,https://x/b,go,200\n';
+  test('all_inlinks.csv -> links (not issue_urls)', detectFormat(linkRaw, 'all_inlinks.csv').format === 'links');
+
+  // canonical/directive SLICE files stay typed (their signature wins; the
+  // wider issue gate must NOT steal them).
+  test('REGRESSION canonicals_self_referencing.csv stays canonicals (not issue_urls)',
+    detectFormat(canonicalsRaw, 'canonicals_self_referencing.csv').format === 'canonicals',
+    detectFormat(canonicalsRaw, 'canonicals_self_referencing.csv').format);
+  test('REGRESSION directives_follow.csv stays directives (not issue_urls)',
+    detectFormat(directivesRaw, 'directives_follow.csv').format === 'directives',
+    detectFormat(directivesRaw, 'directives_follow.csv').format);
+
   const failed = results.filter(r => !r.pass);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);
   if (failed.length > 0) process.exit(1);

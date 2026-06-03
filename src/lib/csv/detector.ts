@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import { ISSUE_CSV_FILENAME_MAP } from './parsers/issue-urls';
+import { issueNameForFilename } from './parsers/issue-urls';
 
 export type CsvFormat =
   | 'position_tracking'
@@ -263,14 +263,18 @@ export function detectFormat(raw: string, filename: string): { format: CsvFormat
     return { format: 'links', headers: [] };
   }
 
-  // Per-issue URL exports from Screaming Frog. The filename matches a
-  // known per-issue CSV (h1_missing.csv, page_titles_below_30_characters.csv,
-  // etc.); each file lists the URLs that have that issue, with the URL
-  // in the first column "Address." Caught BEFORE the site_audit
-  // fallback so these route to the dedicated issue-urls parser that
-  // populates site_issue_urls (and therefore the per-issue pop-out on
-  // the health page).
-  if (ISSUE_CSV_FILENAME_MAP[normalizedName]) {
+  // Per-issue URL exports from Screaming Frog. Either a curated filename
+  // (h1_missing.csv, page_titles_below_30_characters.csv, ...) OR a genuine
+  // issue-slice family whose name we can derive (accessibility_<rule>.csv,
+  // amp_*, hreflang_* issue variants, pagespeed_<opportunity>.csv, wcag_*,
+  // etc.). issueNameForFilename() applies the qualify gate + deny patterns,
+  // so resource lists, link dumps, and *_all per-URL masters return null and
+  // fall through. Caught AFTER 'links' (so link dumps are claimed first) and
+  // BEFORE the SIGNATURES loop (so the typed *_all reports win their own
+  // signatures). Each file lists the URLs that have that issue (URL in the
+  // "Address" column) and populates site_issue_urls (per-issue popout). The
+  // health SCORE reads only site_issues, so derived slices never skew it.
+  if (issueNameForFilename(normalizedName)) {
     return { format: 'issue_urls', headers: [] };
   }
 

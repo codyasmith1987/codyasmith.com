@@ -60,7 +60,7 @@ const json = (data: any, status = 200) =>
 //   - External link 4xx errors — need the link-relationships table
 //     (*_inlinks) which doesn't have a typed parser yet.
 interface IssueDerivation {
-  source: 'crawl_urls' | 'image_urls' | 'content_urls' | 'accessibility_urls' | 'structured_data_urls';
+  source: 'crawl_urls' | 'image_urls' | 'content_urls' | 'accessibility_urls' | 'structured_data_urls' | 'link_graph';
   where: string;
   extraColumns?: string[];
   // For "find duplicates within a column" patterns: groupBy + having
@@ -147,6 +147,19 @@ const ISSUE_DERIVATION_MAP: Record<string, IssueDerivation> = {
     source: 'crawl_urls',
     where: "status_code >= 500",
     extraColumns: ['status_code'],
+  },
+  // ===== link_graph (Tier-2) =====
+  // These two curated Links issues route to link_graph (the detector's links_
+  // gate claims them before the issue gate), so their site_issue_urls popout
+  // is empty. Derive the affected SOURCE pages from link_graph instead (L1).
+  // source_file is the filename lowercased, path + .csv stripped (links.ts).
+  'Links: Internal Outlinks With No Anchor Text': {
+    source: 'link_graph',
+    where: "source_file = 'links_internal_outlinks_with_no_anchor_text'",
+  },
+  'Links: Non-Descriptive Anchor Text In Internal Outlinks': {
+    source: 'link_graph',
+    where: "source_file = 'links_nondescriptive_anchor_text_in_internal_outlinks'",
   },
   // Canonicals
   'Canonicals: Missing': {
@@ -419,11 +432,18 @@ async function deriveFromTable(
     ? ', ' + extraColumns.join(', ')
     : '';
 
+  // link_graph has no content_type/indexability columns and many rows per
+  // source page, so list DISTINCT source pages with NULL class columns (the
+  // classifier handles nulls). Other tables are one row per URL.
+  const urlSelect = table === 'link_graph'
+    ? 'DISTINCT source_url AS url, NULL AS content_type, NULL AS indexability'
+    : 'url, content_type, indexability';
+
   let sql: string;
   if (derivation.groupBy) {
     // Duplicate-detection: subquery finds values that appear more
     // than once, outer query lists pages with those values.
-    sql = `SELECT url, content_type, indexability${selectExtras}
+    sql = `SELECT ${urlSelect}${selectExtras}
            FROM ${table}
            WHERE client_id = ?
              AND month = ?
@@ -437,7 +457,7 @@ async function deriveFromTable(
            ORDER BY ${derivation.groupBy}, url ASC
            LIMIT 500`;
   } else {
-    sql = `SELECT url, content_type, indexability${selectExtras}
+    sql = `SELECT ${urlSelect}${selectExtras}
            FROM ${table}
            WHERE client_id = ?
              AND month = ?

@@ -190,6 +190,45 @@ function run() {
     detectFormat(directivesRaw, 'directives_follow.csv').format === 'directives',
     detectFormat(directivesRaw, 'directives_follow.csv').format);
 
+  // ---- Slice 3: rich per-URL "_all" reports route to their typed formats ----
+  const javascriptRaw =
+    'Address,Status Code,HTML Word Count,Rendered HTML Word Count,Word Count Change,JS Word Count %,HTML Title\n' +
+    'https://zipkithomes.com/,200,100,350,250,71.4,Home\n';
+  test('javascript_all header -> javascript',
+    detectFormat(javascriptRaw, 'javascript_all.csv').format === 'javascript',
+    detectFormat(javascriptRaw, 'javascript_all.csv').format);
+
+  const urlAllRaw =
+    'Address,Content Type,Status Code,Status,Indexability,Indexability Status,Hash,Length,Canonical Link Element 1,URL Encoded Address\n' +
+    'https://zipkithomes.com/,text/html,200,OK,Indexable,,abc123,28,https://zipkithomes.com/,https%3A%2F%2F\n';
+  test('url_all.csv -> url_structure (filename rule)',
+    detectFormat(urlAllRaw, 'url_all.csv').format === 'url_structure',
+    detectFormat(urlAllRaw, 'url_all.csv').format);
+  // Backup signature catches a url_all copy renamed to a NON-issue-family name
+  // (a 'url_'-prefixed name would be claimed by the issue gate first, which is
+  // correct — url_uppercase.csv etc. are genuine issues).
+  test('url_all backup signature (renamed export.csv) -> url_structure',
+    detectFormat(urlAllRaw, 'export.csv').format === 'url_structure',
+    detectFormat(urlAllRaw, 'export.csv').format);
+
+  const hreflangRaw =
+    'Address,Title 1,Occurrences,HTML hreflang 1,HTML hreflang 1 URL,Indexability,Indexability Status\n' +
+    'https://zipkithomes.com/,Home,1,en,https://zipkithomes.com/,Indexable,\n';
+  test('hreflang_all header -> hreflang',
+    detectFormat(hreflangRaw, 'hreflang_all.csv').format === 'hreflang',
+    detectFormat(hreflangRaw, 'hreflang_all.csv').format);
+
+  // Slice 3 regressions: the new signatures must not steal neighbors.
+  test('REGRESSION canonicals_all stays canonicals (not hreflang/javascript)',
+    detectFormat(canonicalsRaw, 'canonicals_all.csv').format === 'canonicals',
+    detectFormat(canonicalsRaw, 'canonicals_all.csv').format);
+  test('REGRESSION directives_all stays directives',
+    detectFormat(directivesRaw, 'directives_all.csv').format === 'directives',
+    detectFormat(directivesRaw, 'directives_all.csv').format);
+  test('REGRESSION security_all stays security_urls (not url_structure)',
+    detectFormat(securityAllRaw, 'security_all.csv').format === 'security_urls',
+    detectFormat(securityAllRaw, 'security_all.csv').format);
+
   const failed = results.filter(r => !r.pass);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);
   if (failed.length > 0) process.exit(1);

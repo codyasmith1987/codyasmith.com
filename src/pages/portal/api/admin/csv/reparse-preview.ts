@@ -159,7 +159,8 @@ export const GET: APIRoute = async ({ locals }) => {
     // Live row counts of the typed tables the backfill writes into, so the
     // backfill result can be verified read-only (counts go up after a run).
     const typed_counts: Record<string, number> = {};
-    for (const t of ['canonical_urls', 'directive_urls', 'page_weight_urls', 'sitemap_urls', 'sf_export_rows']) {
+    for (const t of ['canonical_urls', 'directive_urls', 'page_weight_urls', 'sitemap_urls',
+      'javascript_urls', 'url_structure_urls', 'hreflang_urls', 'sf_export_rows', 'site_issue_urls']) {
       try {
         const c = await turso.execute(`SELECT COUNT(*) AS n FROM ${t}`);
         typed_counts[t] = Number((c.rows[0] as any).n) || 0;

@@ -26,6 +26,12 @@ export type CsvFormat =
   | 'directives'
   | 'page_weight'
   | 'sitemap_urls'
+  // Rich per-URL "_all" reports worth typed columns (the rest stay in the
+  // sf_generic floor). javascript = HTML-vs-rendered deltas; url_structure =
+  // Hash dup-content + URL length; hreflang = per-URL hreflang annotations.
+  | 'javascript'
+  | 'url_structure'
+  | 'hreflang'
   // Link-graph rows from SF *_inlinks, *_outlinks, all_anchor_text,
   // and the issue-context-filtered inlinks variants. Each filename
   // becomes its own source_file label inside link_graph, with
@@ -174,6 +180,28 @@ const SIGNATURES: FormatSignature[] = [
     format: 'page_weight',
     requiredColumns: ['address', 'co2 (mg)', 'carbon rating'],
   },
+  {
+    // Screaming Frog javascript_all.csv — HTML vs rendered comparison.
+    // "rendered html word count" is the unique tell: only the JS rendering
+    // report has pre/post-render columns. (crawl_internal needs 'title 1' +
+    // 'indexability' which this report does not carry.)
+    format: 'javascript',
+    requiredColumns: ['address', 'rendered html word count', 'word count change'],
+  },
+  {
+    // Screaming Frog hreflang_all.csv. Occurrences + "html hreflang 1" is the
+    // unique tell (canonicals/directives carry occurrences but never hreflang
+    // columns).
+    format: 'hreflang',
+    requiredColumns: ['address', 'occurrences', 'html hreflang 1'],
+  },
+  {
+    // Screaming Frog url_all.csv BACKUP signature (primary is the exact
+    // filename rule). Hash + URL Encoded Address together are unique to this
+    // report; Length here is the URL string length, not page byte size.
+    format: 'url_structure',
+    requiredColumns: ['address', 'hash', 'length', 'url encoded address'],
+  },
 ];
 
 function isAuthoritativeCrawlInternalFilename(filename: string): boolean {
@@ -239,6 +267,14 @@ export function detectFormat(raw: string, filename: string): { format: CsvFormat
   // filename triggers sitemap_urls; the generic header alone never does.
   if (normalizedName === 'sitemaps_all.csv') {
     return { format: 'sitemap_urls', headers: [] };
+  }
+
+  // Screaming Frog url_all.csv. Like sitemaps_all, the header overlaps generic
+  // crawl reports (Address, Content Type, Status Code, Indexability), so match
+  // the exact filename here BEFORE the links/issue blocks. A backup signature
+  // (Hash + URL Encoded Address) in the SIGNATURES loop catches a renamed copy.
+  if (normalizedName === 'url_all.csv') {
+    return { format: 'url_structure', headers: [] };
   }
 
   // Screaming Frog link-relationship exports. All share the same

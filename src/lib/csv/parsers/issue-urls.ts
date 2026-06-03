@@ -180,14 +180,94 @@ export const ISSUE_CSV_FILENAME_MAP: Record<string, string> = {
   'pagination_pagination_url_not_in_anchor_tag.csv': 'Pagination: Pagination URL Not In Anchor Tag',
 };
 
+// The Screaming Frog issue/violation FAMILIES whose per-issue slice files are
+// genuine "list of URLs flagged for one issue" exports. A filename only
+// derives an issue name when its first token is one of these — everything
+// else returns null so the detector does NOT route it to the issue system
+// (it falls through to typed signatures or the sf_generic floor). This is the
+// qualify gate that keeps resource lists, link dumps, and per-URL masters OUT.
+// NOTE: 'canonicals' and 'directives' are deliberately NOT here. Their
+// non-_all slice files (canonicals_contains_canonical.csv, directives_follow.csv,
+// etc.) carry the SAME rich per-URL columns as their _all master and must
+// route to the typed canonical/directive parsers via the SIGNATURES loop, not
+// the issue system. Including them would steal those files before the loop.
+const ISSUE_FAMILIES = new Set([
+  'accessibility', 'wcag', 'amp', 'hreflang', 'javascript', 'pagespeed',
+  'security', 'sitemaps', 'pagination', 'images',
+  'content', 'validation', 'mobile', 'url', 'h1', 'h2', 'page', 'meta',
+  'structured', 'analytics',
+]);
+
+// Tokens that should render as acronyms / fixed casing in a derived name.
+const ISSUE_TOKEN_CASING: Record<string, string> = {
+  url: 'URL', urls: 'URLs', http: 'HTTP', https: 'HTTPS', html: 'HTML',
+  css: 'CSS', js: 'JS', amp: 'AMP', h1: 'H1', h2: 'H2', h3: 'H3', kb: 'KB',
+  mb: 'MB', api: 'API', ga: 'GA', psi: 'PSI', wcag: 'WCAG', aa: 'AA',
+  aaa: 'AAA', xml: 'XML', json: 'JSON', seo: 'SEO', cdn: 'CDN', hsts: 'HSTS',
+  csp: 'CSP', cors: 'CORS', dom: 'DOM', lcp: 'LCP', cls: 'CLS', amphtml: 'AMPHTML',
+  '2xx': '2xx', '3xx': '3xx', '4xx': '4xx', '5xx': '5xx',
+  pagespeed: 'PageSpeed', javascript: 'JavaScript', hreflang: 'Hreflang',
+};
+
+// Reused from site-audit.ts: a derived name that still looks like a raw
+// filename (path separators, SF timestamp folder, absurd length) must NOT
+// become an issue label.
+function looksLikeFilenameLeak(name: string): boolean {
+  if (!name) return true;
+  if (name.includes('/') || name.includes('\\')) return true;
+  if (/^\d{4}\.\d{2}\.\d{2}/.test(name)) return true;
+  if (name.length > 100) return true;
+  return false;
+}
+
+function titleCaseToken(t: string): string {
+  if (ISSUE_TOKEN_CASING[t]) return ISSUE_TOKEN_CASING[t];
+  if (/^\d+$/.test(t)) return t;
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
 /**
- * Look up the issue_name for a CSV filename. Returns null when the
- * filename is not a known per-issue export. The format detector uses
- * this to decide whether the file routes to this parser.
+ * Derive a clean human issue name from a Screaming Frog issue-slice filename
+ * when it is NOT in the curated ISSUE_CSV_FILENAME_MAP. Returns null for any
+ * filename that is not a genuine single-issue URL slice, so the detector does
+ * not over-route. Derived names live in site_issue_urls ONLY (never
+ * site_issues — see the parser), so they never affect the health score.
+ */
+export function deriveIssueNameFromFilename(filename: string): string | null {
+  const norm = filename
+    .replace(/^.*[\\/]/, '')
+    .replace(/^.*\.zip:/i, '')
+    .replace(/\.csv$/i, '')
+    .trim()
+    .toLowerCase();
+  if (!norm) return null;
+
+  // DENY: per-URL masters, link/anchor dumps, and resource inventories are
+  // NOT issue slices. (*_inlinks/links_* are already claimed by the 'links'
+  // format earlier in the detector; denied here too as belt-and-suspenders.)
+  if (/(^|_)all$/.test(norm)) return null;                                   // *_all masters
+  if (/_inlinks$|_outlinks$|^links_|^all_anchor_text$/.test(norm)) return null; // link dumps
+  if (/resources?$|^external_|^internal_(css|javascript|images|html|other)$/.test(norm)) return null; // resource lists
+  if (/_summary$|_summary_report$|_overview$/.test(norm)) return null;       // aggregates, not per-URL issue lists
+
+  const family = norm.split('_')[0];
+  if (!ISSUE_FAMILIES.has(family)) return null;                              // qualify gate
+
+  const name = norm.split('_').map(titleCaseToken).join(' ');
+  if (looksLikeFilenameLeak(name)) return null;
+  return name;
+}
+
+/**
+ * Look up the issue_name for a CSV filename. The curated map wins first (its
+ * names match issues_overview exactly for the site_issues join); otherwise a
+ * clean name is derived for any genuine issue-slice family. Returns null when
+ * the filename is not a per-issue export. The format detector uses this to
+ * decide whether the file routes to this parser.
  */
 export function issueNameForFilename(filename: string): string | null {
   const normalized = filename.toLowerCase().replace(/^.*[\\/]/, '');
-  return ISSUE_CSV_FILENAME_MAP[normalized] || null;
+  return ISSUE_CSV_FILENAME_MAP[normalized] || deriveIssueNameFromFilename(filename);
 }
 
 export async function parse(
@@ -214,6 +294,16 @@ export async function parseIssueUrlsWithDb(
   if (!issueName) return 0;
 
   const result = Papa.parse(raw, { header: true, skipEmptyLines: true });
+
+  // Column-shape guard: a genuine issue slice has the URL in an
+  // Address/URL/url column. If none is present (e.g. a link-relationship
+  // file keyed on Source slipped through, or a non-URL report), do NOT
+  // touch the table — returning before the DELETE prevents a misrouted file
+  // from wiping a legitimate issue's URLs under this issue_name.
+  const fields = (result.meta?.fields || []).map(f => String(f).trim().toLowerCase());
+  if (!fields.includes('address') && !fields.includes('url')) {
+    return 0;
+  }
 
   // Wipe any previous rows for this (client, month, issue) so re-uploads
   // do not double-insert. The same upload can supply many per-issue

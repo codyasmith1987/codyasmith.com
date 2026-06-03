@@ -115,6 +115,9 @@ function formatLabel(format: string): string {
         <div class="flex items-center justify-between mb-4">
           <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase">Recent uploads</p>
           <div class="flex items-center gap-4">
+            <button type="button" id="reparse-stored-btn" class="text-[11px] text-emerald-400/90 hover:text-emerald-300 transition-colors">
+              Reparse stored files
+            </button>
             <button type="button" id="clear-superseded-btn" class="text-[11px] text-amber-600 hover:text-amber-600 transition-colors">
               Clear superseded duplicates
             </button>
@@ -129,6 +132,7 @@ function formatLabel(format: string): string {
             </button>
           </div>
         </div>
+        <p id="reparse-progress" class="text-[11px] text-neutral-400 mb-3 hidden"></p>
         <div class="space-y-2" id="uploads-list">
           {uploads.map(u => (
             <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 flex items-center justify-between hover:border-white/10 transition-all duration-300" data-upload-row data-upload-id={u.id}>
@@ -512,6 +516,69 @@ function formatLabel(format: string): string {
         }
       } catch (err: any) {
         alert(`Clear superseded failed: ${err?.message || 'network error'}`);
+      }
+    });
+
+    // ---- Reparse stored files (chunked loop) ----
+    // Walks raw_csv_data in pages, re-detecting + re-ingesting each stored
+    // file through the current parsers. Loops like the upload path so each
+    // request stays well under Cloudflare's 100s origin window. Accumulates
+    // a tally and shows progress + a final summary.
+    document.getElementById('reparse-stored-btn')?.addEventListener('click', async () => {
+      if (!confirm('Reparse every stored ("not yet visualized") file across all clients through the current parsers? Files that now have a parser move into their typed tables; the rest stay stored. Non-destructive (raw copies are kept).')) return;
+      const reBtn = document.getElementById('reparse-stored-btn') as HTMLButtonElement;
+      const reProgress = document.getElementById('reparse-progress')!;
+      const LIMIT = 25;
+      let offset = 0;
+      let total = 0;
+      let processed = 0;
+      let retyped = 0;
+      let skipped = 0;
+      const errors: Array<{ filename: string; error: string }> = [];
+      const origText = reBtn.textContent;
+      reBtn.disabled = true;
+      reBtn.textContent = 'Reparsing…';
+      reProgress.classList.remove('hidden');
+      reProgress.textContent = 'Starting reparse…';
+      try {
+        // Guard against an unbounded loop if total never advances: cap
+        // iterations at total/LIMIT + slack.
+        let guard = 0;
+        do {
+          const res = await fetch('/portal/api/admin/csv/reparse-stored', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ offset, limit: LIMIT }),
+          });
+          const text = await res.text();
+          let data: any = null;
+          try { data = text ? JSON.parse(text) : null; } catch { /* noop */ }
+          if (!res.ok || !data || !data.ok) {
+            const msg = (data && data.error) ? data.error : `HTTP ${res.status}${text ? ': ' + text.slice(0, 140) : ''}`;
+            throw new Error(msg);
+          }
+          total = data.total || 0;
+          processed += data.processed || 0;
+          retyped += Array.isArray(data.retyped) ? data.retyped.length : 0;
+          skipped += data.skippedUnknown || 0;
+          if (Array.isArray(data.errors)) for (const e of data.errors) errors.push(e);
+          offset += LIMIT;
+          guard++;
+          reProgress.textContent = `Reparsing ${Math.min(offset, total)}/${total}: ${retyped} retyped, ${skipped} still unknown${errors.length ? `, ${errors.length} error(s)` : ''}…`;
+        } while (offset < total && guard < (Math.ceil(total / LIMIT) + 5));
+
+        const tally = `Done. ${processed} stored file(s) checked: ${retyped} moved into typed tables, ${skipped} still unknown${errors.length ? `, ${errors.length} error(s)` : ''}.`;
+        reProgress.textContent = tally;
+        (window as any).__toast(tally, errors.length ? 'error' : 'success');
+        // Reload so the Recent uploads chips reflect the superseded
+        // unknown_stored rows and any new typed uploads.
+        setTimeout(() => window.location.reload(), 1200);
+      } catch (err: any) {
+        reProgress.textContent = `Reparse failed: ${err?.message || 'network error'}`;
+        (window as any).__toast(`Reparse failed: ${err?.message || 'network error'}`, 'error');
+      } finally {
+        reBtn.disabled = false;
+        reBtn.textContent = origText;
       }
     });
 

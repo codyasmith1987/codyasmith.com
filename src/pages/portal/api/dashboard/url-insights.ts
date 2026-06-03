@@ -26,6 +26,7 @@ import {
   HARD_TO_READ_FLESCH_THRESHOLD,
   type ContentQualityInsights,
 } from '../../../../lib/dashboard/content-quality-insights';
+import { realUserPageRowFilters, realUserPageUrlExclusions } from '../../../../lib/csv/page-count-sql';
 
 export const prerender = false;
 
@@ -281,6 +282,17 @@ export async function loadUrlInsights(
     // Crawl-derived widgets only run when crawl_urls has data for
     // this client.
     if (crawlMonth) {
+      // The single real-user-page definition (status 200 + HTML + indexable,
+      // minus taxonomy/system/attachment/pagination URLs). The page-quality
+      // widgets below MUST use this so they never count 404 cache-busted
+      // assets, redirects, archives, or noindex URLs as "pages" — that was
+      // the bug where F3 showed 8 "missing title" / 8 "thin content" pages
+      // while the headline correctly said 5. It also keeps these widgets in
+      // agreement with the "X of your Y pages" count (crawl-stats uses the
+      // same filters). NOT applied to indexability_blocks (it is ABOUT
+      // non-indexable URLs) or to the image/redirect/broken-link surfaces.
+      const PAGE_FILTER = `${realUserPageRowFilters('')} ${realUserPageUrlExclusions('url')}`;
+
       // Title quality counts.
       const tqRow = await db.execute({
         sql: `SELECT
@@ -289,7 +301,7 @@ export async function loadUrlInsights(
                 SUM(CASE WHEN title_length > 0 AND title_length < ? THEN 1 ELSE 0 END) AS short_n
               FROM crawl_urls
               WHERE client_id = ? AND month = ?
-                AND content_type LIKE 'text/html%'`,
+                ${PAGE_FILTER}`,
         args: [TITLE_LONG, TITLE_SHORT, clientId, crawlMonth],
       });
       const tq = tqRow.rows[0] as any;
@@ -300,7 +312,7 @@ export async function loadUrlInsights(
       const titleMissingSamples = await db.execute({
         sql: `SELECT url FROM crawl_urls
               WHERE client_id = ? AND month = ?
-                AND content_type LIKE 'text/html%'
+                ${PAGE_FILTER}
                 AND (title IS NULL OR title = '')
               ORDER BY url LIMIT ?`,
         args: [clientId, crawlMonth, SAMPLE_LIMIT],
@@ -310,7 +322,7 @@ export async function loadUrlInsights(
       const titleLongSamples = await db.execute({
         sql: `SELECT url, title, title_length FROM crawl_urls
               WHERE client_id = ? AND month = ?
-                AND content_type LIKE 'text/html%'
+                ${PAGE_FILTER}
                 AND title_length > ?
               ORDER BY title_length DESC LIMIT ?`,
         args: [clientId, crawlMonth, TITLE_LONG, SAMPLE_LIMIT],
@@ -322,7 +334,7 @@ export async function loadUrlInsights(
       const titleShortSamples = await db.execute({
         sql: `SELECT url, title, title_length FROM crawl_urls
               WHERE client_id = ? AND month = ?
-                AND content_type LIKE 'text/html%'
+                ${PAGE_FILTER}
                 AND title_length > 0 AND title_length < ?
               ORDER BY title_length ASC LIMIT ?`,
         args: [clientId, crawlMonth, TITLE_SHORT, SAMPLE_LIMIT],
@@ -335,7 +347,7 @@ export async function loadUrlInsights(
         sql: `SELECT title, COUNT(*) AS cnt, MIN(url) AS sample_url
               FROM crawl_urls
               WHERE client_id = ? AND month = ?
-                AND content_type LIKE 'text/html%'
+                ${PAGE_FILTER}
                 AND title IS NOT NULL AND title != ''
               GROUP BY title
               HAVING COUNT(*) > 1
@@ -389,8 +401,8 @@ export async function loadUrlInsights(
                 SUM(CASE WHEN word_count < ? THEN 1 ELSE 0 END) AS under_100
               FROM crawl_urls
               WHERE client_id = ? AND month = ?
-                AND content_type LIKE 'text/html%'
-                AND word_count IS NOT NULL`,
+                ${PAGE_FILTER}
+                AND word_count > 0`,
         args: [THIN_WORDS, VERY_THIN_WORDS, clientId, crawlMonth],
       });
       const tc = tcCounts.rows[0] as any;
@@ -399,8 +411,8 @@ export async function loadUrlInsights(
       const tcSamples = await db.execute({
         sql: `SELECT url, word_count, title FROM crawl_urls
               WHERE client_id = ? AND month = ?
-                AND content_type LIKE 'text/html%'
-                AND word_count IS NOT NULL AND word_count < ?
+                ${PAGE_FILTER}
+                AND word_count > 0 AND word_count < ?
               ORDER BY word_count ASC LIMIT ?`,
         args: [clientId, crawlMonth, THIN_WORDS, SAMPLE_LIMIT],
       });
@@ -417,6 +429,7 @@ export async function loadUrlInsights(
                 SUM(CASE WHEN response_time_ms > ? THEN 1 ELSE 0 END) AS over_very_slow
               FROM crawl_urls
               WHERE client_id = ? AND month = ?
+                ${PAGE_FILTER}
                 AND response_time_ms IS NOT NULL`,
         args: [SLOW_MS, VERY_SLOW_MS, clientId, crawlMonth],
       });
@@ -426,6 +439,7 @@ export async function loadUrlInsights(
       const rtSamples = await db.execute({
         sql: `SELECT url, response_time_ms, content_type, status_code FROM crawl_urls
               WHERE client_id = ? AND month = ?
+                ${PAGE_FILTER}
                 AND response_time_ms IS NOT NULL AND response_time_ms > ?
               ORDER BY response_time_ms DESC LIMIT ?`,
         args: [clientId, crawlMonth, SLOW_MS, SAMPLE_LIMIT],
@@ -441,7 +455,7 @@ export async function loadUrlInsights(
       const orphanCountRow = await db.execute({
         sql: `SELECT COUNT(*) FROM crawl_urls
               WHERE client_id = ? AND month = ?
-                AND content_type LIKE 'text/html%'
+                ${PAGE_FILTER}
                 AND inlinks_count = 0`,
         args: [clientId, crawlMonth],
       });
@@ -449,7 +463,7 @@ export async function loadUrlInsights(
       const orphanSamples = await db.execute({
         sql: `SELECT url, status_code, indexability, title FROM crawl_urls
               WHERE client_id = ? AND month = ?
-                AND content_type LIKE 'text/html%'
+                ${PAGE_FILTER}
                 AND inlinks_count = 0
               ORDER BY url LIMIT ?`,
         args: [clientId, crawlMonth, SAMPLE_LIMIT],
@@ -468,7 +482,7 @@ export async function loadUrlInsights(
                 SUM(CASE WHEN crawl_depth > ? THEN 1 ELSE 0 END) AS over_10
               FROM crawl_urls
               WHERE client_id = ? AND month = ?
-                AND content_type LIKE 'text/html%'
+                ${PAGE_FILTER}
                 AND crawl_depth IS NOT NULL`,
         args: [DEEP_CLICKS, VERY_DEEP_CLICKS, clientId, crawlMonth],
       });
@@ -478,7 +492,7 @@ export async function loadUrlInsights(
       const dpSamples = await db.execute({
         sql: `SELECT url, crawl_depth, inlinks_count FROM crawl_urls
               WHERE client_id = ? AND month = ?
-                AND content_type LIKE 'text/html%'
+                ${PAGE_FILTER}
                 AND crawl_depth IS NOT NULL AND crawl_depth > ?
               ORDER BY crawl_depth DESC LIMIT ?`,
         args: [clientId, crawlMonth, DEEP_CLICKS, SAMPLE_LIMIT],

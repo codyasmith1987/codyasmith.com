@@ -58,6 +58,7 @@ interface UrlInsightsResponse {
   has_accessibility_data: boolean;
   has_structured_data: boolean;
   has_content_quality: boolean;
+  has_url_structure_data: boolean;
   title_quality: {
     missing_count: number;
     too_long_count: number;
@@ -115,6 +116,14 @@ interface UrlInsightsResponse {
       inbound_count: number;
       sample_source_urls: string[]; // top 5 source pages, capped
     }>;
+  };
+  // Duplicate content: real pages sharing an identical content fingerprint
+  // (SF's Hash column, from url_all.csv). Each group is a set of pages with
+  // byte-identical content — a real SEO issue (split ranking signals).
+  duplicate_content: {
+    group_count: number;        // distinct hashes shared by >1 real page
+    affected_count: number;     // total real pages in those groups
+    samples: Array<{ count: number; urls: string[] }>;
   };
   accessibility: AccessibilityInsights;
   structured_data: StructuredDataInsights;
@@ -204,6 +213,11 @@ export async function loadUrlInsights(
       args: [clientId],
     });
     const linkMonth = (linkMonthRow.rows[0]?.[0] as string | null) ?? null;
+    const urlStructureMonthRow = await db.execute({
+      sql: 'SELECT MAX(month) FROM url_structure_urls WHERE client_id = ?',
+      args: [clientId],
+    });
+    const urlStructureMonth = (urlStructureMonthRow.rows[0]?.[0] as string | null) ?? null;
 
     // Signal categories (accessibility / structured_data / content_quality)
     // gate on data_coverage.measured, NOT on table-row presence. A free
@@ -262,6 +276,7 @@ export async function loadUrlInsights(
       has_accessibility_data: !!accessibilityMonth,
       has_structured_data: !!structuredMonth,
       has_content_quality: !!contentMonth,
+      has_url_structure_data: !!urlStructureMonth,
       title_quality: {
         missing_count: 0, too_long_count: 0, too_short_count: 0, duplicate_count: 0,
         sample_missing: [], sample_too_long: [], sample_too_short: [], sample_duplicates: [],
@@ -274,6 +289,7 @@ export async function loadUrlInsights(
       orphan_pages: { count: 0, samples: [] },
       deep_pages: { over_5_count: 0, over_10_count: 0, samples: [] },
       inbound_broken_links: { broken_destination_count: 0, total_inbound_links: 0, samples: [] },
+      duplicate_content: { group_count: 0, affected_count: 0, samples: [] },
       accessibility: emptyAccessibility(),
       structured_data: emptyStructuredData(),
       content_quality: emptyContentQuality(),
@@ -634,6 +650,33 @@ export async function loadUrlInsights(
           sample_source_urls: sources,
         };
       });
+    }
+
+    // Duplicate-content widget. Real pages that share an identical content
+    // fingerprint (SF's Hash, from url_all.csv) — byte-identical content split
+    // across URLs dilutes ranking signals. Group by content_hash among REAL
+    // pages only (the page filter excludes assets/archives/noindex, where a
+    // shared hash is meaningless), keeping groups with 2+ pages.
+    if (urlStructureMonth) {
+      const dupRows = await db.execute({
+        sql: `SELECT content_hash, COUNT(*) AS n, GROUP_CONCAT(url) AS urls
+              FROM url_structure_urls
+              WHERE client_id = ? AND month = ?
+                AND content_hash IS NOT NULL AND content_hash != ''
+                ${realUserPageRowFilters('')} ${realUserPageUrlExclusions('url')}
+              GROUP BY content_hash
+              HAVING COUNT(*) > 1
+              ORDER BY n DESC, content_hash
+              LIMIT ?`,
+        args: [clientId, urlStructureMonth, SAMPLE_LIMIT],
+      });
+      const dupGroups = (dupRows.rows as any[]).map(r => ({
+        count: Number(r[1] || 0),
+        urls: (r[2] ? String(r[2]) : '').split(',').map(u => u.trim()).filter(Boolean).slice(0, 10),
+      }));
+      response.duplicate_content.group_count = dupGroups.length;
+      response.duplicate_content.affected_count = dupGroups.reduce((s, g) => s + g.count, 0);
+      response.duplicate_content.samples = dupGroups;
     }
 
     // Accessibility (WCAG) widget. Per-URL violation counts from

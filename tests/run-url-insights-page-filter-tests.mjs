@@ -84,5 +84,32 @@ await test('indexability "pages blocked" counts real noindex pages, NOT CMS noin
   assert.strictEqual(Number(r.rows[0].n), 1, `expected 1 real blocked page, got ${r.rows[0].n}`);
 });
 
+await test('duplicate-content groups real pages by content_hash, excludes archives/blank-hash', async () => {
+  const db = createClient({ url: ':memory:' });
+  await db.execute(`CREATE TABLE url_structure_urls (
+    client_id TEXT, month TEXT, url TEXT, content_type TEXT, status_code INTEGER,
+    indexability TEXT, content_hash TEXT)`);
+  const rows = [
+    ['https://f3.com/a',        'text/html', 200, 'Indexable', 'AAA'], // dup group AAA (2 real pages)
+    ['https://f3.com/a-copy',   'text/html', 200, 'Indexable', 'AAA'],
+    ['https://f3.com/unique',   'text/html', 200, 'Indexable', 'BBB'], // unique hash -> not a group
+    ['https://f3.com/tag/x/',   'text/html', 200, 'Indexable', 'CCC'], // archive: excluded even though...
+    ['https://f3.com/tag/y/',   'text/html', 200, 'Indexable', 'CCC'], // ...two share hash CCC
+    ['https://f3.com/blank',    'text/html', 200, 'Indexable', ''   ], // blank hash excluded
+  ];
+  for (const r of rows) await db.execute({ sql: `INSERT INTO url_structure_urls (client_id, month, url, content_type, status_code, indexability, content_hash) VALUES (?,?,?,?,?,?,?)`, args: [C, M, ...r] });
+  const r = await db.execute({
+    sql: `SELECT content_hash, COUNT(*) AS n FROM url_structure_urls
+          WHERE client_id=? AND month=? AND content_hash IS NOT NULL AND content_hash != ''
+            ${realUserPageRowFilters('')} ${realUserPageUrlExclusions('url')}
+          GROUP BY content_hash HAVING COUNT(*) > 1`,
+    args: [C, M],
+  });
+  // Only AAA qualifies: BBB is unique, CCC is archive pages (excluded), blank excluded.
+  assert.strictEqual(r.rows.length, 1, `expected 1 dup group, got ${r.rows.length}`);
+  assert.strictEqual(String(r.rows[0].content_hash), 'AAA');
+  assert.strictEqual(Number(r.rows[0].n), 2);
+});
+
 console.log(`\n${passed}/${passed + failed} passed`);
 if (failed > 0) process.exit(1);

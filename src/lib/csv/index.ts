@@ -15,6 +15,9 @@ import { buildCanonicalUrlsStatements } from './parsers/canonical-urls';
 import { buildDirectiveUrlsStatements } from './parsers/directive-urls';
 import { buildPageWeightUrlsStatements } from './parsers/page-weight-urls';
 import { buildSitemapUrlsStatements } from './parsers/sitemap-urls';
+import { buildJavascriptUrlsStatements } from './parsers/javascript-urls';
+import { buildUrlStructureUrlsStatements } from './parsers/url-structure-urls';
+import { buildHreflangUrlsStatements } from './parsers/hreflang-urls';
 import { parse as parseImageOptimization } from './parsers/image-optimization';
 import { parse as parseKeywordResearch } from './parsers/keyword-research';
 import { parse as parseKeywordSuggestions } from './parsers/keyword-suggestions';
@@ -51,6 +54,11 @@ const FORMAT_SOURCES: Record<string, { tables: string[]; source: string }> = {
   directives: { tables: ['directive_urls'], source: 'directives' },
   page_weight: { tables: ['page_weight_urls'], source: 'page_weight' },
   sitemap_urls: { tables: ['sitemap_urls'], source: 'sitemap_urls' },
+  // Rich per-URL "_all" reports (slice 3). Each maps 1:1 to its typed table;
+  // listed so the supersede sweep clears the prior upload's rows on re-import.
+  javascript: { tables: ['javascript_urls'], source: 'javascript' },
+  url_structure: { tables: ['url_structure_urls'], source: 'url_structure' },
+  hreflang: { tables: ['hreflang_urls'], source: 'hreflang' },
   image_optimization: { tables: ['metrics'], source: 'image_optimization' },
   site_audit: { tables: ['site_issues'], source: 'site_audit' },
   accessibility: { tables: ['metrics', 'accessibility_urls'], source: 'accessibility' },
@@ -114,6 +122,9 @@ const CLASS_A_BUILDERS: Record<string, (raw: string, clientId: string, month: st
   directives: buildDirectiveUrlsStatements,
   page_weight: buildPageWeightUrlsStatements,
   sitemap_urls: buildSitemapUrlsStatements,
+  javascript: buildJavascriptUrlsStatements,
+  url_structure: buildUrlStructureUrlsStatements,
+  hreflang: buildHreflangUrlsStatements,
 };
 
 // READ-ONLY collector: runs ONLY the SELECT for the prior live upload of this

@@ -774,6 +774,7 @@ const clients = isAdmin ? await getAllClients() : [];
       if (
         !data.has_crawl_data && !data.has_image_data && !data.has_redirect_data && !data.has_link_data &&
         !data.has_accessibility_data && !data.has_structured_data && !data.has_content_quality &&
+        !data.has_url_structure_data &&
         accessibilityState !== 'not_measured' && structuredState !== 'not_measured' && contentState !== 'not_measured'
       ) return;
 
@@ -967,6 +968,22 @@ const clients = isAdmin ? await getAllClients() : [];
                 </ul>`;
             return `<li>${urlLink(x.destination_url)} <span class="text-neutral-400">${x.status_code}, ${x.inbound_count} inbound</span>${sources}</li>`;
           }),
+        }));
+      }
+
+      // ----- Duplicate content (url_structure_urls Hash) -----
+      if (data.has_url_structure_data && data.duplicate_content.group_count > 0) {
+        const dc = data.duplicate_content;
+        cards.push(widgetCard({
+          id: 'widget-duplicate-content',
+          title: 'Duplicate content',
+          description: 'Sets of pages with byte-identical content. Search engines split ranking signals across duplicates, so consolidating or canonicalizing them helps each rank better.',
+          stat_lines: [
+            { count: dc.group_count, label: 'duplicate groups', severity: 'medium' },
+            { count: dc.affected_count, label: 'pages affected', severity: dc.affected_count > 10 ? 'medium' : 'low' },
+          ],
+          sample_html: renderUrlList(dc.samples, g =>
+            `<li>${g.count} identical pages:<ul class="ml-4 mt-1 space-y-0.5 text-neutral-500">${g.urls.map(u => `<li>${urlLink(u)}</li>`).join('')}</ul></li>`),
         }));
       }
 

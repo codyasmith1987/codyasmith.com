@@ -8,6 +8,7 @@ const clients = await getAllClients();
 const uploads = await getRecentUploads(undefined, 30);
 
 function formatLabel(format: string): string {
+  if (format === 'sf_generic') return 'Captured (queryable)';
   return format.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 ---
@@ -69,7 +70,7 @@ function formatLabel(format: string): string {
           <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">CSV or ZIP files</label>
           <input type="file" id="csv-files" accept=".csv,.zip" multiple required
             class="w-full text-sm text-neutral-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-amber-500 file:text-neutral-950 hover:file:bg-amber-400 file:cursor-pointer file:transition-colors file:duration-300" />
-          <p class="text-[10px] text-neutral-400 mt-1.5">Or <button type="button" id="pick-folder-btn" class="text-amber-600 hover:text-amber-600 underline">pick a folder</button> to upload every CSV in it. ZIPs (GSC Performance exports, Ubersuggest site audits) get unpacked server-side. Unknown formats land in raw storage and surface as "Stored, not yet visualized."</p>
+          <p class="text-[10px] text-neutral-400 mt-1.5">Or <button type="button" id="pick-folder-btn" class="text-amber-600 hover:text-amber-600 underline">pick a folder</button> to upload every CSV in it. ZIPs (GSC Performance exports, Ubersuggest site audits) get unpacked server-side. Any CSV without a dedicated parser is still captured row-by-row into queryable storage ("Captured (queryable)") so its data is available for scoring and analysis.</p>
           <input type="file" id="csv-folder" webkitdirectory="" multiple class="hidden" />
         </div>
       </div>
@@ -213,11 +214,14 @@ function formatLabel(format: string): string {
       card.className = `csv-result bg-neutral-900/30 border rounded-xl p-5 ${borderClass}`;
       card.style.animationDelay = `${idx * 0.05}s`;
       const stored = data.format === 'unknown_stored';
+      const generic = data.format === 'sf_generic';
       const formatLine = stored
         ? `Stored, not yet visualized. <span class="text-amber-600">${escAll(filename)}</span> kept in raw_csv_data so a typed parser can pick it up later.`
-        : (data.format && data.format !== 'unknown')
-          ? `Detected: <span class="text-emerald-400">${escAll(String(data.format).replace(/_/g, ' '))}</span>${data.row_count ? `, ${escAll(data.row_count)} rows processed` : ''}`
-          : '';
+        : generic
+          ? `Captured (queryable)${data.row_count ? `, ${escAll(data.row_count)} rows` : ''} — stored in sf_export_rows for scoring and analysis.`
+          : (data.format && data.format !== 'unknown')
+            ? `Detected: <span class="text-emerald-400">${escAll(String(data.format).replace(/_/g, ' '))}</span>${data.row_count ? `, ${escAll(data.row_count)} rows processed` : ''}`
+            : '';
       const statusChip = data.error
         ? `<span class="text-xs text-red-400">${escAll(data.error)}</span>`
         : stored

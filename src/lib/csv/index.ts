@@ -22,6 +22,7 @@ import { parse as parseSiteAudit } from './parsers/site-audit';
 import { parse as parseAccessibility } from './parsers/accessibility';
 import { parse as parseIssueUrls } from './parsers/issue-urls';
 import { parse as parseRawCsv } from './parsers/raw-csv';
+import { parse as parseSfGeneric } from './parsers/sf-generic';
 import { parse as parseLinks } from './parsers/links';
 import { parseGa4 } from './parsers/ga4';
 import { parseGsc } from './parsers/gsc';
@@ -88,6 +89,11 @@ const FORMAT_SOURCES: Record<string, { tables: string[]; source: string }> = {
   // have the second unknown upload wipe the first's raw storage.
   // raw-csv.ts handles its own per-filename dedup so uploading the
   // same filename twice replaces, while sibling unknowns coexist.
+  //
+  // sf_generic ALSO deliberately OMITTED. Every unrecognized CSV shares
+  // detected_format='sf_generic' but writes its own report_type into
+  // sf_export_rows; sf-generic.ts self-dedups by (client, month,
+  // report_type), so a format-level sweep would wipe sibling reports.
 };
 
 // Map Class-A (supersede) formats to their pure statement builders. These
@@ -494,6 +500,13 @@ export async function ingestCSV(
         // sweep at the top would wipe sibling link files in the same
         // batch. Same pattern as 'issue_urls' and 'unknown_stored'.
         rowCount = await parseLinks(raw, clientId, month, uploadId, filename);
+        break;
+      case 'sf_generic':
+        // Universal capture: row-explode any unrecognized CSV into
+        // sf_export_rows. Self-dedups by (client, month, report_type), so
+        // sf_generic is intentionally absent from FORMAT_SOURCES (a
+        // format-level sweep would wipe sibling reports in the same batch).
+        rowCount = await parseSfGeneric(raw, clientId, month, uploadId, filename);
         break;
       case 'ga4_reports_snapshot':
       case 'ga4_traffic_acquisition':

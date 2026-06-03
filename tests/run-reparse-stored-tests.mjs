@@ -37,10 +37,12 @@ const CANONICALS_RAW =
   'https://example.com/,1,https://example.com/,\n' +
   'https://example.com/about,1,https://example.com/about,\n';
 
-// A pagespeed_all.csv has no signature + a filename with no detector hook,
-// so it still detects as 'unknown' and must be skipped.
-const PAGESPEED_RAW =
-  'Metric,Value\nLargest Contentful Paint,2.4s\nTotal Blocking Time,150ms\n';
+// With the universal-capture fallback, ANY CSV-shaped file routes to
+// sf_generic (and IS ingested), so a file like pagespeed_all.csv is no
+// longer "unknown". Only input that does not parse as a CSV at all (no
+// extractable rows) still detects as 'unknown' and must be skipped by
+// reparse. An empty body is the clean trigger for that path.
+const NON_CSV_RAW = '';
 
 // Fresh in-memory db with the two tables reparse touches: raw_csv_data
 // (source rows) and csv_uploads (the unknown_stored rows it supersedes),
@@ -144,10 +146,10 @@ await test('(1) typed file: ingestFn called with verbatim raw + reparse-backfill
   assert.strictEqual(Number(raw.rows[0].n), 1, 'raw_csv_data row preserved');
 });
 
-// ─── (2) pagespeed raw -> skipped, ingest NOT called, upload untouched ───────
-await test('(2) still-unknown file: skippedUnknown++, ingestFn NOT called, upload row untouched', async () => {
+// ─── (2) genuinely non-CSV raw -> skipped, ingest NOT called, upload untouched ─
+await test('(2) non-CSV file (still detects unknown): skippedUnknown++, ingestFn NOT called, upload row untouched', async () => {
   const db = await freshDb();
-  await seedStored(db, { uploadId: 'up_ps', rawId: 'raw_ps', filename: 'pagespeed_all.csv', raw: PAGESPEED_RAW, ordinal: 1 });
+  await seedStored(db, { uploadId: 'up_ps', rawId: 'raw_ps', filename: 'broken.csv', raw: NON_CSV_RAW, ordinal: 1 });
   const spy = makeSpy();
 
   const summary = await reparseStoredChunk(db, { limit: 25, offset: 0, uploadedBy: 'u_admin' }, spy.fn);

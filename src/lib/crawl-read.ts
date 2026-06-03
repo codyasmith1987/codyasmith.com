@@ -22,10 +22,11 @@ export interface SiteIssueRow {
 
 export interface HealthMonthData {
   month: string;
-  issues: SiteIssueRow[];                 // deduped by name, ORDER BY affected_urls DESC
-  totalIssues: number;                    // distinct issue categories
-  totalAffected: number;                  // SUM(affected_urls) across categories
-  byPriority: { high: number; medium: number; low: number };
+  issues: SiteIssueRow[];                 // SCORED problems, deduped by name, ORDER BY affected_urls DESC
+  advisories: SiteIssueRow[];             // optional/benign (Warning/Opportunity + site_audit) — NOT scored
+  totalIssues: number;                    // distinct SCORED issue categories
+  totalAffected: number;                  // SUM(affected_urls) across SCORED categories
+  byPriority: { high: number; medium: number; low: number };  // SCORED only
 }
 
 export interface ResponseCodeCount {
@@ -40,6 +41,18 @@ export function bucketPriority(p: string | null): 'high' | 'medium' | 'low' {
   if (v === 'critical' || v === 'high') return 'high';
   if (v === 'medium') return 'medium';
   return 'low';
+}
+
+// An ADVISORY is a benign/optional finding that must NOT count toward the
+// health score or read as a "problem": Screaming Frog's own "Warning" and
+// "Opportunity" issue types (e.g. the Low-priority "Missing security header"
+// categories), plus site_audit rows (issue_type='audit') which carry a
+// hardcoded 'medium' priority rather than a real assessed severity. Splitting
+// these out is the M2 + M3 fix from the classification audit; done here once so
+// the score, the health page, and the report all stay consistent.
+export function isAdvisoryIssue(issue: { issue_type: string | null }): boolean {
+  const t = String(issue.issue_type || '').toLowerCase();
+  return t === 'warning' || t === 'opportunity' || t === 'audit';
 }
 
 // Pure rollup of issue rows into a priority histogram (one count per
@@ -78,7 +91,7 @@ export async function getHealthMonthData(clientId: string, month: string): Promi
           ORDER BY affected_urls DESC`,
     args: [clientId, month],
   });
-  const issues: SiteIssueRow[] = res.rows.map(row => ({
+  const allRows: SiteIssueRow[] = res.rows.map(row => ({
     issue_name: row[0] as string,
     issue_type: row[1] as string | null,
     priority: row[2] as string | null,
@@ -87,10 +100,15 @@ export async function getHealthMonthData(clientId: string, month: string): Promi
     description: row[5] as string | null,
     how_to_fix: row[6] as string | null,
   }));
+  // Scored problems vs optional advisories (M2 + M3). The score, the health
+  // page chips, and the report all read from this split, so they agree.
+  const issues = allRows.filter(i => !isAdvisoryIssue(i));
+  const advisories = allRows.filter(isAdvisoryIssue);
   const totalAffected = issues.reduce((s, i) => s + (i.affected_urls ?? 0), 0);
   return {
     month,
     issues,
+    advisories,
     totalIssues: issues.length,
     totalAffected,
     byPriority: rollupByPriority(issues),
@@ -136,4 +154,4 @@ export async function getResponseCodeCounts(clientId: string, month: string): Pr
   return [2, 3, 4, 5].map(b => ({ code: `${b}xx`, count: byBand.has(b) ? byBand.get(b)! : 0 }));
 }
 
-export const __test = { bucketPriority, rollupByPriority };
+export const __test = { bucketPriority, rollupByPriority, isAdvisoryIssue };

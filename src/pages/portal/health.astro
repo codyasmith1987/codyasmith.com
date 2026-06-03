@@ -77,6 +77,9 @@ const clients = isAdmin ? await getAllClients() : [];
     <!-- Issue categories -->
     <div id="issue-groups" class="space-y-6 mb-8"></div>
 
+    <!-- Optional hardening recommendations (advisories: not scored, not problems) -->
+    <div id="advisory-section" class="mb-8 hidden"></div>
+
     <!-- Per-URL insights from crawl_urls / image_urls / redirect_chains -->
     <div id="url-insights" class="space-y-6 mb-8 hidden"></div>
 
@@ -209,6 +212,37 @@ const clients = isAdmin ? await getAllClients() : [];
       return { icon: '!!', color: 'bg-red-500/20 text-red-400', label: 'Critical' };
     }
 
+    // Optional hardening recommendations: benign/advisory findings (SF
+    // Warning/Opportunity + site_audit) that do NOT count toward the health
+    // score and must not read as problems. Rendered as a muted, separate
+    // section — no priority dots, no red. (M3, classification audit.)
+    function renderAdvisories(advisories) {
+      const advEl = document.getElementById('advisory-section');
+      if (!advEl) return;
+      if (!advisories || advisories.length === 0) { advEl.classList.add('hidden'); advEl.innerHTML = ''; return; }
+      const rows = advisories.map(a => {
+        const name = escapeHtml(String(a.issue_name || ''));
+        const count = Number(a.affected_urls) || 0;
+        const expl = ISSUE_EXPLAIN[String(a.issue_name || '').toLowerCase()] || a.description || '';
+        return `<div class="px-6 py-3">
+          <div class="flex items-center justify-between gap-4">
+            <span class="text-sm text-neutral-300">${name}</span>
+            <span class="text-[10px] font-mono text-neutral-500 shrink-0">${count} URL${count !== 1 ? 's' : ''}</span>
+          </div>
+          ${expl ? `<p class="text-xs text-neutral-500 mt-1 leading-relaxed">${escapeHtml(expl)}</p>` : ''}
+        </div>`;
+      }).join('');
+      advEl.innerHTML = `
+        <div class="health-animate bg-neutral-900/20 border border-white/5 rounded-2xl overflow-hidden">
+          <div class="px-6 py-5 border-b border-white/5">
+            <h3 class="text-sm font-medium text-neutral-200">Hardening recommendations (optional)</h3>
+            <p class="text-xs text-neutral-400 mt-0.5">Best-practice improvements, not problems. These don't affect your health score.</p>
+          </div>
+          <div class="divide-y divide-white/[0.03]">${rows}</div>
+        </div>`;
+      advEl.classList.remove('hidden');
+    }
+
     async function loadHealth() {
       const loadingEl = document.getElementById('health-loading');
       const errorEl = document.getElementById('health-error');
@@ -240,11 +274,17 @@ const clients = isAdmin ? await getAllClients() : [];
         if (!issuesRes.ok) throw new Error('Failed to load health data');
         const data = await issuesRes.json();
         const issues = data.issues || [];
+        const advisories = data.advisories || [];
         const stats = statsRes && statsRes.ok ? await statsRes.json() : { navigable_pages: 0, urls_crawled: 0, distinct_affected_urls: 0 };
 
         loadingEl.classList.add('hidden');
 
-        if (issues.length === 0) {
+        // Render optional hardening recommendations (advisories) regardless of
+        // whether there are scored problems — but only treat the page as
+        // "empty" when there are neither problems NOR advisories.
+        renderAdvisories(advisories);
+
+        if (issues.length === 0 && advisories.length === 0) {
           document.getElementById('health-empty').classList.remove('hidden');
           return;
         }

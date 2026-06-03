@@ -67,7 +67,7 @@ function run() {
 
   // Closed this month derivation
   test('closed: Page Titles cleared row', trend.includes('Page Titles: Over 60 Characters cleared'));
-  test('closed: Images reduced 230->109 (-52.6%)', /Images: Over 100 kB reduced[\s\S]*?230 to 109 pages \(-52\.6%\)/.test(trend), trend.split('\n').find(l => l.includes('reduced')));
+  test('closed: Images reduced 230->109 (-52.6%)', /Images: Over 100 kB reduced[\s\S]*?230 to 109 URLs \(-52\.6%\)/.test(trend), trend.split('\n').find(l => l.includes('reduced')));
   test('closed: Meta Description NOT a closed row (only 38% reduction)', !trend.includes('Meta Description: Missing cleared') && !trend.includes('Meta Description: Missing reduced'));
 
   // Finding sentences (factual)
@@ -95,7 +95,7 @@ function run() {
   test('baseline: no Change column', !baseline.includes('| Change |'));
   test('baseline: first site health report disclosure', baseline.includes('first site health report'));
   test('baseline: closed-this-month suppressed (placeholder only)', baseline.includes('### Closed this month') && baseline.includes('no prior cycle to compare'));
-  test('baseline: still has sections + data', baseline.includes('## Image health') && baseline.includes('Affected pages'));
+  test('baseline: still has sections + data', baseline.includes('## Image health') && baseline.includes('Affected URLs'));
 
   // Resilience
   test('empty issues builds without throwing', typeof buildSiteHealthMarkdown({ ...baseInput, current: health('2026-05', []), prior: null, navigablePagesPrior: null }) === 'string');

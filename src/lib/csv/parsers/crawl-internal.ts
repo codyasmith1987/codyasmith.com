@@ -111,7 +111,7 @@ export function buildCrawlInternalStatements(
     outlinks: findHeaderIndex(headers, 'outlinks'),
     canonical: findHeaderIndex(headers, 'canonical link element'),
     responseTime: findHeaderIndex(headers, 'response time'),
-    size: findHeaderIndex(headers, 'size'),
+    size: findHeaderIndex(headers, 'size (bytes)'),
     lastModified: findHeaderIndex(headers, 'last modified'),
   };
 

@@ -368,10 +368,15 @@ export function detectFormat(raw: string, filename: string): { format: CsvFormat
   // with the filename as the issue name. They now fall through to
   // unknown_stored where a future link-graph parser can pick them
   // up cleanly.
+  // 'response_code' and 'images_' deliberately REMOVED: response_codes_all.csv
+  // (and other unmatched response-code lists) were minted as a single fake
+  // 'medium' site_issue covering the whole crawl, depressing the health score;
+  // images_* either match the 'images' signature or the curated issue map
+  // already. Both now fall to the sf_generic floor (queryable, UNSCORED)
+  // instead of polluting site_issues. (M1, classification audit.)
   const lowerName = filename.toLowerCase();
   if (lowerName.includes('broken_link') || lowerName.includes('low_word') ||
-      lowerName.includes('no_meta') || lowerName.includes('title_tag') ||
-      lowerName.includes('response_code') || lowerName.includes('images_')) {
+      lowerName.includes('no_meta') || lowerName.includes('title_tag')) {
     return { format: 'site_audit', headers };
   }
 

@@ -54,15 +54,25 @@ export const GET: APIRoute = async ({ locals, url }) => {
     : locals.user.client_id;
   if (!clientId) return json({ error: 'No client specified' }, 400);
 
+  // Resolve the latest crawl cycle so the page count Y is ONE cycle, not
+  // all-time. With 2+ crawls loaded, an all-months DISTINCT url denominator
+  // mixes cycles and disagrees with the month-scoped numerator below. (M5)
+  const crawlMonthRes = await turso.execute({
+    sql: 'SELECT MAX(month) AS m FROM crawl_urls WHERE client_id = ?',
+    args: [clientId],
+  });
+  const crawlMonth = (crawlMonthRes.rows[0]?.[0] as string | null) ?? null;
+
   // Navigable pages: the friendly count. This is the "Y" in "X of
   // your Y pages need attention" on the health page headline.
   const pagesResult = await turso.execute({
     sql: `SELECT COUNT(DISTINCT url) AS n
           FROM crawl_urls
           WHERE client_id = ?
+          ${crawlMonth ? 'AND month = ?' : ''}
           ${realUserPageRowFilters()}
           ${realUserPageUrlExclusions('url')}`,
-    args: [clientId],
+    args: crawlMonth ? [clientId, crawlMonth] : [clientId],
   });
   const navigablePages = (pagesResult.rows[0]?.[0] as number) || 0;
 
@@ -97,6 +107,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
             FROM site_issue_urls siu
             INNER JOIN crawl_urls cu
               ON cu.url = siu.url AND cu.client_id = siu.client_id
+              AND cu.month = siu.month
             WHERE siu.client_id = ?
               AND siu.month = ?
             ${realUserPageRowFilters('cu')}

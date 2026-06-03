@@ -27,7 +27,7 @@ import {
   type ContentQualityInsights,
 } from '../../../../lib/dashboard/content-quality-insights';
 import { realUserPageRowFilters, realUserPageUrlExclusions } from '../../../../lib/csv/page-count-sql';
-import { classifyUrl, isCrawlerBlockedHost, isBotBlockStatus } from '../../../../lib/url-classifier';
+import { classifyUrl, isCrawlerBlockedHost } from '../../../../lib/url-classifier';
 
 export const prerender = false;
 
@@ -294,6 +294,13 @@ export async function loadUrlInsights(
       // non-indexable URLs) or to the image/redirect/broken-link surfaces.
       const PAGE_FILTER = `${realUserPageRowFilters('')} ${realUserPageUrlExclusions('url')}`;
 
+      // Real pages blocked from index: 200 + HTML + real-page URL shape, but
+      // NON-indexable. Excludes EXPECTED CMS noindex (tag/category/author/
+      // pagination archives, wp-system) so an intentional block is never
+      // counted as a problem (M4). Cannot reuse PAGE_FILTER — that asserts
+      // indexable, the opposite of what this widget is about.
+      const BLOCKED_PAGE_FILTER = `AND status_code = 200 AND LOWER(IFNULL(content_type, '')) LIKE '%html%' ${realUserPageUrlExclusions('url')}`;
+
       // Title quality counts.
       const tqRow = await db.execute({
         sql: `SELECT
@@ -365,6 +372,7 @@ export async function loadUrlInsights(
       const ibCount = await db.execute({
         sql: `SELECT COUNT(*) FROM crawl_urls
               WHERE client_id = ? AND month = ?
+                ${BLOCKED_PAGE_FILTER}
                 AND indexability IS NOT NULL AND indexability != 'Indexable'`,
         args: [clientId, crawlMonth],
       });
@@ -372,6 +380,7 @@ export async function loadUrlInsights(
       const ibByStatus = await db.execute({
         sql: `SELECT indexability_status, COUNT(*) FROM crawl_urls
               WHERE client_id = ? AND month = ?
+                ${BLOCKED_PAGE_FILTER}
                 AND indexability IS NOT NULL AND indexability != 'Indexable'
               GROUP BY indexability_status
               ORDER BY COUNT(*) DESC`,
@@ -384,6 +393,7 @@ export async function loadUrlInsights(
       const ibSamples = await db.execute({
         sql: `SELECT url, indexability, indexability_status, status_code FROM crawl_urls
               WHERE client_id = ? AND month = ?
+                ${BLOCKED_PAGE_FILTER}
                 AND indexability IS NOT NULL AND indexability != 'Indexable'
               ORDER BY url LIMIT ?`,
         args: [clientId, crawlMonth, SAMPLE_LIMIT],
@@ -581,10 +591,13 @@ export async function loadUrlInsights(
       // single source of truth; SQL host-matching on destination_url would be
       // fragile). Broken-link rows are a small subset, so pulling them all is
       // cheap. Suppressed: Cloudflare /cdn-cgi/ + mailto/tel (URL-shape), and
-      // crawler-blocked social/video hosts (youtube/linkedin/...) returning a
-      // bot-block code (403/429/503/999) — a genuine 404 on those hosts still
-      // counts. Suppressed links stay in link_graph for admin; they just are
-      // not shown to the client as broken.
+      // any error to a crawler-blocked social/video host (youtube/linkedin/...).
+      // Verified empirically: YouTube returns 404 to the crawler for a LIVE
+      // @handle, so we suppress ANY 4xx/5xx from these hosts here (we are
+      // already inside the >=400 broken set) rather than only bot-block codes
+      // — a client's live social profiles must never read as broken. Genuinely
+      // broken on-site resources (e.g. a 404 wp-content image) are NOT these
+      // hosts and stay flagged. Suppressed links remain in link_graph for admin.
       const brokenRows = await db.execute({
         sql: `SELECT
                 destination_url,
@@ -600,11 +613,10 @@ export async function loadUrlInsights(
       });
       const kept = (brokenRows.rows as any[]).filter(r => {
         const dest = String(r[0]);
-        const status = r[1] != null ? Number(r[1]) : null;
         if (classifyUrl(dest).is_expected) return false;
         let host = '';
         try { host = new URL(dest).hostname; } catch { /* relative/malformed: treat as on-site, keep */ }
-        if (isCrawlerBlockedHost(host) && isBotBlockStatus(status)) return false;
+        if (isCrawlerBlockedHost(host)) return false; // any 4xx/5xx from a crawler-blocked host is a block, not a dead link
         return true;
       });
       response.inbound_broken_links.broken_destination_count = kept.length;

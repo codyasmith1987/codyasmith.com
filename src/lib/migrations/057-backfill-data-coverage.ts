@@ -51,6 +51,21 @@ function formatsForCategory(category: string): string[] {
 // upsert. Rows written here carry source = 'backfill', csv_upload_id = NULL.
 export async function backfillCoverage(db: Client): Promise<void> {
   for (const cat of Object.values(COVERAGE_CATEGORIES)) {
+    // A category's table may not exist yet when this historical backfill runs
+    // on a FRESH database. Migrations run in id order, so a category whose
+    // table is created by a LATER migration (e.g. canonical_urls/directive_urls/
+    // page_weight_urls/sitemap_urls in 059) is absent when 057 executes. Skip
+    // it: those formats previously had no typed table, so there is nothing to
+    // backfill, and forward coverage is written by recomputeCategoryCoverage on
+    // the live ingest path. On an already-migrated DB 057 never re-runs, so this
+    // only matters for fresh cold starts — but a thrown "no such table" there
+    // would halt the whole migration chain and brick the deploy.
+    const tableExists = await db.execute({
+      sql: `SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1`,
+      args: [cat.table],
+    });
+    if (tableExists.rows.length === 0) continue;
+
     let pairs: Array<{ clientId: string; month: string }>;
 
     if (cat.kind === 'file-present') {

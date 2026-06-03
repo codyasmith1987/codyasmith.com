@@ -43,6 +43,11 @@ export const FORMAT_TO_CATEGORY: Record<string, string> = {
   images: 'images',
   redirects: 'redirects',
   security_urls: 'security',
+  // file-present, Class-A — unique-data SF exports (slice 2)
+  canonicals: 'canonicals',
+  directives: 'directives',
+  page_weight: 'page_weight',
+  sitemap_urls: 'sitemaps',
   // signal, Class-A
   accessibility: 'accessibility',
   structured_data_urls: 'structured_data',
@@ -96,6 +101,12 @@ export const COVERAGE_CATEGORIES: Record<string, CoverageCategory> = {
   ga4:       { category: 'ga4',       table: 'ga4_channels',    kind: 'file-present' },
   gsc:       { category: 'gsc',       table: 'gsc_dimensions',  kind: 'file-present' },
   issues:    { category: 'issues',    table: 'site_issues',     kind: 'file-present' },
+  // Unique-data SF exports (slice 2). file-present: the columns always
+  // populate when the export is provided, so a live upload means measured.
+  canonicals: { category: 'canonicals', table: 'canonical_urls',  kind: 'file-present' },
+  directives: { category: 'directives', table: 'directive_urls',  kind: 'file-present' },
+  page_weight:{ category: 'page_weight',table: 'page_weight_urls',kind: 'file-present' },
+  sitemaps:   { category: 'sitemaps',   table: 'sitemap_urls',    kind: 'file-present' },
 
   accessibility: {
     category: 'accessibility',

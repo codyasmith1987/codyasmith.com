@@ -11,6 +11,10 @@ import { buildContentUrlsStatements } from './parsers/content-urls';
 import { buildSecurityUrlsStatements } from './parsers/security-urls';
 import { buildStructuredDataUrlsStatements } from './parsers/structured-data-urls';
 import { buildAccessibilityUrlsStatements } from './parsers/accessibility-urls';
+import { buildCanonicalUrlsStatements } from './parsers/canonical-urls';
+import { buildDirectiveUrlsStatements } from './parsers/directive-urls';
+import { buildPageWeightUrlsStatements } from './parsers/page-weight-urls';
+import { buildSitemapUrlsStatements } from './parsers/sitemap-urls';
 import { parse as parseImageOptimization } from './parsers/image-optimization';
 import { parse as parseKeywordResearch } from './parsers/keyword-research';
 import { parse as parseKeywordSuggestions } from './parsers/keyword-suggestions';
@@ -39,6 +43,13 @@ const FORMAT_SOURCES: Record<string, { tables: string[]; source: string }> = {
   content_urls: { tables: ['content_urls'], source: 'content_urls' },
   security_urls: { tables: ['security_urls'], source: 'security_urls' },
   structured_data_urls: { tables: ['structured_data_urls'], source: 'structured_data_urls' },
+  // Unique-data SF exports (slice 2). Each maps 1:1 to its own per-URL
+  // table; listed here so the supersede sweep clears the prior upload's
+  // rows for the same (client, month, format, original_name) key.
+  canonicals: { tables: ['canonical_urls'], source: 'canonicals' },
+  directives: { tables: ['directive_urls'], source: 'directives' },
+  page_weight: { tables: ['page_weight_urls'], source: 'page_weight' },
+  sitemap_urls: { tables: ['sitemap_urls'], source: 'sitemap_urls' },
   image_optimization: { tables: ['metrics'], source: 'image_optimization' },
   site_audit: { tables: ['site_issues'], source: 'site_audit' },
   accessibility: { tables: ['metrics', 'accessibility_urls'], source: 'accessibility' },
@@ -93,6 +104,10 @@ const CLASS_A_BUILDERS: Record<string, (raw: string, clientId: string, month: st
   accessibility: buildAccessibilityUrlsStatements,
   images: buildImagesStatements,
   redirects: buildRedirectsStatements,
+  canonicals: buildCanonicalUrlsStatements,
+  directives: buildDirectiveUrlsStatements,
+  page_weight: buildPageWeightUrlsStatements,
+  sitemap_urls: buildSitemapUrlsStatements,
 };
 
 // READ-ONLY collector: runs ONLY the SELECT for the prior live upload of this

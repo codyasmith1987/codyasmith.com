@@ -111,12 +111,19 @@ export const GET: APIRoute = async ({ locals }) => {
     const would_retype_probe: Array<{
       format: string; file: string; client_id: string; client_exists: boolean; result: string;
     }> = [];
+    // One probe per format only. Each probe is an interactive transaction
+    // (round-trips to remote Turso); probing all 45 rows blows past
+    // Cloudflare's 100s window AND the DO gateway timeout. One sample per
+    // format is enough to prove the insert path for that format.
+    const probedFormats = new Set<string>();
     for (const row of rows) {
       const filename = String(row.filename);
       const rawText = String(row.raw_text ?? '');
       let fmt = 'unknown';
       try { fmt = detectFormat(rawText, filename).format; } catch { continue; }
       if (!BUILDERS[fmt]) continue;
+      if (probedFormats.has(fmt)) continue;
+      probedFormats.add(fmt);
 
       const clientId = String(row.client_id);
       const clientExists = existingClients.has(clientId);
@@ -149,9 +156,22 @@ export const GET: APIRoute = async ({ locals }) => {
       would_retype_probe.push({ format: fmt, file: normName(filename), client_id: clientId, client_exists: clientExists, result });
     }
 
+    // Live row counts of the typed tables the backfill writes into, so the
+    // backfill result can be verified read-only (counts go up after a run).
+    const typed_counts: Record<string, number> = {};
+    for (const t of ['canonical_urls', 'directive_urls', 'page_weight_urls', 'sitemap_urls']) {
+      try {
+        const c = await turso.execute(`SELECT COUNT(*) AS n FROM ${t}`);
+        typed_counts[t] = Number((c.rows[0] as any).n) || 0;
+      } catch (e: any) {
+        typed_counts[t] = -1;
+      }
+    }
+
     return json({
       ok: true,
       total_raw_rows: rows.length,
+      typed_counts,
       empty_raw_text_rows: emptyRaw,
       would_retype: wouldRetype,
       still_unknown: byFormat['unknown'] || 0,

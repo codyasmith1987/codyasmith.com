@@ -32,6 +32,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
   return json({
     month,
     issues: current.issues,
+    advisories: current.advisories,           // optional hardening (not scored, not "problems")
     by_priority: current.byPriority,
     total_issues: current.totalIssues,
     prior_month: priorMonth,

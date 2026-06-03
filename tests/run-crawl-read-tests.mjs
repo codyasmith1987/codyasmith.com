@@ -4,7 +4,7 @@
 // to match score.ts. Runs via tsx.
 
 import { __test } from '../src/lib/crawl-read.ts';
-const { bucketPriority, rollupByPriority } = __test;
+const { bucketPriority, rollupByPriority, isAdvisoryIssue } = __test;
 
 const results = [];
 function test(name, pass, detail = '') {
@@ -28,6 +28,14 @@ function run() {
     { issue_name: 'd', priority: null, affected_urls: 1 },
   ]);
   test('rollup counts categories not urls', rollup.high === 2 && rollup.medium === 1 && rollup.low === 1, JSON.stringify(rollup));
+
+  // Advisory split (M2 + M3): Warning/Opportunity (SF advisory types) and
+  // site_audit ('audit') rows are advisories, NOT scored problems.
+  test('Warning -> advisory', isAdvisoryIssue({ issue_type: 'Warning' }) === true);
+  test('Opportunity -> advisory', isAdvisoryIssue({ issue_type: 'Opportunity' }) === true);
+  test('audit -> advisory (site_audit hardcoded medium)', isAdvisoryIssue({ issue_type: 'audit' }) === true);
+  test('Issue -> scored (not advisory)', isAdvisoryIssue({ issue_type: 'Issue' }) === false);
+  test('null type -> scored (not advisory)', isAdvisoryIssue({ issue_type: null }) === false);
 
   const failed = results.filter(r => !r.pass);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);

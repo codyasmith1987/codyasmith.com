@@ -102,8 +102,17 @@ export async function getHealthMonthData(clientId: string, month: string): Promi
   }));
   // Scored problems vs optional advisories (M2 + M3). The score, the health
   // page chips, and the report all read from this split, so they agree.
+  // - scored: everything that is not advisory (excludes Warning/Opportunity
+  //   AND the site_audit 'audit' rows) — feeds byPriority + the score.
+  // - advisories (DISPLAYED): genuine SF recommendations only
+  //   (Warning/Opportunity). site_audit 'audit' rows are derived-filename
+  //   whole-crawl noise (e.g. "Response codes all") — excluded from the score
+  //   AND from the displayed list, so they neither penalize nor clutter.
   const issues = allRows.filter(i => !isAdvisoryIssue(i));
-  const advisories = allRows.filter(isAdvisoryIssue);
+  const advisories = allRows.filter(i => {
+    const t = String(i.issue_type || '').toLowerCase();
+    return t === 'warning' || t === 'opportunity';
+  });
   const totalAffected = issues.reduce((s, i) => s + (i.affected_urls ?? 0), 0);
   return {
     month,

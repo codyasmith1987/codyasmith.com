@@ -3,7 +3,7 @@
 // suppression so a client is never shown a benign link as broken, while a
 // genuine 404 still flags.
 import assert from 'node:assert';
-import { classifyUrl, isCrawlerBlockedHost, isBotBlockStatus, CRAWLER_BLOCKING_DOMAINS } from '../src/lib/url-classifier.ts';
+import { classifyUrl, isCrawlerBlockedHost, CRAWLER_BLOCKING_DOMAINS } from '../src/lib/url-classifier.ts';
 
 let passed = 0, failed = 0;
 function test(n, f) {
@@ -47,25 +47,22 @@ test('the client domain is NOT a crawler-blocked host', () => {
   assert.strictEqual(isCrawlerBlockedHost('zipkithomes.com'), false);
   assert.strictEqual(isCrawlerBlockedHost('f3properties.com'), false);
 });
-test('bot-block status codes', () => {
-  assert.ok(isBotBlockStatus(403) && isBotBlockStatus(429) && isBotBlockStatus(503) && isBotBlockStatus(999));
-  assert.strictEqual(isBotBlockStatus(404), false); // a real 404 still flags
-  assert.strictEqual(isBotBlockStatus(500), false);
-});
-
-// The exact suppression the broken-link widget applies.
-function suppressed(dest, status) {
+// The exact suppression the broken-link widget applies (it already operates
+// only within the >=400 broken set, so a crawler-blocked host is suppressed on
+// ANY error — verified: YouTube 404s a LIVE @handle to the crawler).
+function suppressed(dest) {
   if (classifyUrl(dest).is_expected) return true;
   let host = ''; try { host = new URL(dest).hostname; } catch { /* keep */ }
-  return isCrawlerBlockedHost(host) && isBotBlockStatus(status);
+  return isCrawlerBlockedHost(host);
 }
-test('youtube 403 (bot block) is suppressed; youtube 404 (real) is NOT', () => {
-  assert.strictEqual(suppressed('https://www.youtube.com/@zipkithomes4527', 403), true);
-  assert.strictEqual(suppressed('https://www.youtube.com/watch?v=deadvid', 404), false);
+test('youtube is suppressed on any error (the verified 404-to-live-@handle case)', () => {
+  assert.strictEqual(suppressed('https://www.youtube.com/@zipkithomes4527'), true);
+  assert.strictEqual(suppressed('https://www.youtube.com/watch?v=anything'), true);
 });
-test('on-site 404 is NOT suppressed; cdn-cgi 403 IS', () => {
-  assert.strictEqual(suppressed('https://zipkithomes.com/gone', 404), false);
-  assert.strictEqual(suppressed('https://zipkithomes.com/cdn-cgi/l/email-protection', 403), true);
+test('on-site 404 is NOT suppressed; a broken wp-content image is NOT suppressed; cdn-cgi IS', () => {
+  assert.strictEqual(suppressed('https://zipkithomes.com/gone'), false);
+  assert.strictEqual(suppressed('https://zipkithomes.com/wp-content/uploads/x.webp'), false); // real broken image, keep flagged
+  assert.strictEqual(suppressed('https://zipkithomes.com/cdn-cgi/l/email-protection'), true);
 });
 test('allowlist covers the documented social/video set', () => {
   for (const d of ['youtube.com', 'linkedin.com', 'facebook.com', 'instagram.com', 'x.com', 'twitter.com', 'tiktok.com', 'pinterest.com']) {

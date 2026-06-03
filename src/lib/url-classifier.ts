@@ -53,9 +53,10 @@ export interface UrlClassification {
   // be shown to a client as a broken link: Cloudflare email-protection
   // endpoints (/cdn-cgi/, routinely 4xx to crawlers) and non-fetchable schemes
   // (mailto:/tel:/javascript:/#). NOTE: this is URL-shape only. A
-  // crawler-blocked external host (youtube/linkedin returning 403/999) is NOT
-  // detectable from the string — use isCrawlerBlockedHost + isBotBlockStatus
-  // against the destination host + status code for that case.
+  // crawler-blocked external host (youtube/linkedin) is NOT detectable from
+  // the string — use isCrawlerBlockedHost against the destination host for
+  // that case (these hosts return 403/404/429/999 to bots for LIVE pages, so
+  // any error from them in a broken-link context is a block, not a dead link).
   is_expected: boolean;
 }
 
@@ -196,12 +197,6 @@ export function isCrawlerBlockedHost(hostname: string | null | undefined): boole
   if (!hostname) return false;
   const h = hostname.replace(/^www\./, '').toLowerCase();
   return CRAWLER_BLOCKING_DOMAINS.some(d => h === d || h.endsWith('.' + d));
-}
-
-// Status codes a crawler-blocking host returns to bots (NOT a genuine 404 —
-// a real youtube.com/watch?v=missing 404 is still worth flagging).
-export function isBotBlockStatus(status: number | null | undefined): boolean {
-  return status === 403 || status === 429 || status === 503 || status === 999;
 }
 
 // Convenience for code that needs the label for a known type without

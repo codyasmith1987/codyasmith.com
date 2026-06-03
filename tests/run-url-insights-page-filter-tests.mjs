@@ -30,8 +30,9 @@ async function freshDb() {
     ['https://f3.com/x.webp?v=2', 404, 'text/html', 'Indexable', '',       0,   0  ], // 404 cache-busted asset
     ['https://f3.com/tag/seo/',   200, 'text/html', 'Indexable', '',       0,   10 ], // tag archive
     ['https://f3.com/wp-content/uploads/a.webp', 200, 'image/webp', '',     '', 0,  0 ], // wp asset
-    ['https://f3.com/old',        200, 'text/html', 'Non-Indexable', '',    0,   5  ], // noindex
+    ['https://f3.com/old',        200, 'text/html', 'Non-Indexable', 'Old', 3,   500], // noindex REAL page (a real "blocked" problem)
     ['https://f3.com/app',        200, 'text/html', 'Indexable', 'App',     3,   0  ], // JS-rendered, 0 words
+    ['https://f3.com/tag/old/',   200, 'text/html', 'Non-Indexable', 'Tag', 3,   10 ], // noindex ARCHIVE (expected, NOT a blocked page)
   ];
   for (const r of rows) {
     await db.execute({
@@ -69,6 +70,18 @@ await test('without the filter, the noise inflates the counts (proves the filter
   });
   // homepage + 404 asset + tag + noindex = 4 (the bug); filtered version is 1.
   assert.ok(Number(r.rows[0].n) > 1, `old query should over-count; got ${r.rows[0].n}`);
+});
+
+await test('indexability "pages blocked" counts real noindex pages, NOT CMS noindex archives (M4)', async () => {
+  const db = await freshDb();
+  const BLOCKED = `AND status_code = 200 AND LOWER(IFNULL(content_type, '')) LIKE '%html%' ${realUserPageUrlExclusions('url')}`;
+  const r = await db.execute({
+    sql: `SELECT COUNT(*) AS n FROM crawl_urls WHERE client_id=? AND month=? ${BLOCKED} AND indexability IS NOT NULL AND indexability != 'Indexable'`,
+    args: [C, M],
+  });
+  // Only /old (real noindex page) counts; /tag/old/ (noindex archive) and the
+  // 404 asset are excluded.
+  assert.strictEqual(Number(r.rows[0].n), 1, `expected 1 real blocked page, got ${r.rows[0].n}`);
 });
 
 console.log(`\n${passed}/${passed + failed} passed`);

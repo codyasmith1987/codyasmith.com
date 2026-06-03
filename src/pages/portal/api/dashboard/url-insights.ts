@@ -59,6 +59,8 @@ interface UrlInsightsResponse {
   has_structured_data: boolean;
   has_content_quality: boolean;
   has_url_structure_data: boolean;
+  has_javascript_data: boolean;
+  has_hreflang_data: boolean;
   title_quality: {
     missing_count: number;
     too_long_count: number;
@@ -124,6 +126,19 @@ interface UrlInsightsResponse {
     group_count: number;        // distinct hashes shared by >1 real page
     affected_count: number;     // total real pages in those groups
     samples: Array<{ count: number; urls: string[] }>;
+  };
+  // Pages whose content depends on JavaScript: the rendered word count far
+  // exceeds the static HTML word count (from javascript_all.csv). Search
+  // engines that render poorly may miss this content.
+  js_rendering: {
+    needs_js_count: number;
+    samples: Array<{ url: string; html_word_count: number; rendered_word_count: number; word_count_change: number }>;
+  };
+  // Pages carrying hreflang annotations (from hreflang_all.csv). Mostly 0 for
+  // single-locale sites; meaningful for multi-locale clients.
+  hreflang: {
+    pages_with_hreflang: number;
+    samples: Array<{ url: string; hreflang_count: number }>;
   };
   accessibility: AccessibilityInsights;
   structured_data: StructuredDataInsights;
@@ -218,6 +233,16 @@ export async function loadUrlInsights(
       args: [clientId],
     });
     const urlStructureMonth = (urlStructureMonthRow.rows[0]?.[0] as string | null) ?? null;
+    const javascriptMonthRow = await db.execute({
+      sql: 'SELECT MAX(month) FROM javascript_urls WHERE client_id = ?',
+      args: [clientId],
+    });
+    const javascriptMonth = (javascriptMonthRow.rows[0]?.[0] as string | null) ?? null;
+    const hreflangMonthRow = await db.execute({
+      sql: 'SELECT MAX(month) FROM hreflang_urls WHERE client_id = ?',
+      args: [clientId],
+    });
+    const hreflangMonth = (hreflangMonthRow.rows[0]?.[0] as string | null) ?? null;
 
     // Signal categories (accessibility / structured_data / content_quality)
     // gate on data_coverage.measured, NOT on table-row presence. A free
@@ -277,6 +302,8 @@ export async function loadUrlInsights(
       has_structured_data: !!structuredMonth,
       has_content_quality: !!contentMonth,
       has_url_structure_data: !!urlStructureMonth,
+      has_javascript_data: !!javascriptMonth,
+      has_hreflang_data: !!hreflangMonth,
       title_quality: {
         missing_count: 0, too_long_count: 0, too_short_count: 0, duplicate_count: 0,
         sample_missing: [], sample_too_long: [], sample_too_short: [], sample_duplicates: [],
@@ -290,6 +317,8 @@ export async function loadUrlInsights(
       deep_pages: { over_5_count: 0, over_10_count: 0, samples: [] },
       inbound_broken_links: { broken_destination_count: 0, total_inbound_links: 0, samples: [] },
       duplicate_content: { group_count: 0, affected_count: 0, samples: [] },
+      js_rendering: { needs_js_count: 0, samples: [] },
+      hreflang: { pages_with_hreflang: 0, samples: [] },
       accessibility: emptyAccessibility(),
       structured_data: emptyStructuredData(),
       content_quality: emptyContentQuality(),
@@ -677,6 +706,58 @@ export async function loadUrlInsights(
       response.duplicate_content.group_count = dupGroups.length;
       response.duplicate_content.affected_count = dupGroups.reduce((s, g) => s + g.count, 0);
       response.duplicate_content.samples = dupGroups;
+    }
+
+    // JS-rendering widget: pages whose content appears only after JavaScript
+    // renders (rendered word count far exceeds the static HTML word count, from
+    // javascript_all.csv). javascript_all is HTML pages only; it has no
+    // content_type/indexability columns, so gate on 200 + real-page URL shape.
+    if (javascriptMonth) {
+      const JS_DELTA = 200; // rendered has >= 200 more words than static HTML
+      const jsCountRow = await db.execute({
+        sql: `SELECT COUNT(*) AS n FROM javascript_urls
+              WHERE client_id = ? AND month = ?
+                AND status_code = 200 AND word_count_change >= ?
+                ${realUserPageUrlExclusions('url')}`,
+        args: [clientId, javascriptMonth, JS_DELTA],
+      });
+      response.js_rendering.needs_js_count = Number((jsCountRow.rows[0] as any)?.[0] || 0);
+      const jsRows = await db.execute({
+        sql: `SELECT url, html_word_count, rendered_word_count, word_count_change
+              FROM javascript_urls
+              WHERE client_id = ? AND month = ?
+                AND status_code = 200 AND word_count_change >= ?
+                ${realUserPageUrlExclusions('url')}
+              ORDER BY word_count_change DESC
+              LIMIT ?`,
+        args: [clientId, javascriptMonth, JS_DELTA, SAMPLE_LIMIT],
+      });
+      response.js_rendering.samples = (jsRows.rows as any[]).map(r => ({
+        url: String(r[0]),
+        html_word_count: Number(r[1] || 0),
+        rendered_word_count: Number(r[2] || 0),
+        word_count_change: Number(r[3] || 0),
+      }));
+    }
+
+    // hreflang widget: pages carrying hreflang annotations. Mostly 0 for
+    // single-locale sites (card stays hidden); meaningful for multi-locale.
+    if (hreflangMonth) {
+      const hlCountRow = await db.execute({
+        sql: `SELECT COUNT(*) AS n FROM hreflang_urls
+              WHERE client_id = ? AND month = ? AND hreflang_count > 0`,
+        args: [clientId, hreflangMonth],
+      });
+      response.hreflang.pages_with_hreflang = Number((hlCountRow.rows[0] as any)?.[0] || 0);
+      const hlRows = await db.execute({
+        sql: `SELECT url, hreflang_count FROM hreflang_urls
+              WHERE client_id = ? AND month = ? AND hreflang_count > 0
+              ORDER BY hreflang_count DESC LIMIT ?`,
+        args: [clientId, hreflangMonth, SAMPLE_LIMIT],
+      });
+      response.hreflang.samples = (hlRows.rows as any[]).map(r => ({
+        url: String(r[0]), hreflang_count: Number(r[1] || 0),
+      }));
     }
 
     // Accessibility (WCAG) widget. Per-URL violation counts from

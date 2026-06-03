@@ -774,7 +774,7 @@ const clients = isAdmin ? await getAllClients() : [];
       if (
         !data.has_crawl_data && !data.has_image_data && !data.has_redirect_data && !data.has_link_data &&
         !data.has_accessibility_data && !data.has_structured_data && !data.has_content_quality &&
-        !data.has_url_structure_data &&
+        !data.has_url_structure_data && !data.has_javascript_data && !data.has_hreflang_data &&
         accessibilityState !== 'not_measured' && structuredState !== 'not_measured' && contentState !== 'not_measured'
       ) return;
 
@@ -984,6 +984,36 @@ const clients = isAdmin ? await getAllClients() : [];
           ],
           sample_html: renderUrlList(dc.samples, g =>
             `<li>${g.count} identical pages:<ul class="ml-4 mt-1 space-y-0.5 text-neutral-500">${g.urls.map(u => `<li>${urlLink(u)}</li>`).join('')}</ul></li>`),
+        }));
+      }
+
+      // ----- Content that needs JavaScript (javascript_urls) -----
+      if (data.has_javascript_data && data.js_rendering.needs_js_count > 0) {
+        const js = data.js_rendering;
+        cards.push(widgetCard({
+          id: 'widget-js-rendering',
+          title: 'Content that needs JavaScript',
+          description: 'Pages where most of the content only appears after JavaScript runs. Search engines that render poorly may miss it, so server-rendering the key content can help.',
+          stat_lines: [
+            { count: js.needs_js_count, label: 'pages depend on JS for content', severity: 'medium' },
+          ],
+          sample_html: renderUrlList(js.samples, x =>
+            `<li>${urlLink(x.url)} <span class="text-neutral-400">${x.html_word_count} static &rarr; ${x.rendered_word_count} rendered words</span></li>`),
+        }));
+      }
+
+      // ----- Hreflang coverage (hreflang_urls) -----
+      if (data.has_hreflang_data && data.hreflang.pages_with_hreflang > 0) {
+        const hl = data.hreflang;
+        cards.push(widgetCard({
+          id: 'widget-hreflang',
+          title: 'Hreflang coverage',
+          description: 'Pages with hreflang annotations that tell search engines which language or region version to show. Relevant for sites targeting multiple locales.',
+          stat_lines: [
+            { count: hl.pages_with_hreflang, label: 'pages with hreflang', severity: 'none' },
+          ],
+          sample_html: renderUrlList(hl.samples, x =>
+            `<li>${urlLink(x.url)} <span class="text-neutral-400">${x.hreflang_count} annotation${x.hreflang_count !== 1 ? 's' : ''}</span></li>`),
         }));
       }
 

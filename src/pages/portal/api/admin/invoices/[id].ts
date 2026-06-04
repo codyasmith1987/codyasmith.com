@@ -69,6 +69,10 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
       return json({ ok: true });
     }
 
+    if (body.invoice_number !== undefined && !String(body.invoice_number).trim()) {
+      return json({ error: 'Invoice number cannot be empty' }, 400);
+    }
+
     // Standard invoice field updates
     await updateInvoice(params.id!, {
       ...(body.status !== undefined && { status: body.status }),
@@ -101,6 +105,7 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
     logger.error('Update invoice error', err);
     const msg = String(err?.message || '');
     if (/already in use/i.test(msg)) return json({ error: msg }, 409);
+    if (/cannot be empty/i.test(msg)) return json({ error: msg }, 400);
     return json({ error: 'Failed to update invoice' }, 500);
   }
 };

@@ -412,10 +412,10 @@ export async function markOverdueInvoices(): Promise<number> {
   return result.rowsAffected ?? 0;
 }
 
-export async function sendDueReminders(): Promise<number> {
+export async function sendDueReminders(): Promise<{ sent: number; failed: number }> {
   const { sendEmail } = await import('./email');
   const dueInvoices = await getDueInvoices(3);
-  let sent = 0;
+  let sent = 0, failed = 0;
 
   for (const invoice of dueInvoices) {
     try {
@@ -468,13 +468,16 @@ export async function sendDueReminders(): Promise<number> {
       if (ok) {
         await updateInvoice(invoice.id, { last_reminder_sent: new Date().toISOString() });
         sent++;
+      } else {
+        failed++;
       }
     } catch (err) {
       logger.error(`Failed to send reminder for invoice ${invoice.id}`, err);
+      failed++;
     }
   }
 
-  return sent;
+  return { sent, failed };
 }
 
 // Lightweight check — call on admin page load
@@ -546,10 +549,10 @@ export async function getOverdueNoticeCandidates(now: Date = new Date()): Promis
 // the engagement uninterrupted). Stamps last_reminder_sent so the weekly
 // cadence advances. Honors reminders_paused via the candidate query. Returns
 // the count sent. Run from the daily cron, after markOverdueInvoices.
-export async function sendOverdueNotices(now: Date = new Date()): Promise<number> {
+export async function sendOverdueNotices(now: Date = new Date()): Promise<{ sent: number; failed: number }> {
   const { sendEmail } = await import('./email');
   const candidates = await getOverdueNoticeCandidates(now);
-  let sent = 0;
+  let sent = 0, failed = 0;
 
   for (const invoice of candidates) {
     try {
@@ -596,13 +599,16 @@ export async function sendOverdueNotices(now: Date = new Date()): Promise<number
       if (ok) {
         await updateInvoice(invoice.id, { last_reminder_sent: now.toISOString() });
         sent++;
+      } else {
+        failed++;
       }
     } catch (err) {
       logger.error(`Failed to send overdue notice for invoice ${invoice.id}`, err);
+      failed++;
     }
   }
 
-  return sent;
+  return { sent, failed };
 }
 
 // Read-only preview of what the daily cron WOULD do, for verifying the

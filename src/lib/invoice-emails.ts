@@ -194,3 +194,51 @@ export async function sendInvoiceEmail(invoiceId: string): Promise<SendInvoiceRe
 
   return { ok: true, to: recipients.to, cc: recipients.cc };
 }
+
+// Payment receipt (Cody, 2026-06-04: all financial notices carry the accountant
+// CC). Sent after a payment is recorded, to the billing contact + accountant CC
+// + any per-invoice extra. Confirms the amount received and the remaining
+// balance. Pure-ish: reads the (already-updated) invoice; soft-fails.
+export async function sendPaymentReceiptEmail(invoiceId: string, paymentAmount: number): Promise<SendInvoiceResult> {
+  const invoice = await getInvoice(invoiceId);
+  if (!invoice) return { ok: false, to: [], cc: [], reason: 'not_found' };
+
+  const meta = await getClientMetadata(invoice.client_id).catch(() => null);
+  const users = await getUsersByClientId(invoice.client_id);
+  const recipients = resolveInvoiceRecipients({
+    primaryEmail: meta?.primary_contact_email,
+    billingCcEmail: meta?.billing_cc_email,
+    extraEmail: invoice.extra_recipient_email,
+    fallbackEmails: users.map(u => u.email),
+  });
+  if (recipients.to.length === 0) return { ok: false, to: [], cc: [], reason: 'no_recipient' };
+
+  const portalUrl = import.meta.env.SITE || 'https://codyasmith.com';
+  const balance = invoice.total - (invoice.amount_paid || 0);
+  const paidInFull = balance <= 0.005;
+  const greetName = escapeHtml((meta?.primary_contact_name || '').split(' ')[0] || 'there');
+  const balanceLine = paidInFull
+    ? 'That settles this invoice in full. Thank you.'
+    : `Your remaining balance on this invoice is <strong>${money(balance)}</strong>.`;
+
+  const inner = `
+    <h2 style="font-size: 22px; margin: 0 0 16px;">Payment received, thank you</h2>
+    <p style="font-size: 15px; color: #4a4239; margin: 0 0 16px;">Hi ${greetName}, this confirms we received <strong>${money(paymentAmount)}</strong> toward invoice <strong>${escapeHtml(invoice.invoice_number)}</strong>. ${balanceLine}</p>
+    <p style="margin: 24px 0;">
+      <a href="${portalUrl}/portal/invoices" style="display: inline-block; background: #1a1814; color: #faf7f2; padding: 12px 22px; text-decoration: none; font-size: 15px;">View your invoices</a>
+    </p>
+    <p style="font-size: 14px; color: #6b6359; margin: 16px 0 0;">Keep this email for your records. Questions? Just reply.</p>
+  `;
+  const subject = paidInFull
+    ? `Paid in full: invoice ${invoice.invoice_number}`
+    : `Payment received: invoice ${invoice.invoice_number}`;
+
+  const ok = await sendEmail(
+    recipients.to.map((e, i) => ({ email: e, name: i === 0 ? (meta?.primary_contact_name || '') : '' })),
+    subject,
+    invoiceShell(inner),
+    { cc: recipients.cc.map(e => ({ email: e })) }
+  );
+
+  return { ok, to: recipients.to, cc: recipients.cc, reason: ok ? undefined : 'send_failed' };
+}

@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import {
   getInvoice, updateInvoice, deleteInvoice, getInvoiceItems,
-  addInvoiceItem, updateInvoiceItem, deleteInvoiceItem,
+  addInvoiceItem, updateInvoiceItem, deleteInvoiceItem, recalculateInvoiceTotals,
 } from '../../../../../lib/invoices';
 import { logActivity } from '../../../../../lib/activity';
 import { logger } from '../../../../../lib/logger';
@@ -86,6 +86,12 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
       ...(body.terms_label !== undefined && { terms_label: body.terms_label }),
       ...(body.reminders_paused !== undefined && { reminders_paused: body.reminders_paused ? 1 : 0 }),
     });
+
+    // Tax is stored on the invoice but the total is subtotal + tax. Setting tax
+    // alone (no item change) would leave the stored total stale, so recompute.
+    if (body.tax !== undefined) {
+      await recalculateInvoiceTotals(params.id!);
+    }
 
     await logActivity({
       clientId: invoice.client_id,

@@ -13,6 +13,7 @@
 import type { APIRoute } from 'astro';
 import { getClientById } from '../../../../../lib/auth';
 import { getClientMetadata, upsertClientMetadata } from '../../../../../lib/agreements';
+import { isValidEmail } from '../../../../../lib/email-safety';
 import { logger } from '../../../../../lib/logger';
 import { logActivity } from '../../../../../lib/activity';
 
@@ -20,8 +21,6 @@ export const prerender = false;
 
 const json = (data: any, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const POST: APIRoute = async ({ locals, request }) => {
   if (locals.user?.role !== 'admin') return json({ error: 'Forbidden' }, 403);
@@ -42,14 +41,14 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
   if (body.primary_contact_email !== undefined) {
     const v = (body.primary_contact_email ?? '').toString().trim();
-    if (v && !EMAIL_RE.test(v)) return json({ error: 'Primary contact email is not a valid email address' }, 400);
+    if (v && !isValidEmail(v)) return json({ error: 'Primary contact email is not a valid email address (use a plain address like name@example.com, not "Name" <name@example.com>)' }, 400);
     update.primary_contact_email = v; // '' clears
     changes.push('primary contact');
   }
 
   if (body.billing_cc_email !== undefined) {
     const v = (body.billing_cc_email ?? '').toString().trim();
-    if (v && !EMAIL_RE.test(v)) return json({ error: 'Accountant CC email is not a valid email address' }, 400);
+    if (v && !isValidEmail(v)) return json({ error: 'Accountant CC email is not a valid email address (use a plain address like name@example.com, not "Name" <name@example.com>)' }, 400);
     update.billing_cc_email = v; // '' clears
     changes.push('accountant CC');
   }

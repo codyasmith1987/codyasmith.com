@@ -26,3 +26,19 @@ export function stripCRLF(s: string | null | undefined): string {
   if (s == null) return '';
   return String(s).replace(/[\r\n]+/g, ' ').trim();
 }
+
+// Strict-enough email validity for OUTBOUND recipients. Rejects the things
+// Brevo rejects but a loose `[^\s@]+@[^\s@]+\.[^\s@]+` lets through: display-name
+// formats ("Name" <a@b.com>), angle brackets, spaces, commas/semicolons, and
+// trailing junk like `a@b.com>`. The local part and domain forbid space and
+// < > ( ) [ ] , ; : " and the address must END in a letter TLD. Used to
+// validate on save AND to drop invalid addresses at send time so one bad CC
+// never fails the whole email (a typo'd accountant must not block the client's
+// invoice). Real prod incident 2026-06-04: a malformed CC 400'd the entire
+// overdue-notice send.
+const EMAIL_RE = /^[^\s@<>()[\],;:"]+@[^\s@<>()[\],;:"]+\.[A-Za-z]{2,}$/;
+
+export function isValidEmail(s: string | null | undefined): boolean {
+  if (s == null) return false;
+  return EMAIL_RE.test(String(s).trim());
+}

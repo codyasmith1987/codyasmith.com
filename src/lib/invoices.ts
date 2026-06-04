@@ -5,8 +5,8 @@ import turso from './turso';
 
 // --- Column allowlists for dynamic UPDATE builders ---
 const UPDATABLE_COLUMNS: Record<string, Set<string>> = {
-  invoices: new Set(['status', 'issued_date', 'due_date', 'subtotal', 'tax', 'total', 'amount_paid', 'notes', 'client_visible', 'billing_period_start', 'billing_period_end', 'last_reminder_sent']),
-  invoice_items: new Set(['description', 'quantity', 'unit_price', 'amount', 'sort_order']),
+  invoices: new Set(['status', 'issued_date', 'due_date', 'subtotal', 'tax', 'total', 'amount_paid', 'notes', 'client_visible', 'billing_period_start', 'billing_period_end', 'last_reminder_sent', 'title', 'terms_label', 'bill_to_snapshot', 'reminders_paused']),
+  invoice_items: new Set(['description', 'quantity', 'unit_price', 'amount', 'sort_order', 'name', 'sub_description', 'frequency', 'category']),
   change_orders: new Set(['title', 'description', 'status', 'cost_impact', 'time_impact_days']),
 };
 
@@ -66,6 +66,10 @@ export interface Invoice {
   billing_period_start: string | null;
   billing_period_end: string | null;
   last_reminder_sent: string | null;
+  title: string | null;
+  terms_label: string | null;
+  bill_to_snapshot: string | null;
+  reminders_paused: number;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -200,7 +204,8 @@ export async function getClientVisibleInvoices(clientId: string): Promise<Pick<I
 
 export async function updateInvoice(id: string, data: Partial<Pick<Invoice,
   'status' | 'issued_date' | 'due_date' | 'subtotal' | 'tax' | 'total' | 'amount_paid' | 'notes' | 'client_visible' |
-  'billing_period_start' | 'billing_period_end' | 'last_reminder_sent'
+  'billing_period_start' | 'billing_period_end' | 'last_reminder_sent' |
+  'title' | 'terms_label' | 'bill_to_snapshot' | 'reminders_paused'
 >>): Promise<void> {
   const update = buildSafeUpdate('invoices', id, data);
   if (!update) return;
@@ -218,6 +223,106 @@ export async function recalculateInvoiceTotals(invoiceId: string): Promise<void>
   await updateInvoice(invoiceId, { subtotal, total: subtotal + tax });
 }
 
+// --- Category-aware subtotals (Services vs Reimbursements) ---
+// Pure. A NULL or absent category counts as 'services', so legacy flat invoices
+// keep a Services subtotal equal to their old subtotal and 0 reimbursements.
+export function splitSubtotals(
+  items: Array<{ amount: number; category?: string | null }>,
+): { services: number; reimbursements: number; total: number } {
+  let services = 0;
+  let reimbursements = 0;
+  for (const item of items) {
+    if ((item.category || 'services') === 'reimbursements') reimbursements += item.amount;
+    else services += item.amount;
+  }
+  return { services, reimbursements, total: services + reimbursements };
+}
+
+export async function getInvoiceSubtotals(invoiceId: string): Promise<{ services: number; reimbursements: number; total: number }> {
+  return splitSubtotals(await getInvoiceItems(invoiceId));
+}
+
+// --- Duplicate ---
+// Pure. Advance a 'YYYY-MM-DD' date by n months, clamping the day to the target
+// month length (e.g. Jan 31 plus 1 month becomes Feb 28). Used to roll a
+// duplicated invoice's billing period forward to the next cycle.
+export function addMonthsToDate(dateStr: string, n: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const monthIndex = (m - 1) + n;
+  const ny = y + Math.floor(monthIndex / 12);
+  const nm = ((monthIndex % 12) + 12) % 12; // 0-based target month
+  const lastDay = new Date(Date.UTC(ny, nm + 1, 0)).getUTCDate();
+  const nd = Math.min(d, lastDay);
+  const pad = (v: number) => String(v).padStart(2, '0');
+  return `${ny}-${pad(nm + 1)}-${pad(nd)}`;
+}
+
+// Pure. Build the header field set plus line items for a duplicate. The billing
+// period rolls forward one month; tax/title/terms carry over; every line item
+// copies verbatim (name, sub_description, frequency, category) so a duplicate is
+// a faithful starting point to tweak. Status/visibility are forced by
+// duplicateInvoice, not here.
+export function buildDuplicatePayload(
+  src: Invoice,
+  items: InvoiceItem[],
+): {
+  header: { title: string | null; terms_label: string | null; tax: number; billing_period_start: string | null; billing_period_end: string | null };
+  items: Array<{ name: string | null; sub_description: string | null; description: string; frequency: string | null; category: string; quantity: number; unit_price: number }>;
+} {
+  return {
+    header: {
+      title: src.title ?? null,
+      terms_label: src.terms_label ?? null,
+      tax: src.tax ?? 0,
+      billing_period_start: src.billing_period_start ? addMonthsToDate(src.billing_period_start, 1) : null,
+      billing_period_end: src.billing_period_end ? addMonthsToDate(src.billing_period_end, 1) : null,
+    },
+    items: items.map(it => ({
+      name: it.name ?? null,
+      sub_description: it.sub_description ?? null,
+      description: it.description,
+      frequency: it.frequency ?? null,
+      category: it.category || 'services',
+      quantity: it.quantity,
+      unit_price: it.unit_price,
+    })),
+  };
+}
+
+// Clone an invoice into a new editable DRAFT (the duplicate button). The copy is
+// not client-visible and gets a fresh generated number. Returns the new id +
+// number. EMAIL/visibility side effects: none (draft, hidden).
+export async function duplicateInvoice(sourceId: string, createdBy: string): Promise<{ id: string; invoice_number: string }> {
+  const src = await getInvoice(sourceId);
+  if (!src) throw new Error('Source invoice not found');
+  const items = await getInvoiceItems(sourceId);
+
+  const { id, invoice_number } = await createInvoiceWithGeneratedNumber({
+    contract_id: src.contract_id,
+    client_id: src.client_id,
+    milestone_id: src.milestone_id ?? undefined,
+    notes: src.notes ?? undefined,
+    created_by: createdBy,
+  });
+
+  const payload = buildDuplicatePayload(src, items);
+  await updateInvoice(id, {
+    status: 'draft',
+    client_visible: 0,
+    title: payload.header.title,
+    terms_label: payload.header.terms_label,
+    tax: payload.header.tax,
+    billing_period_start: payload.header.billing_period_start,
+    billing_period_end: payload.header.billing_period_end,
+  });
+
+  for (const item of payload.items) {
+    await addInvoiceItem({ invoice_id: id, ...item });
+  }
+
+  return { id, invoice_number };
+}
+
 export async function deleteInvoice(id: string): Promise<void> {
   await turso.execute({ sql: 'DELETE FROM invoice_items WHERE invoice_id = ?', args: [id] });
   await turso.execute({ sql: 'DELETE FROM payments WHERE invoice_id = ?', args: [id] });
@@ -231,7 +336,11 @@ export async function deleteInvoice(id: string): Promise<void> {
 export interface InvoiceItem {
   id: string;
   invoice_id: string;
+  name: string | null;
+  sub_description: string | null;
   description: string;
+  frequency: string | null;
+  category: string;
   quantity: number;
   unit_price: number;
   amount: number;
@@ -242,6 +351,10 @@ export interface InvoiceItem {
 export async function addInvoiceItem(data: {
   invoice_id: string;
   description: string;
+  name?: string | null;
+  sub_description?: string | null;
+  frequency?: string | null;
+  category?: string | null;
   quantity?: number;
   unit_price: number;
 }): Promise<string> {
@@ -249,9 +362,13 @@ export async function addInvoiceItem(data: {
   const qty = data.quantity ?? 1;
   const amount = qty * data.unit_price;
   await turso.execute({
-    sql: `INSERT INTO invoice_items (id, invoice_id, description, quantity, unit_price, amount)
-          VALUES (?, ?, ?, ?, ?, ?)`,
-    args: [id, data.invoice_id, data.description, qty, data.unit_price, amount],
+    sql: `INSERT INTO invoice_items (id, invoice_id, name, sub_description, description, frequency, category, quantity, unit_price, amount)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      id, data.invoice_id, data.name ?? null, data.sub_description ?? null,
+      data.description, data.frequency ?? null, data.category ?? 'services',
+      qty, data.unit_price, amount,
+    ],
   });
   await recalculateInvoiceTotals(data.invoice_id);
   return id;

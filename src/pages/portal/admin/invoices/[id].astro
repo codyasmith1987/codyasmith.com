@@ -39,6 +39,7 @@ const statusColors: Record<string, string> = {
       <div class="flex items-center gap-3">
         <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[invoice.status] || ''}`}>{invoice.status}</span>
         {invoice.last_reminder_sent && <span class="text-[10px] text-neutral-400">Reminder sent {invoice.last_reminder_sent.split('T')[0]}</span>}
+        <button id="duplicate-invoice" class="text-xs text-amber-600 hover:text-amber-600 transition-colors">Duplicate</button>
         <a href={`/portal/api/admin/invoices/${id}/pdf`} class="text-xs text-amber-600 hover:text-amber-600 transition-colors">Download PDF</a>
         <button id="delete-invoice" class="text-xs text-neutral-400 hover:text-red-400 transition-colors">Delete</button>
       </div>
@@ -242,6 +243,21 @@ const statusColors: Record<string, string> = {
           window.__toast('Invoice deleted.', 'success');
           setTimeout(() => window.location.href = `/portal/admin/contracts/${contractId}`, 600);
         } else window.__toast('Failed to delete invoice.', 'error');
+      });
+    });
+
+    // Duplicate invoice -> new draft, then open it
+    document.getElementById('duplicate-invoice')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      await window.__withButtonLoading(btn, 'Duplicating…', async () => {
+        const res = await fetch(`/portal/api/admin/invoices/${invoiceId}/duplicate`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          window.__toast('Invoice duplicated. Opening the new draft.', 'success');
+          setTimeout(() => window.location.href = `/portal/admin/invoices/${data.id}`, 600);
+        } else window.__toast('Failed to duplicate invoice.', 'error');
       });
     });
 

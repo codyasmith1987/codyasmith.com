@@ -6,7 +6,7 @@
 // HTML pattern as the proposal-flow emails for visual continuity.
 
 import { logger } from './logger';
-import { escapeHtml, stripCRLF } from './email-safety';
+import { escapeHtml, stripCRLF, isValidEmail } from './email-safety';
 import type { ClientAgreement, AgreementSigner } from './agreements';
 
 const BREVO_ENDPOINT = 'https://api.brevo.com/v3/smtp/email';
@@ -31,10 +31,12 @@ interface SendBrevoArgs {
 // "name is missing in to". Signer `to` names come from snapshots (populated),
 // but the accountant cc carries no name, so this guard matters there.
 const safeRecipients = (list: Array<{ email: string; name?: string }>) =>
-  list.map(r => {
-    const n = stripCRLF(r.name || '');
-    return n ? { email: r.email, name: n } : { email: r.email };
-  });
+  list
+    .filter(r => isValidEmail(r.email)) // drop invalid so one bad CC can't 400 the whole send
+    .map(r => {
+      const n = stripCRLF(r.name || '');
+      return n ? { email: r.email, name: n } : { email: r.email };
+    });
 
 async function sendBrevo(args: SendBrevoArgs): Promise<boolean> {
   const brevoKey = import.meta.env.BREVO_API_KEY;
@@ -43,13 +45,21 @@ async function sendBrevo(args: SendBrevoArgs): Promise<boolean> {
     return false;
   }
   try {
+    const to = safeRecipients(args.to);
+    if (to.length === 0) {
+      logger.error('contract email: no valid To recipient; not sending');
+      return false;
+    }
     const body: any = {
       sender: { name: FROM_NAME, email: FROM_EMAIL },
-      to: safeRecipients(args.to),
+      to,
       subject: stripCRLF(args.subject),
       htmlContent: args.html,
     };
-    if (args.cc && args.cc.length > 0) body.cc = safeRecipients(args.cc);
+    if (args.cc && args.cc.length > 0) {
+      const cc = safeRecipients(args.cc);
+      if (cc.length > 0) body.cc = cc;
+    }
     if (args.attachments && args.attachments.length > 0) body.attachment = args.attachments;
     const res = await fetch(BREVO_ENDPOINT, {
       method: 'POST',

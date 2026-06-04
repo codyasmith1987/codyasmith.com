@@ -6,7 +6,7 @@
 // src/lib/email-safety.ts for the helper.
 
 import { logger } from './logger';
-import { stripCRLF } from './email-safety';
+import { stripCRLF, isValidEmail } from './email-safety';
 
 // Optional extras for financial documents (invoices, overdue notices): a CC
 // list (e.g. a client's accountant) and base64 attachments (the invoice PDF).
@@ -41,7 +41,16 @@ export async function sendEmail(
   // (RFC 5322 header injection). Brevo's JSON API is unlikely to honor
   // these in practice, but we strip at the application boundary.
   const safeSubject = stripCRLF(subject);
-  const safeTo = to.map(t => toBrevoRecipient(t.email, t.name));
+
+  // Drop invalid addresses rather than let one bad recipient 400 the whole
+  // send. A typo'd CC (e.g. an accountant pasted as "Name" <a@b.com>) must not
+  // block the client's invoice from reaching a valid To.
+  const validTo = to.filter(t => isValidEmail(t.email));
+  if (validTo.length === 0) {
+    logger.error(`[EMAIL] no valid To recipient (had ${to.length}); not sending. Subject: ${subject}`);
+    return false;
+  }
+  const safeTo = validTo.map(t => toBrevoRecipient(t.email, t.name));
 
   try {
     const body: any = {
@@ -51,7 +60,11 @@ export async function sendEmail(
       htmlContent,
     };
     if (opts?.cc && opts.cc.length > 0) {
-      body.cc = opts.cc.map(c => toBrevoRecipient(c.email, c.name));
+      const validCc = opts.cc.filter(c => isValidEmail(c.email));
+      if (validCc.length < opts.cc.length) {
+        logger.error(`[EMAIL] dropped ${opts.cc.length - validCc.length} invalid CC address(es); sending to the rest. Subject: ${subject}`);
+      }
+      if (validCc.length > 0) body.cc = validCc.map(c => toBrevoRecipient(c.email, c.name));
     }
     if (opts?.attachments && opts.attachments.length > 0) {
       body.attachment = opts.attachments;

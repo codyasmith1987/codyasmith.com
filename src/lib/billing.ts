@@ -331,7 +331,7 @@ export async function getDueInvoices(withinDays: number = 3): Promise<any[]> {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() + withinDays);
   return queryAll(
-    "SELECT * FROM invoices WHERE status = 'sent' AND due_date <= ? AND due_date >= date('now') AND last_reminder_sent IS NULL AND amount_paid < total",
+    "SELECT * FROM invoices WHERE status = 'sent' AND due_date <= ? AND due_date >= date('now') AND last_reminder_sent IS NULL AND amount_paid < total AND (reminders_paused = 0 OR reminders_paused IS NULL)",
     [cutoff.toISOString().split('T')[0]]
   );
 }
@@ -343,7 +343,8 @@ export async function getDueInvoices(withinDays: number = 3): Promise<any[]> {
 export async function markOverdueInvoices(): Promise<number> {
   const result = await turso.execute({
     sql: `UPDATE invoices SET status = 'overdue', updated_at = datetime('now')
-           WHERE status = 'sent' AND amount_paid < total AND due_date < date('now')`,
+           WHERE status = 'sent' AND amount_paid < total AND due_date < date('now')
+             AND (reminders_paused = 0 OR reminders_paused IS NULL)`,
   });
   return result.rowsAffected ?? 0;
 }
@@ -443,7 +444,8 @@ export async function previewDailyCron(): Promise<{
 
   const overdueRes = await turso.execute({
     sql: `SELECT id, invoice_number, due_date FROM invoices
-           WHERE status = 'sent' AND amount_paid < total AND due_date < date('now')`,
+           WHERE status = 'sent' AND amount_paid < total AND due_date < date('now')
+             AND (reminders_paused = 0 OR reminders_paused IS NULL)`,
   });
   const would_mark_overdue = (overdueRes.rows as any[]).map(r => ({
     id: r[0] as string,

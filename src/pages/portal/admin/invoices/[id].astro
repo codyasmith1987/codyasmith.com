@@ -50,7 +50,7 @@ const statusColors: Record<string, string> = {
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
         <div>
           <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Invoice number</label>
-          <input type="text" id="f-number" value={invoice.invoice_number} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
+          <input type="text" id="f-number" required value={invoice.invoice_number} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
         </div>
         <div>
           <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Title (optional)</label>

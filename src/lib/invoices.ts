@@ -211,6 +211,9 @@ export async function updateInvoice(id: string, data: Partial<Pick<Invoice,
   // but must stay unique. Reject a collision with a DIFFERENT invoice before
   // writing. The caller surfaces this as a 409, not a 500.
   if (data.invoice_number !== undefined) {
+    if (!String(data.invoice_number).trim()) {
+      throw new Error('Invoice number cannot be empty');
+    }
     const clash = await getInvoiceByNumber(data.invoice_number);
     if (clash && clash.id !== id) {
       throw new Error(`Invoice number "${data.invoice_number}" is already in use`);

@@ -183,12 +183,26 @@ export async function generateInvoicePdf(invoiceId: string): Promise<Buffer> {
     renderSection('Services', services, subs.services, true);
     renderSection('Reimbursements', reimbursements, subs.reimbursements, true);
 
+    // Subtotal + Tax rows, only when the invoice is taxed. The section subtotals
+    // above show the untaxed split; this adds the grand subtotal and tax so the
+    // TOTAL DUE bar (invoice.total = subtotal + tax) is never understated.
+    if (invoice.tax > 0) {
+      ensureSpace(36);
+      let ry = doc.y + 2;
+      doc.font('Helvetica').fontSize(10).fillColor(GRAY).text('Subtotal', L + 4, ry, { width: amountX - L - 12, align: 'right' });
+      doc.fillColor(DARK).text(money(invoice.subtotal), amountX, ry, { width: amountW, align: 'right' });
+      ry = doc.y + 2;
+      doc.fillColor(GRAY).text('Tax', L + 4, ry, { width: amountX - L - 12, align: 'right' });
+      doc.fillColor(DARK).text(money(invoice.tax), amountX, ry, { width: amountW, align: 'right' });
+      doc.y = doc.y + 8;
+    }
+
     // ---- TOTAL DUE bar ----
     ensureSpace(40);
     const ty = doc.y + 4;
     doc.rect(L, ty, W, 30).fill(AMBER);
     doc.font('Helvetica-Bold').fontSize(13).fillColor('#ffffff').text('TOTAL DUE', L + 12, ty + 8);
-    doc.text(money(subs.total), amountX - 40, ty + 8, { width: amountW + 28, align: 'right' });
+    doc.text(money(invoice.total), amountX - 40, ty + 8, { width: amountW + 28, align: 'right' });
     doc.y = ty + 40;
 
     // Payments / balance (portal-tracked; absent on a clean Upon-Receipt invoice)

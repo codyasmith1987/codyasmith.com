@@ -394,14 +394,16 @@ export async function getDueInvoices(withinDays: number = 3): Promise<any[]> {
   );
 }
 
-// Transition sent-but-unpaid invoices past their due date to 'overdue'.
-// The status is otherwise unreachable (nothing ever sets it), so the
-// client-visible status and the red overdue styling in the PDF never fire.
-// Run from the daily cron. Returns the number of invoices marked.
+// Transition unpaid-past-due invoices to 'overdue' so the client-visible status
+// and the red overdue styling in the PDF fire. Includes 'partial' (Cody,
+// 2026-06-04): a partially-paid invoice that goes past due is MARKED overdue
+// for visibility; whether it gets an automatic notice is decided separately
+// (isAutoOverdueEmailEligible only emails fully-unpaid ones). Run from the
+// daily cron. Returns the number of invoices marked.
 export async function markOverdueInvoices(): Promise<number> {
   const result = await turso.execute({
     sql: `UPDATE invoices SET status = 'overdue', updated_at = datetime('now')
-           WHERE status = 'sent' AND amount_paid < total AND due_date < date('now')
+           WHERE status IN ('sent', 'partial') AND amount_paid < total AND due_date < date('now')
              AND (reminders_paused = 0 OR reminders_paused IS NULL)`,
   });
   return result.rowsAffected ?? 0;
@@ -508,17 +510,32 @@ export function isOverdueNoticeDue(
   return now >= weekAfterLast;
 }
 
-// The overdue invoices that should receive a notice right now. SQL narrows to
-// overdue + unpaid + reminders active + has a due date; the pure predicate
-// applies the due+7 / weekly cadence so the cadence logic is testable in one
-// place. `now` is injectable for tests.
+// Auto-email eligibility for an overdue invoice (Cody, 2026-06-04: a
+// partially-paid invoice is MARKED overdue for visibility but is NOT
+// auto-dunned; only a fully-unpaid overdue invoice gets an automatic notice).
+// Pure + unit-tested, separate from the date cadence below. The admin can
+// still manually Send a partial-paid overdue invoice; this gates only the cron.
+export function isAutoOverdueEmailEligible(
+  inv: { status: string; amount_paid: number | null; total: number; reminders_paused?: number | null }
+): boolean {
+  if (inv.status !== 'overdue') return false;
+  if (inv.reminders_paused === 1) return false;
+  const paid = inv.amount_paid || 0;
+  if (paid > 0) return false;        // partially paid -> marked overdue, not auto-emailed
+  if (paid >= inv.total) return false; // fully paid (shouldn't be overdue, but guard)
+  return true;
+}
+
+// The overdue invoices that should receive an automatic notice right now. SQL
+// narrows to overdue + has-a-due-date; the pure predicates apply the
+// fully-unpaid eligibility rule and the due+7 / weekly cadence, so both are
+// testable in one place. `now` is injectable for tests.
 export async function getOverdueNoticeCandidates(now: Date = new Date()): Promise<any[]> {
   const rows = await queryAll(
     `SELECT * FROM invoices
-      WHERE status = 'overdue' AND amount_paid < total AND due_date IS NOT NULL
-        AND (reminders_paused = 0 OR reminders_paused IS NULL)`
+      WHERE status = 'overdue' AND due_date IS NOT NULL`
   );
-  return rows.filter(inv => isOverdueNoticeDue(inv, now));
+  return rows.filter(inv => isAutoOverdueEmailEligible(inv) && isOverdueNoticeDue(inv, now));
 }
 
 // Send an overdue notice to each eligible invoice's billing contact (+ the
@@ -626,7 +643,7 @@ export async function previewDailyCron(): Promise<{
 
   const overdueRes = await turso.execute({
     sql: `SELECT id, invoice_number, due_date FROM invoices
-           WHERE status = 'sent' AND amount_paid < total AND due_date < date('now')
+           WHERE status IN ('sent', 'partial') AND amount_paid < total AND due_date < date('now')
              AND (reminders_paused = 0 OR reminders_paused IS NULL)`,
   });
   const would_mark_overdue = (overdueRes.rows as any[]).map(r => ({
@@ -648,15 +665,17 @@ export async function previewDailyCron(): Promise<{
   // still 'sent' but already past due would be marked overdue and then noticed
   // in the same run. To preview the real outcome (not the pre-mark state), the
   // dry run includes 'sent'-and-past-due rows alongside 'overdue' ones, then
-  // applies the same cadence predicate sendOverdueNotices uses.
+  // applies the SAME eligibility (fully-unpaid only; partials are marked
+  // overdue but never auto-emailed) and cadence sendOverdueNotices uses. We
+  // pass status='overdue' into the eligibility predicate because that is the
+  // status these rows will hold after markOverdueInvoices runs.
   const overdueRows = await queryAll(
     `SELECT * FROM invoices
-      WHERE amount_paid < total AND due_date IS NOT NULL
-        AND (reminders_paused = 0 OR reminders_paused IS NULL)
-        AND (status = 'overdue' OR (status = 'sent' AND due_date < date('now')))`
+      WHERE due_date IS NOT NULL
+        AND (status = 'overdue' OR (status IN ('sent', 'partial') AND due_date < date('now')))`
   );
   const would_send_overdue = overdueRows
-    .filter(i => isOverdueNoticeDue(i, now))
+    .filter(i => isAutoOverdueEmailEligible({ ...i, status: 'overdue' }) && isOverdueNoticeDue(i, now))
     .map(i => ({
       id: i.id as string,
       invoice_number: i.invoice_number as string,

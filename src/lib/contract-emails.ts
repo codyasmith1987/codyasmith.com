@@ -20,10 +20,17 @@ interface BrevoAttachment {
 
 interface SendBrevoArgs {
   to: Array<{ email: string; name?: string }>;
+  cc?: Array<{ email: string; name?: string }>;
   subject: string;
   html: string;
   attachments?: BrevoAttachment[];
 }
+
+// Strip CRLF from recipient names (RFC 5322 header-injection defense). Signer
+// names flow in from snapshots, so this matches the safeguard in email.ts that
+// this transport previously lacked.
+const safeRecipients = (list: Array<{ email: string; name?: string }>) =>
+  list.map(r => ({ email: r.email, name: stripCRLF(r.name || '') }));
 
 async function sendBrevo(args: SendBrevoArgs): Promise<boolean> {
   const brevoKey = import.meta.env.BREVO_API_KEY;
@@ -34,10 +41,11 @@ async function sendBrevo(args: SendBrevoArgs): Promise<boolean> {
   try {
     const body: any = {
       sender: { name: FROM_NAME, email: FROM_EMAIL },
-      to: args.to,
+      to: safeRecipients(args.to),
       subject: stripCRLF(args.subject),
       htmlContent: args.html,
     };
+    if (args.cc && args.cc.length > 0) body.cc = safeRecipients(args.cc);
     if (args.attachments && args.attachments.length > 0) body.attachment = args.attachments;
     const res = await fetch(BREVO_ENDPOINT, {
       method: 'POST',
@@ -136,6 +144,7 @@ export async function sendFullyExecutedEmail(args: {
   finalizedAt: string;
   pdfBase64?: string;
   pdfFilename?: string;
+  cc?: Array<{ email: string; name?: string }>;
 }): Promise<boolean> {
   const fn = firstName(args.recipient.name_snapshot);
   // Only promise an attachment when one is actually present. If PDF
@@ -160,6 +169,7 @@ export async function sendFullyExecutedEmail(args: {
   }
   return sendBrevo({
     to: [{ email: args.recipient.email_snapshot, name: args.recipient.name_snapshot }],
+    cc: args.cc,
     subject: hasPdf ? `Contract executed. Your copy is attached.` : `Contract executed`,
     html: shell(inner),
     attachments: attachments.length > 0 ? attachments : undefined,
@@ -177,6 +187,7 @@ export async function sendAtSigningInvoiceEmail(args: {
   invoicesUrl: string;
   pdfBase64?: string;
   pdfFilename?: string;
+  cc?: Array<{ email: string; name?: string }>;
 }): Promise<boolean> {
   const fn = firstName(args.recipient.name_snapshot);
   const amount = '$' + args.amountDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -194,6 +205,7 @@ export async function sendAtSigningInvoiceEmail(args: {
   if (hasPdf) attachments.push({ name: args.pdfFilename!, content: args.pdfBase64! });
   return sendBrevo({
     to: [{ email: args.recipient.email_snapshot, name: args.recipient.name_snapshot }],
+    cc: args.cc,
     subject: `Your invoice to get started: ${args.agreement.title}`,
     html: shell(inner),
     attachments: attachments.length > 0 ? attachments : undefined,

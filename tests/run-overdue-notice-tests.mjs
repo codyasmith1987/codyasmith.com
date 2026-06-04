@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { isOverdueNoticeDue } from '../src/lib/billing.ts';
+import { isOverdueNoticeDue, isAutoOverdueEmailEligible } from '../src/lib/billing.ts';
 
 let passed = 0, failed = 0;
 function test(name, fn) { try { fn(); console.log(`[PASS] ${name}`); passed++; } catch (e) { console.error(`[FAIL] ${name}: ${e.message}`); failed++; } }
@@ -44,6 +44,33 @@ test('a pre-due reminder (before due+7) does not block the first overdue notice'
 
 test('invalid last_reminder_sent past due+7 -> treated as needing a notice', () => {
   assert.strictEqual(isOverdueNoticeDue({ due_date: '2026-06-01', last_reminder_sent: 'not-a-date' }, at('2026-06-20T00:00:00Z')), true);
+});
+
+// --- Auto-email eligibility (Cody 2026-06-04: partials are marked overdue but NOT auto-dunned) ---
+
+test('fully-unpaid overdue invoice IS auto-emailable', () => {
+  assert.strictEqual(isAutoOverdueEmailEligible({ status: 'overdue', amount_paid: 0, total: 500 }), true);
+});
+
+test('partially-paid overdue invoice is NOT auto-emailed (marked only)', () => {
+  assert.strictEqual(isAutoOverdueEmailEligible({ status: 'overdue', amount_paid: 100, total: 500 }), false);
+});
+
+test('non-overdue status is not auto-emailable', () => {
+  assert.strictEqual(isAutoOverdueEmailEligible({ status: 'sent', amount_paid: 0, total: 500 }), false);
+  assert.strictEqual(isAutoOverdueEmailEligible({ status: 'partial', amount_paid: 100, total: 500 }), false);
+});
+
+test('reminders-paused overdue invoice is not auto-emailed', () => {
+  assert.strictEqual(isAutoOverdueEmailEligible({ status: 'overdue', amount_paid: 0, total: 500, reminders_paused: 1 }), false);
+});
+
+test('fully-paid (guard) is not auto-emailed', () => {
+  assert.strictEqual(isAutoOverdueEmailEligible({ status: 'overdue', amount_paid: 500, total: 500 }), false);
+});
+
+test('null amount_paid is treated as zero (auto-emailable)', () => {
+  assert.strictEqual(isAutoOverdueEmailEligible({ status: 'overdue', amount_paid: null, total: 500 }), true);
 });
 
 console.log(`\n${passed}/${passed + failed} passed`);

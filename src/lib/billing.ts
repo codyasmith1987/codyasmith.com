@@ -394,17 +394,20 @@ export async function getDueInvoices(withinDays: number = 3): Promise<any[]> {
   );
 }
 
+// Single source of truth for "which invoices the cron marks overdue". Used by
+// markOverdueInvoices AND previewDailyCron's would_mark_overdue so the dry run
+// can never drift from the live run. Includes 'partial' (Cody, 2026-06-04): a
+// partially-paid past-due invoice is MARKED overdue for visibility; whether it
+// gets an automatic notice is decided separately (isAutoOverdueEmailEligible
+// only emails fully-unpaid ones).
+export const OVERDUE_MARK_WHERE =
+  `status IN ('sent', 'partial') AND amount_paid < total AND due_date < date('now') AND (reminders_paused = 0 OR reminders_paused IS NULL)`;
+
 // Transition unpaid-past-due invoices to 'overdue' so the client-visible status
-// and the red overdue styling in the PDF fire. Includes 'partial' (Cody,
-// 2026-06-04): a partially-paid invoice that goes past due is MARKED overdue
-// for visibility; whether it gets an automatic notice is decided separately
-// (isAutoOverdueEmailEligible only emails fully-unpaid ones). Run from the
-// daily cron. Returns the number of invoices marked.
+// fires. Run from the daily cron. Returns the number of invoices marked.
 export async function markOverdueInvoices(): Promise<number> {
   const result = await turso.execute({
-    sql: `UPDATE invoices SET status = 'overdue', updated_at = datetime('now')
-           WHERE status IN ('sent', 'partial') AND amount_paid < total AND due_date < date('now')
-             AND (reminders_paused = 0 OR reminders_paused IS NULL)`,
+    sql: `UPDATE invoices SET status = 'overdue', updated_at = datetime('now') WHERE ${OVERDUE_MARK_WHERE}`,
   });
   return result.rowsAffected ?? 0;
 }
@@ -642,9 +645,7 @@ export async function previewDailyCron(): Promise<{
   }
 
   const overdueRes = await turso.execute({
-    sql: `SELECT id, invoice_number, due_date FROM invoices
-           WHERE status IN ('sent', 'partial') AND amount_paid < total AND due_date < date('now')
-             AND (reminders_paused = 0 OR reminders_paused IS NULL)`,
+    sql: `SELECT id, invoice_number, due_date FROM invoices WHERE ${OVERDUE_MARK_WHERE}`,
   });
   const would_mark_overdue = (overdueRes.rows as any[]).map(r => ({
     id: r[0] as string,

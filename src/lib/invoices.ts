@@ -189,9 +189,15 @@ export async function getAwaitingAtSigningInvoices(): Promise<Array<{
   );
 }
 
+// Overdue invoices for the admin "Overdue" count/list. Matches a row whether
+// or not the daily cron has flipped it to 'overdue' yet: an already-marked
+// 'overdue' row, OR a still-'sent'/'partial' row already past its due date.
+// (The old query keyed only on status='sent', so once markOverdueInvoices ran
+// the count dropped to 0 even with overdue invoices present.) amount_paid <
+// total excludes anything fully settled.
 export async function getOverdueInvoices(): Promise<Invoice[]> {
   return queryAll(
-    "SELECT * FROM invoices WHERE status = 'sent' AND due_date < date('now') ORDER BY due_date",
+    "SELECT * FROM invoices WHERE (status = 'overdue' OR ((status = 'sent' OR status = 'partial') AND due_date < date('now'))) AND amount_paid < total ORDER BY due_date",
     []
   );
 }

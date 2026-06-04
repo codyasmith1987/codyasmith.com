@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { isOverdueNoticeDue, isAutoOverdueEmailEligible } from '../src/lib/billing.ts';
+import { isOverdueNoticeDue, isAutoOverdueEmailEligible, OVERDUE_MARK_WHERE } from '../src/lib/billing.ts';
 
 let passed = 0, failed = 0;
 function test(name, fn) { try { fn(); console.log(`[PASS] ${name}`); passed++; } catch (e) { console.error(`[FAIL] ${name}: ${e.message}`); failed++; } }
@@ -71,6 +71,15 @@ test('fully-paid (guard) is not auto-emailed', () => {
 
 test('null amount_paid is treated as zero (auto-emailable)', () => {
   assert.strictEqual(isAutoOverdueEmailEligible({ status: 'overdue', amount_paid: null, total: 500 }), true);
+});
+
+// --- The shared mark-overdue predicate (single source for cron + dry-run) ---
+
+test('OVERDUE_MARK_WHERE marks partials too (Cody 2026-06-04)', () => {
+  assert.ok(OVERDUE_MARK_WHERE.includes("'partial'"), 'mark predicate must include partial');
+  assert.ok(OVERDUE_MARK_WHERE.includes("'sent'"), 'mark predicate must include sent');
+  assert.ok(OVERDUE_MARK_WHERE.includes('amount_paid < total'), 'mark predicate must exclude fully-paid');
+  assert.ok(OVERDUE_MARK_WHERE.includes('reminders_paused'), 'mark predicate must honor pause');
 });
 
 console.log(`\n${passed}/${passed + failed} passed`);

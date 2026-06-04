@@ -2,11 +2,13 @@
 import Portal from '../../../layouts/Portal.astro';
 import { getAllClients } from '../../../lib/auth';
 import { getInvoicesByClient } from '../../../lib/invoices';
+import { getClientExpenses } from '../../../lib/client-expenses';
 export const prerender = false;
 
 const clients = await getAllClients();
 const clientId = Astro.url.searchParams.get('client');
 const invoices = clientId ? await getInvoicesByClient(clientId) : [];
+const expenses = clientId ? await getClientExpenses(clientId) : [];
 
 const statusColors: Record<string, string> = {
   draft: 'bg-neutral-700/30 text-neutral-400',
@@ -70,5 +72,99 @@ const statusColors: Record<string, string> = {
         <p class="text-sm text-neutral-500">Create invoices from a contract's detail page.</p>
       </div>
     )}
+
+    {clientId && (
+      <div class="mt-14">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-1">Recurring expenses</p>
+            <p class="text-sm text-neutral-400">Plugin and tool licenses you pay for and pass through. These auto-fill the Reimbursements section of this client's generated invoices.</p>
+          </div>
+          <button id="show-add-expense" class="text-xs text-amber-600 hover:text-amber-600 transition-colors shrink-0 ml-4">+ Add expense</button>
+        </div>
+
+        <form id="add-expense-form" class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 mb-4 hidden">
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <input type="text" id="ae-name" required placeholder="Name (e.g. Kadence Ultimate)" class="sm:col-span-2 px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+            <input type="number" id="ae-amount" required step="0.01" min="0" placeholder="Amount" class="px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+            <select id="ae-frequency" class="px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+              <option value="monthly">Monthly</option>
+              <option value="annual">Annual</option>
+              <option value="one_time">One-time</option>
+            </select>
+          </div>
+          <div class="flex gap-3 mt-4">
+            <button type="submit" class="px-5 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all">Add</button>
+            <button type="button" id="cancel-add-expense" class="text-sm text-neutral-500 hover:text-neutral-300">Cancel</button>
+          </div>
+        </form>
+
+        {expenses.length > 0 ? (
+          <div class="space-y-2">
+            {expenses.map(e => (
+              <div class={`bg-neutral-900/30 border border-white/5 rounded-xl p-4 flex items-center justify-between ${e.active === 0 ? 'opacity-50' : ''}`}>
+                <div>
+                  <p class="text-sm text-neutral-200">{e.name}<span class="ml-2 text-[10px] font-mono text-amber-600/80 uppercase">{e.frequency.replace('_', '-')}</span></p>
+                  <p class="text-xs text-neutral-500 mt-0.5">${e.amount.toFixed(2)} {e.last_billed_on ? `(last billed ${e.last_billed_on})` : '(not yet billed)'}</p>
+                </div>
+                <div class="flex items-center gap-3">
+                  <button data-toggle-expense={e.id} data-active={e.active} class="text-xs text-neutral-400 hover:text-amber-600 transition-colors">{e.active === 1 ? 'Pause' : 'Activate'}</button>
+                  <button data-delete-expense={e.id} class="text-xs text-neutral-400 hover:text-red-400 transition-colors">Delete</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p class="text-sm text-neutral-500 py-3">No recurring expenses for this client yet.</p>
+        )}
+      </div>
+    )}
   </div>
+
+  <script>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const clientId = new URLSearchParams(location.search).get('client');
+
+    const form = document.getElementById('add-expense-form');
+    document.getElementById('show-add-expense')?.addEventListener('click', () => form?.classList.remove('hidden'));
+    document.getElementById('cancel-add-expense')?.addEventListener('click', () => form?.classList.add('hidden'));
+
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const res = await fetch('/portal/api/admin/expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({
+          client_id: clientId,
+          name: (document.getElementById('ae-name') as HTMLInputElement).value.trim(),
+          amount: Number((document.getElementById('ae-amount') as HTMLInputElement).value),
+          frequency: (document.getElementById('ae-frequency') as HTMLSelectElement).value,
+        }),
+      });
+      if (res.ok) location.reload();
+      else { const d = await res.json().catch(() => ({})); (window as any).__toast?.(d.error || 'Failed to add expense', 'error'); }
+    });
+
+    document.querySelectorAll('[data-toggle-expense]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-toggle-expense');
+        const active = btn.getAttribute('data-active') === '1';
+        const res = await fetch(`/portal/api/admin/expenses/${id}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ active: !active }),
+        });
+        if (res.ok) location.reload();
+      });
+    });
+
+    document.querySelectorAll('[data-delete-expense]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-delete-expense');
+        const ok = await ((window as any).__confirm?.({ title: 'Delete expense', message: 'Remove this recurring expense template?', confirmLabel: 'Delete', danger: true }) ?? Promise.resolve(true));
+        if (!ok) return;
+        const res = await fetch(`/portal/api/admin/expenses/${id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken } });
+        if (res.ok) location.reload();
+      });
+    });
+  </script>
 </Portal>

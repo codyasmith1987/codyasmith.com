@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid';
 import turso from './turso';
 import { getAllContracts, getContract, type Contract } from './contracts';
 import { createInvoiceWithGeneratedNumber, addInvoiceItem, getInvoice, updateInvoice } from './invoices';
+import { getExpensesDueForBilling, markExpensesBilled } from './client-expenses';
 import { createNotification } from './notifications';
 import { getUsersByClientId } from './auth';
 import { logger } from './logger';
@@ -279,6 +280,28 @@ export async function generateInvoiceForContract(contract: Contract, createdBy: 
   // Mark charges as billed
   if (chargeIds.length > 0) {
     await markChargesAsBilled(chargeIds, invoiceId);
+  }
+
+  // Reimbursements: active recurring-expense templates due for this invoice's
+  // date (cadence-aware). Each becomes a category='reimbursements' line, then
+  // its last_billed_on is stamped so annual/one_time templates do not re-bill.
+  const billDate = now.toISOString().split('T')[0];
+  const dueExpenses = await getExpensesDueForBilling(contract.client_id, billDate);
+  const billedExpenseIds: string[] = [];
+  for (const exp of dueExpenses) {
+    await addInvoiceItem({
+      invoice_id: invoiceId,
+      name: exp.name,
+      description: exp.name,
+      category: 'reimbursements',
+      frequency: exp.frequency,
+      quantity: 1,
+      unit_price: exp.amount,
+    });
+    billedExpenseIds.push(exp.id);
+  }
+  if (billedExpenseIds.length > 0) {
+    await markExpensesBilled(billedExpenseIds, billDate);
   }
 
   return invoiceId;

@@ -26,11 +26,15 @@ interface SendBrevoArgs {
   attachments?: BrevoAttachment[];
 }
 
-// Strip CRLF from recipient names (RFC 5322 header-injection defense). Signer
-// names flow in from snapshots, so this matches the safeguard in email.ts that
-// this transport previously lacked.
+// Strip CRLF from recipient names (RFC 5322 header-injection defense), and OMIT
+// the name key when empty: Brevo rejects an empty-string name with HTTP 400
+// "name is missing in to". Signer `to` names come from snapshots (populated),
+// but the accountant cc carries no name, so this guard matters there.
 const safeRecipients = (list: Array<{ email: string; name?: string }>) =>
-  list.map(r => ({ email: r.email, name: stripCRLF(r.name || '') }));
+  list.map(r => {
+    const n = stripCRLF(r.name || '');
+    return n ? { email: r.email, name: n } : { email: r.email };
+  });
 
 async function sendBrevo(args: SendBrevoArgs): Promise<boolean> {
   const brevoKey = import.meta.env.BREVO_API_KEY;

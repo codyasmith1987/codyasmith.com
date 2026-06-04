@@ -16,6 +16,14 @@ export interface SendEmailOptions {
   attachments?: { name: string; content: string }[]; // content is base64
 }
 
+// Shape a recipient for the Brevo API. Brevo REJECTS an empty-string name
+// ("name is missing in to", HTTP 400), so omit the name key entirely when there
+// is no name rather than sending name: ''. CRLF-stripped for header safety.
+export function toBrevoRecipient(email: string, name?: string): { email: string; name?: string } {
+  const n = stripCRLF(name || '');
+  return n ? { email, name: n } : { email };
+}
+
 export async function sendEmail(
   to: { email: string; name: string }[],
   subject: string,
@@ -33,7 +41,7 @@ export async function sendEmail(
   // (RFC 5322 header injection). Brevo's JSON API is unlikely to honor
   // these in practice, but we strip at the application boundary.
   const safeSubject = stripCRLF(subject);
-  const safeTo = to.map(t => ({ email: t.email, name: stripCRLF(t.name || '') }));
+  const safeTo = to.map(t => toBrevoRecipient(t.email, t.name));
 
   try {
     const body: any = {
@@ -43,7 +51,7 @@ export async function sendEmail(
       htmlContent,
     };
     if (opts?.cc && opts.cc.length > 0) {
-      body.cc = opts.cc.map(c => ({ email: c.email, name: stripCRLF(c.name || '') }));
+      body.cc = opts.cc.map(c => toBrevoRecipient(c.email, c.name));
     }
     if (opts?.attachments && opts.attachments.length > 0) {
       body.attachment = opts.attachments;

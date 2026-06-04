@@ -17,6 +17,7 @@ export interface ClientExpense {
   frequency: ExpenseFrequency;
   active: number;
   last_billed_on: string | null;
+  billed_invoice_id: string | null;
   notes: string | null;
   created_by: string;
   created_at: string;
@@ -51,7 +52,7 @@ export function expenseDueForBilling(
   }
 }
 
-const COLS = 'id, client_id, name, amount, frequency, active, last_billed_on, notes, created_by, created_at, updated_at';
+const COLS = 'id, client_id, name, amount, frequency, active, last_billed_on, billed_invoice_id, notes, created_by, created_at, updated_at';
 
 function rowToExpense(columns: string[], row: any[]): ClientExpense {
   return Object.fromEntries(columns.map((c, i) => [c, row[i]])) as unknown as ClientExpense;
@@ -87,13 +88,23 @@ export async function getExpensesDueForBilling(clientId: string, asOf: string): 
   return r.rows.map(row => rowToExpense(r.columns, row as any[])).filter(e => expenseDueForBilling(e, asOf));
 }
 
-export async function markExpensesBilled(ids: string[], dateISO: string): Promise<void> {
+export async function markExpensesBilled(ids: string[], dateISO: string, invoiceId: string): Promise<void> {
   for (const id of ids) {
     await turso.execute({
-      sql: `UPDATE client_expenses SET last_billed_on = ?, updated_at = datetime('now') WHERE id = ?`,
-      args: [dateISO, id],
+      sql: `UPDATE client_expenses SET last_billed_on = ?, billed_invoice_id = ?, updated_at = datetime('now') WHERE id = ?`,
+      args: [dateISO, invoiceId, id],
     });
   }
+}
+
+// When an invoice that billed recurring-expense templates is deleted, un-stamp
+// those templates so they become due again on the next generation (otherwise an
+// annual/one_time template would silently skip its cycle - dual-audit finding).
+export async function clearExpenseBillingForInvoice(invoiceId: string): Promise<void> {
+  await turso.execute({
+    sql: `UPDATE client_expenses SET last_billed_on = NULL, billed_invoice_id = NULL, updated_at = datetime('now') WHERE billed_invoice_id = ?`,
+    args: [invoiceId],
+  });
 }
 
 export async function updateClientExpense(

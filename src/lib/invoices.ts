@@ -2,6 +2,7 @@
 
 import { nanoid } from 'nanoid';
 import turso from './turso';
+import { clearExpenseBillingForInvoice } from './client-expenses';
 
 // --- Column allowlists for dynamic UPDATE builders ---
 const UPDATABLE_COLUMNS: Record<string, Set<string>> = {
@@ -336,6 +337,9 @@ export async function duplicateInvoice(sourceId: string, createdBy: string): Pro
 }
 
 export async function deleteInvoice(id: string): Promise<void> {
+  // Un-stamp any recurring-expense templates this invoice billed, so they become
+  // due again on the next generation instead of silently skipping their cycle.
+  await clearExpenseBillingForInvoice(id);
   await turso.execute({ sql: 'DELETE FROM invoice_items WHERE invoice_id = ?', args: [id] });
   await turso.execute({ sql: 'DELETE FROM payments WHERE invoice_id = ?', args: [id] });
   await turso.execute({ sql: 'DELETE FROM invoices WHERE id = ?', args: [id] });

@@ -247,10 +247,16 @@ export async function generateInvoiceForContract(contract: Contract, createdBy: 
     client_visible: 1,
   });
 
-  // Add recurring amount line item
+  // Add recurring amount line item (structured: a monthly Services line named
+  // for the contract, with the billing period as the sub-description). Amount
+  // unchanged; description kept for the legacy fallback.
   await addInvoiceItem({
     invoice_id: invoiceId,
+    name: contract.title,
+    sub_description: `${period.start} to ${period.end}`,
     description: `${contract.title} (${period.start} to ${period.end})`,
+    category: 'services',
+    frequency: 'monthly',
     quantity: 1,
     unit_price: contract.recurring_amount,
   });
@@ -261,7 +267,9 @@ export async function generateInvoiceForContract(contract: Contract, createdBy: 
   for (const charge of pendingCharges) {
     await addInvoiceItem({
       invoice_id: invoiceId,
+      name: charge.description,
       description: charge.description,
+      category: 'services',
       quantity: 1,
       unit_price: charge.amount,
     });

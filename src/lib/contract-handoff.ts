@@ -152,7 +152,7 @@ export async function ensureBillingContractFromAgreement(
 
     for (const li of atSigningItems) {
       if (typeof li.amount === 'number' && li.amount !== 0) {
-        await addInvoiceItem({ invoice_id: id, description: String(li.label || 'Line item'), unit_price: li.amount });
+        await addInvoiceItem({ invoice_id: id, name: String(li.label || 'Line item'), description: String(li.label || 'Line item'), category: 'services', unit_price: li.amount });
       }
     }
   }

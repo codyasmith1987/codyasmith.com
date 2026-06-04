@@ -5,7 +5,7 @@ import turso from './turso';
 
 // --- Column allowlists for dynamic UPDATE builders ---
 const UPDATABLE_COLUMNS: Record<string, Set<string>> = {
-  invoices: new Set(['status', 'issued_date', 'due_date', 'subtotal', 'tax', 'total', 'amount_paid', 'notes', 'client_visible', 'billing_period_start', 'billing_period_end', 'last_reminder_sent', 'title', 'terms_label', 'bill_to_snapshot', 'reminders_paused']),
+  invoices: new Set(['status', 'issued_date', 'due_date', 'subtotal', 'tax', 'total', 'amount_paid', 'notes', 'client_visible', 'billing_period_start', 'billing_period_end', 'last_reminder_sent', 'title', 'terms_label', 'bill_to_snapshot', 'reminders_paused', 'invoice_number']),
   invoice_items: new Set(['description', 'quantity', 'unit_price', 'amount', 'sort_order', 'name', 'sub_description', 'frequency', 'category']),
   change_orders: new Set(['title', 'description', 'status', 'cost_impact', 'time_impact_days']),
 };
@@ -205,8 +205,17 @@ export async function getClientVisibleInvoices(clientId: string): Promise<Pick<I
 export async function updateInvoice(id: string, data: Partial<Pick<Invoice,
   'status' | 'issued_date' | 'due_date' | 'subtotal' | 'tax' | 'total' | 'amount_paid' | 'notes' | 'client_visible' |
   'billing_period_start' | 'billing_period_end' | 'last_reminder_sent' |
-  'title' | 'terms_label' | 'bill_to_snapshot' | 'reminders_paused'
+  'title' | 'terms_label' | 'bill_to_snapshot' | 'reminders_paused' | 'invoice_number'
 >>): Promise<void> {
+  // The invoice number is editable (manual override of the auto-generated one),
+  // but must stay unique. Reject a collision with a DIFFERENT invoice before
+  // writing. The caller surfaces this as a 409, not a 500.
+  if (data.invoice_number !== undefined) {
+    const clash = await getInvoiceByNumber(data.invoice_number);
+    if (clash && clash.id !== id) {
+      throw new Error(`Invoice number "${data.invoice_number}" is already in use`);
+    }
+  }
   const update = buildSafeUpdate('invoices', id, data);
   if (!update) return;
   await turso.execute(update);
@@ -379,7 +388,7 @@ export async function getInvoiceItems(invoiceId: string): Promise<InvoiceItem[]>
 }
 
 export async function updateInvoiceItem(id: string, data: Partial<Pick<InvoiceItem,
-  'description' | 'quantity' | 'unit_price' | 'sort_order'
+  'description' | 'quantity' | 'unit_price' | 'sort_order' | 'name' | 'sub_description' | 'frequency' | 'category'
 >>): Promise<void> {
   const allowed = UPDATABLE_COLUMNS.invoice_items;
   const fields: string[] = [];

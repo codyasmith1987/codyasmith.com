@@ -47,6 +47,16 @@ const statusColors: Record<string, string> = {
 
     <!-- Invoice fields -->
     <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-8">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Invoice number</label>
+          <input type="text" id="f-number" value={invoice.invoice_number} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Title (optional)</label>
+          <input type="text" id="f-title" value={invoice.title || ''} placeholder="May 2026 Web Management" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+        </div>
+      </div>
       <div class="grid grid-cols-1 sm:grid-cols-4 gap-5">
         <div>
           <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" title="draft: not yet sent | sent: emailed to client, awaiting payment | paid: full balance received | partial: payment received but balance remains | overdue: past due date, not paid | cancelled: voided, no payment expected">Status</label>
@@ -82,6 +92,17 @@ const statusColors: Record<string, string> = {
             <option value="0" selected={invoice.client_visible === 0}>No</option>
           </select>
         </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Payment terms</label>
+          <input type="text" id="f-terms" value={invoice.terms_label || ''} placeholder="Upon Receipt" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" title="Active: due and overdue reminder emails send on schedule. Paused: this invoice is skipped.">Reminders</label>
+          <select id="f-reminders" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+            <option value="0" selected={invoice.reminders_paused === 0}>Active</option>
+            <option value="1" selected={invoice.reminders_paused === 1}>Paused</option>
+          </select>
+        </div>
       </div>
       <div class="mt-5">
         <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Notes</label>
@@ -99,7 +120,20 @@ const statusColors: Record<string, string> = {
 
       <form id="add-item-form" class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 mb-4 hidden">
         <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
-          <input type="text" id="ai-desc" required placeholder="Description" class="sm:col-span-2 px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          <input type="text" id="ai-name" required placeholder="Name (e.g. Web Management - ZipKit Homes)" class="sm:col-span-2 px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          <select id="ai-category" class="px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+            <option value="services">Services</option>
+            <option value="reimbursements">Reimbursement</option>
+          </select>
+          <select id="ai-frequency" class="px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+            <option value="">No tag</option>
+            <option value="monthly">Monthly</option>
+            <option value="annual">Annual</option>
+            <option value="one_time">One-time</option>
+          </select>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mt-4">
+          <input type="text" id="ai-sub" placeholder="Sub-description (e.g. zipkithomes.com service)" class="sm:col-span-2 px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
           <input type="number" id="ai-qty" value="1" min="1" step="1" placeholder="Qty" class="px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
           <input type="number" id="ai-price" required step="0.01" placeholder="Unit price" class="px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
         </div>
@@ -124,7 +158,14 @@ const statusColors: Record<string, string> = {
             <tbody>
               {items.map(item => (
                 <tr class="border-b border-white/5 last:border-0 group">
-                  <td class="px-5 py-3 text-neutral-300">{item.description}</td>
+                  <td class="px-5 py-3">
+                    <div class="text-neutral-300">
+                      {item.name || item.description}
+                      {item.frequency && <span class="ml-2 text-[10px] font-mono text-amber-600/80 uppercase">{item.frequency.replace('_', '-')}</span>}
+                    </div>
+                    {item.sub_description && <div class="text-xs text-neutral-500 mt-0.5">{item.sub_description}</div>}
+                    {item.category === 'reimbursements' && <div class="text-[10px] font-mono text-neutral-500 uppercase mt-1">Reimbursement</div>}
+                  </td>
                   <td class="px-5 py-3 text-right text-neutral-400 font-mono">{item.quantity}</td>
                   <td class="px-5 py-3 text-right text-neutral-400 font-mono">${item.unit_price.toFixed(2)}</td>
                   <td class="px-5 py-3 text-right text-neutral-200 font-mono">${item.amount.toFixed(2)}</td>
@@ -215,15 +256,19 @@ const statusColors: Record<string, string> = {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
           body: JSON.stringify({
+            invoice_number: document.getElementById('f-number').value.trim(),
             status: document.getElementById('f-status').value,
             issued_date: document.getElementById('f-issued').value || null,
             due_date: document.getElementById('f-due').value || null,
             client_visible: Number(document.getElementById('f-visible').value),
             notes: document.getElementById('f-notes').value.trim() || null,
+            title: document.getElementById('f-title').value.trim() || null,
+            terms_label: document.getElementById('f-terms').value.trim() || null,
+            reminders_paused: Number(document.getElementById('f-reminders').value),
           }),
         });
         if (res.ok) window.__toast('Invoice saved.', 'success');
-        else window.__toast('Failed to save invoice.', 'error');
+        else { const e = await res.json().catch(() => ({})); window.__toast(e.error || 'Failed to save invoice.', 'error'); }
       });
     });
 
@@ -275,7 +320,11 @@ const statusColors: Record<string, string> = {
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
           body: JSON.stringify({
             action: 'add_item',
-            description: document.getElementById('ai-desc').value.trim(),
+            name: document.getElementById('ai-name').value.trim(),
+            description: document.getElementById('ai-name').value.trim(),
+            sub_description: document.getElementById('ai-sub').value.trim() || null,
+            category: document.getElementById('ai-category').value,
+            frequency: document.getElementById('ai-frequency').value || null,
             quantity: Number(document.getElementById('ai-qty').value),
             unit_price: Number(document.getElementById('ai-price').value),
           }),

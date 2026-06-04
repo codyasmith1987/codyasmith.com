@@ -5,7 +5,8 @@ import turso from './turso';
 import { getAllContracts, getContract, type Contract } from './contracts';
 import { createInvoiceWithGeneratedNumber, addInvoiceItem, getInvoice, updateInvoice } from './invoices';
 import { getExpensesDueForBilling, markExpensesBilled } from './client-expenses';
-import { getAgreementByContractId } from './agreements';
+import { getAgreementByContractId, getClientMetadata } from './agreements';
+import { resolveInvoiceRecipients } from './invoice-emails';
 import { createNotification } from './notifications';
 import { getUsersByClientId } from './auth';
 import { logger } from './logger';
@@ -393,31 +394,46 @@ export async function getDueInvoices(withinDays: number = 3): Promise<any[]> {
   );
 }
 
-// Transition sent-but-unpaid invoices past their due date to 'overdue'.
-// The status is otherwise unreachable (nothing ever sets it), so the
-// client-visible status and the red overdue styling in the PDF never fire.
-// Run from the daily cron. Returns the number of invoices marked.
+// Single source of truth for "which invoices the cron marks overdue". Used by
+// markOverdueInvoices AND previewDailyCron's would_mark_overdue so the dry run
+// can never drift from the live run. Includes 'partial' (Cody, 2026-06-04): a
+// partially-paid past-due invoice is MARKED overdue for visibility; whether it
+// gets an automatic notice is decided separately (isAutoOverdueEmailEligible
+// only emails fully-unpaid ones).
+export const OVERDUE_MARK_WHERE =
+  `status IN ('sent', 'partial') AND amount_paid < total AND due_date < date('now') AND (reminders_paused = 0 OR reminders_paused IS NULL)`;
+
+// Transition unpaid-past-due invoices to 'overdue' so the client-visible status
+// fires. Run from the daily cron. Returns the number of invoices marked.
 export async function markOverdueInvoices(): Promise<number> {
   const result = await turso.execute({
-    sql: `UPDATE invoices SET status = 'overdue', updated_at = datetime('now')
-           WHERE status = 'sent' AND amount_paid < total AND due_date < date('now')
-             AND (reminders_paused = 0 OR reminders_paused IS NULL)`,
+    sql: `UPDATE invoices SET status = 'overdue', updated_at = datetime('now') WHERE ${OVERDUE_MARK_WHERE}`,
   });
   return result.rowsAffected ?? 0;
 }
 
-export async function sendDueReminders(): Promise<number> {
+export async function sendDueReminders(): Promise<{ sent: number; failed: number }> {
   const { sendEmail } = await import('./email');
   const dueInvoices = await getDueInvoices(3);
-  let sent = 0;
+  let sent = 0, failed = 0;
 
   for (const invoice of dueInvoices) {
     try {
       const contract = await getContract(invoice.contract_id);
       if (!contract) continue;
 
-      const users = await getUsersByClientId(contract.client_id);
-      if (users.length === 0) continue;
+      // Recipient model (Cody, 2026-06-04): a payment reminder is a financial
+      // notice, so it goes to the billing contact + accountant CC, not every
+      // portal user. Falls back to the first portal user if no contact is set.
+      const meta = await getClientMetadata(invoice.client_id).catch(() => null);
+      const users = await getUsersByClientId(invoice.client_id);
+      const recipients = resolveInvoiceRecipients({
+        primaryEmail: meta?.primary_contact_email,
+        billingCcEmail: meta?.billing_cc_email,
+        extraEmail: invoice.extra_recipient_email,
+        fallbackEmails: users.map(u => u.email),
+      });
+      if (recipients.to.length === 0) continue;
 
       const portalUrl = import.meta.env.SITE || 'https://codyasmith.com';
       // An at-signing invoice (no billing period) gates work starting per
@@ -431,7 +447,7 @@ export async function sendDueReminders(): Promise<number> {
         ? `Your at-signing invoice <strong>${invoice.invoice_number}</strong> for <strong>$${invoice.total.toFixed(2)}</strong> is due on <strong>${invoice.due_date}</strong>. Work begins as soon as it clears.`
         : `Invoice <strong>${invoice.invoice_number}</strong> for <strong>$${invoice.total.toFixed(2)}</strong> is due on <strong>${invoice.due_date}</strong>.`;
       const ok = await sendEmail(
-        users.map(u => ({ email: u.email, name: u.name })),
+        recipients.to.map(e => ({ email: e, name: '' })),
         subject,
         `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
@@ -445,19 +461,23 @@ export async function sendDueReminders(): Promise<number> {
             <a href="${portalUrl}" style="color: #a3a3a3;">codyasmith.com</a>
           </p>
         </div>
-        `
+        `,
+        { cc: recipients.cc.map(e => ({ email: e })) }
       );
 
       if (ok) {
         await updateInvoice(invoice.id, { last_reminder_sent: new Date().toISOString() });
         sent++;
+      } else {
+        failed++;
       }
     } catch (err) {
       logger.error(`Failed to send reminder for invoice ${invoice.id}`, err);
+      failed++;
     }
   }
 
-  return sent;
+  return { sent, failed };
 }
 
 // Lightweight check — call on admin page load
@@ -469,6 +489,128 @@ export async function checkAndSendReminders(): Promise<void> {
   }
 }
 
+// ============================================================
+// Overdue Notices (Cody, 2026-06-04: first at due+7, then weekly until paid)
+// ============================================================
+
+// Pure cadence predicate, unit-tested: is an overdue invoice due for an
+// overdue notice as of `now`? The first notice fires 7 days after the due
+// date; subsequent notices fire weekly, keyed off last_reminder_sent. The
+// caller is responsible for the status/paid/reminders-paused gates (so this
+// stays a pure date function). All math in UTC for determinism.
+export function isOverdueNoticeDue(
+  inv: { due_date: string | null; last_reminder_sent: string | null },
+  now: Date = new Date()
+): boolean {
+  if (!inv.due_date) return false;
+  const due = new Date(inv.due_date + 'T00:00:00Z');
+  if (isNaN(due.getTime())) return false;
+  const firstNotice = new Date(due);
+  firstNotice.setUTCDate(firstNotice.getUTCDate() + 7);
+  if (now < firstNotice) return false;
+  if (!inv.last_reminder_sent) return true;
+  const last = new Date(inv.last_reminder_sent);
+  if (isNaN(last.getTime())) return true;
+  const weekAfterLast = new Date(last);
+  weekAfterLast.setUTCDate(weekAfterLast.getUTCDate() + 7);
+  return now >= weekAfterLast;
+}
+
+// Auto-email eligibility for an overdue invoice (Cody, 2026-06-04: a
+// partially-paid invoice is MARKED overdue for visibility but is NOT
+// auto-dunned; only a fully-unpaid overdue invoice gets an automatic notice).
+// Pure + unit-tested, separate from the date cadence below. The admin can
+// still manually Send a partial-paid overdue invoice; this gates only the cron.
+export function isAutoOverdueEmailEligible(
+  inv: { status: string; amount_paid: number | null; total: number; reminders_paused?: number | null }
+): boolean {
+  if (inv.status !== 'overdue') return false;
+  if (inv.reminders_paused === 1) return false;
+  const paid = inv.amount_paid || 0;
+  if (paid > 0) return false;        // partially paid -> marked overdue, not auto-emailed
+  if (paid >= inv.total) return false; // fully paid (shouldn't be overdue, but guard)
+  return true;
+}
+
+// The overdue invoices that should receive an automatic notice right now. SQL
+// narrows to overdue + has-a-due-date; the pure predicates apply the
+// fully-unpaid eligibility rule and the due+7 / weekly cadence, so both are
+// testable in one place. `now` is injectable for tests.
+export async function getOverdueNoticeCandidates(now: Date = new Date()): Promise<any[]> {
+  const rows = await queryAll(
+    `SELECT * FROM invoices
+      WHERE status = 'overdue' AND due_date IS NOT NULL`
+  );
+  return rows.filter(inv => isAutoOverdueEmailEligible(inv) && isOverdueNoticeDue(inv, now));
+}
+
+// Send an overdue notice to each eligible invoice's billing contact (+ the
+// accountant CC and any per-invoice extra). Firm but kind, value-first (keep
+// the engagement uninterrupted). Stamps last_reminder_sent so the weekly
+// cadence advances. Honors reminders_paused via the candidate query. Returns
+// the count sent. Run from the daily cron, after markOverdueInvoices.
+export async function sendOverdueNotices(now: Date = new Date()): Promise<{ sent: number; failed: number }> {
+  const { sendEmail } = await import('./email');
+  const candidates = await getOverdueNoticeCandidates(now);
+  let sent = 0, failed = 0;
+
+  for (const invoice of candidates) {
+    try {
+      const meta = await getClientMetadata(invoice.client_id).catch(() => null);
+      const users = await getUsersByClientId(invoice.client_id);
+      const recipients = resolveInvoiceRecipients({
+        primaryEmail: meta?.primary_contact_email,
+        billingCcEmail: meta?.billing_cc_email,
+        extraEmail: invoice.extra_recipient_email,
+        fallbackEmails: users.map(u => u.email),
+      });
+      if (recipients.to.length === 0) continue;
+
+      const portalUrl = import.meta.env.SITE || 'https://codyasmith.com';
+      const balance = invoice.total - (invoice.amount_paid || 0);
+      const balanceStr = '$' + balance.toFixed(2);
+      const isAtSigning = !invoice.billing_period_start;
+      const subject = `Past due: invoice ${invoice.invoice_number} (${balanceStr})`;
+      // Name the consequence so the reminder is useful, not just a nag: an
+      // at-signing invoice gates work starting; a recurring one keeps service
+      // going. Keep it warm and resolvable (reply to sort it out).
+      const stakesLine = isAtSigning
+        ? 'Work begins as soon as it clears, so settling it gets us moving.'
+        : 'Keeping it current keeps your service running without interruption.';
+      const ok = await sendEmail(
+        recipients.to.map(e => ({ email: e, name: '' })),
+        subject,
+        `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+          <h2 style="color: #171717; margin-bottom: 16px;">A quick note on invoice ${invoice.invoice_number}</h2>
+          <p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">Invoice <strong>${invoice.invoice_number}</strong> was due on <strong>${invoice.due_date}</strong> and shows a balance of <strong>${balanceStr}</strong>. ${stakesLine}</p>
+          <p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">If it is already on its way, thank you and please disregard. If something needs sorting out, just reply and we will take care of it.</p>
+          <a href="${portalUrl}/portal/invoices" style="display: inline-block; background: #f59e0b; color: #0a0a0a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; margin-top: 16px;">
+            View invoice in portal
+          </a>
+          <p style="color: #a3a3a3; font-size: 12px; margin-top: 32px;">
+            <a href="${portalUrl}" style="color: #a3a3a3;">codyasmith.com</a>
+          </p>
+        </div>
+        `,
+        { cc: recipients.cc.map(e => ({ email: e })) }
+      );
+
+      if (ok) {
+        await updateInvoice(invoice.id, { last_reminder_sent: now.toISOString() });
+        sent++;
+      } else {
+        failed++;
+      }
+    } catch (err) {
+      logger.error(`Failed to send overdue notice for invoice ${invoice.id}`, err);
+      failed++;
+    }
+  }
+
+  return { sent, failed };
+}
+
 // Read-only preview of what the daily cron WOULD do, for verifying the
 // trigger before it fires real invoices. Mirrors the gating in
 // generateInvoiceForContract, markOverdueInvoices, and getDueInvoices, but
@@ -477,6 +619,7 @@ export async function previewDailyCron(): Promise<{
   would_generate: Array<{ contract_id: string; title: string; client_id: string; period_start: string; period_end: string; amount: number }>;
   would_mark_overdue: Array<{ id: string; invoice_number: string; due_date: string | null }>;
   would_remind: Array<{ id: string; invoice_number: string; due_date: string | null; total: number }>;
+  would_send_overdue: Array<{ id: string; invoice_number: string; due_date: string | null; balance: number }>;
 }> {
   const now = new Date();
 
@@ -508,9 +651,7 @@ export async function previewDailyCron(): Promise<{
   }
 
   const overdueRes = await turso.execute({
-    sql: `SELECT id, invoice_number, due_date FROM invoices
-           WHERE status = 'sent' AND amount_paid < total AND due_date < date('now')
-             AND (reminders_paused = 0 OR reminders_paused IS NULL)`,
+    sql: `SELECT id, invoice_number, due_date FROM invoices WHERE ${OVERDUE_MARK_WHERE}`,
   });
   const would_mark_overdue = (overdueRes.rows as any[]).map(r => ({
     id: r[0] as string,
@@ -526,5 +667,28 @@ export async function previewDailyCron(): Promise<{
     total: i.total as number,
   }));
 
-  return { would_generate, would_mark_overdue, would_remind };
+  // Overdue notices the cron would send right now (due+7, then weekly). The
+  // live cron runs markOverdueInvoices BEFORE sendOverdueNotices, so an invoice
+  // still 'sent' but already past due would be marked overdue and then noticed
+  // in the same run. To preview the real outcome (not the pre-mark state), the
+  // dry run includes 'sent'-and-past-due rows alongside 'overdue' ones, then
+  // applies the SAME eligibility (fully-unpaid only; partials are marked
+  // overdue but never auto-emailed) and cadence sendOverdueNotices uses. We
+  // pass status='overdue' into the eligibility predicate because that is the
+  // status these rows will hold after markOverdueInvoices runs.
+  const overdueRows = await queryAll(
+    `SELECT * FROM invoices
+      WHERE due_date IS NOT NULL
+        AND (status = 'overdue' OR (status IN ('sent', 'partial') AND due_date < date('now')))`
+  );
+  const would_send_overdue = overdueRows
+    .filter(i => isAutoOverdueEmailEligible({ ...i, status: 'overdue' }) && isOverdueNoticeDue(i, now))
+    .map(i => ({
+      id: i.id as string,
+      invoice_number: i.invoice_number as string,
+      due_date: (i.due_date as string | null) ?? null,
+      balance: (i.total as number) - ((i.amount_paid as number) || 0),
+    }));
+
+  return { would_generate, would_mark_overdue, would_remind, would_send_overdue };
 }

@@ -227,3 +227,16 @@ Independence: 3 and 4 both depend on 0-2, not each other. 5/6/7 depend on 0-2 + 
 5. **Store + attach PDF.** LOCKED: attach always; store immutable copy in Slice 7.
 6. **Seller profile.** LOCKED: seeded `seller_profile` table; letterhead seeded from the hand invoices (Cody Smith / 604 Morningside Cir / Cedar City, UT 84720 / cody@codyasmith.com / 435-868-7133 / "Operating as Cody A Smith LLC (Utah)"). Editable later without deploy. (Flagged to Cody that the street address prints client-facing, as it does today.)
 7. **"Upon Receipt" derivation.** LOCKED: per-invoice editable `terms_label` (default derived from `payment_terms_days`); leave the contract default alone until a global decision.
+
+---
+
+## 8. AS-BUILT NOTE — Slices 5 + 6 (added 2026-06-04, extends the plan above; roots preserved)
+
+Built on branch `invoice-email-recipients` (NOT merged; the two client-facing senders await Cody's sign-off). Differences from the plan worth recording:
+
+- **Recipient model (Cody, 2026-06-04).** Invoices + overdue notices go to the per-client PRIMARY billing contact (`client_metadata.primary_contact_email`), NOT every portal user. An accountant CC (`client_metadata.billing_cc_email`) rides financial notices only; a per-invoice `extra_recipient_email` is a one-off CC. Resolved by the pure, unit-tested `resolveInvoiceRecipients` (`src/lib/invoice-emails.ts`). Migration **067** adds the two columns (PRAGMA-guarded). Admin setters: per-client section + `billing-contacts` API on `/portal/admin/invoices`; per-invoice field on the editor.
+- **Transport.** Rather than a 3rd Brevo copy, `sendEmail` (`src/lib/email.ts`) gained optional `cc` + `attachments`, and now returns the REAL Brevo result (it previously returned `true` on a 4xx, which silently stamped `last_reminder_sent` on failed sends). The pre-due `sendDueReminders` was ALSO rerouted through the recipient model for consistency (it was blasting all portal users).
+- **Overdue cadence.** First notice at **due+7**, then weekly via `last_reminder_sent`, honoring `reminders_paused`. Pure predicate `isOverdueNoticeDue` (9/9 unit test); `sendOverdueNotices` runs from `/api/cron/daily` after `markOverdueInvoices`; `previewDailyCron.would_send_overdue` includes sent-and-past-due rows so the dry run matches the post-mark real run.
+- **Send action.** `sendInvoiceEmail` freezes `bill_to_snapshot` from live metadata, generates+attaches the PDF, sets `status=sent` + `issued_date` + `client_visible=1` on success (the `client_visible=1` was a dual-audit fix: a manually-sent draft was otherwise left hidden while the email said "it's in your portal").
+
+**Open decisions surfaced by the Slice 5/6 dual audit (detail in the memory tracker):** (D1) `partial`-status invoices currently escape the whole reminder/overdue pipeline (recommend broadening the collection queries to `status IN ('sent','partial')`); (D2) route the contract + at-signing-invoice emails through the recipient model + accountant CC (also fixes a CRLF-strip security-parity gap in `contract-emails.ts` `sendBrevo`); (D3) admin alerting when overdue notices fire / an automated send fails; (D4 minor) `onInvoiceSent` idempotency, a ~1-day first-overdue slip from the shared `last_reminder_sent` column, "Resend" relabel + send-state in the list.

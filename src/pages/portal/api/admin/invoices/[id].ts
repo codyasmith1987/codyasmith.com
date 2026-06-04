@@ -85,6 +85,7 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
       ...(body.title !== undefined && { title: body.title }),
       ...(body.terms_label !== undefined && { terms_label: body.terms_label }),
       ...(body.reminders_paused !== undefined && { reminders_paused: body.reminders_paused ? 1 : 0 }),
+      ...(body.extra_recipient_email !== undefined && { extra_recipient_email: (String(body.extra_recipient_email).trim() || null) }),
     });
 
     // Tax is stored on the invoice but the total is subtotal + tax. Setting tax

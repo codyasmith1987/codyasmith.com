@@ -15,7 +15,8 @@
 import type { APIRoute } from 'astro';
 import turso from '../../../lib/turso';
 import { logger } from '../../../lib/logger';
-import { markOverdueInvoices, generateRecurringInvoices, sendDueReminders, previewDailyCron } from '../../../lib/billing';
+import { markOverdueInvoices, generateRecurringInvoices, sendDueReminders, sendOverdueNotices, previewDailyCron } from '../../../lib/billing';
+import { onAutomatedFailure } from '../../../lib/triggers';
 
 export const prerender = false;
 
@@ -56,6 +57,7 @@ export const POST: APIRoute = async ({ request }) => {
   } catch (err: any) {
     logger.error('cron: markOverdueInvoices failed', err);
     result.overdue_error = err?.message || 'failed';
+    await onAutomatedFailure('markOverdueInvoices', err?.message || 'failed');
   }
 
   if (systemUserId) {
@@ -66,16 +68,34 @@ export const POST: APIRoute = async ({ request }) => {
     } catch (err: any) {
       logger.error('cron: generateRecurringInvoices failed', err);
       result.invoices_error = err?.message || 'failed';
+      await onAutomatedFailure('generateRecurringInvoices', err?.message || 'failed');
     }
   } else {
     result.invoices_skipped_reason = 'no admin user found for created_by';
   }
 
   try {
-    result.reminders_sent = await sendDueReminders();
+    const r = await sendDueReminders();
+    result.reminders_sent = r.sent;
+    result.reminders_failed = r.failed;
+    if (r.failed > 0) await onAutomatedFailure('sendDueReminders', `${r.failed} due-reminder email(s) failed to send (Brevo rejected or errored).`);
   } catch (err: any) {
     logger.error('cron: sendDueReminders failed', err);
     result.reminders_error = err?.message || 'failed';
+    await onAutomatedFailure('sendDueReminders', err?.message || 'failed');
+  }
+
+  // Overdue notices run AFTER markOverdueInvoices so a freshly-overdue invoice
+  // is eligible the same day it crosses due+7.
+  try {
+    const r = await sendOverdueNotices();
+    result.overdue_notices_sent = r.sent;
+    result.overdue_notices_failed = r.failed;
+    if (r.failed > 0) await onAutomatedFailure('sendOverdueNotices', `${r.failed} overdue-notice email(s) failed to send (Brevo rejected or errored).`);
+  } catch (err: any) {
+    logger.error('cron: sendOverdueNotices failed', err);
+    result.overdue_notices_error = err?.message || 'failed';
+    await onAutomatedFailure('sendOverdueNotices', err?.message || 'failed');
   }
 
   logger.info(`cron/daily ran: ${JSON.stringify(result)}`);

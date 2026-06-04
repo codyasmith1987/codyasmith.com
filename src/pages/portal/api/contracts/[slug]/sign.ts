@@ -364,6 +364,14 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
   // fires when the handoff actually raised an invoice (skipped for the
   // backfill / already-paid path). Wrapped so any failure never breaks
   // execution; the invoice is already created and client-visible.
+  // Accountant CC for the financial documents (the at-signing invoice and the
+  // executed contract), per the recipient model (Cody, 2026-06-04): an
+  // accountant rides financial docs only. Empty for clients with no accountant
+  // configured, so this is a no-op until one is set.
+  const financialCc = clientMetadata?.billing_cc_email
+    ? [{ email: clientMetadata.billing_cc_email }]
+    : undefined;
+
   if (atSigningInvoiceId) {
     try {
       const invoice = await getInvoice(atSigningInvoiceId);
@@ -377,7 +385,9 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
         logger.error('at-signing invoice PDF generation failed', err);
       }
       const invoicesUrl = `${baseUrl}/portal/invoices`;
-      for (const signer of signers) {
+      // CC the accountant only on the first signer's copy so a two-signer
+      // client does not double-send the accountant the same invoice.
+      for (const [i, signer] of signers.entries()) {
         try {
           await sendAtSigningInvoiceEmail({
             recipient: signer,
@@ -387,6 +397,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
             invoicesUrl,
             pdfBase64: invPdfBase64,
             pdfFilename: invPdfFilename,
+            cc: i === 0 ? financialCc : undefined,
           });
         } catch (err) {
           logger.error(`at-signing invoice email to ${signer.email_snapshot} failed`, err);
@@ -407,7 +418,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
 
   // Send fully-executed emails to each signer with the PDF attached.
   const finalizedAtDisplay = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
-  for (const signer of signers) {
+  for (const [i, signer] of signers.entries()) {
     try {
       await sendFullyExecutedEmail({
         recipient: signer,
@@ -417,6 +428,7 @@ export const POST: APIRoute = async ({ locals, request, params }) => {
         finalizedAt: finalizedAtDisplay,
         pdfBase64,
         pdfFilename,
+        cc: i === 0 ? financialCc : undefined,
       });
     } catch (err) {
       logger.error(`fully-executed email to ${signer.email_snapshot} failed`, err);

@@ -40,6 +40,7 @@ const statusColors: Record<string, string> = {
       <div class="flex items-center gap-3">
         <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[invoice.status] || ''}`}>{invoice.status}</span>
         {invoice.last_reminder_sent && <span class="text-[10px] text-neutral-400">Reminder sent {invoice.last_reminder_sent.split('T')[0]}</span>}
+        <button id="send-invoice" class="text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-colors">Send to client</button>
         <button id="duplicate-invoice" class="text-xs text-amber-600 hover:text-amber-600 transition-colors">Duplicate</button>
         <a href={`/portal/api/admin/invoices/${id}/pdf`} class="text-xs text-amber-600 hover:text-amber-600 transition-colors">Download PDF</a>
         <button id="delete-invoice" class="text-xs text-neutral-400 hover:text-red-400 transition-colors">Delete</button>
@@ -104,6 +105,10 @@ const statusColors: Record<string, string> = {
             <option value="1" selected={invoice.reminders_paused === 1}>Paused</option>
           </select>
         </div>
+      </div>
+      <div class="mt-5">
+        <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" title="A one-off CC for this invoice only (in addition to the client's primary contact and accountant CC). Set the client's standing recipients on the Invoices page.">Extra recipient, this invoice only (optional)</label>
+        <input type="email" id="f-extra" value={invoice.extra_recipient_email || ''} placeholder="someone@example.com" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
       </div>
       <div class="mt-5">
         <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Notes</label>
@@ -260,7 +265,7 @@ const statusColors: Record<string, string> = {
     </div>
   </div>
 
-  <script define:vars={{ invoiceId: id, contractId: invoice.contract_id }}>
+  <script define:vars={{ invoiceId: id, contractId: invoice.contract_id, clientId: invoice.client_id }}>
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
     // Save invoice
@@ -280,6 +285,7 @@ const statusColors: Record<string, string> = {
             title: document.getElementById('f-title').value.trim() || null,
             terms_label: document.getElementById('f-terms').value.trim() || null,
             reminders_paused: Number(document.getElementById('f-reminders').value),
+            extra_recipient_email: document.getElementById('f-extra').value.trim() || null,
           }),
         });
         if (res.ok) window.__toast('Invoice saved.', 'success');
@@ -303,6 +309,43 @@ const statusColors: Record<string, string> = {
           window.__toast('Invoice deleted.', 'success');
           setTimeout(() => window.location.href = `/portal/admin/contracts/${contractId}`, 600);
         } else window.__toast('Failed to delete invoice.', 'error');
+      });
+    });
+
+    // Send invoice to client (emails the PDF). Shows the resolved recipients in
+    // the confirm so there is no surprise about who it reaches.
+    document.getElementById('send-invoice')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      // Look up the client's standing recipients; combine with the per-invoice
+      // extra typed into the field (saved or not) for an accurate preview.
+      let primary = '', cc = '';
+      try {
+        const r = await fetch(`/portal/api/admin/clients/billing-contacts?client=${encodeURIComponent(clientId)}`);
+        if (r.ok) { const d = await r.json(); primary = d.primary_contact_email || ''; cc = d.billing_cc_email || ''; }
+      } catch {}
+      const extra = document.getElementById('f-extra').value.trim();
+      const ccList = [cc, extra].filter(Boolean);
+      const toLine = primary || '(the client\'s portal login, since no primary contact is set)';
+      const ccLine = ccList.length ? `\nCC: ${ccList.join(', ')}` : '';
+      const confirmed = await window.__confirm({
+        title: 'Send invoice to client',
+        message: `This emails the invoice PDF now.\n\nTo: ${toLine}${ccLine}\n\nUnsaved changes to the extra recipient or other fields are not included unless you saved first.`,
+        confirmLabel: 'Send invoice',
+      });
+      if (!confirmed) return;
+      await window.__withButtonLoading(btn, 'Sending…', async () => {
+        const res = await fetch(`/portal/api/admin/invoices/${invoiceId}/send`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        });
+        if (res.ok) {
+          const d = await res.json();
+          const ccPart = d.cc && d.cc.length ? ` (cc ${d.cc.join(', ')})` : '';
+          window.__toast(`Invoice sent to ${d.to.join(', ')}${ccPart}.`, 'success');
+          setTimeout(() => location.reload(), 900);
+        } else {
+          const d = await res.json().catch(() => ({}));
+          window.__toast(d.error || 'Failed to send invoice.', 'error');
+        }
       });
     });
 

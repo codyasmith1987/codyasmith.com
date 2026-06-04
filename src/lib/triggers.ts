@@ -93,6 +93,44 @@ export async function onDocumentIssued(args: { clientId: string; fileId: string;
 }
 
 // ============================================================
+// Automated-failure alert (Cody, 2026-06-04: alert the admin on any major
+// automated failure). The automated billing/email jobs run unattended on the
+// daily cron, so a thrown task or a failed send would otherwise be silent.
+// Alerts in-portal (always lands) AND emails the admin (best-effort). The
+// admin email is wrapped so a failure here never recurses into another alert.
+// ============================================================
+export async function onAutomatedFailure(context: string, detail: string): Promise<void> {
+  try {
+    await notifyAdmins({
+      type: 'general',
+      title: `Automated job failed: ${context}`,
+      body: detail.slice(0, 500),
+    });
+  } catch (err) {
+    logger.error('onAutomatedFailure in-portal notify failed', err);
+  }
+  try {
+    const { sendEmail } = await import('./email');
+    const admins = await getAdminUsers();
+    if (admins.length > 0) {
+      await sendEmail(
+        admins.map(a => ({ email: a.email, name: a.name })),
+        `Portal alert: ${context} failed`,
+        `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 20px;">
+          <h2 style="color: #171717; margin-bottom: 12px;">An automated job failed</h2>
+          <p style="color: #525252; line-height: 1.6;"><strong>${context}</strong></p>
+          <pre style="color: #525252; background: #f5f5f5; padding: 12px; border-radius: 6px; white-space: pre-wrap; font-size: 12px;">${detail.slice(0, 800).replace(/[<>]/g, '')}</pre>
+          <p style="color: #a3a3a3; font-size: 12px; margin-top: 24px;">codyasmith.com automated billing</p>
+        </div>`
+      );
+    }
+  } catch (err) {
+    // Never re-alert on an alert-email failure; just log.
+    logger.error('onAutomatedFailure admin email failed', err);
+  }
+}
+
+// ============================================================
 // Trigger 1: Task marked complete
 // ============================================================
 export async function onTaskCompleted(taskId: string): Promise<void> {
@@ -285,6 +323,15 @@ export async function onPaymentRecorded(invoiceId: string, amount: number): Prom
   try {
     const invoice = await getInvoice(invoiceId);
     if (!invoice) return;
+
+    // Email the client a receipt (financial notice -> carries the accountant CC
+    // per the recipient model). Soft-fails so it never breaks payment recording.
+    try {
+      const { sendPaymentReceiptEmail } = await import('./invoice-emails');
+      await sendPaymentReceiptEmail(invoiceId, amount);
+    } catch (err) {
+      logger.error('payment receipt email failed', err);
+    }
 
     // Notify admin
     await notifyAdmins({

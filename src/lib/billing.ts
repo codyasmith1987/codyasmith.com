@@ -301,7 +301,7 @@ export async function generateInvoiceForContract(contract: Contract, createdBy: 
     billedExpenseIds.push(exp.id);
   }
   if (billedExpenseIds.length > 0) {
-    await markExpensesBilled(billedExpenseIds, billDate);
+    await markExpensesBilled(billedExpenseIds, billDate, invoiceId);
   }
 
   return invoiceId;

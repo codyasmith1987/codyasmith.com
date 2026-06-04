@@ -42,3 +42,6 @@ tmp-build.db
 
 # One-shot docx editing scripts
 .tmp-docx-scripts/
+
+# us-context private local map (kept local, not committed to the client repo)
+.us/

@@ -133,3 +133,54 @@ This repo is shared. It holds the portal (admin and client surfaces), the person
 **Handoff file:** `HANDOFF_SLICE_18D.md` at the repo root.
 
 **Authoritative vision document:** `PORTAL-VISION-AND-RULES.md` lives in the Claude Project that hosts the controller, not in this repo. The rules above are the CC-operational subset. Controllers read the full vision doc every session.
+
+---
+
+## Private Context Protocol (us-context)
+
+Merged from the us-context kit. Use this protocol for codebase orientation, architecture questions, "what did we decide", tracing flows, impact analysis, and any task where broad file search would otherwise be the first move.
+
+### Query first
+
+Before broad exploration:
+
+1. Read `.us/CONTEXT.md` if it exists.
+2. If `.us/index.json` exists, run:
+
+   ```bash
+   python .us/scripts/query_map.py "<question or concepts>"
+   ```
+
+3. If the map is missing or clearly stale, run:
+
+   ```bash
+   python .us/scripts/build_map.py .
+   ```
+
+4. Use the map to choose source files, then inspect source directly.
+
+Never answer from `.us/REPO_MAP.md` or `.us/index.json` alone when file-level correctness matters. They are routing aids, not truth.
+
+### Confidence labels
+
+Use these labels in notes and summaries:
+
+- `EXTRACTED` - directly supported by source, command output, or user statement.
+- `INFERRED` - reasoned from available evidence but not directly stated.
+- `AMBIGUOUS` - plausible but conflicting, incomplete, or uncertain.
+
+When a claim will affect implementation, prefer `EXTRACTED` evidence with file and line references.
+
+### Memory discipline
+
+`.us/CONTEXT.md` is for stable, reusable memory: user preferences for how to work together, project-specific conventions, durable decisions and their rationale, known risks, recurring gotchas, and non-obvious commands. Do not store secrets, credentials, personal data, one-off scratch notes, or unverified guesses as durable fact. At the end of meaningful work, update `.us/CONTEXT.md` only when the fact is stable and useful later.
+
+### Freshness
+
+Treat the map as stale after meaningful file changes. Rebuild it before using it for orientation if many files changed, generated files were added or removed, the task concerns newly edited code, or query results are weak or surprising. Do not install background hooks, watchers, or global config unless the user explicitly asks.
+
+`build_map.py` refuses filesystem, home, and system roots by default. Run it from a real project directory, pass the project path explicitly, or use `--allow-broad-root` only when the broad scan is intentional.
+
+### Source truth
+
+Use the map to narrow the search. Use real files, tests, command output, and source references to decide. If the map and source disagree, source wins and the map should be rebuilt.

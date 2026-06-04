@@ -1147,11 +1147,14 @@ export const webManagementProduct: ProductDefinition = {
         billing_cadence_note: 'Per-site Web Management monthly fees are prorated at each site\'s go-live date to align with this engagement\'s monthly billing cadence. All sites under this agreement bill on the same monthly date thereafter, on one consolidated invoice.',
       },
       hours_addendum: { included_hours: pooledHours },
-      pass_through_items: siteRows.map(site => ({
-        name: `Plugin and software management (${site.domain})`,
-        monthly_cost: 15,
-        billing_note: 'billed monthly with the recurring invoice',
-      })),
+      // 2026-06-04 decision: plugin management is folded into the base Web
+      // Management price for new clients (it is part of the service the tiers
+      // already cover), so no separate $15/site pass-through line. Actual
+      // out-of-pocket license/tool costs pass through as Reimbursements
+      // (client_expenses) when they occur. ZipKit Homes is grandfathered via
+      // their already-signed Schedule A (stored, unchanged). See the pricing
+      // memory's 2026-06-04 plugin-fee decision.
+      pass_through_items: [],
     };
   },
 };

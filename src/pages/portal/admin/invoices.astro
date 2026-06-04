@@ -29,6 +29,21 @@ const statusColors: Record<string, string> = {
       <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Invoices</h1>
     </div>
 
+    <!-- Daily billing engine: same cycle the scheduled cron runs (generate +
+         auto-email upcoming invoices, mark overdue, send reminders + overdue
+         notices). Preview is read-only; Run now sends real client email. -->
+    <div class="mb-8 bg-neutral-900/30 border border-white/5 rounded-xl p-5 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Billing engine</p>
+        <p class="text-sm text-neutral-400">Runs the automatic cycle on demand. It also runs daily on its own.</p>
+        <p id="billing-run-result" class="text-xs text-neutral-500 mt-1 font-mono"></p>
+      </div>
+      <div class="flex items-center gap-3 shrink-0">
+        <button id="billing-preview" class="text-xs text-amber-600 hover:text-amber-500 transition-colors">Preview</button>
+        <button id="billing-run" class="px-4 py-2.5 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all">Run billing now</button>
+      </div>
+    </div>
+
     <form method="GET" class="mb-8">
       <select name="client" onchange="this.form.submit()" class="px-4 py-2.5 bg-neutral-900/50 border border-white/5 rounded-lg text-sm text-neutral-300 focus:outline-none focus:border-amber-500/30">
         <option value="">Select a client...</option>
@@ -148,6 +163,45 @@ const statusColors: Record<string, string> = {
   <script>
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const clientId = new URLSearchParams(location.search).get('client');
+
+    // Billing engine: preview (dry-run) + run now (live)
+    const billingResult = document.getElementById('billing-run-result');
+    function fmtBilling(d) {
+      const parts = [];
+      if (d.preview) {
+        const p = d.preview;
+        parts.push(`would generate ${p.would_generate?.length || 0}`, `mark overdue ${p.would_mark_overdue?.length || 0}`, `remind ${p.would_remind?.length || 0}`, `overdue notices ${p.would_send_overdue?.length || 0}`);
+        return 'Preview: ' + parts.join(', ');
+      }
+      parts.push(`generated ${d.invoices_generated ?? 0}`, `emailed ${d.invoices_emailed ?? 0}`, `overdue marked ${d.overdue_marked ?? 0}`, `reminders ${d.reminders_sent ?? 0}`, `overdue notices ${d.overdue_notices_sent ?? 0}`);
+      const fails = (d.invoices_email_failed || 0) + (d.reminders_failed || 0) + (d.overdue_notices_failed || 0);
+      if (fails > 0) parts.push(`FAILURES ${fails}`);
+      return 'Ran: ' + parts.join(', ');
+    }
+
+    document.getElementById('billing-preview')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget as HTMLButtonElement;
+      const run = async () => {
+        const res = await fetch('/portal/api/admin/billing/run-daily?dry=1', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken } });
+        const d = await res.json().catch(() => ({}));
+        if (res.ok) { if (billingResult) billingResult.textContent = fmtBilling(d); (window as any).__toast?.('Billing preview ready.', 'success'); }
+        else (window as any).__toast?.(d.error || 'Preview failed.', 'error');
+      };
+      if ((window as any).__withButtonLoading) await (window as any).__withButtonLoading(btn, 'Previewing…', run); else await run();
+    });
+
+    document.getElementById('billing-run')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget as HTMLButtonElement;
+      const ok = await ((window as any).__confirm?.({ title: 'Run billing now', message: 'This runs the full billing cycle immediately: it generates and EMAILS any upcoming invoices, marks overdue, and sends reminders and overdue notices to real clients. Continue?', confirmLabel: 'Run now' }) ?? Promise.resolve(true));
+      if (!ok) return;
+      const run = async () => {
+        const res = await fetch('/portal/api/admin/billing/run-daily', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken } });
+        const d = await res.json().catch(() => ({}));
+        if (res.ok) { if (billingResult) billingResult.textContent = fmtBilling(d); (window as any).__toast?.('Billing run complete.', 'success'); setTimeout(() => location.reload(), 1200); }
+        else (window as any).__toast?.(d.error || 'Billing run failed.', 'error');
+      };
+      if ((window as any).__withButtonLoading) await (window as any).__withButtonLoading(btn, 'Running…', run); else await run();
+    });
 
     // Save billing recipients (primary contact + accountant CC)
     document.getElementById('save-billing-contacts')?.addEventListener('click', async (e) => {

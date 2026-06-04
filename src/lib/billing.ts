@@ -5,6 +5,7 @@ import turso from './turso';
 import { getAllContracts, getContract, type Contract } from './contracts';
 import { createInvoiceWithGeneratedNumber, addInvoiceItem, getInvoice, updateInvoice } from './invoices';
 import { getExpensesDueForBilling, markExpensesBilled } from './client-expenses';
+import { getAgreementByContractId } from './agreements';
 import { createNotification } from './notifications';
 import { getUsersByClientId } from './auth';
 import { logger } from './logger';
@@ -262,6 +263,31 @@ export async function generateInvoiceForContract(contract: Contract, createdBy: 
     unit_price: contract.recurring_amount,
   });
 
+  // Contracted pass-through: the monthly plugin/software management fee from the
+  // signed Schedule A (a Services line, distinct from out-of-pocket
+  // reimbursements). Summed across sites to match the hand-invoice presentation.
+  const agreement = await getAgreementByContractId(contract.id);
+  const passThrough: any[] = Array.isArray(agreement?.schedule_a?.pass_through_items)
+    ? agreement!.schedule_a.pass_through_items
+    : [];
+  const passThroughTotal = passThrough.reduce((sum: number, p: any) => sum + (Number(p?.monthly_cost) || 0), 0);
+  if (passThroughTotal > 0) {
+    const rates = new Set(passThrough.map((p: any) => Number(p?.monthly_cost) || 0));
+    const sub = rates.size === 1
+      ? `${passThrough.length} ${passThrough.length === 1 ? 'site' : 'sites'} x $${[...rates][0]}`
+      : `${passThrough.length} items`;
+    await addInvoiceItem({
+      invoice_id: invoiceId,
+      name: 'Plugin Management Fee',
+      sub_description: sub,
+      description: 'Plugin Management Fee',
+      category: 'services',
+      frequency: 'monthly',
+      quantity: 1,
+      unit_price: passThroughTotal,
+    });
+  }
+
   // Add pending charges (change orders, overage, one-time)
   const pendingCharges = await getPendingChargesForContract(contract.id);
   const chargeIds: string[] = [];
@@ -463,13 +489,21 @@ export async function previewDailyCron(): Promise<{
     const issueThreshold = new Date(period.start + 'T00:00:00');
     issueThreshold.setDate(issueThreshold.getDate() - 7);
     if (now < issueThreshold) continue;
+    // Match what the generator will actually bill so the dry-run total is
+    // accurate: recurring + contracted pass-through + due recurring expenses.
+    const billDateP = now.toISOString().split('T')[0];
+    const dueExp = await getExpensesDueForBilling(c.client_id, billDateP);
+    const reimbTotal = dueExp.reduce((s, e) => s + e.amount, 0);
+    const agr = await getAgreementByContractId(c.id);
+    const ptItems: any[] = Array.isArray(agr?.schedule_a?.pass_through_items) ? agr!.schedule_a.pass_through_items : [];
+    const ptTotal = ptItems.reduce((s: number, p: any) => s + (Number(p?.monthly_cost) || 0), 0);
     would_generate.push({
       contract_id: c.id,
       title: c.title,
       client_id: c.client_id,
       period_start: period.start,
       period_end: period.end,
-      amount: c.recurring_amount,
+      amount: c.recurring_amount + ptTotal + reimbTotal,
     });
   }
 

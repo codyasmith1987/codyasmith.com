@@ -111,6 +111,18 @@ export async function getAgreementBySlug(slug: string): Promise<ClientAgreement 
   return row ? rowToAgreement(row as any) : null;
 }
 
+// The agreement linked to a billable contract (set on the billing handoff).
+// Lets the recurring generator read the signed Schedule A (e.g. pass-through
+// fees) for the contract it is billing.
+export async function getAgreementByContractId(contractId: string): Promise<ClientAgreement | null> {
+  const result = await turso.execute({
+    sql: `SELECT ${AGREEMENT_COLS} FROM client_agreements WHERE contract_id = ? LIMIT 1`,
+    args: [contractId],
+  });
+  const row = result.rows[0];
+  return row ? rowToAgreement(row as any) : null;
+}
+
 export async function getAgreement(id: string): Promise<ClientAgreement | null> {
   const result = await turso.execute({
     sql: `SELECT ${AGREEMENT_COLS} FROM client_agreements WHERE id = ? LIMIT 1`,

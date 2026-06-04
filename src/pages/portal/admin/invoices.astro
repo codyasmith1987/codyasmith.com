@@ -3,12 +3,14 @@ import Portal from '../../../layouts/Portal.astro';
 import { getAllClients } from '../../../lib/auth';
 import { getInvoicesByClient } from '../../../lib/invoices';
 import { getClientExpenses } from '../../../lib/client-expenses';
+import { getClientMetadata } from '../../../lib/agreements';
 export const prerender = false;
 
 const clients = await getAllClients();
 const clientId = Astro.url.searchParams.get('client');
 const invoices = clientId ? await getInvoicesByClient(clientId) : [];
 const expenses = clientId ? await getClientExpenses(clientId) : [];
+const meta = clientId ? await getClientMetadata(clientId).catch(() => null) : null;
 
 const statusColors: Record<string, string> = {
   draft: 'bg-neutral-700/30 text-neutral-400',
@@ -75,6 +77,28 @@ const statusColors: Record<string, string> = {
 
     {clientId && (
       <div class="mt-14">
+        <div class="mb-4">
+          <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-1">Billing recipients</p>
+          <p class="text-sm text-neutral-400">Who invoices and payment notices go to. The primary contact is the recipient; the accountant is CC'd on financial notices only. Leave a field blank to clear it. (A per-invoice extra recipient is set on the invoice itself.)</p>
+        </div>
+        <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Primary contact email</label>
+              <input type="email" id="bc-primary" value={meta?.primary_contact_email || ''} placeholder="client@example.com" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+            </div>
+            <div>
+              <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Accountant CC email (optional)</label>
+              <input type="email" id="bc-cc" value={meta?.billing_cc_email || ''} placeholder="accountant@example.com" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+            </div>
+          </div>
+          <button id="save-billing-contacts" class="mt-4 px-5 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all">Save recipients</button>
+        </div>
+      </div>
+    )}
+
+    {clientId && (
+      <div class="mt-14">
         <div class="flex items-center justify-between mb-4">
           <div>
             <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-1">Recurring expenses</p>
@@ -124,6 +148,26 @@ const statusColors: Record<string, string> = {
   <script>
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const clientId = new URLSearchParams(location.search).get('client');
+
+    // Save billing recipients (primary contact + accountant CC)
+    document.getElementById('save-billing-contacts')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget as HTMLButtonElement;
+      const run = async () => {
+        const res = await fetch('/portal/api/admin/clients/billing-contacts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({
+            client_id: clientId,
+            primary_contact_email: (document.getElementById('bc-primary') as HTMLInputElement).value.trim(),
+            billing_cc_email: (document.getElementById('bc-cc') as HTMLInputElement).value.trim(),
+          }),
+        });
+        if (res.ok) (window as any).__toast?.('Billing recipients saved.', 'success');
+        else { const d = await res.json().catch(() => ({})); (window as any).__toast?.(d.error || 'Failed to save recipients.', 'error'); }
+      };
+      if ((window as any).__withButtonLoading) await (window as any).__withButtonLoading(btn, 'Saving…', run);
+      else await run();
+    });
 
     const form = document.getElementById('add-expense-form');
     document.getElementById('show-add-expense')?.addEventListener('click', () => form?.classList.remove('hidden'));

@@ -15,7 +15,7 @@
 import type { APIRoute } from 'astro';
 import turso from '../../../lib/turso';
 import { logger } from '../../../lib/logger';
-import { markOverdueInvoices, generateRecurringInvoices, sendDueReminders, previewDailyCron } from '../../../lib/billing';
+import { markOverdueInvoices, generateRecurringInvoices, sendDueReminders, sendOverdueNotices, previewDailyCron } from '../../../lib/billing';
 
 export const prerender = false;
 
@@ -76,6 +76,15 @@ export const POST: APIRoute = async ({ request }) => {
   } catch (err: any) {
     logger.error('cron: sendDueReminders failed', err);
     result.reminders_error = err?.message || 'failed';
+  }
+
+  // Overdue notices run AFTER markOverdueInvoices so a freshly-overdue invoice
+  // is eligible the same day it crosses due+7.
+  try {
+    result.overdue_notices_sent = await sendOverdueNotices();
+  } catch (err: any) {
+    logger.error('cron: sendOverdueNotices failed', err);
+    result.overdue_notices_error = err?.message || 'failed';
   }
 
   logger.info(`cron/daily ran: ${JSON.stringify(result)}`);

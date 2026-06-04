@@ -452,9 +452,10 @@ export interface ClientMetadata {
   primary_contact_title: string | null;
   primary_contact_email: string | null;
   primary_contact_phone: string | null;
+  billing_cc_email: string | null;
 }
 
-const CLIENT_METADATA_COLS = `client_id, legal_entity_name, entity_type, state_of_organization, ein, principal_address, notice_address, primary_contact_name, primary_contact_title, primary_contact_email, primary_contact_phone`;
+const CLIENT_METADATA_COLS = `client_id, legal_entity_name, entity_type, state_of_organization, ein, principal_address, notice_address, primary_contact_name, primary_contact_title, primary_contact_email, primary_contact_phone, billing_cc_email`;
 
 export async function getClientMetadata(clientId: string): Promise<ClientMetadata | null> {
   const result = await turso.execute({
@@ -475,6 +476,7 @@ export async function getClientMetadata(clientId: string): Promise<ClientMetadat
     primary_contact_title: (row[8] as string | null) ?? null,
     primary_contact_email: (row[9] as string | null) ?? null,
     primary_contact_phone: (row[10] as string | null) ?? null,
+    billing_cc_email: (row[11] as string | null) ?? null,
   };
 }
 
@@ -490,12 +492,13 @@ export interface UpsertClientMetadataInput {
   primary_contact_title?: string | null;
   primary_contact_email?: string | null;
   primary_contact_phone?: string | null;
+  billing_cc_email?: string | null;
 }
 
 export async function upsertClientMetadata(input: UpsertClientMetadataInput): Promise<ClientMetadata> {
   await turso.execute({
     sql: `INSERT INTO client_metadata (${CLIENT_METADATA_COLS})
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(client_id) DO UPDATE SET
             legal_entity_name = COALESCE(excluded.legal_entity_name, client_metadata.legal_entity_name),
             entity_type = COALESCE(excluded.entity_type, client_metadata.entity_type),
@@ -507,6 +510,7 @@ export async function upsertClientMetadata(input: UpsertClientMetadataInput): Pr
             primary_contact_title = COALESCE(excluded.primary_contact_title, client_metadata.primary_contact_title),
             primary_contact_email = COALESCE(excluded.primary_contact_email, client_metadata.primary_contact_email),
             primary_contact_phone = COALESCE(excluded.primary_contact_phone, client_metadata.primary_contact_phone),
+            billing_cc_email = COALESCE(excluded.billing_cc_email, client_metadata.billing_cc_email),
             updated_at = datetime('now')`,
     args: [
       input.client_id,
@@ -520,6 +524,7 @@ export async function upsertClientMetadata(input: UpsertClientMetadataInput): Pr
       input.primary_contact_title ?? null,
       input.primary_contact_email ?? null,
       input.primary_contact_phone ?? null,
+      input.billing_cc_email ?? null,
     ],
   });
   const meta = await getClientMetadata(input.client_id);

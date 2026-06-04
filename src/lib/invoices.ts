@@ -6,7 +6,7 @@ import { clearExpenseBillingForInvoice } from './client-expenses';
 
 // --- Column allowlists for dynamic UPDATE builders ---
 const UPDATABLE_COLUMNS: Record<string, Set<string>> = {
-  invoices: new Set(['status', 'issued_date', 'due_date', 'subtotal', 'tax', 'total', 'amount_paid', 'notes', 'client_visible', 'billing_period_start', 'billing_period_end', 'last_reminder_sent', 'title', 'terms_label', 'bill_to_snapshot', 'reminders_paused', 'invoice_number']),
+  invoices: new Set(['status', 'issued_date', 'due_date', 'subtotal', 'tax', 'total', 'amount_paid', 'notes', 'client_visible', 'billing_period_start', 'billing_period_end', 'last_reminder_sent', 'title', 'terms_label', 'bill_to_snapshot', 'reminders_paused', 'invoice_number', 'extra_recipient_email']),
   invoice_items: new Set(['description', 'quantity', 'unit_price', 'amount', 'sort_order', 'name', 'sub_description', 'frequency', 'category']),
   change_orders: new Set(['title', 'description', 'status', 'cost_impact', 'time_impact_days']),
 };
@@ -71,6 +71,7 @@ export interface Invoice {
   terms_label: string | null;
   bill_to_snapshot: string | null;
   reminders_paused: number;
+  extra_recipient_email: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -206,7 +207,7 @@ export async function getClientVisibleInvoices(clientId: string): Promise<Pick<I
 export async function updateInvoice(id: string, data: Partial<Pick<Invoice,
   'status' | 'issued_date' | 'due_date' | 'subtotal' | 'tax' | 'total' | 'amount_paid' | 'notes' | 'client_visible' |
   'billing_period_start' | 'billing_period_end' | 'last_reminder_sent' |
-  'title' | 'terms_label' | 'bill_to_snapshot' | 'reminders_paused' | 'invoice_number'
+  'title' | 'terms_label' | 'bill_to_snapshot' | 'reminders_paused' | 'invoice_number' | 'extra_recipient_email'
 >>): Promise<void> {
   // The invoice number is editable (manual override of the auto-generated one),
   // but must stay unique. Reject a collision with a DIFFERENT invoice before

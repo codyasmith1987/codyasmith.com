@@ -334,10 +334,12 @@ export async function generateInvoiceForContract(contract: Contract, createdBy: 
   return invoiceId;
 }
 
-export async function generateRecurringInvoices(createdBy: string): Promise<{ generated: string[]; skipped: string[] }> {
+export async function generateRecurringInvoices(createdBy: string): Promise<{ generated: string[]; skipped: string[]; emailed: number; email_failed: number }> {
+  const { sendInvoiceEmail } = await import('./invoice-emails');
   const contracts = await getAllContracts();
   const generated: string[] = [];
   const skipped: string[] = [];
+  let emailed = 0, email_failed = 0;
 
   for (const contract of contracts) {
     try {
@@ -345,7 +347,7 @@ export async function generateRecurringInvoices(createdBy: string): Promise<{ ge
       if (invoiceId) {
         generated.push(invoiceId);
 
-        // Notify client (System 5)
+        // Notify client in-portal (the bell).
         const invoice = await getInvoice(invoiceId);
         if (invoice) {
           const users = await getUsersByClientId(contract.client_id);
@@ -360,6 +362,20 @@ export async function generateRecurringInvoices(createdBy: string): Promise<{ ge
             });
           }
         }
+
+        // Auto-EMAIL the invoice (with PDF) to the billing contact + accountant
+        // CC, exactly like the at-signing invoice. Without this the recurring
+        // engine generated invoices the client never received by email -- the
+        // billing was "on auto" only up to the in-portal notification. Soft-fail
+        // so a send hiccup never aborts the rest of the run; failures surface in
+        // email_failed for the daily-cron admin alert.
+        try {
+          const r = await sendInvoiceEmail(invoiceId);
+          if (r.ok) emailed++; else { email_failed++; logger.error(`recurring invoice ${invoiceId} email not sent: ${r.reason}`); }
+        } catch (err) {
+          email_failed++;
+          logger.error(`recurring invoice ${invoiceId} email threw`, err);
+        }
       } else {
         skipped.push(contract.id);
       }
@@ -369,7 +385,7 @@ export async function generateRecurringInvoices(createdBy: string): Promise<{ ge
     }
   }
 
-  return { generated, skipped };
+  return { generated, skipped, emailed, email_failed };
 }
 
 // Lightweight check — call on page load

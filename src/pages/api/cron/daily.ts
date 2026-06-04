@@ -1,22 +1,20 @@
-// Daily billing automation, provider-agnostic.
+// Daily billing automation, provider-agnostic (machine trigger).
 //
-// Runs the recurring billing tasks that previously only fired when an
-// admin happened to load a page: mark overdue invoices, generate the
-// upcoming recurring invoices (issued ~7 days ahead per contract 5.3),
-// and send due reminders. Point any scheduler at this once a day:
-// the n8n recurring-automation initiative is the intended home, but it
-// works equally with a DO Function cron, a GitHub Actions schedule, or
-// cron-job.org as an interim trigger.
+// Runs the recurring billing tasks that previously only fired when an admin
+// happened to load a page: mark overdue invoices, generate + auto-email the
+// upcoming recurring invoices, send due reminders, send overdue notices. Point
+// any scheduler at this once a day (the n8n recurring-automation initiative is
+// the intended home; a DO Function cron / GitHub Actions schedule / cron-job.org
+// work equally). The exact same cycle is also runnable on demand by an admin via
+// POST /portal/api/admin/billing/run-daily (both call runDailyBilling).
 //
-// Auth: POST with header X-Admin-Token matching ADMIN_API_TOKEN (the same
-// machine-auth pattern as the bulk-ingest endpoint). Safe to call more
-// than once a day: each task is idempotent (period dedup, status guards).
+// Auth: POST with header X-Admin-Token matching ADMIN_API_TOKEN (machine auth,
+// same pattern as the bulk-ingest endpoint). Safe to call more than once a day:
+// each task is idempotent (period dedup, status guards, cadence guards).
 
 import type { APIRoute } from 'astro';
-import turso from '../../../lib/turso';
-import { logger } from '../../../lib/logger';
-import { markOverdueInvoices, generateRecurringInvoices, sendDueReminders, sendOverdueNotices, previewDailyCron } from '../../../lib/billing';
-import { onAutomatedFailure } from '../../../lib/triggers';
+import { previewDailyCron } from '../../../lib/billing';
+import { runDailyBilling } from '../../../lib/billing-cron';
 
 export const prerender = false;
 
@@ -36,68 +34,15 @@ export const POST: APIRoute = async ({ request }) => {
   }
   if (mismatch !== 0) return json({ error: 'Forbidden' }, 403);
 
-  // Read-only dry run (?dry=1): report exactly what each task would do,
-  // writing nothing and sending no email. Lets the trigger be verified
-  // before it ever generates or sends a real invoice. Per the Production
-  // Safety SOP: verify without writing to prod.
+  // Read-only dry run (?dry=1): report exactly what each task would do, writing
+  // nothing and sending no email. Lets the trigger be verified before it ever
+  // generates or sends a real invoice (Production Safety SOP: verify without
+  // writing to prod).
   if (new URL(request.url).searchParams.get('dry') === '1') {
     const preview = await previewDailyCron();
     return json({ ok: true, dry_run: true, ran_at: new Date().toISOString(), preview });
   }
 
-  // generateRecurringInvoices stamps created_by, which is a FK to users.
-  // Run invoice generation as the earliest admin (a system actor).
-  const adminRow = await turso.execute("SELECT id FROM users WHERE role = 'admin' ORDER BY created_at LIMIT 1");
-  const systemUserId = (adminRow.rows[0]?.[0] as string | undefined) || undefined;
-
-  const result: Record<string, unknown> = { ok: true, ran_at: new Date().toISOString() };
-
-  try {
-    result.overdue_marked = await markOverdueInvoices();
-  } catch (err: any) {
-    logger.error('cron: markOverdueInvoices failed', err);
-    result.overdue_error = err?.message || 'failed';
-    await onAutomatedFailure('markOverdueInvoices', err?.message || 'failed');
-  }
-
-  if (systemUserId) {
-    try {
-      const gen = await generateRecurringInvoices(systemUserId);
-      result.invoices_generated = gen.generated.length;
-      result.invoices_skipped = gen.skipped.length;
-    } catch (err: any) {
-      logger.error('cron: generateRecurringInvoices failed', err);
-      result.invoices_error = err?.message || 'failed';
-      await onAutomatedFailure('generateRecurringInvoices', err?.message || 'failed');
-    }
-  } else {
-    result.invoices_skipped_reason = 'no admin user found for created_by';
-  }
-
-  try {
-    const r = await sendDueReminders();
-    result.reminders_sent = r.sent;
-    result.reminders_failed = r.failed;
-    if (r.failed > 0) await onAutomatedFailure('sendDueReminders', `${r.failed} due-reminder email(s) failed to send (Brevo rejected or errored).`);
-  } catch (err: any) {
-    logger.error('cron: sendDueReminders failed', err);
-    result.reminders_error = err?.message || 'failed';
-    await onAutomatedFailure('sendDueReminders', err?.message || 'failed');
-  }
-
-  // Overdue notices run AFTER markOverdueInvoices so a freshly-overdue invoice
-  // is eligible the same day it crosses due+7.
-  try {
-    const r = await sendOverdueNotices();
-    result.overdue_notices_sent = r.sent;
-    result.overdue_notices_failed = r.failed;
-    if (r.failed > 0) await onAutomatedFailure('sendOverdueNotices', `${r.failed} overdue-notice email(s) failed to send (Brevo rejected or errored).`);
-  } catch (err: any) {
-    logger.error('cron: sendOverdueNotices failed', err);
-    result.overdue_notices_error = err?.message || 'failed';
-    await onAutomatedFailure('sendOverdueNotices', err?.message || 'failed');
-  }
-
-  logger.info(`cron/daily ran: ${JSON.stringify(result)}`);
+  const result = await runDailyBilling();
   return json(result);
 };

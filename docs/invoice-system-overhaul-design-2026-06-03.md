@@ -2,6 +2,24 @@
 
 codyasmith.com portal. Repo root: `C:\Users\codya\projects-clean\codyasmith.com`. Status: discovery complete (read-only). This document is the build spec for the full effort.
 
+---
+
+## AS-BUILT STATUS + DECISIONS (updated 2026-06-04)
+
+**Shipped + prod-verified (PRs #281-292, all merged to main + deployed):**
+- Slice 0 schema migrations (062-066), Slice 1 Duplicate button, Slice 2 authorable fields (editable number, title, terms, reminders, structured line items), Slice 3 gold-standard PDF (`pdf.ts` + `seller-profile.ts`), Slice 4 structured items in the client view + admin totals split.
+- O5: recurring + at-signing generators emit structured line items.
+- Reimbursement billing: `client_expenses` recurring-expense templates (cadence-aware) + a feeder in the recurring generator + admin management UI; verified end-to-end on Cody Test.
+- `$15/site` pass-through auto-bill from the signed Schedule A (then folded into base for new clients, see decision below).
+- Five dual audits (caught + fixed 3 real regressions: PDF tax-drop, empty invoice number, delete-un-stamp). Utah sales-tax research.
+
+**Decisions locked:**
+- **Plugin fee (2026-06-04):** folded into base WM for NEW clients (no separate `$15/site` line); only actual license costs pass through as Reimbursements; ZipKit grandfathered. Implemented by `web-management.ts` returning `pass_through_items: []`. The frozen raised_bar builder + ZKH's stored Schedule A are untouched.
+- **Utah tax:** core services not taxable; reimbursed prewritten-software to a Utah client is a likely taxable resale (CPA's call). Invoice shows no tax line by default.
+- **Email recipients:** invoices + overdue go to the per-client PRIMARY billing contact (not all portal users), with an accountant CC scoped to FINANCIAL docs only (invoices/overdue/contracts) + a per-invoice extra; first overdue notice at due+7, then weekly until paid (per-invoice `reminders_paused` override is built).
+
+**Remaining (not yet built):** the Send button + `sendOverdueNotices` email slices (built around the recipient model above; EMAIL side effects, so Cody-Test-gated + dual-audited + confirmed before any real-client mail); plus low-priority hardening (a unique index on `client_agreements.contract_id`, pending charges in the cron preview, pass-through unit tests).
+
 Source: read-only discovery workflow (2026-06-03), five parallel code maps verified against live code: `src/lib/invoices.ts`, `src/lib/pdf.ts`, `src/lib/billing.ts`, `src/lib/contract-emails.ts`, `src/lib/migrations/019-client-metadata.ts`, `src/pages/portal/api/admin/invoices/[id].ts`, `src/lib/triggers.ts`. Quality bar = the hand-made ZKH invoices (INV-002 April .docx, INV-003 May .pdf).
 
 ---

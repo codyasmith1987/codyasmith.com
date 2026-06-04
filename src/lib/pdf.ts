@@ -230,12 +230,15 @@ export async function generateInvoicePdf(invoiceId: string): Promise<Buffer> {
       }
     }
 
-    // ---- Footer (bottom of the last page) ----
-    const footerY = 760;
-    if (doc.y > footerY - 24) doc.addPage();
+    // ---- Footer ----
+    // Flows after the content. Pinning to an absolute y past the bottom margin
+    // makes PDFKit spill each line onto its own new page (caught in PDF review).
+    doc.moveDown(2);
+    if (doc.y > 720) doc.addPage();
     doc.font('Helvetica').fontSize(8.5).fillColor(LIGHT)
-      .text(`${seller.display_name}  |  ${seller.email}  |  ${seller.phone}  |  Thank you for your business.`, L, footerY, { width: W, align: 'center' });
-    doc.fontSize(7.5).fillColor(LIGHT).text(seller.legal_footer, L, footerY + 12, { width: W, align: 'center' });
+      .text(`${seller.display_name}  |  ${seller.email}  |  ${seller.phone}  |  Thank you for your business.`, L, doc.y, { width: W, align: 'center', lineBreak: false });
+    doc.font('Helvetica').fontSize(7.5).fillColor(LIGHT)
+      .text(seller.legal_footer, L, doc.y + 2, { width: W, align: 'center', lineBreak: false });
 
     doc.end();
   });

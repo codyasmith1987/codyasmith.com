@@ -69,6 +69,11 @@ export async function generateInvoicePdf(invoiceId: string): Promise<Buffer> {
   const services = items.filter(i => !isReimb(i));
   const reimbursements = items.filter(isReimb);
   const subs = splitSubtotals(items);
+  // Compute the total from the live item subtotal + tax rather than the stored
+  // invoice.total, so the PDF is correct even if a tax-only update left the
+  // stored total stale. subs.total is the sum of item amounts (the subtotal).
+  const taxAmount = Number(invoice.tax) || 0;
+  const grandTotal = subs.total + taxAmount;
 
   const PDFDocument = (await import('pdfkit')).default;
 
@@ -186,14 +191,14 @@ export async function generateInvoicePdf(invoiceId: string): Promise<Buffer> {
     // Subtotal + Tax rows, only when the invoice is taxed. The section subtotals
     // above show the untaxed split; this adds the grand subtotal and tax so the
     // TOTAL DUE bar (invoice.total = subtotal + tax) is never understated.
-    if (invoice.tax > 0) {
+    if (taxAmount > 0) {
       ensureSpace(36);
       let ry = doc.y + 2;
       doc.font('Helvetica').fontSize(10).fillColor(GRAY).text('Subtotal', L + 4, ry, { width: amountX - L - 12, align: 'right' });
-      doc.fillColor(DARK).text(money(invoice.subtotal), amountX, ry, { width: amountW, align: 'right' });
+      doc.fillColor(DARK).text(money(subs.total), amountX, ry, { width: amountW, align: 'right' });
       ry = doc.y + 2;
       doc.fillColor(GRAY).text('Tax', L + 4, ry, { width: amountX - L - 12, align: 'right' });
-      doc.fillColor(DARK).text(money(invoice.tax), amountX, ry, { width: amountW, align: 'right' });
+      doc.fillColor(DARK).text(money(taxAmount), amountX, ry, { width: amountW, align: 'right' });
       doc.y = doc.y + 8;
     }
 
@@ -202,7 +207,7 @@ export async function generateInvoicePdf(invoiceId: string): Promise<Buffer> {
     const ty = doc.y + 4;
     doc.rect(L, ty, W, 30).fill(AMBER);
     doc.font('Helvetica-Bold').fontSize(13).fillColor('#ffffff').text('TOTAL DUE', L + 12, ty + 8);
-    doc.text(money(invoice.total), amountX - 40, ty + 8, { width: amountW + 28, align: 'right' });
+    doc.text(money(grandTotal), amountX - 40, ty + 8, { width: amountW + 28, align: 'right' });
     doc.y = ty + 40;
 
     // Payments / balance (portal-tracked; absent on a clean Upon-Receipt invoice)
@@ -210,7 +215,7 @@ export async function generateInvoicePdf(invoiceId: string): Promise<Buffer> {
       const py = doc.y;
       doc.font('Helvetica').fontSize(10).fillColor(GRAY).text('Amount paid', L + 4, py, { width: amountX - L - 12, align: 'right' });
       doc.fillColor('#059669').text(money(invoice.amount_paid), amountX, py, { width: amountW, align: 'right' });
-      const balance = invoice.total - invoice.amount_paid;
+      const balance = grandTotal - invoice.amount_paid;
       const byy = doc.y + 2;
       doc.font('Helvetica-Bold').fontSize(10).fillColor(DARK).text('Balance due', L + 4, byy, { width: amountX - L - 12, align: 'right' });
       doc.text(money(balance), amountX, byy, { width: amountW, align: 'right' });

@@ -4,10 +4,11 @@
 //
 // primary_contact_email is who invoices and payment notices are addressed to.
 // billing_cc_email is an accountant/bookkeeper CC'd on financial documents
-// only. Both ride on client_metadata. An empty string CLEARS a field; an
-// absent field is left unchanged (upsertClientMetadata uses COALESCE, so it
-// distinguishes "" from undefined). See src/lib/invoice-emails.ts for how
-// these resolve into a send.
+// only. Both ride on client_metadata. Write contract: an empty string is
+// written through to CLEAR a field; an absent field is bound as NULL so
+// upsertClientMetadata's COALESCE(excluded, existing) keeps the current value.
+// (COALESCE only acts on the NULL/absent case; "" overwrites because it is not
+// NULL.) See src/lib/invoice-emails.ts for how these resolve into a send.
 
 import type { APIRoute } from 'astro';
 import { getClientById } from '../../../../../lib/auth';

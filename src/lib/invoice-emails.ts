@@ -3,9 +3,13 @@
 // every portal user. An accountant CC (per client) rides along on FINANCIAL
 // documents only. A per-invoice extra recipient alerts someone for one invoice.
 //
-// resolveInvoiceRecipients is pure (unit-tested). The actual send
-// (sendInvoiceEmail) is added with the Send slice and reuses sendBrevo + the
-// PDF, gated to the Cody Test client until confirmed for real clients.
+// resolveInvoiceRecipients is pure (unit-tested). sendInvoiceEmail reuses
+// sendEmail (CC + PDF attachment) and the invoice PDF. It is a deliberate
+// admin-only action (the admin-role send endpoint plus a UI confirm dialog);
+// there is NO per-client allowlist in the code. Until the slice is signed off,
+// the gate is operational: the branch is unmerged, so only Cody Test (his own
+// inbox) is ever used for verification. Do not point Send at a real client
+// before sign-off.
 
 export interface InvoiceRecipients {
   to: string[];
@@ -173,6 +177,11 @@ export async function sendInvoiceEmail(invoiceId: string): Promise<SendInvoiceRe
   const patch: Record<string, any> = {};
   if (wasDraft) patch.status = 'sent';
   if (!invoice.issued_date) patch.issued_date = new Date().toISOString().split('T')[0];
+  // Emailing the invoice to the client inherently makes it client-visible. New
+  // invoices default to client_visible = 0, so without this the email's "the
+  // same copy is in your portal" line would point at a page where the invoice
+  // is hidden. (The recurring path already sets this; the manual Send must too.)
+  if (invoice.client_visible !== 1) patch.client_visible = 1;
   if (Object.keys(patch).length > 0) {
     try { await updateInvoice(invoiceId, patch); } catch (err) { logger.error('post-send invoice update failed', err); }
   }

@@ -643,14 +643,26 @@ export async function previewDailyCron(): Promise<{
     total: i.total as number,
   }));
 
-  // Overdue notices the cron would send right now (due+7, then weekly).
-  const overdueCandidates = await getOverdueNoticeCandidates(now);
-  const would_send_overdue = overdueCandidates.map(i => ({
-    id: i.id as string,
-    invoice_number: i.invoice_number as string,
-    due_date: (i.due_date as string | null) ?? null,
-    balance: (i.total as number) - ((i.amount_paid as number) || 0),
-  }));
+  // Overdue notices the cron would send right now (due+7, then weekly). The
+  // live cron runs markOverdueInvoices BEFORE sendOverdueNotices, so an invoice
+  // still 'sent' but already past due would be marked overdue and then noticed
+  // in the same run. To preview the real outcome (not the pre-mark state), the
+  // dry run includes 'sent'-and-past-due rows alongside 'overdue' ones, then
+  // applies the same cadence predicate sendOverdueNotices uses.
+  const overdueRows = await queryAll(
+    `SELECT * FROM invoices
+      WHERE amount_paid < total AND due_date IS NOT NULL
+        AND (reminders_paused = 0 OR reminders_paused IS NULL)
+        AND (status = 'overdue' OR (status = 'sent' AND due_date < date('now')))`
+  );
+  const would_send_overdue = overdueRows
+    .filter(i => isOverdueNoticeDue(i, now))
+    .map(i => ({
+      id: i.id as string,
+      invoice_number: i.invoice_number as string,
+      due_date: (i.due_date as string | null) ?? null,
+      balance: (i.total as number) - ((i.amount_paid as number) || 0),
+    }));
 
   return { would_generate, would_mark_overdue, would_remind, would_send_overdue };
 }

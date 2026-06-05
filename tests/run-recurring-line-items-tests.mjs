@@ -59,5 +59,22 @@ test('breakdown with no positive lines -> null', () => {
   assert.strictEqual(deriveRecurringLineItems({ web_management: { sites: [{ domain: 'a.com', monthly_contribution: 0 }] }, marketing_consulting: { monthly_retainer: 0 } }, period), null);
 });
 
+test('priced site with NO domain -> synthesized label, still billed (reconcile-safe)', () => {
+  // A site with a positive contribution but a missing domain must still produce
+  // a line, or the lines would sum short of contract.recurring_amount and trip
+  // the reconcile HALT (dual audit 2026-06-05). Synthesized label, real amount.
+  const lines = deriveRecurringLineItems({ web_management: { sites: [
+    { domain: 'zipkithomes.com', monthly_contribution: 500, is_primary: true },
+    { monthly_contribution: 330, is_primary: false },
+  ] } }, period);
+  assert.strictEqual(lines.length, 2);
+  const synth = lines.find(l => l.name === 'Web Management - additional site');
+  assert.ok(synth, 'domainless priced site gets a synthesized-label line');
+  assert.strictEqual(synth.unit_price, 330);
+  // Sum preserved so reconcile vs recurring_amount (830) passes, not null/short.
+  const sum = lines.reduce((s, l) => s + l.unit_price * l.quantity, 0);
+  assert.strictEqual(sum, 830);
+});
+
 console.log(`\n${passed}/${passed + failed} passed`);
 if (failed > 0) process.exit(1);

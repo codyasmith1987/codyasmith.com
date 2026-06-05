@@ -198,6 +198,42 @@ export async function updateOverageCharge(contractId: string, periodStart: strin
 // Recurring Invoice Generation
 // ============================================================
 
+// Derive the ITEMIZED recurring service lines from a signed Schedule A (Cody's
+// hard rule: every invoice is always itemized, never a single combined line).
+// Returns one line per Web Management site (its own monthly contribution) plus
+// the Marketing Consulting retainer line. Returns null when the Schedule A has
+// no such breakdown (legacy contracts / no linked agreement) so the caller
+// falls back to a single line. Pure + unit-tested. Pass-through, pending
+// charges, and reimbursements are added separately by the caller.
+export function deriveRecurringLineItems(
+  scheduleA: any,
+  period: { start: string; end: string }
+): Array<{ name: string; sub_description: string; description: string; category: string; frequency: string; quantity: number; unit_price: number }> | null {
+  if (!scheduleA || typeof scheduleA !== 'object') return null;
+  const sub = `${period.start} to ${period.end}`;
+  const lines: Array<{ name: string; sub_description: string; description: string; category: string; frequency: string; quantity: number; unit_price: number }> = [];
+
+  const wm = scheduleA.web_management;
+  if (wm && Array.isArray(wm.sites)) {
+    // Primary first, then the rest in their listed order.
+    const sites = [...wm.sites].sort((a: any, b: any) => (b?.is_primary ? 1 : 0) - (a?.is_primary ? 1 : 0));
+    for (const s of sites) {
+      const amt = Number(s?.monthly_contribution) || 0;
+      if (amt > 0 && s?.domain) {
+        const name = `Web Management - ${s.domain}`;
+        lines.push({ name, sub_description: sub, description: name, category: 'services', frequency: 'monthly', quantity: 1, unit_price: amt });
+      }
+    }
+  }
+
+  const mcAmt = Number(scheduleA.marketing_consulting?.monthly_retainer) || 0;
+  if (mcAmt > 0) {
+    lines.push({ name: 'Marketing Consulting', sub_description: sub, description: 'Marketing Consulting', category: 'services', frequency: 'monthly', quantity: 1, unit_price: mcAmt });
+  }
+
+  return lines.length > 0 ? lines : null;
+}
+
 export async function generateInvoiceForContract(contract: Contract, createdBy: string, now: Date = new Date()): Promise<string | null> {
   if (contract.status !== 'active' || contract.billing_cadence !== 'monthly' || !contract.billing_day || !contract.recurring_amount) {
     return null;
@@ -220,6 +256,21 @@ export async function generateInvoiceForContract(contract: Contract, createdBy: 
   issueThreshold.setDate(issueThreshold.getDate() - 7);
   if (now < issueThreshold) {
     return null;
+  }
+
+  // Itemize the recurring lines from the signed Schedule A (always-itemized
+  // rule). Load the agreement once (reused below for pass-through). Reconcile
+  // against the contract's recurring_amount BEFORE creating anything: on a
+  // mismatch, HALT (Cody, 2026-06-04: never send a wrong invoice) by throwing,
+  // which generateRecurringInvoices logs + alerts on. A contract with no
+  // Schedule A breakdown (legacy) falls back to a single recurring line.
+  const agreement = await getAgreementByContractId(contract.id);
+  const recurringLines = deriveRecurringLineItems(agreement?.schedule_a, period);
+  if (recurringLines) {
+    const sum = recurringLines.reduce((s, l) => s + l.unit_price * l.quantity, 0);
+    if (Math.abs(sum - contract.recurring_amount) > 0.01) {
+      throw new Error(`reconcile mismatch for contract ${contract.id}: Schedule A recurring lines $${sum.toFixed(2)} do not equal contract.recurring_amount $${Number(contract.recurring_amount).toFixed(2)}; itemized invoice not generated`);
+    }
   }
 
   // Generate the invoice with a collision-safe invoice number. Manual
@@ -250,24 +301,31 @@ export async function generateInvoiceForContract(contract: Contract, createdBy: 
     client_visible: 1,
   });
 
-  // Add recurring amount line item (structured: a monthly Services line named
-  // for the contract, with the billing period as the sub-description). Amount
-  // unchanged; description kept for the legacy fallback.
-  await addInvoiceItem({
-    invoice_id: invoiceId,
-    name: contract.title,
-    sub_description: `${period.start} to ${period.end}`,
-    description: `${contract.title} (${period.start} to ${period.end})`,
-    category: 'services',
-    frequency: 'monthly',
-    quantity: 1,
-    unit_price: contract.recurring_amount,
-  });
+  // Recurring lines: itemized per Schedule A (always-itemized rule), or a single
+  // line as a legacy fallback. sort_order is set explicitly on every line below
+  // so display order is deterministic (getInvoiceItems orders by sort_order).
+  let so = 0;
+  if (recurringLines) {
+    for (const l of recurringLines) {
+      await addInvoiceItem({ invoice_id: invoiceId, sort_order: so++, ...l });
+    }
+  } else {
+    await addInvoiceItem({
+      invoice_id: invoiceId,
+      sort_order: so++,
+      name: contract.title,
+      sub_description: `${period.start} to ${period.end}`,
+      description: `${contract.title} (${period.start} to ${period.end})`,
+      category: 'services',
+      frequency: 'monthly',
+      quantity: 1,
+      unit_price: contract.recurring_amount,
+    });
+  }
 
   // Contracted pass-through: the monthly plugin/software management fee from the
   // signed Schedule A (a Services line, distinct from out-of-pocket
   // reimbursements). Summed across sites to match the hand-invoice presentation.
-  const agreement = await getAgreementByContractId(contract.id);
   const passThrough: any[] = Array.isArray(agreement?.schedule_a?.pass_through_items)
     ? agreement!.schedule_a.pass_through_items
     : [];
@@ -279,6 +337,7 @@ export async function generateInvoiceForContract(contract: Contract, createdBy: 
       : `${passThrough.length} items`;
     await addInvoiceItem({
       invoice_id: invoiceId,
+      sort_order: so++,
       name: 'Plugin Management Fee',
       sub_description: sub,
       description: 'Plugin Management Fee',
@@ -295,6 +354,7 @@ export async function generateInvoiceForContract(contract: Contract, createdBy: 
   for (const charge of pendingCharges) {
     await addInvoiceItem({
       invoice_id: invoiceId,
+      sort_order: so++,
       name: charge.description,
       description: charge.description,
       category: 'services',
@@ -318,6 +378,7 @@ export async function generateInvoiceForContract(contract: Contract, createdBy: 
   for (const exp of dueExpenses) {
     await addInvoiceItem({
       invoice_id: invoiceId,
+      sort_order: so++,
       name: exp.name,
       description: exp.name,
       category: 'reimbursements',
@@ -379,9 +440,16 @@ export async function generateRecurringInvoices(createdBy: string): Promise<{ ge
       } else {
         skipped.push(contract.id);
       }
-    } catch (err) {
+    } catch (err: any) {
       logger.error(`Failed to generate invoice for contract ${contract.id}`, err);
       skipped.push(contract.id);
+      // Halt-and-alert (Cody, 2026-06-04): a thrown generate error (e.g. a
+      // Schedule A reconcile mismatch) skips that contract WITHOUT emitting a
+      // wrong invoice, and tells the admin so it can be fixed.
+      try {
+        const { onAutomatedFailure } = await import('./triggers');
+        await onAutomatedFailure('generateInvoiceForContract', `Contract ${contract.id}: ${err?.message || 'failed'}`);
+      } catch (e) { logger.error('generate failure alert failed', e); }
     }
   }
 

@@ -380,17 +380,18 @@ export async function addInvoiceItem(data: {
   category?: string | null;
   quantity?: number;
   unit_price: number;
+  sort_order?: number | null;
 }): Promise<string> {
   const id = nanoid();
   const qty = data.quantity ?? 1;
   const amount = qty * data.unit_price;
   await turso.execute({
-    sql: `INSERT INTO invoice_items (id, invoice_id, name, sub_description, description, frequency, category, quantity, unit_price, amount)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO invoice_items (id, invoice_id, name, sub_description, description, frequency, category, quantity, unit_price, amount, sort_order)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id, data.invoice_id, data.name ?? null, data.sub_description ?? null,
       data.description, data.frequency ?? null, data.category ?? 'services',
-      qty, data.unit_price, amount,
+      qty, data.unit_price, amount, data.sort_order ?? null,
     ],
   });
   await recalculateInvoiceTotals(data.invoice_id);

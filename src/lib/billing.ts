@@ -565,6 +565,85 @@ export function dunningMessageType(section58Version: number, stage: DunningStage
   return stage;
 }
 
+// ============================================================
+// Overdue roll-forward + late interest (Part B, v7 section 5.8)
+// ============================================================
+// Late-payment interest, per v7/v6 section 5.8 + the Utah research
+// (utah-contract-law-research-2026-06-04.md): 1.5% per month (18%/yr), SIMPLE,
+// from the invoice date, enforceable B2B. Only portal-contract clients are
+// charged it (the same gate as the section 5.8 escalation); the caller enforces
+// that.
+export const LATE_INTEREST_MONTHLY_RATE = 0.015;
+// The line-item category for carried-forward overdue principal, and for the
+// late-interest lines. Interest is computed on everything EXCEPT late_interest
+// lines, so previously-charged interest never itself bears interest.
+export const PAST_DUE_CATEGORY = 'past_due';
+export const LATE_INTEREST_CATEGORY = 'late_interest';
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+// Simple interest on `principalBase` accruing from `issuedDate` to `asOf` at
+// 1.5%/month (prorated by whole days, UTC). 0 before/at the issue date, on a
+// non-positive base, or an unparseable date. Pure + unit-tested.
+export function accruedInterest(principalBase: number, issuedDate: string | null, asOf: Date = new Date()): number {
+  if (principalBase <= 0 || !issuedDate) return 0;
+  const issued = new Date(issuedDate + 'T00:00:00Z');
+  if (isNaN(issued.getTime())) return 0;
+  const days = Math.floor((asOf.getTime() - issued.getTime()) / 86400000);
+  if (days <= 0) return 0;
+  const dailyRate = LATE_INTEREST_MONTHLY_RATE * 12 / 365;
+  return round2(principalBase * dailyRate * days);
+}
+
+// Given an overdue invoice and its line items, compute the ITEMIZED lines to add
+// to the next invoice when rolling it forward. Pure + unit-tested.
+//   - past_due       : the carried principal = sum of all NON-late-interest lines
+//   - late_interest  : the newly accrued interest on that principal from the
+//                      invoice's own issue date (simple; segments sum to
+//                      simple-from-original across multiple roll-forwards because
+//                      simple interest is linear in time)
+//   - late_interest  : any PRIOR interest the invoice itself carried, moved over
+//                      as a NON-bearing line (only on a 2nd+ roll-forward)
+export function computeRollForwardLines(
+  inv: { invoice_number: string; issued_date: string | null },
+  items: Array<{ category?: string | null; amount: number }>,
+  now: Date = new Date()
+): Array<{ category: string; name: string; sub_description: string; amount: number }> {
+  const isInterest = (c?: string | null) => (c || 'services') === LATE_INTEREST_CATEGORY;
+  const principalBase = round2(items.filter(i => !isInterest(i.category)).reduce((s, i) => s + i.amount, 0));
+  const priorInterest = round2(items.filter(i => isInterest(i.category)).reduce((s, i) => s + i.amount, 0));
+  const interest = accruedInterest(principalBase, inv.issued_date, now);
+
+  const lines: Array<{ category: string; name: string; sub_description: string; amount: number }> = [];
+  if (principalBase > 0) {
+    lines.push({
+      category: PAST_DUE_CATEGORY,
+      name: `Past due: ${inv.invoice_number}`,
+      sub_description: inv.issued_date ? `Originally invoiced ${inv.issued_date}` : '',
+      amount: principalBase,
+    });
+  }
+  if (interest > 0) {
+    lines.push({
+      category: LATE_INTEREST_CATEGORY,
+      name: `Late interest: ${inv.invoice_number}`,
+      sub_description: `1.5% per month from ${inv.issued_date}`,
+      amount: interest,
+    });
+  }
+  if (priorInterest > 0) {
+    lines.push({
+      category: LATE_INTEREST_CATEGORY,
+      name: `Prior late interest: ${inv.invoice_number}`,
+      sub_description: 'carried forward',
+      amount: priorInterest,
+    });
+  }
+  return lines;
+}
+
 // The per-invoice extra recipient to honor for a CONSOLIDATED notice. An extra
 // recipient is scoped to a single invoice (migration 067), so for a per-client
 // email listing several invoices we honor it ONLY when EVERY listed invoice

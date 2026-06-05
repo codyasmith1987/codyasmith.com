@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { daysPastDue, overdueStage, resolveDunningStage, sharedExtraRecipient } from '../src/lib/billing.ts';
+import { daysPastDue, overdueStage, resolveDunningStage, sharedExtraRecipient, isDunnable } from '../src/lib/billing.ts';
 
 let passed = 0, failed = 0;
 function test(name, fn) { try { fn(); console.log(`[PASS] ${name}`); passed++; } catch (e) { console.error(`[FAIL] ${name}: ${e.message}`); failed++; } }
@@ -151,6 +151,22 @@ test('case/whitespace differences count as the same shared extra', () => {
     { extra_recipient_email: 'Boss@X.com' },
     { extra_recipient_email: ' boss@x.com ' },
   ]), 'Boss@X.com');
+});
+
+// --- isDunnable (portal-contract gate: auto-dun only executed agreements) ---
+
+test('executed agreement -> dunnable', () => {
+  assert.strictEqual(isDunnable({ status: 'executed' }), true);
+});
+
+test('no agreement (legacy/manual) -> NOT dunnable', () => {
+  assert.strictEqual(isDunnable(null), false);
+});
+
+test('non-executed agreement (draft/issued/partial/voided) -> NOT dunnable', () => {
+  for (const status of ['draft', 'issued', 'partially_signed', 'voided', 'revoked']) {
+    assert.strictEqual(isDunnable({ status }), false, `${status} must not be dunnable`);
+  }
 });
 
 console.log(`\n${passed}/${passed + failed} passed`);

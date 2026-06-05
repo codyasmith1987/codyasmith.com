@@ -204,7 +204,12 @@ const statusColors: Record<string, string> = {
       const parts = [];
       if (d.preview) {
         const p = d.preview;
-        parts.push(`would generate ${p.would_generate?.length || 0}`, `mark overdue ${p.would_mark_overdue?.length || 0}`, `remind ${p.would_remind?.length || 0}`, `overdue notices ${p.would_send_overdue?.length || 0}`);
+        // The live run sends ONE consolidated email per client, so report the
+        // preview in the same unit: "<invoices> inv / <clients> email" so the
+        // dry-run reconciles with the post-run "reminders N / overdue notices N"
+        // (which count emails/clients), not just the invoice count.
+        const clients = (rows: Array<{ client_id?: string }> | undefined) => new Set((rows || []).map(r => r.client_id)).size;
+        parts.push(`would generate ${p.would_generate?.length || 0}`, `mark overdue ${p.would_mark_overdue?.length || 0}`, `remind ${p.would_remind?.length || 0} inv / ${clients(p.would_remind)} email`, `overdue notices ${p.would_send_overdue?.length || 0} inv / ${clients(p.would_send_overdue)} email`);
         return 'Preview: ' + parts.join(', ');
       }
       parts.push(`generated ${d.invoices_generated ?? 0}`, `emailed ${d.invoices_emailed ?? 0}`, `overdue marked ${d.overdue_marked ?? 0}`, `reminders ${d.reminders_sent ?? 0}`, `overdue notices ${d.overdue_notices_sent ?? 0}`);

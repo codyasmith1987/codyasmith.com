@@ -245,6 +245,16 @@ export async function updateInvoice(id: string, data: Partial<Pick<Invoice,
       throw new Error(`Invoice number "${data.invoice_number}" is already in use`);
     }
   }
+  // Couple visibility to a balance-bearing status (dual audit 2026-06-05): when an
+  // invoice moves into sent/partial/overdue, the CLIENT must be able to see it --
+  // otherwise their portal balance (computed from the client_visible subset)
+  // understates what they owe. Default client_visible=1 on that transition unless
+  // the caller is explicitly setting it (so a deliberate hide still wins). Covers
+  // admin status edits + recordPayment's flip to 'partial'; markOverdueInvoices
+  // sets it in its own raw UPDATE.
+  if (data.status && ['sent', 'partial', 'overdue'].includes(data.status) && data.client_visible === undefined) {
+    data = { ...data, client_visible: 1 };
+  }
   const update = buildSafeUpdate('invoices', id, data);
   if (!update) return;
   await turso.execute(update);

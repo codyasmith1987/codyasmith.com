@@ -6,6 +6,7 @@ import {
 import { logActivity } from '../../../../../lib/activity';
 import { logger } from '../../../../../lib/logger';
 import { onInvoiceSent } from '../../../../../lib/triggers';
+import { isValidEmail } from '../../../../../lib/email-safety';
 
 export const prerender = false;
 
@@ -71,6 +72,17 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
 
     if (body.invoice_number !== undefined && !String(body.invoice_number).trim()) {
       return json({ error: 'Invoice number cannot be empty' }, 400);
+    }
+
+    // Validate the per-invoice extra recipient (dual audit 2026-06-05): without
+    // this a typo'd address is saved silently and then dropped at send time, so
+    // that person never gets the invoice. Mirror billing-contacts.ts: a non-empty
+    // value must be a plain email; empty clears.
+    if (body.extra_recipient_email !== undefined) {
+      const v = String(body.extra_recipient_email).trim();
+      if (v && !isValidEmail(v)) {
+        return json({ error: 'Extra recipient is not a valid email address (use a plain address like name@example.com)' }, 400);
+      }
     }
 
     // Standard invoice field updates

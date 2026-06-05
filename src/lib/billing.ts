@@ -219,8 +219,13 @@ export function deriveRecurringLineItems(
     const sites = [...wm.sites].sort((a: any, b: any) => (b?.is_primary ? 1 : 0) - (a?.is_primary ? 1 : 0));
     for (const s of sites) {
       const amt = Number(s?.monthly_contribution) || 0;
-      if (amt > 0 && s?.domain) {
-        const name = `Web Management - ${s.domain}`;
+      // Include any site with a positive contribution. A missing domain degrades
+      // to a synthesized label rather than dropping the line -- otherwise the
+      // lines would sum to less than contract.recurring_amount and trip the
+      // reconcile HALT, stopping the client's auto-billing entirely (dual audit
+      // 2026-06-05). A $0 site is still skipped (nothing to bill).
+      if (amt > 0) {
+        const name = s?.domain ? `Web Management - ${s.domain}` : 'Web Management - additional site';
         lines.push({ name, sub_description: sub, description: name, category: 'services', frequency: 'monthly', quantity: 1, unit_price: amt });
       }
     }
@@ -280,8 +285,15 @@ export async function generateInvoiceForContract(contract: Contract, createdBy: 
   // standalone/unlinked monthly contracts that previously billed via the
   // fallback. The v7 section 5.8 dunning/interest/suspension policy is scoped to
   // portal-contract clients separately, in sendOverdueNotices -- not here.
+  // Only itemize from an EXECUTED agreement's Schedule A (dual audit 2026-06-05):
+  // an admin Schedule A edit can roll a linked agreement back to partially_signed
+  // while the contract stays active, so without the status check the generator
+  // could itemize from a non-executed document. A non-executed (or absent)
+  // agreement falls through to the single-line fallback. (Generation itself is
+  // still NOT gated on agreement existence -- see the note above.)
   const agreement = await getAgreementByContractId(contract.id);
-  const recurringLines = deriveRecurringLineItems(agreement?.schedule_a, period);
+  const scheduleA = agreement && agreement.status === 'executed' ? agreement.schedule_a : null;
+  const recurringLines = deriveRecurringLineItems(scheduleA, period);
   if (recurringLines) {
     const sum = recurringLines.reduce((s, l) => s + l.unit_price * l.quantity, 0);
     if (Math.abs(sum - contract.recurring_amount) > 0.01) {
@@ -342,8 +354,8 @@ export async function generateInvoiceForContract(contract: Contract, createdBy: 
   // Contracted pass-through: the monthly plugin/software management fee from the
   // signed Schedule A (a Services line, distinct from out-of-pocket
   // reimbursements). Summed across sites to match the hand-invoice presentation.
-  const passThrough: any[] = Array.isArray(agreement?.schedule_a?.pass_through_items)
-    ? agreement!.schedule_a.pass_through_items
+  const passThrough: any[] = Array.isArray(scheduleA?.pass_through_items)
+    ? scheduleA.pass_through_items
     : [];
   const passThroughTotal = passThrough.reduce((sum: number, p: any) => sum + (Number(p?.monthly_cost) || 0), 0);
   if (passThroughTotal > 0) {
@@ -507,7 +519,9 @@ export const OVERDUE_MARK_WHERE =
 // fires. Run from the daily cron. Returns the number of invoices marked.
 export async function markOverdueInvoices(): Promise<number> {
   const result = await turso.execute({
-    sql: `UPDATE invoices SET status = 'overdue', updated_at = datetime('now') WHERE ${OVERDUE_MARK_WHERE}`,
+    // client_visible = 1: an invoice flipped to overdue must be visible to the
+    // client so their portal balance reflects it (dual audit 2026-06-05).
+    sql: `UPDATE invoices SET status = 'overdue', client_visible = 1, updated_at = datetime('now') WHERE ${OVERDUE_MARK_WHERE}`,
   });
   return result.rowsAffected ?? 0;
 }
@@ -945,8 +959,8 @@ export async function sendOverdueNotices(now: Date = new Date()): Promise<{ sent
 export async function previewDailyCron(): Promise<{
   would_generate: Array<{ contract_id: string; title: string; client_id: string; period_start: string; period_end: string; amount: number }>;
   would_mark_overdue: Array<{ id: string; invoice_number: string; due_date: string | null }>;
-  would_remind: Array<{ id: string; invoice_number: string; due_date: string | null; total: number }>;
-  would_send_overdue: Array<{ id: string; invoice_number: string; due_date: string | null; balance: number }>;
+  would_remind: Array<{ id: string; client_id: string; invoice_number: string; due_date: string | null; total: number }>;
+  would_send_overdue: Array<{ id: string; client_id: string; invoice_number: string; due_date: string | null; balance: number }>;
 }> {
   const now = new Date();
   // Shared cached lookups so the dry run matches the live senders/generator and
@@ -970,8 +984,12 @@ export async function previewDailyCron(): Promise<{
     const billDateP = now.toISOString().split('T')[0];
     const dueExp = await getExpensesDueForBilling(c.client_id, billDateP);
     const reimbTotal = dueExp.reduce((s, e) => s + e.amount, 0);
+    // Mirror the generator's executed-status gate so the dry-run total matches
+    // what the live run would actually bill (a non-executed agreement bills via
+    // the single-line fallback with NO pass-through).
     const agr = await lookupAgr(c.id);
-    const ptItems: any[] = Array.isArray(agr?.schedule_a?.pass_through_items) ? agr!.schedule_a.pass_through_items : [];
+    const sa = agr && agr.status === 'executed' ? agr.schedule_a : null;
+    const ptItems: any[] = Array.isArray(sa?.pass_through_items) ? sa.pass_through_items : [];
     const ptTotal = ptItems.reduce((s: number, p: any) => s + (Number(p?.monthly_cost) || 0), 0);
     would_generate.push({
       contract_id: c.id,
@@ -996,11 +1014,12 @@ export async function previewDailyCron(): Promise<{
   // run shows exactly who the live senders would email (hand-billed clients are
   // excluded; non-standard clients ARE included -- they get the default notice).
   const due = await getDueInvoices(3);
-  const would_remind: Array<{ id: string; invoice_number: string; due_date: string | null; total: number }> = [];
+  const would_remind: Array<{ id: string; client_id: string; invoice_number: string; due_date: string | null; total: number }> = [];
   for (const i of due as any[]) {
     if (await isManual(i.client_id)) continue;
     would_remind.push({
       id: i.id as string,
+      client_id: i.client_id as string,
       invoice_number: i.invoice_number as string,
       due_date: (i.due_date as string | null) ?? null,
       total: i.total as number,
@@ -1021,12 +1040,13 @@ export async function previewDailyCron(): Promise<{
       WHERE due_date IS NOT NULL
         AND (status = 'overdue' OR (status IN ('sent', 'partial') AND due_date < date('now')))`
   );
-  const would_send_overdue: Array<{ id: string; invoice_number: string; due_date: string | null; balance: number }> = [];
+  const would_send_overdue: Array<{ id: string; client_id: string; invoice_number: string; due_date: string | null; balance: number }> = [];
   for (const i of overdueRows) {
     if (!(isAutoOverdueEmailEligible({ ...i, status: 'overdue' }) && isOverdueNoticeDue(i, now))) continue;
     if (await isManual(i.client_id)) continue;
     would_send_overdue.push({
       id: i.id as string,
+      client_id: i.client_id as string,
       invoice_number: i.invoice_number as string,
       due_date: (i.due_date as string | null) ?? null,
       balance: (i.total as number) - ((i.amount_paid as number) || 0),

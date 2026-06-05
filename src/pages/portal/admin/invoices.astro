@@ -1,7 +1,7 @@
 ---
 import Portal from '../../../layouts/Portal.astro';
 import { getAllClients } from '../../../lib/auth';
-import { getInvoicesByClient, getClientOpenBalance } from '../../../lib/invoices';
+import { getInvoicesByClient, getClientOpenBalance, getAllClientsOpenBalance } from '../../../lib/invoices';
 import { getClientExpenses } from '../../../lib/client-expenses';
 import { getClientMetadata } from '../../../lib/agreements';
 export const prerender = false;
@@ -16,6 +16,17 @@ const meta = clientId ? await getClientMetadata(clientId).catch(() => null) : nu
 const balance = clientId ? await getClientOpenBalance(clientId) : null;
 // Selected client (for the manual-billing toggle). getAllClients carries manual_billing.
 const selectedClient = clientId ? clients.find(c => c.id === clientId) : null;
+
+// Portfolio AR rollup (the "who owes what" hub), shown when no single client is
+// selected. Joins client names + the hand-billed flag; sorted overdue-first then
+// by age so the most-at-risk clients surface at the top.
+const clientById = Object.fromEntries(clients.map(c => [c.id, c]));
+const arRows = !clientId
+  ? (await getAllClientsOpenBalance())
+      .map(r => ({ ...r, name: clientById[r.client_id]?.name || 'Unknown', manual: !!clientById[r.client_id]?.manual_billing }))
+      .sort((a, b) => (b.overdue - a.overdue) || (b.oldestDaysPast - a.oldestDaysPast) || (b.open - a.open))
+  : [];
+const arTotals = arRows.reduce((t, r) => ({ open: t.open + r.open, overdue: t.overdue + r.overdue }), { open: 0, overdue: 0 });
 
 const statusColors: Record<string, string> = {
   draft: 'bg-neutral-700/30 text-neutral-400',
@@ -71,6 +82,12 @@ const statusColors: Record<string, string> = {
             <p class="text-2xl font-mono text-red-400">${balance.overdue.toFixed(2)}</p>
           </div>
         )}
+        {balance.oldestDaysPast > 0 && (
+          <div>
+            <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Oldest past due</p>
+            <p class={`text-2xl font-mono ${balance.oldestDaysPast >= 30 ? 'text-red-400' : 'text-amber-600'}`}>{balance.oldestDaysPast}d</p>
+          </div>
+        )}
         <div>
           <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Open invoices</p>
           <p class="text-2xl font-mono text-neutral-300">{balance.count}</p>
@@ -79,10 +96,47 @@ const statusColors: Record<string, string> = {
     )}
 
     {!clientId ? (
-      <div class="text-center py-16">
-        <p class="font-serif text-xl text-neutral-100 mb-2">Select a client</p>
-        <p class="text-sm text-neutral-500">Choose a client above to view their invoices.</p>
-      </div>
+      arRows.length > 0 ? (
+        <div>
+          <div class="flex flex-wrap items-baseline justify-between gap-3 mb-3">
+            <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase">Accounts receivable</p>
+            <p class="text-xs text-neutral-500 font-mono">${arTotals.open.toFixed(2)} open{arTotals.overdue > 0 ? <span class="text-red-400"> &middot; ${arTotals.overdue.toFixed(2)} overdue</span> : null}</p>
+          </div>
+          <div class="bg-neutral-900/30 border border-white/5 rounded-xl overflow-hidden">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-[10px] font-mono text-neutral-500 uppercase tracking-wide border-b border-white/5">
+                  <th class="text-left px-5 py-3 font-normal">Client</th>
+                  <th class="text-right px-4 py-3 font-normal">Open</th>
+                  <th class="text-right px-4 py-3 font-normal">Overdue</th>
+                  <th class="text-right px-4 py-3 font-normal">Oldest</th>
+                  <th class="text-right px-5 py-3 font-normal">Invoices</th>
+                </tr>
+              </thead>
+              <tbody>
+                {arRows.map(r => (
+                  <tr class="border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors">
+                    <td class="px-5 py-3">
+                      <a href={`/portal/admin/invoices?client=${r.client_id}`} class="text-neutral-200 hover:text-amber-600 transition-colors">{r.name}</a>
+                      {r.manual && <span class="ml-2 text-[10px] font-mono text-neutral-500 uppercase">hand-billed</span>}
+                    </td>
+                    <td class="px-4 py-3 text-right font-mono text-neutral-300">${r.open.toFixed(2)}</td>
+                    <td class={`px-4 py-3 text-right font-mono ${r.overdue > 0 ? 'text-red-400' : 'text-neutral-600'}`}>{r.overdue > 0 ? `$${r.overdue.toFixed(2)}` : '-'}</td>
+                    <td class={`px-4 py-3 text-right font-mono ${r.oldestDaysPast >= 30 ? 'text-red-400' : r.oldestDaysPast >= 7 ? 'text-amber-600' : 'text-neutral-600'}`}>{r.oldestDaysPast > 0 ? `${r.oldestDaysPast}d` : '-'}</td>
+                    <td class="px-5 py-3 text-right font-mono text-neutral-400">{r.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p class="text-xs text-neutral-500 mt-3">Choose a client above (or click a name) to view and manage their invoices.</p>
+        </div>
+      ) : (
+        <div class="text-center py-16">
+          <p class="font-serif text-xl text-neutral-100 mb-2">No open balances</p>
+          <p class="text-sm text-neutral-500">No client has an outstanding invoice. Choose a client above to view their billing.</p>
+        </div>
+      )
     ) : invoices.length > 0 ? (
       <div class="space-y-3">
         {invoices.map(inv => (
@@ -201,7 +255,7 @@ const statusColors: Record<string, string> = {
 
     // Billing engine: preview (dry-run) + run now (live)
     const billingResult = document.getElementById('billing-run-result');
-    function fmtBilling(d) {
+    function fmtBilling(d: any) {
       const parts = [];
       if (d.preview) {
         const p = d.preview;

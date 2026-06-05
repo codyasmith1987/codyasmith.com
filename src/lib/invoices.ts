@@ -214,16 +214,42 @@ export async function getOverdueInvoices(): Promise<Invoice[]> {
 // not-fully-settled sent/partial/overdue rows. Used by the admin invoices
 // summary strip. (The client portal computes its own balance from the
 // client_visible subset so the figure always matches the rows it renders.)
-export async function getClientOpenBalance(clientId: string): Promise<{ open: number; overdue: number; count: number }> {
+export async function getClientOpenBalance(clientId: string): Promise<{ open: number; overdue: number; count: number; oldestDaysPast: number }> {
   const row = await queryOne(
     `SELECT
        COALESCE(SUM(total - amount_paid), 0) AS open,
        COALESCE(SUM(CASE WHEN status = 'overdue' OR (status IN ('sent','partial') AND due_date < date('now')) THEN total - amount_paid ELSE 0 END), 0) AS overdue,
+       COALESCE(MAX(CASE WHEN due_date IS NOT NULL AND (status = 'overdue' OR (status IN ('sent','partial') AND due_date < date('now'))) THEN CAST(julianday('now') - julianday(due_date) AS INTEGER) ELSE 0 END), 0) AS oldest_days_past,
        COUNT(*) AS count
      FROM invoices
      WHERE client_id = ? AND status IN ('sent','partial','overdue') AND amount_paid < total`,
     [clientId]);
-  return { open: row?.open ?? 0, overdue: row?.overdue ?? 0, count: row?.count ?? 0 };
+  return { open: row?.open ?? 0, overdue: row?.overdue ?? 0, count: row?.count ?? 0, oldestDaysPast: row?.oldest_days_past ?? 0 };
+}
+
+// Portfolio AR rollup: one row per client that has any open invoice, with the
+// same open/overdue/age semantics as getClientOpenBalance. Backs the admin
+// "who owes what" billing hub. Only clients with a balance are returned; the
+// caller joins client names (and the manual-billing flag) from getAllClients.
+export async function getAllClientsOpenBalance(): Promise<Array<{ client_id: string; open: number; overdue: number; count: number; oldestDaysPast: number }>> {
+  const rows = await queryAll(
+    `SELECT client_id,
+       COALESCE(SUM(total - amount_paid), 0) AS open,
+       COALESCE(SUM(CASE WHEN status = 'overdue' OR (status IN ('sent','partial') AND due_date < date('now')) THEN total - amount_paid ELSE 0 END), 0) AS overdue,
+       COALESCE(MAX(CASE WHEN due_date IS NOT NULL AND (status = 'overdue' OR (status IN ('sent','partial') AND due_date < date('now'))) THEN CAST(julianday('now') - julianday(due_date) AS INTEGER) ELSE 0 END), 0) AS oldest_days_past,
+       COUNT(*) AS count
+     FROM invoices
+     WHERE status IN ('sent','partial','overdue') AND amount_paid < total
+     GROUP BY client_id
+     HAVING SUM(total - amount_paid) > 0`,
+  );
+  return rows.map(r => ({
+    client_id: r.client_id as string,
+    open: r.open ?? 0,
+    overdue: r.overdue ?? 0,
+    count: r.count ?? 0,
+    oldestDaysPast: r.oldest_days_past ?? 0,
+  }));
 }
 
 // Client-safe: excludes created_by, contract_id, milestone_id (admin context)

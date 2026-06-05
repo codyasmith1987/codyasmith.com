@@ -7,6 +7,7 @@ import { getTask, getMilestone, getProject, getContract, getTasksByMilestone, ge
 import { getInvoice, getChangeOrder } from './invoices';
 import { createPendingCharge } from './billing';
 import { createNotification } from './notifications';
+import turso from './turso';
 import { getUsersByClientId, getAdminUsers } from './auth';
 import { logActivity } from './activity';
 import { logger } from './logger';
@@ -127,6 +128,55 @@ export async function onAutomatedFailure(context: string, detail: string): Promi
   } catch (err) {
     // Never re-alert on an alert-email failure; just log.
     logger.error('onAutomatedFailure admin email failed', err);
+  }
+}
+
+// ============================================================
+// Dunning-escalation alert (Part B, 2026-06-05): tell the admin when a client
+// crosses into the section 5.8 'final' tier (30+ days past due, where the notice
+// names interest + the suspension consequence). The cron tells the CLIENT; this
+// surfaces the highest-stakes dunning step to the OWNER too. Informational (not
+// a failure). Best-effort; never throws into the caller. The caller fires this
+// only in the FIRST final week (maxDaysPast < 37) so the weekly cadence does not
+// re-alert -- no stored marker needed.
+// ============================================================
+export async function onDunningEscalation(clientId: string, clientName: string, balanceStr: string, daysPast: number): Promise<void> {
+  // Dedup via notification existence (no stored marker / no migration, and
+  // OUTAGE-PROOF): fire once on the FIRST final notice whenever it actually
+  // lands, then suppress for ~25 days. A still-unpaid client re-alerts about
+  // monthly (a useful reminder, not weekly spam). If the dedup check itself
+  // errors, fall through and alert -- better a duplicate than a silent miss.
+  try {
+    const existing = await turso.execute({
+      sql: `SELECT 1 FROM notifications WHERE entity_type = 'dunning_final' AND entity_id = ? AND created_at > datetime('now', '-25 days') LIMIT 1`,
+      args: [clientId],
+    });
+    if (existing.rows.length > 0) return;
+  } catch (err) {
+    logger.error('onDunningEscalation dedup check failed', err);
+  }
+  const line = `${clientName} is now ${daysPast} days past due (${balanceStr}). The section 5.8 final notice (interest + possible suspension) has gone out. Any suspension is a manual decision.`;
+  try {
+    await notifyAdmins({ type: 'general', title: `Past due 30+ days: ${clientName}`, body: line, entity_type: 'dunning_final', entity_id: clientId });
+  } catch (err) {
+    logger.error('onDunningEscalation in-portal notify failed', err);
+  }
+  try {
+    const { sendEmail } = await import('./email');
+    const admins = await getAdminUsers();
+    if (admins.length > 0) {
+      await sendEmail(
+        admins.map(a => ({ email: a.email, name: a.name })),
+        `Past due 30+ days: ${clientName} (${balanceStr})`,
+        `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 20px;">
+          <h2 style="color: #171717; margin-bottom: 12px;">A client crossed 30 days past due</h2>
+          <p style="color: #525252; line-height: 1.6;">${line.replace(/[<>]/g, '')}</p>
+          <p style="color: #a3a3a3; font-size: 12px; margin-top: 24px;">codyasmith.com automated billing</p>
+        </div>`
+      );
+    }
+  } catch (err) {
+    logger.error('onDunningEscalation admin email failed', err);
   }
 }
 

@@ -8,7 +8,7 @@ import { getExpensesDueForBilling, markExpensesBilled } from './client-expenses'
 import { getAgreementByContractId, getClientMetadata, type ClientAgreement } from './agreements';
 import { resolveInvoiceRecipients } from './invoice-emails';
 import { createNotification } from './notifications';
-import { getUsersByClientId } from './auth';
+import { getUsersByClientId, clientIsManualBilling } from './auth';
 import { logger } from './logger';
 
 // --- Query helpers ---
@@ -236,6 +236,13 @@ export function deriveRecurringLineItems(
 
 export async function generateInvoiceForContract(contract: Contract, createdBy: string, now: Date = new Date()): Promise<string | null> {
   if (contract.status !== 'active' || contract.billing_cadence !== 'monthly' || !contract.billing_day || !contract.recurring_amount) {
+    return null;
+  }
+
+  // Manual-billing gate (Cody, 2026-06-05): a hand-billed client is never
+  // auto-generated -- Cody invoices them by hand (e.g. ZipKit until the v7
+  // re-paper). Marking/visibility is unaffected; this only skips auto-creation.
+  if (await clientIsManualBilling(contract.client_id)) {
     return null;
   }
 
@@ -518,16 +525,30 @@ function makeAgreementLookup() {
   };
 }
 
-// Whether an invoice is eligible for ANY automated dunning (Cody, 2026-06-04:
-// the entire automated late-payment system -- pre-due reminders, overdue
-// notices, and section 5.8 escalation -- applies ONLY to clients on an active
-// portal contract). An active portal contract is an EXECUTED portal agreement.
-// Legacy clients on old paper contracts, and ad-hoc manual invoices (no
-// contract, or a contract with no executed agreement), are dunned by hand and
-// never automatically. Marking an invoice overdue for visibility is separate
-// and stays ungated; this gates only the outbound automated comms.
-export function isDunnable(agr: Pick<ClientAgreement, 'status'> | null): boolean {
-  return !!agr && agr.status === 'executed';
+// A per-call cached "is this client hand-billed" lookup. Mirrors
+// makeAgreementLookup so a run reads each client's flag once.
+function makeManualBillingLookup() {
+  const cache = new Map<string, boolean>();
+  return async (clientId: string): Promise<boolean> => {
+    if (!cache.has(clientId)) cache.set(clientId, await clientIsManualBilling(clientId));
+    return cache.get(clientId)!;
+  };
+}
+
+// The dunning MESSAGE TYPE for an overdue notice, given the section-5.8 version
+// that drove the stage (from resolveDunningStage) and the stage. Three types
+// (Cody, 2026-06-05):
+//   'default' -- a non-standard client with no executed portal contract (section
+//                5.8 version 0). Plain past-due message + a faint reminder of the
+//                30-day written notice to cancel. No interest, no suspension.
+//   'firm'    -- a portal-contract client, under 30 days past due.
+//   'final'   -- a portal-contract client, 30+ days: the section 5.8 escalation.
+// (Manual-billing clients are filtered out entirely before this; they get no
+// automated notice at all.)
+export type DunningMessageType = 'default' | 'firm' | 'final';
+export function dunningMessageType(section58Version: number, stage: DunningStage): DunningMessageType {
+  if (section58Version === 0) return 'default';
+  return stage;
 }
 
 // The per-invoice extra recipient to honor for a CONSOLIDATED notice. An extra
@@ -564,27 +585,25 @@ export async function sendDueReminders(): Promise<{ sent: number; failed: number
   const { sendEmail } = await import('./email');
   const dueInvoices = await getDueInvoices(3);
 
-  // Portal-contract gate (Cody, 2026-06-04): only invoices on an active portal
-  // contract are auto-dunned. Legacy/paper/manual invoices are reminded by hand.
-  const lookupAgr = makeAgreementLookup();
-  const dunnable: any[] = [];
-  for (const inv of dueInvoices) {
-    if (isDunnable(await lookupAgr(inv.contract_id))) dunnable.push(inv);
-  }
-
   // Group by client so each client receives a single reminder email.
   const byClient = new Map<string, any[]>();
-  for (const inv of dunnable) {
+  for (const inv of dueInvoices) {
     const arr = byClient.get(inv.client_id) || [];
     arr.push(inv);
     byClient.set(inv.client_id, arr);
   }
 
+  // Manual-billing gate (Cody, 2026-06-05): a hand-billed client gets NO
+  // automated reminders. Every other client does, regardless of portal-contract
+  // status (a non-standard client is still reminded; only the section 5.8
+  // escalation -- in sendOverdueNotices -- is portal-contract-only).
+  const isManual = makeManualBillingLookup();
   const portalUrl = import.meta.env.SITE || 'https://codyasmith.com';
   let sent = 0, failed = 0;
 
   for (const [clientId, invoices] of byClient) {
     try {
+      if (await isManual(clientId)) continue;
       // Recipient model (Cody, 2026-06-04): a payment reminder is a financial
       // notice, so it goes to the billing contact + accountant CC, not every
       // portal user. Falls back to the first portal user if no contact is set.
@@ -784,32 +803,26 @@ export async function sendOverdueNotices(now: Date = new Date()): Promise<{ sent
   const { sendEmail } = await import('./email');
   const candidates = await getOverdueNoticeCandidates(now);
 
-  // Portal-contract gate (Cody, 2026-06-04): only invoices on an active portal
-  // contract are auto-dunned. Legacy/paper/manual invoices are dunned by hand,
-  // never automatically -- so a legacy client like ZipKit on an old paper
-  // contract receives NO automated overdue notice. The cached lookup is reused
-  // below for the section 5.8 stage so each contract is read once per run.
-  const lookupAgr = makeAgreementLookup();
-  const dunnable: any[] = [];
-  for (const inv of candidates) {
-    if (isDunnable(await lookupAgr(inv.contract_id))) dunnable.push(inv);
-  }
-
   // Consolidate per client: one notice per client per run listing every overdue
   // invoice (Cody, 2026-06-04: "sven gets confused easily"). last_reminder_sent
   // is still stamped per invoice so each one's weekly cadence advances.
   const byClient = new Map<string, any[]>();
-  for (const inv of dunnable) {
+  for (const inv of candidates) {
     const arr = byClient.get(inv.client_id) || [];
     arr.push(inv);
     byClient.set(inv.client_id, arr);
   }
 
+  // lookupAgr drives the section 5.8 message type (executed v6+); isManual gates
+  // a fully hand-billed client out of all automated notices.
+  const lookupAgr = makeAgreementLookup();
+  const isManual = makeManualBillingLookup();
   const portalUrl = import.meta.env.SITE || 'https://codyasmith.com';
   let sent = 0, failed = 0;
 
   for (const [clientId, invoices] of byClient) {
     try {
+      if (await isManual(clientId)) continue;
       const meta = await getClientMetadata(clientId).catch(() => null);
       const users = await getUsersByClientId(clientId);
       const recipients = resolveInvoiceRecipients({
@@ -836,14 +849,16 @@ export async function sendOverdueNotices(now: Date = new Date()): Promise<{ sent
       // voided-but-still-linked agreement can never back the escalation.
       const stageInvoices: Array<{ daysPast: number; section58Version: number | null }> = [];
       for (const inv of invoices) {
-        // Every invoice here is already dunnable (executed agreement). It counts
-        // toward the section 5.8 stage only if that agreement is v6+.
+        // An invoice counts toward the section 5.8 stage only if it is on an
+        // EXECUTED portal agreement at v6+. A non-standard client (no executed
+        // agreement) yields section58Version 0 -> the 'default' message.
         const agr = await lookupAgr(inv.contract_id);
-        const section58Version = agr && agr.template_version >= MIN_SECTION_5_8_VERSION ? agr.template_version : null;
+        const section58Version = agr && agr.status === 'executed' && agr.template_version >= MIN_SECTION_5_8_VERSION ? agr.template_version : null;
         stageInvoices.push({ daysPast: daysPastDue(inv.due_date, now), section58Version });
       }
       const { stage, section58Version } = resolveDunningStage(stageInvoices);
       const offlineBargained = section58Version >= SITE_OFFLINE_BARGAINED_VERSION;
+      const msgType = dunningMessageType(section58Version, stage);
 
       const subject = stage === 'final'
         ? `Action needed to avoid service interruption: ${balanceStr} past due`
@@ -855,7 +870,7 @@ export async function sendOverdueNotices(now: Date = new Date()): Promise<{ sent
         : `<p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">Invoice <strong>${invoices[0].invoice_number}</strong> was due on <strong>${invoices[0].due_date}</strong> and shows a balance of <strong>${balanceStr}</strong>.</p>`;
 
       let bodyMid: string;
-      if (stage === 'final') {
+      if (msgType === 'final') {
         // 30+ days past due, client on an executed section-5.8 contract. Name
         // the consequence plainly: continued non-payment lets us pause
         // non-critical work now and, after additional written notice and an
@@ -870,7 +885,16 @@ export async function sendOverdueNotices(now: Date = new Date()): Promise<{ sent
         bodyMid = `
           <p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">This balance is now more than 30 days past due. Under our agreement, an unpaid balance accrues interest at 1.5% per month, and continued non-payment allows us to pause non-critical work now and, after further written notice and a chance to make it right, to suspend the affected service.${offlineSentence}</p>
           <p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">I would much rather keep everything running. If there is a problem with the invoice or the timing, just reply and we will work it out. A suspension is always reversible once the balance is settled.</p>`;
+      } else if (msgType === 'default') {
+        // Non-standard client: no executed portal contract, so NO interest or
+        // suspension language (they never agreed to section 5.8). Plain past-due
+        // nudge + a FAINT reminder of the 30-day written notice to cancel, to
+        // hold our position (Cody, 2026-06-05).
+        bodyMid = `
+          <p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">When you have a moment, please settle this so your account stays current. If it is already on its way, thank you and please disregard, and if anything needs sorting out, just reply and we will take care of it.</p>
+          <p style="color: #a3a3a3; line-height: 1.5; font-size: 12px; margin-top: 20px;">As a reminder, ending an engagement requires thirty (30) days' written notice.</p>`;
       } else {
+        // Portal-contract client, under 30 days past due (firm but kind).
         const stakesLine = invoices.some(i => !i.billing_period_start)
           ? 'Settling it gets your work moving.'
           : 'Keeping it current keeps your service running without interruption.';
@@ -925,14 +949,16 @@ export async function previewDailyCron(): Promise<{
   would_send_overdue: Array<{ id: string; invoice_number: string; due_date: string | null; balance: number }>;
 }> {
   const now = new Date();
-  // Shared cached agreement lookup so the dunning gate matches the live senders
-  // and each contract is read once across the whole preview.
+  // Shared cached lookups so the dry run matches the live senders/generator and
+  // each contract/client is read once across the whole preview.
   const lookupAgr = makeAgreementLookup();
+  const isManual = makeManualBillingLookup();
 
   const would_generate: Array<{ contract_id: string; title: string; client_id: string; period_start: string; period_end: string; amount: number }> = [];
   const contracts = await getAllContracts();
   for (const c of contracts) {
     if (c.status !== 'active' || c.billing_cadence !== 'monthly' || !c.billing_day || !c.recurring_amount) continue;
+    if (await isManual(c.client_id)) continue; // hand-billed; not auto-generated
     const period = getUpcomingBillingPeriod(c.billing_day, now);
     if (await invoiceExistsForPeriod(c.id, period.start, period.end)) continue;
     const issueThreshold = new Date(period.start + 'T00:00:00');
@@ -966,13 +992,13 @@ export async function previewDailyCron(): Promise<{
     due_date: (r[2] as string | null) ?? null,
   }));
 
-  // would_remind / would_send_overdue apply the portal-contract dunning gate so
-  // the dry run shows exactly who the live senders would email (legacy/manual
-  // invoices are excluded -- they are dunned by hand).
+  // would_remind / would_send_overdue apply the manual-billing gate so the dry
+  // run shows exactly who the live senders would email (hand-billed clients are
+  // excluded; non-standard clients ARE included -- they get the default notice).
   const due = await getDueInvoices(3);
   const would_remind: Array<{ id: string; invoice_number: string; due_date: string | null; total: number }> = [];
   for (const i of due as any[]) {
-    if (!isDunnable(await lookupAgr(i.contract_id))) continue;
+    if (await isManual(i.client_id)) continue;
     would_remind.push({
       id: i.id as string,
       invoice_number: i.invoice_number as string,
@@ -998,7 +1024,7 @@ export async function previewDailyCron(): Promise<{
   const would_send_overdue: Array<{ id: string; invoice_number: string; due_date: string | null; balance: number }> = [];
   for (const i of overdueRows) {
     if (!(isAutoOverdueEmailEligible({ ...i, status: 'overdue' }) && isOverdueNoticeDue(i, now))) continue;
-    if (!isDunnable(await lookupAgr(i.contract_id))) continue;
+    if (await isManual(i.client_id)) continue;
     would_send_overdue.push({
       id: i.id as string,
       invoice_number: i.invoice_number as string,

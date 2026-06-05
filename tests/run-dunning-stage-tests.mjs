@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { daysPastDue, overdueStage, resolveDunningStage, sharedExtraRecipient, isDunnable } from '../src/lib/billing.ts';
+import { daysPastDue, overdueStage, resolveDunningStage, sharedExtraRecipient, dunningMessageType } from '../src/lib/billing.ts';
 
 let passed = 0, failed = 0;
 function test(name, fn) { try { fn(); console.log(`[PASS] ${name}`); passed++; } catch (e) { console.error(`[FAIL] ${name}: ${e.message}`); failed++; } }
@@ -153,20 +153,25 @@ test('case/whitespace differences count as the same shared extra', () => {
   ]), 'Boss@X.com');
 });
 
-// --- isDunnable (portal-contract gate: auto-dun only executed agreements) ---
+// --- dunningMessageType (three message types: default / firm / final) ---
 
-test('executed agreement -> dunnable', () => {
-  assert.strictEqual(isDunnable({ status: 'executed' }), true);
+test('no section-5.8 contract -> default message (non-standard client)', () => {
+  assert.strictEqual(dunningMessageType(0, 'firm'), 'default');
 });
 
-test('no agreement (legacy/manual) -> NOT dunnable', () => {
-  assert.strictEqual(isDunnable(null), false);
+test('no section-5.8 contract stays default even if stage were final', () => {
+  // defensive: section58Version 0 always yields the default message
+  assert.strictEqual(dunningMessageType(0, 'final'), 'default');
 });
 
-test('non-executed agreement (draft/issued/partial/voided) -> NOT dunnable', () => {
-  for (const status of ['draft', 'issued', 'partially_signed', 'voided', 'revoked']) {
-    assert.strictEqual(isDunnable({ status }), false, `${status} must not be dunnable`);
-  }
+test('portal contract, firm stage -> firm message', () => {
+  assert.strictEqual(dunningMessageType(6, 'firm'), 'firm');
+  assert.strictEqual(dunningMessageType(7, 'firm'), 'firm');
+});
+
+test('portal contract, final stage -> final (section 5.8) message', () => {
+  assert.strictEqual(dunningMessageType(6, 'final'), 'final');
+  assert.strictEqual(dunningMessageType(7, 'final'), 'final');
 });
 
 console.log(`\n${passed}/${passed + failed} passed`);

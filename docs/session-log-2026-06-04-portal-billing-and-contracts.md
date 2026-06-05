@@ -123,6 +123,32 @@ feedback_contracts_via_tool_no_oneoffs); dry-run-before-auto-dun + verify-the-au
   the admin balance strip; admin notification when a client crosses into 'final'; auto-set client_visible
   when an invoice goes sent/partial/overdue.
 
+## 5c. Model refinement (2026-06-05) — three message types + manual-billing flag + interest = roll-forward
+After PR #301 (gated ALL dunning to portal contracts), Cody corrected the model again. The right model:
+- **THREE overdue message types**, by client status:
+  1. **Manual-billing client** (a new per-client flag): ZERO automation -- no generation, no reminders, no
+     overdue notices. Fully hand-billed. ZipKit is set manual until the v7 re-paper ("keep ZKH manual til
+     we fix all this").
+  2. **Non-standard client** (no executed portal contract, NOT flagged manual): a DEFAULT overdue message
+     -- plain "past due, please pay" + a FAINT subtext reminding them of the 30-day written notice to
+     cancel (Cody: "to strengthen our position"). NO interest, NO suspension language.
+  3. **Portal-contract client** (executed v6+ agreement): the portal overdue message; firm early, escalates
+     to the s5.8 message at 30 days; interest applies.
+  So PR #301 was too aggressive (it silenced non-standard clients entirely); they should get the DEFAULT
+  message. The manual-billing flag is the real "off switch," separate from portal-vs-non-portal.
+- **INTEREST is settled by our own Utah research** (utah-contract-law-research-2026-06-04.md s2), Cody's
+  reminder: 1.5%/month (18%/yr), SIMPLE (s5.8 says "1.5% per month", no "compounded"), accruing FROM THE
+  INVOICE DATE, ENFORCEABLE for B2B (no Utah commercial usury cap, Utah Code 15-1-1(1)), + reasonable
+  collection costs. Rate/legality/accrual-start are NOT open questions.
+- **PLACEMENT = (b) ROLL-FORWARD (Cody, 2026-06-05):** the unpaid overdue balance + accrued interest carry
+  onto the client's NEXT invoice as ITEMIZED lines, and the old invoice is closed as carried-forward, so
+  everything stays consolidated on one current bill ("keeps things from being spread out"). HARD RULE:
+  keep it itemized -- one clearly-labeled carry-forward line per overdue invoice (referencing INV-XXXX +
+  period) + a separate late-interest line, never a single lump. Interest/roll-forward applies only to
+  portal-contract clients. Old "(a) grow the same invoice" rejected.
+- BUILD ORDER: (A) manual flag + default non-standard message + revert #301 gate [comms, lower risk] ship
+  first; then (B) roll-forward + interest [money model, own design + dual audit].
+
 ## 6. WHAT'S NEXT (in order)
 1. DONE: v7 live on prod (PR #297). DONE: billing engine Phases 1-4 + dual audit + dunning gate
    (PRs #298, #300, #301) -- see section 5b.

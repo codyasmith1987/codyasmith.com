@@ -16,6 +16,7 @@
 import { createContract, updateContract, deleteContract } from './contracts';
 import { createInvoiceWithGeneratedNumber, updateInvoice, addInvoiceItem } from './invoices';
 import { linkAgreementContract, getAgreementBySlug, type ClientAgreement } from './agreements';
+import { clientIsManualBilling } from './auth';
 import { logger } from './logger';
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -127,9 +128,15 @@ export async function ensureBillingContractFromAgreement(
   // when the caller knows payment was already collected (the backfill
   // running over agreements executed before the handoff shipped), so we
   // create the billable contract without re-invoicing an already-paid
-  // engagement.
+  // engagement. ALSO skipped for a hand-billed (manual_billing) client (Cody,
+  // 2026-06-05): a manual client gets ZERO automated invoices/emails, including
+  // the at-signing one -- the billable contract is still created so the engine
+  // and account state are correct, but Cody raises the first invoice by hand
+  // (and flips the client off manual when ready). Without this, a manual client
+  // who signs a portal agreement would be auto-invoiced + auto-emailed.
+  const manualBilled = await clientIsManualBilling(agreement.client_id);
   let invoiceId: string | null = null;
-  if (!opts.skipAtSigningInvoice && atSigningItems.length > 0 && atSigningTotal > 0) {
+  if (!opts.skipAtSigningInvoice && !manualBilled && atSigningItems.length > 0 && atSigningTotal > 0) {
     const { id } = await createInvoiceWithGeneratedNumber({
       contract_id: contractId,
       client_id: agreement.client_id,

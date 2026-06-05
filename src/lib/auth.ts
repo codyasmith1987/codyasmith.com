@@ -391,7 +391,7 @@ export async function updateClient(clientId: string, fields: {
 
 export async function getClientById(clientId: string) {
   const result = await turso.execute({
-    sql: 'SELECT id, name, slug, active, created_at, domain, discount_rate FROM clients WHERE id = ?',
+    sql: 'SELECT id, name, slug, active, created_at, domain, discount_rate, manual_billing FROM clients WHERE id = ?',
     args: [clientId],
   });
   if (result.rows.length === 0) return null;
@@ -404,6 +404,7 @@ export async function getClientById(clientId: string) {
     created_at: row[4] as string,
     domain: (row[5] ?? null) as string | null,
     discount_rate: (row[6] ?? 0) as number,
+    manual_billing: !!(row[7] as number),
   };
 }
 
@@ -417,7 +418,7 @@ export async function createUser(email: string, name: string, role: 'admin' | 'c
 }
 
 export async function getAllClients() {
-  const result = await turso.execute('SELECT id, name, slug, active, created_at, domain, discount_rate FROM clients ORDER BY name');
+  const result = await turso.execute('SELECT id, name, slug, active, created_at, domain, discount_rate, manual_billing FROM clients ORDER BY name');
   return result.rows.map(row => ({
     id: row[0] as string,
     name: row[1] as string,
@@ -426,7 +427,21 @@ export async function getAllClients() {
     domain: (row[5] ?? null) as string | null,
     created_at: row[4] as string,
     discount_rate: (row[6] ?? 0) as number,
+    manual_billing: !!(row[7] as number),
   }));
+}
+
+// Single source for the "is this client hand-billed" check (clients.manual_billing,
+// migration 068). A manual client is excluded from ALL automated billing:
+// recurring generation, pre-due reminders, overdue notices, and the at-signing
+// invoice. Used by the billing engine + the contract handoff so the column name
+// and the 1-means-manual interpretation live in one place.
+export async function clientIsManualBilling(clientId: string): Promise<boolean> {
+  const result = await turso.execute({
+    sql: 'SELECT manual_billing FROM clients WHERE id = ?',
+    args: [clientId],
+  });
+  return (result.rows[0]?.[0] as number) === 1;
 }
 
 export async function isClientActive(clientId: string): Promise<boolean> {

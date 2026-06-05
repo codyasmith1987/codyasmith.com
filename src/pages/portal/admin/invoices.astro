@@ -14,6 +14,8 @@ const meta = clientId ? await getClientMetadata(clientId).catch(() => null) : nu
 // Read-only account statement: open balance, overdue portion, count. Across
 // all of this client's invoices (admin sees everything, visible or not).
 const balance = clientId ? await getClientOpenBalance(clientId) : null;
+// Selected client (for the manual-billing toggle). getAllClients carries manual_billing.
+const selectedClient = clientId ? clients.find(c => c.id === clientId) : null;
 
 const statusColors: Record<string, string> = {
   draft: 'bg-neutral-700/30 text-neutral-400',
@@ -130,6 +132,16 @@ const statusColors: Record<string, string> = {
             </div>
           </div>
           <button id="save-billing-contacts" class="mt-4 px-5 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all">Save recipients</button>
+
+          <div class="mt-5 pt-5 border-t border-white/5">
+            <label class="flex items-start gap-3 cursor-pointer">
+              <input type="checkbox" id="manual-billing-toggle" checked={selectedClient?.manual_billing} class="mt-1 h-4 w-4 rounded border-white/20 bg-neutral-900 accent-amber-500" />
+              <span>
+                <span class="block text-sm text-neutral-200">Hand-billed (manual)</span>
+                <span class="block text-xs text-neutral-500 mt-0.5">No automatic invoices, reminders, or overdue notices for this client. Use for clients not yet on a portal contract. You invoice them by hand.</span>
+              </span>
+            </label>
+          </div>
         </div>
       </div>
     )}
@@ -243,6 +255,19 @@ const statusColors: Record<string, string> = {
       };
       if ((window as any).__withButtonLoading) await (window as any).__withButtonLoading(btn, 'Saving…', run);
       else await run();
+    });
+
+    // Manual-billing toggle: hand-billed clients are excluded from all automation.
+    document.getElementById('manual-billing-toggle')?.addEventListener('change', async (e) => {
+      const cb = e.currentTarget as HTMLInputElement;
+      const desired = cb.checked;
+      const res = await fetch('/portal/api/admin/clients/manual-billing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify({ client_id: clientId, manual_billing: desired }),
+      });
+      if (res.ok) (window as any).__toast?.(desired ? 'Client set to hand-billed. No automation will run.' : 'Client set to automated billing.', 'success');
+      else { cb.checked = !desired; const d = await res.json().catch(() => ({})); (window as any).__toast?.(d.error || 'Failed to update billing mode.', 'error'); }
     });
 
     const form = document.getElementById('add-expense-form');

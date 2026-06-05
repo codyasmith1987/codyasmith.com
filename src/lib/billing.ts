@@ -8,7 +8,7 @@ import { getExpensesDueForBilling, markExpensesBilled } from './client-expenses'
 import { getAgreementByContractId, getClientMetadata, type ClientAgreement } from './agreements';
 import { resolveInvoiceRecipients } from './invoice-emails';
 import { createNotification } from './notifications';
-import { getUsersByClientId, clientIsManualBilling } from './auth';
+import { getUsersByClientId, clientIsManualBilling, getClientById } from './auth';
 import { logger } from './logger';
 
 // --- Query helpers ---
@@ -909,12 +909,12 @@ export const SITE_OFFLINE_BARGAINED_VERSION = 7;
 // notice and cure, no offline assertion). Pure + unit-tested.
 export function resolveDunningStage(
   invoices: Array<{ daysPast: number; section58Version: number | null }>
-): { stage: DunningStage; section58Version: number } {
+): { stage: DunningStage; section58Version: number; maxDaysPast: number } {
   const eligible = invoices.filter(i => i.section58Version != null && i.section58Version >= MIN_SECTION_5_8_VERSION);
-  if (eligible.length === 0) return { stage: 'firm', section58Version: 0 };
+  if (eligible.length === 0) return { stage: 'firm', section58Version: 0, maxDaysPast: 0 };
   const maxDays = Math.max(...eligible.map(i => i.daysPast));
   const maxVersion = Math.max(...eligible.map(i => i.section58Version as number));
-  return { stage: overdueStage(maxDays), section58Version: maxVersion };
+  return { stage: overdueStage(maxDays), section58Version: maxVersion, maxDaysPast: maxDays };
 }
 
 // Auto-email eligibility for an overdue invoice (Cody, 2026-06-04: a
@@ -1008,7 +1008,7 @@ export async function sendOverdueNotices(now: Date = new Date()): Promise<{ sent
         const section58Version = agr && agr.status === 'executed' && agr.template_version >= MIN_SECTION_5_8_VERSION ? agr.template_version : null;
         stageInvoices.push({ daysPast: daysPastDue(inv.due_date, now), section58Version });
       }
-      const { stage, section58Version } = resolveDunningStage(stageInvoices);
+      const { stage, section58Version, maxDaysPast } = resolveDunningStage(stageInvoices);
       const offlineBargained = section58Version >= SITE_OFFLINE_BARGAINED_VERSION;
       const msgType = dunningMessageType(section58Version, stage);
 
@@ -1078,6 +1078,17 @@ export async function sendOverdueNotices(now: Date = new Date()): Promise<{ sent
         const stamp = now.toISOString();
         for (const inv of invoices) await updateInvoice(inv.id, { last_reminder_sent: stamp });
         sent++;
+        // Alert the admin when a client is in the section 5.8 'final' tier (30+
+        // days). onDunningEscalation dedups via notification existence, so this
+        // can fire on every final send without spamming -- it alerts once on the
+        // first final notice (whenever it lands) and at most ~monthly after.
+        if (stage === 'final') {
+          try {
+            const client = await getClientById(clientId);
+            const { onDunningEscalation } = await import('./triggers');
+            await onDunningEscalation(clientId, client?.name || clientId, balanceStr, maxDaysPast);
+          } catch (e) { logger.error('dunning-escalation admin alert failed', e); }
+        }
       } else {
         failed++;
       }

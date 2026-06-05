@@ -8,6 +8,22 @@ if (!user.client_id) return Astro.redirect('/portal/dashboard');
 
 const invoices = await getClientVisibleInvoices(user.client_id);
 
+// Account balance, computed from the visible invoices so it always reconciles
+// with the rows shown below. Open = unpaid remainder of any awaiting/partial/
+// overdue invoice; overdue = the portion already past due (status flagged
+// overdue, or still awaiting/partial with a due date in the past).
+const todayStr = new Date().toISOString().slice(0, 10);
+const isOpen = (s: string) => s === 'sent' || s === 'partial' || s === 'overdue';
+const remainder = (inv: typeof invoices[number]) => Math.max(0, inv.total - inv.amount_paid);
+const openBalance = invoices
+  .filter(inv => isOpen(inv.status) && inv.amount_paid < inv.total)
+  .reduce((sum, inv) => sum + remainder(inv), 0);
+const overdueBalance = invoices
+  .filter(inv => inv.amount_paid < inv.total &&
+    (inv.status === 'overdue' ||
+      ((inv.status === 'sent' || inv.status === 'partial') && !!inv.due_date && inv.due_date < todayStr)))
+  .reduce((sum, inv) => sum + remainder(inv), 0);
+
 // Enrich with items (split into Services and Reimbursements, matching the PDF)
 // and payments. A NULL category counts as Services, a NULL name falls back to
 // description, so legacy invoices render unchanged.
@@ -55,6 +71,21 @@ const statusColors: Record<string, string> = {
       <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Invoices</h1>
       <p class="text-sm text-neutral-500 mt-2">Your billing history and payment status.</p>
     </div>
+
+    {openBalance > 0 && (
+      <div class="mb-8 bg-neutral-900/30 border border-white/5 rounded-2xl p-6 flex flex-wrap items-center gap-10">
+        <div>
+          <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Account balance</p>
+          <p class="text-3xl font-mono font-semibold text-neutral-100">${openBalance.toFixed(2)}</p>
+        </div>
+        {overdueBalance > 0 && (
+          <div>
+            <p class="text-[10px] font-mono text-red-400/80 tracking-wide uppercase mb-1">Past due</p>
+            <p class="text-3xl font-mono font-semibold text-red-400">${overdueBalance.toFixed(2)}</p>
+          </div>
+        )}
+      </div>
+    )}
 
     {enriched.length > 0 ? (
       <div class="space-y-6">

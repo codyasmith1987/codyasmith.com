@@ -262,8 +262,17 @@ export async function generateInvoiceForContract(contract: Contract, createdBy: 
   // rule). Load the agreement once (reused below for pass-through). Reconcile
   // against the contract's recurring_amount BEFORE creating anything: on a
   // mismatch, HALT (Cody, 2026-06-04: never send a wrong invoice) by throwing,
-  // which generateRecurringInvoices logs + alerts on. A contract with no
-  // Schedule A breakdown (legacy) falls back to a single recurring line.
+  // which generateRecurringInvoices logs + alerts on. recurringLines is null
+  // when there is no linked agreement (a standalone/legacy contract) OR the
+  // Schedule A has no WM/MC breakdown (a flat-fee custom contract); in either
+  // case the single-line fallback below applies.
+  //
+  // NOTE (dual audit, 2026-06-04): invoice GENERATION is deliberately NOT gated
+  // on having an agreement. An earlier version returned null here when no
+  // agreement was linked, which silently stopped auto-billing for active
+  // standalone/unlinked monthly contracts that previously billed via the
+  // fallback. The v7 section 5.8 dunning/interest/suspension policy is scoped to
+  // portal-contract clients separately, in sendOverdueNotices -- not here.
   const agreement = await getAgreementByContractId(contract.id);
   const recurringLines = deriveRecurringLineItems(agreement?.schedule_a, period);
   if (recurringLines) {
@@ -473,7 +482,7 @@ export async function getDueInvoices(withinDays: number = 3): Promise<any[]> {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() + withinDays);
   return queryAll(
-    "SELECT * FROM invoices WHERE status = 'sent' AND due_date <= ? AND due_date >= date('now') AND last_reminder_sent IS NULL AND amount_paid < total AND (reminders_paused = 0 OR reminders_paused IS NULL)",
+    "SELECT * FROM invoices WHERE status = 'sent' AND due_date <= ? AND due_date >= date('now') AND last_reminder_sent IS NULL AND amount_paid < total AND (reminders_paused = 0 OR reminders_paused IS NULL) ORDER BY due_date, invoice_number",
     [cutoff.toISOString().split('T')[0]]
   );
 }
@@ -496,50 +505,93 @@ export async function markOverdueInvoices(): Promise<number> {
   return result.rowsAffected ?? 0;
 }
 
+// The per-invoice extra recipient to honor for a CONSOLIDATED notice. An extra
+// recipient is scoped to a single invoice (migration 067), so for a per-client
+// email listing several invoices we honor it ONLY when EVERY listed invoice
+// carries the SAME non-empty extra (the common case is a single invoice).
+// A mix of "extra on one, none on another" returns undefined so one invoice's
+// one-off contact never receives another invoice's number and balance.
+// Normalized for case/whitespace so 'A@x.com' and 'a@x.com' count as the same.
+export function sharedExtraRecipient(invoices: Array<{ extra_recipient_email?: string | null }>): string | undefined {
+  const norm = invoices.map(i => (i.extra_recipient_email || '').trim().toLowerCase());
+  if (!norm[0] || !norm.every(e => e === norm[0])) return undefined;
+  return invoices[0].extra_recipient_email || undefined;
+}
+
+// One HTML table row per invoice for a consolidated notice. Shows the number,
+// due date, and balance owed. Shared by reminders and overdue notices.
+function invoiceRowHtml(inv: { invoice_number: string; due_date: string | null; total: number; amount_paid: number | null }): string {
+  const balance = inv.total - (inv.amount_paid || 0);
+  return `<tr>
+    <td style="padding: 8px 0; color: #525252; font-size: 14px;">${inv.invoice_number}</td>
+    <td style="padding: 8px 0; color: #737373; font-size: 13px; text-align: center;">${inv.due_date || ''}</td>
+    <td style="padding: 8px 0; color: #171717; font-size: 14px; text-align: right; font-weight: 600;">$${balance.toFixed(2)}</td>
+  </tr>`;
+}
+
+// Send pre-due payment reminders, ONE email per client per run (Cody,
+// 2026-06-04: a client with several invoices due gets a single consolidated
+// notice, not one email per invoice -- "sven gets confused easily"). Each
+// invoice's last_reminder_sent is still stamped so the cadence gate stays
+// per-invoice. Recipients follow the financial-notice model (billing contact +
+// accountant CC, not every portal user). Returns counts of emails sent/failed.
 export async function sendDueReminders(): Promise<{ sent: number; failed: number }> {
   const { sendEmail } = await import('./email');
   const dueInvoices = await getDueInvoices(3);
+
+  // Group by client so each client receives a single reminder email.
+  const byClient = new Map<string, any[]>();
+  for (const inv of dueInvoices) {
+    const arr = byClient.get(inv.client_id) || [];
+    arr.push(inv);
+    byClient.set(inv.client_id, arr);
+  }
+
+  const portalUrl = import.meta.env.SITE || 'https://codyasmith.com';
   let sent = 0, failed = 0;
 
-  for (const invoice of dueInvoices) {
+  for (const [clientId, invoices] of byClient) {
     try {
-      const contract = await getContract(invoice.contract_id);
-      if (!contract) continue;
-
       // Recipient model (Cody, 2026-06-04): a payment reminder is a financial
       // notice, so it goes to the billing contact + accountant CC, not every
       // portal user. Falls back to the first portal user if no contact is set.
-      const meta = await getClientMetadata(invoice.client_id).catch(() => null);
-      const users = await getUsersByClientId(invoice.client_id);
+      const meta = await getClientMetadata(clientId).catch(() => null);
+      const users = await getUsersByClientId(clientId);
       const recipients = resolveInvoiceRecipients({
         primaryEmail: meta?.primary_contact_email,
         billingCcEmail: meta?.billing_cc_email,
-        extraEmail: invoice.extra_recipient_email,
+        extraEmail: sharedExtraRecipient(invoices),
         fallbackEmails: users.map(u => u.email),
       });
       if (recipients.to.length === 0) continue;
 
-      const portalUrl = import.meta.env.SITE || 'https://codyasmith.com';
-      // An at-signing invoice (no billing period) gates work starting per
-      // section 5.2; a recurring invoice keeps service going. Name the
-      // consequence so the client understands what is at stake.
-      const isAtSigning = !invoice.billing_period_start;
-      const subject = isAtSigning
-        ? `Your invoice to get started is due ${invoice.due_date}. Work begins once it clears.`
-        : `Invoice ${invoice.invoice_number}: payment due ${invoice.due_date}`;
-      const leadLine = isAtSigning
-        ? `Your at-signing invoice <strong>${invoice.invoice_number}</strong> for <strong>$${invoice.total.toFixed(2)}</strong> is due on <strong>${invoice.due_date}</strong>. Work begins as soon as it clears.`
-        : `Invoice <strong>${invoice.invoice_number}</strong> for <strong>$${invoice.total.toFixed(2)}</strong> is due on <strong>${invoice.due_date}</strong>.`;
+      const total = invoices.reduce((s, i) => s + (i.total - (i.amount_paid || 0)), 0);
+      const multi = invoices.length > 1;
+      const anyAtSigning = invoices.some(i => !i.billing_period_start);
+      const subject = multi
+        ? `Payment reminder: ${invoices.length} invoices ($${total.toFixed(2)})`
+        : (!invoices[0].billing_period_start
+            ? `Your invoice to get started is due ${invoices[0].due_date}. Work begins once it clears.`
+            : `Invoice ${invoices[0].invoice_number}: payment due ${invoices[0].due_date}`);
+      // In the multi case the at-signing framing is appended (so a new client
+      // whose at-signing and recurring invoices come due together is still told
+      // their work is gated on the at-signing payment -- it must not be lost in
+      // consolidation).
+      const lead = multi
+        ? `You have ${invoices.length} invoices coming due, totaling <strong>$${total.toFixed(2)}</strong>.${anyAtSigning ? ' One of these is your at-signing invoice; that work begins as soon as it clears.' : ''}`
+        : (!invoices[0].billing_period_start
+            ? `Your at-signing invoice <strong>${invoices[0].invoice_number}</strong> for <strong>$${invoices[0].total.toFixed(2)}</strong> is due on <strong>${invoices[0].due_date}</strong>. Work begins as soon as it clears.`
+            : `Invoice <strong>${invoices[0].invoice_number}</strong> for <strong>$${invoices[0].total.toFixed(2)}</strong> is due on <strong>${invoices[0].due_date}</strong>.`);
       const ok = await sendEmail(
         recipients.to.map(e => ({ email: e, name: '' })),
         subject,
         `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-          <h2 style="color: #171717; margin-bottom: 16px;">${isAtSigning ? 'Getting started' : 'Payment reminder'}</h2>
-          <p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">${leadLine}</p>
-          ${invoice.amount_paid > 0 ? `<p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">Amount paid so far: $${invoice.amount_paid.toFixed(2)}. Remaining: $${(invoice.total - invoice.amount_paid).toFixed(2)}.</p>` : ''}
+          <h2 style="color: #171717; margin-bottom: 16px;">${anyAtSigning && !multi ? 'Getting started' : 'Payment reminder'}</h2>
+          <p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">${lead}</p>
+          ${multi ? `<table style="width: 100%; border-collapse: collapse; margin: 16px 0;">${invoices.map(invoiceRowHtml).join('')}</table>` : ''}
           <a href="${portalUrl}/portal/invoices" style="display: inline-block; background: #f59e0b; color: #0a0a0a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; margin-top: 16px;">
-            View invoice in portal
+            View ${multi ? 'invoices' : 'invoice'} in portal
           </a>
           <p style="color: #a3a3a3; font-size: 12px; margin-top: 32px;">
             <a href="${portalUrl}" style="color: #a3a3a3;">codyasmith.com</a>
@@ -550,13 +602,14 @@ export async function sendDueReminders(): Promise<{ sent: number; failed: number
       );
 
       if (ok) {
-        await updateInvoice(invoice.id, { last_reminder_sent: new Date().toISOString() });
+        const stamp = new Date().toISOString();
+        for (const inv of invoices) await updateInvoice(inv.id, { last_reminder_sent: stamp });
         sent++;
       } else {
         failed++;
       }
     } catch (err) {
-      logger.error(`Failed to send reminder for invoice ${invoice.id}`, err);
+      logger.error(`Failed to send reminders for client ${clientId}`, err);
       failed++;
     }
   }
@@ -600,6 +653,66 @@ export function isOverdueNoticeDue(
   return now >= weekAfterLast;
 }
 
+// Whole days an invoice is past its due date as of `now` (0 if not past due,
+// no due date, or an unparseable date). UTC for determinism. Pure + tested.
+export function daysPastDue(dueDate: string | null, now: Date = new Date()): number {
+  if (!dueDate) return 0;
+  const due = new Date(dueDate + 'T00:00:00Z');
+  if (isNaN(due.getTime())) return 0;
+  const ms = now.getTime() - due.getTime();
+  if (ms <= 0) return 0;
+  return Math.floor(ms / 86400000);
+}
+
+// Dunning escalation stage for an overdue invoice, keyed off days past the due
+// date. Maps to v7 section 5.8:
+//   'firm'  -- first/continued weekly notice, firm but kind (under 30 days).
+//   'final' -- 30+ days past due: the notice names the service-interruption
+//              consequence (continued non-payment lets the Practice pause
+//              non-critical work now and, after additional written notice and
+//              an opportunity to cure, suspend the product, which can take a
+//              site offline) and that interest accrues per the agreement. The
+//              actual suspension always stays a manual admin action; this only
+//              controls the message. The caller restricts 'final' to clients on
+//              an executed portal contract -- a legacy client never agreed to
+//              the section 5.8 terms, so it stays at 'firm'.
+export type DunningStage = 'firm' | 'final';
+export function overdueStage(daysPast: number): DunningStage {
+  return daysPast >= 30 ? 'final' : 'firm';
+}
+
+// The minimum executed portal-agreement template version that carries the
+// section 5.8 late-payment terms (1.5%/mo interest + the pause/suspend ladder).
+// v6 introduced them; v7 hardened them (and v7 alone expressly bargained the
+// site-can-go-offline consequence). A client on a pre-v6 / paper / no agreement
+// never agreed to section 5.8 and is never escalated to the 'final' notice.
+export const MIN_SECTION_5_8_VERSION = 6;
+// The version that expressly bargained the site-unavailability consequence, so
+// only this version's clients see the explicit "can take the site offline"
+// wording in the 'final' notice.
+export const SITE_OFFLINE_BARGAINED_VERSION = 7;
+
+// Resolve the consolidated overdue-notice stage for one client. The notice is
+// grouped per client, but a client can hold several contracts at different
+// template versions and ages. 'final' (the section 5.8 escalation that names
+// interest + the suspension consequence) fires ONLY when an invoice that is
+// ITSELF on an executed section-5.8 agreement (template_version >= MIN) is 30+
+// days past due. The 30-day trigger must be met by a section-5.8 invoice, never
+// by an unrelated legacy/no-agreement invoice that merely shares the email.
+// Returns the stage and the highest section-5.8 template version among the
+// invoices that drove it, so the caller uses exactly the consequence language
+// that version bargained for (v7 = site-can-go-offline; v6 = suspend after
+// notice and cure, no offline assertion). Pure + unit-tested.
+export function resolveDunningStage(
+  invoices: Array<{ daysPast: number; section58Version: number | null }>
+): { stage: DunningStage; section58Version: number } {
+  const eligible = invoices.filter(i => i.section58Version != null && i.section58Version >= MIN_SECTION_5_8_VERSION);
+  if (eligible.length === 0) return { stage: 'firm', section58Version: 0 };
+  const maxDays = Math.max(...eligible.map(i => i.daysPast));
+  const maxVersion = Math.max(...eligible.map(i => i.section58Version as number));
+  return { stage: overdueStage(maxDays), section58Version: maxVersion };
+}
+
 // Auto-email eligibility for an overdue invoice (Cody, 2026-06-04: a
 // partially-paid invoice is MARKED overdue for visibility but is NOT
 // auto-dunned; only a fully-unpaid overdue invoice gets an automatic notice).
@@ -623,7 +736,8 @@ export function isAutoOverdueEmailEligible(
 export async function getOverdueNoticeCandidates(now: Date = new Date()): Promise<any[]> {
   const rows = await queryAll(
     `SELECT * FROM invoices
-      WHERE status = 'overdue' AND due_date IS NOT NULL`
+      WHERE status = 'overdue' AND due_date IS NOT NULL
+      ORDER BY due_date, invoice_number`
   );
   return rows.filter(inv => isAutoOverdueEmailEligible(inv) && isOverdueNoticeDue(inv, now));
 }
@@ -636,41 +750,104 @@ export async function getOverdueNoticeCandidates(now: Date = new Date()): Promis
 export async function sendOverdueNotices(now: Date = new Date()): Promise<{ sent: number; failed: number }> {
   const { sendEmail } = await import('./email');
   const candidates = await getOverdueNoticeCandidates(now);
+
+  // Consolidate per client: one notice per client per run listing every overdue
+  // invoice (Cody, 2026-06-04: "sven gets confused easily"). last_reminder_sent
+  // is still stamped per invoice so each one's weekly cadence advances.
+  const byClient = new Map<string, any[]>();
+  for (const inv of candidates) {
+    const arr = byClient.get(inv.client_id) || [];
+    arr.push(inv);
+    byClient.set(inv.client_id, arr);
+  }
+
+  const portalUrl = import.meta.env.SITE || 'https://codyasmith.com';
   let sent = 0, failed = 0;
 
-  for (const invoice of candidates) {
+  for (const [clientId, invoices] of byClient) {
     try {
-      const meta = await getClientMetadata(invoice.client_id).catch(() => null);
-      const users = await getUsersByClientId(invoice.client_id);
+      const meta = await getClientMetadata(clientId).catch(() => null);
+      const users = await getUsersByClientId(clientId);
       const recipients = resolveInvoiceRecipients({
         primaryEmail: meta?.primary_contact_email,
         billingCcEmail: meta?.billing_cc_email,
-        extraEmail: invoice.extra_recipient_email,
+        extraEmail: sharedExtraRecipient(invoices),
         fallbackEmails: users.map(u => u.email),
       });
       if (recipients.to.length === 0) continue;
 
-      const portalUrl = import.meta.env.SITE || 'https://codyasmith.com';
-      const balance = invoice.total - (invoice.amount_paid || 0);
+      const balance = invoices.reduce((s, i) => s + (i.total - (i.amount_paid || 0)), 0);
       const balanceStr = '$' + balance.toFixed(2);
-      const isAtSigning = !invoice.billing_period_start;
-      const subject = `Past due: invoice ${invoice.invoice_number} (${balanceStr})`;
-      // Name the consequence so the reminder is useful, not just a nag: an
-      // at-signing invoice gates work starting; a recurring one keeps service
-      // going. Keep it warm and resolvable (reply to sort it out).
-      const stakesLine = isAtSigning
-        ? 'Work begins as soon as it clears, so settling it gets us moving.'
-        : 'Keeping it current keeps your service running without interruption.';
+      const multi = invoices.length > 1;
+
+      // Escalation stage (Phase 4, section 5.8). resolveDunningStage drives
+      // 'final' (30+ days) ONLY from invoices that are THEMSELVES on an executed
+      // section-5.8 agreement (template_version >= 6) -- never from an unrelated
+      // legacy/no-agreement invoice that merely shares this client's email. A
+      // pre-v6 / paper / no-agreement client never agreed to section 5.8 and
+      // stays at the firm notice. section58Version is the version that drove the
+      // stage, so the body uses exactly the consequence that version bargained
+      // for. Any actual suspension is always a manual admin action; this only
+      // sets the wording. We require status === 'executed' so a rolled-back or
+      // voided-but-still-linked agreement can never back the escalation.
+      const stageInvoices: Array<{ daysPast: number; section58Version: number | null }> = [];
+      for (const inv of invoices) {
+        let section58Version: number | null = null;
+        if (inv.contract_id) {
+          const agr = await getAgreementByContractId(inv.contract_id);
+          if (agr && agr.status === 'executed' && agr.template_version >= MIN_SECTION_5_8_VERSION) {
+            section58Version = agr.template_version;
+          }
+        }
+        stageInvoices.push({ daysPast: daysPastDue(inv.due_date, now), section58Version });
+      }
+      const { stage, section58Version } = resolveDunningStage(stageInvoices);
+      const offlineBargained = section58Version >= SITE_OFFLINE_BARGAINED_VERSION;
+
+      const subject = stage === 'final'
+        ? `Action needed to avoid service interruption: ${balanceStr} past due`
+        : (multi ? `Past due: ${invoices.length} invoices (${balanceStr})` : `Past due: invoice ${invoices[0].invoice_number} (${balanceStr})`);
+
+      const listOrLead = multi
+        ? `<p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">The following invoices are past due, totaling <strong>${balanceStr}</strong>:</p>
+           <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">${invoices.map(invoiceRowHtml).join('')}</table>`
+        : `<p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">Invoice <strong>${invoices[0].invoice_number}</strong> was due on <strong>${invoices[0].due_date}</strong> and shows a balance of <strong>${balanceStr}</strong>.</p>`;
+
+      let bodyMid: string;
+      if (stage === 'final') {
+        // 30+ days past due, client on an executed section-5.8 contract. Name
+        // the consequence plainly: continued non-payment lets us pause
+        // non-critical work now and, after additional written notice and an
+        // opportunity to cure, suspend the affected service. Interest accrues
+        // per the agreement. Everything is reversible on payment. The explicit
+        // "site can go offline" consequence is bargained only in v7 section 5.8,
+        // so it is added only for a v7+ contract; a v6 contract gets the same
+        // ladder without that assertion (which v6's text does not support).
+        const offlineSentence = offlineBargained
+          ? ' For a managed site that can mean hosting, backups, and monitoring stop, which can take the site offline.'
+          : '';
+        bodyMid = `
+          <p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">This balance is now more than 30 days past due. Under our agreement, an unpaid balance accrues interest at 1.5% per month, and continued non-payment allows us to pause non-critical work now and, after further written notice and a chance to make it right, to suspend the affected service.${offlineSentence}</p>
+          <p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">I would much rather keep everything running. If there is a problem with the invoice or the timing, just reply and we will work it out. A suspension is always reversible once the balance is settled.</p>`;
+      } else {
+        const stakesLine = invoices.some(i => !i.billing_period_start)
+          ? 'Settling it gets your work moving.'
+          : 'Keeping it current keeps your service running without interruption.';
+        bodyMid = `
+          <p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">${stakesLine}</p>
+          <p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">If it is already on its way, thank you and please disregard. If something needs sorting out, just reply and we will take care of it.</p>`;
+      }
+
       const ok = await sendEmail(
         recipients.to.map(e => ({ email: e, name: '' })),
         subject,
         `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-          <h2 style="color: #171717; margin-bottom: 16px;">A quick note on invoice ${invoice.invoice_number}</h2>
-          <p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">Invoice <strong>${invoice.invoice_number}</strong> was due on <strong>${invoice.due_date}</strong> and shows a balance of <strong>${balanceStr}</strong>. ${stakesLine}</p>
-          <p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">If it is already on its way, thank you and please disregard. If something needs sorting out, just reply and we will take care of it.</p>
+          <h2 style="color: #171717; margin-bottom: 16px;">${stage === 'final' ? 'A past-due balance that needs attention' : (multi ? 'A quick note on your past-due invoices' : `A quick note on invoice ${invoices[0].invoice_number}`)}</h2>
+          ${listOrLead}
+          ${bodyMid}
           <a href="${portalUrl}/portal/invoices" style="display: inline-block; background: #f59e0b; color: #0a0a0a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; margin-top: 16px;">
-            View invoice in portal
+            View ${multi ? 'invoices' : 'invoice'} in portal
           </a>
           <p style="color: #a3a3a3; font-size: 12px; margin-top: 32px;">
             <a href="${portalUrl}" style="color: #a3a3a3;">codyasmith.com</a>
@@ -681,13 +858,14 @@ export async function sendOverdueNotices(now: Date = new Date()): Promise<{ sent
       );
 
       if (ok) {
-        await updateInvoice(invoice.id, { last_reminder_sent: now.toISOString() });
+        const stamp = now.toISOString();
+        for (const inv of invoices) await updateInvoice(inv.id, { last_reminder_sent: stamp });
         sent++;
       } else {
         failed++;
       }
     } catch (err) {
-      logger.error(`Failed to send overdue notice for invoice ${invoice.id}`, err);
+      logger.error(`Failed to send overdue notice for client ${clientId}`, err);
       failed++;
     }
   }
@@ -718,6 +896,7 @@ export async function previewDailyCron(): Promise<{
     if (now < issueThreshold) continue;
     // Match what the generator will actually bill so the dry-run total is
     // accurate: recurring + contracted pass-through + due recurring expenses.
+    // (Generation is not gated on an agreement; see generateInvoiceForContract.)
     const billDateP = now.toISOString().split('T')[0];
     const dueExp = await getExpensesDueForBilling(c.client_id, billDateP);
     const reimbTotal = dueExp.reduce((s, e) => s + e.amount, 0);

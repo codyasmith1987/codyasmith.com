@@ -87,13 +87,53 @@ Recipient model; partials marked-not-dunned; no-proration/entire-month; late fee
 (comms auto, shutoffs manual); portal-contract gating; build contracts via the tool (no one-offs,
 feedback_contracts_via_tool_no_oneoffs); dry-run-before-auto-dun + verify-the-auto-path lessons.
 
+## 5b. Billing engine Phases 2-4 — BUILT + AUDITED + SHIPPED (PRs #298, #300, #301)
+- Phase 1 (PR #298): itemized + consolidated recurring invoices (deriveRecurringLineItems per WM site + MC;
+  reconcile-or-halt vs contract.recurring_amount; always-itemized rule).
+- Phase 2 (PR #300): read-only account statement. getClientOpenBalance(clientId) -> {open, overdue, count};
+  admin invoices strip (per client, ALL invoices); client invoices balance line (computed from the VISIBLE
+  invoices so it reconciles with the rows shown).
+- Phase 3 (PR #300): dunning dedupe. sendDueReminders + sendOverdueNotices send ONE email per client per run
+  listing each invoice; last_reminder_sent stamped per invoice (cadence preserved).
+- Phase 4 (PR #300): escalation. Pure daysPastDue + overdueStage + resolveDunningStage (firm <30d, final
+  >=30d). 'final' names the s5.8 consequence (1.5%/mo interest, pause non-critical now, suspend after 30d +
+  cure, reversible) only for invoices on an executed s5.8 agreement (template_version >= 6); the explicit
+  "site can go offline" sentence only for v7+ (the version that bargained it). Suspension stays MANUAL.
+- DUAL AUDIT (workflow wnvhkw62c, find -> adversarially-verify, 6 dims): 13 confirmed. Folded in (PR #300):
+  removed the invoice-GENERATION legacy gate (it silently stopped auto-billing standalone/unlinked active
+  monthly contracts that previously billed via the single-line fallback -- the only HIGH); extra-recipient
+  leak fix (honor a per-invoice extra only when EVERY listed invoice shares the same non-empty extra);
+  cross-contract s5.8 leak fix (final driven only by s5.8 invoices' age, never an unrelated legacy invoice);
+  v6 over-statement fix (offline sentence v7-only); at-signing framing restored in consolidated reminders;
+  ORDER BY for deterministic rows; executed-status hardening on the s5.8 lookup; pre-existing red test fixed
+  (url_structure/javascript/hreflang tables added to the url-insights coverage fixture).
+- MODEL CORRECTION (PR #301): #300 gated only the s5.8 ESCALATION tier, but Cody's decision is that the
+  WHOLE automated late-payment system (reminders + overdue notices + escalation) applies ONLY to active
+  portal-contract clients. Added isDunnable (auto-dun only invoices on an EXECUTED portal agreement);
+  sendDueReminders/sendOverdueNotices/previewDailyCron all gate through it. So a legacy client like ZipKit
+  (old paper contract) gets NO automated dunning -- Cody duns by hand until re-papered. Marking overdue
+  (status/visibility) stays ungated; only outbound comms are gated. Generation is NOT gated (any active
+  monthly contract still bills, no revenue loss). Tests: tests/run-dunning-stage-tests.mjs (27 cases).
+- OPEN DECISION for Cody: how interest is APPLIED. Shipped = qualitative messaging only (names the 1.5%/mo
+  rate per the agreement in the 'final' notice; no dollar figure computed, no charge auto-applied). Options:
+  (A) auto-add an interest line to the next invoice, (B) manual admin "apply interest" action [recommended,
+  mirrors the manual-suspension posture], (C) leave messaging-only. Build only on Cody's pick.
+- DEFERRED (noted, low): admin dry-run preview counts invoices while the live run counts emails (identical
+  in the common 1-invoice-per-client case); forward opps -- surface days-past-due age + accrued interest on
+  the admin balance strip; admin notification when a client crosses into 'final'; auto-set client_visible
+  when an invoice goes sent/partial/overdue.
+
 ## 6. WHAT'S NEXT (in order)
-1. Confirm v7 live on prod (deploy of PR #297).
-2. Build ZipKit's re-paper on v7 via the contract tool (draft for Cody to issue to Sven). Needs the
+1. DONE: v7 live on prod (PR #297). DONE: billing engine Phases 1-4 + dual audit + dunning gate
+   (PRs #298, #300, #301) -- see section 5b.
+2. Cody to pick the interest-application option (5b open decision) -- build only on his pick.
+3. Build ZipKit's re-paper on v7 via the contract tool (draft for Cody to issue to Sven). Needs the
    agreement-builder flow mapped; encode the consolidated $1,360 itemized Schedule A, onboarding waived,
-   plugin grandfathered; signer Sven.
-3. Build the billing engine phases (itemize+consolidate -> statement -> dunning dedupe -> per-client config
-   + escalation ladder mapped to v7 s5.8 + interest, gated to active-portal-contract clients).
+   plugin grandfathered; signer Sven. NOTE: once Sven executes the v7 agreement, ZipKit becomes an active
+   portal contract and his invoices begin auto-dunning (isDunnable); until then he is dunned by hand.
+4. Optional forward opps from the audit (deferred list in 5b): age/interest on the admin balance strip,
+   'final'-crossing admin notification, client_visible auto-set, dry-run-vs-live count unit alignment.
 
 PRs this session: #281-292 (invoice overhaul slices), #293 (email system), #294 (empty-name fix),
-#295 (auto-email recurring + admin run-daily), #296 (recipient validation hardening), #297 (contract v7).
+#295 (auto-email recurring + admin run-daily), #296 (recipient validation hardening), #297 (contract v7),
+#298 (billing Phase 1 itemize+consolidate), #300 (Phases 2-4 + audit fixes), #301 (dunning portal-gate).

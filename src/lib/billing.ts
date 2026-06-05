@@ -5,7 +5,7 @@ import turso from './turso';
 import { getAllContracts, getContract, type Contract } from './contracts';
 import { createInvoiceWithGeneratedNumber, addInvoiceItem, getInvoice, updateInvoice } from './invoices';
 import { getExpensesDueForBilling, markExpensesBilled } from './client-expenses';
-import { getAgreementByContractId, getClientMetadata } from './agreements';
+import { getAgreementByContractId, getClientMetadata, type ClientAgreement } from './agreements';
 import { resolveInvoiceRecipients } from './invoice-emails';
 import { createNotification } from './notifications';
 import { getUsersByClientId } from './auth';
@@ -505,6 +505,31 @@ export async function markOverdueInvoices(): Promise<number> {
   return result.rowsAffected ?? 0;
 }
 
+// A per-call cached agreement-by-contract lookup. The dunning paths resolve the
+// same contract's agreement more than once (eligibility gate + section 5.8
+// stage), and a client run can repeat contracts; the cache keeps it to one DB
+// read per contract per run.
+function makeAgreementLookup() {
+  const cache = new Map<string, ClientAgreement | null>();
+  return async (contractId: string | null | undefined): Promise<ClientAgreement | null> => {
+    if (!contractId) return null;
+    if (!cache.has(contractId)) cache.set(contractId, await getAgreementByContractId(contractId));
+    return cache.get(contractId) ?? null;
+  };
+}
+
+// Whether an invoice is eligible for ANY automated dunning (Cody, 2026-06-04:
+// the entire automated late-payment system -- pre-due reminders, overdue
+// notices, and section 5.8 escalation -- applies ONLY to clients on an active
+// portal contract). An active portal contract is an EXECUTED portal agreement.
+// Legacy clients on old paper contracts, and ad-hoc manual invoices (no
+// contract, or a contract with no executed agreement), are dunned by hand and
+// never automatically. Marking an invoice overdue for visibility is separate
+// and stays ungated; this gates only the outbound automated comms.
+export function isDunnable(agr: Pick<ClientAgreement, 'status'> | null): boolean {
+  return !!agr && agr.status === 'executed';
+}
+
 // The per-invoice extra recipient to honor for a CONSOLIDATED notice. An extra
 // recipient is scoped to a single invoice (migration 067), so for a per-client
 // email listing several invoices we honor it ONLY when EVERY listed invoice
@@ -539,9 +564,17 @@ export async function sendDueReminders(): Promise<{ sent: number; failed: number
   const { sendEmail } = await import('./email');
   const dueInvoices = await getDueInvoices(3);
 
+  // Portal-contract gate (Cody, 2026-06-04): only invoices on an active portal
+  // contract are auto-dunned. Legacy/paper/manual invoices are reminded by hand.
+  const lookupAgr = makeAgreementLookup();
+  const dunnable: any[] = [];
+  for (const inv of dueInvoices) {
+    if (isDunnable(await lookupAgr(inv.contract_id))) dunnable.push(inv);
+  }
+
   // Group by client so each client receives a single reminder email.
   const byClient = new Map<string, any[]>();
-  for (const inv of dueInvoices) {
+  for (const inv of dunnable) {
     const arr = byClient.get(inv.client_id) || [];
     arr.push(inv);
     byClient.set(inv.client_id, arr);
@@ -751,11 +784,22 @@ export async function sendOverdueNotices(now: Date = new Date()): Promise<{ sent
   const { sendEmail } = await import('./email');
   const candidates = await getOverdueNoticeCandidates(now);
 
+  // Portal-contract gate (Cody, 2026-06-04): only invoices on an active portal
+  // contract are auto-dunned. Legacy/paper/manual invoices are dunned by hand,
+  // never automatically -- so a legacy client like ZipKit on an old paper
+  // contract receives NO automated overdue notice. The cached lookup is reused
+  // below for the section 5.8 stage so each contract is read once per run.
+  const lookupAgr = makeAgreementLookup();
+  const dunnable: any[] = [];
+  for (const inv of candidates) {
+    if (isDunnable(await lookupAgr(inv.contract_id))) dunnable.push(inv);
+  }
+
   // Consolidate per client: one notice per client per run listing every overdue
   // invoice (Cody, 2026-06-04: "sven gets confused easily"). last_reminder_sent
   // is still stamped per invoice so each one's weekly cadence advances.
   const byClient = new Map<string, any[]>();
-  for (const inv of candidates) {
+  for (const inv of dunnable) {
     const arr = byClient.get(inv.client_id) || [];
     arr.push(inv);
     byClient.set(inv.client_id, arr);
@@ -792,13 +836,10 @@ export async function sendOverdueNotices(now: Date = new Date()): Promise<{ sent
       // voided-but-still-linked agreement can never back the escalation.
       const stageInvoices: Array<{ daysPast: number; section58Version: number | null }> = [];
       for (const inv of invoices) {
-        let section58Version: number | null = null;
-        if (inv.contract_id) {
-          const agr = await getAgreementByContractId(inv.contract_id);
-          if (agr && agr.status === 'executed' && agr.template_version >= MIN_SECTION_5_8_VERSION) {
-            section58Version = agr.template_version;
-          }
-        }
+        // Every invoice here is already dunnable (executed agreement). It counts
+        // toward the section 5.8 stage only if that agreement is v6+.
+        const agr = await lookupAgr(inv.contract_id);
+        const section58Version = agr && agr.template_version >= MIN_SECTION_5_8_VERSION ? agr.template_version : null;
         stageInvoices.push({ daysPast: daysPastDue(inv.due_date, now), section58Version });
       }
       const { stage, section58Version } = resolveDunningStage(stageInvoices);
@@ -884,6 +925,9 @@ export async function previewDailyCron(): Promise<{
   would_send_overdue: Array<{ id: string; invoice_number: string; due_date: string | null; balance: number }>;
 }> {
   const now = new Date();
+  // Shared cached agreement lookup so the dunning gate matches the live senders
+  // and each contract is read once across the whole preview.
+  const lookupAgr = makeAgreementLookup();
 
   const would_generate: Array<{ contract_id: string; title: string; client_id: string; period_start: string; period_end: string; amount: number }> = [];
   const contracts = await getAllContracts();
@@ -900,7 +944,7 @@ export async function previewDailyCron(): Promise<{
     const billDateP = now.toISOString().split('T')[0];
     const dueExp = await getExpensesDueForBilling(c.client_id, billDateP);
     const reimbTotal = dueExp.reduce((s, e) => s + e.amount, 0);
-    const agr = await getAgreementByContractId(c.id);
+    const agr = await lookupAgr(c.id);
     const ptItems: any[] = Array.isArray(agr?.schedule_a?.pass_through_items) ? agr!.schedule_a.pass_through_items : [];
     const ptTotal = ptItems.reduce((s: number, p: any) => s + (Number(p?.monthly_cost) || 0), 0);
     would_generate.push({
@@ -922,13 +966,20 @@ export async function previewDailyCron(): Promise<{
     due_date: (r[2] as string | null) ?? null,
   }));
 
+  // would_remind / would_send_overdue apply the portal-contract dunning gate so
+  // the dry run shows exactly who the live senders would email (legacy/manual
+  // invoices are excluded -- they are dunned by hand).
   const due = await getDueInvoices(3);
-  const would_remind = (due as any[]).map(i => ({
-    id: i.id as string,
-    invoice_number: i.invoice_number as string,
-    due_date: (i.due_date as string | null) ?? null,
-    total: i.total as number,
-  }));
+  const would_remind: Array<{ id: string; invoice_number: string; due_date: string | null; total: number }> = [];
+  for (const i of due as any[]) {
+    if (!isDunnable(await lookupAgr(i.contract_id))) continue;
+    would_remind.push({
+      id: i.id as string,
+      invoice_number: i.invoice_number as string,
+      due_date: (i.due_date as string | null) ?? null,
+      total: i.total as number,
+    });
+  }
 
   // Overdue notices the cron would send right now (due+7, then weekly). The
   // live cron runs markOverdueInvoices BEFORE sendOverdueNotices, so an invoice
@@ -944,14 +995,17 @@ export async function previewDailyCron(): Promise<{
       WHERE due_date IS NOT NULL
         AND (status = 'overdue' OR (status IN ('sent', 'partial') AND due_date < date('now')))`
   );
-  const would_send_overdue = overdueRows
-    .filter(i => isAutoOverdueEmailEligible({ ...i, status: 'overdue' }) && isOverdueNoticeDue(i, now))
-    .map(i => ({
+  const would_send_overdue: Array<{ id: string; invoice_number: string; due_date: string | null; balance: number }> = [];
+  for (const i of overdueRows) {
+    if (!(isAutoOverdueEmailEligible({ ...i, status: 'overdue' }) && isOverdueNoticeDue(i, now))) continue;
+    if (!isDunnable(await lookupAgr(i.contract_id))) continue;
+    would_send_overdue.push({
       id: i.id as string,
       invoice_number: i.invoice_number as string,
       due_date: (i.due_date as string | null) ?? null,
       balance: (i.total as number) - ((i.amount_paid as number) || 0),
-    }));
+    });
+  }
 
   return { would_generate, would_mark_overdue, would_remind, would_send_overdue };
 }

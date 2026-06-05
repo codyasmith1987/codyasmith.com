@@ -65,9 +65,12 @@ export async function generateInvoicePdf(invoiceId: string): Promise<Buffer> {
   const seller = await getSellerProfile();
   const billTo = resolveBillTo(invoice, client?.name || 'Client', meta);
 
-  const isReimb = (i: InvoiceItem) => (i.category || 'services') === 'reimbursements';
-  const services = items.filter(i => !isReimb(i));
+  const cat = (i: InvoiceItem) => i.category || 'services';
+  const isReimb = (i: InvoiceItem) => cat(i) === 'reimbursements';
+  const isPastDue = (i: InvoiceItem) => cat(i) === 'past_due' || cat(i) === 'late_interest';
+  const services = items.filter(i => !isReimb(i) && !isPastDue(i));
   const reimbursements = items.filter(isReimb);
+  const pastDue = items.filter(isPastDue);
   const subs = splitSubtotals(items);
   // Compute the total from the live item subtotal + tax rather than the stored
   // invoice.total, so the PDF is correct even if a tax-only update left the
@@ -187,6 +190,9 @@ export async function generateInvoicePdf(invoiceId: string): Promise<Buffer> {
 
     renderSection('Services', services, subs.services, true);
     renderSection('Reimbursements', reimbursements, subs.reimbursements, true);
+    // Past due (carried-forward balance + late interest). Only shown when present,
+    // so normal invoices are unchanged.
+    renderSection('Past due', pastDue, subs.pastDue, false);
 
     // Subtotal + Tax rows, only when the invoice is taxed. The section subtotals
     // above show the untaxed split; this adds the grand subtotal and tax so the

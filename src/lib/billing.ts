@@ -3,7 +3,7 @@
 import { nanoid } from 'nanoid';
 import turso from './turso';
 import { getAllContracts, getContract, type Contract } from './contracts';
-import { createInvoiceWithGeneratedNumber, addInvoiceItem, getInvoice, updateInvoice } from './invoices';
+import { createInvoiceWithGeneratedNumber, addInvoiceItem, getInvoice, getInvoiceItems, updateInvoice } from './invoices';
 import { getExpensesDueForBilling, markExpensesBilled } from './client-expenses';
 import { getAgreementByContractId, getClientMetadata, type ClientAgreement } from './agreements';
 import { resolveInvoiceRecipients } from './invoice-emails';
@@ -307,7 +307,7 @@ export async function generateInvoiceForContract(contract: Contract, createdBy: 
   const dueDate = new Date(now);
   dueDate.setDate(dueDate.getDate() + (contract.payment_terms_days ?? 30));
 
-  const { id: invoiceId } = await createInvoiceWithGeneratedNumber({
+  const { id: invoiceId, invoice_number: newInvoiceNumber } = await createInvoiceWithGeneratedNumber({
     contract_id: contract.id,
     client_id: contract.client_id,
     due_date: dueDate.toISOString().split('T')[0],
@@ -418,6 +418,60 @@ export async function generateInvoiceForContract(contract: Contract, createdBy: 
   }
   if (billedExpenseIds.length > 0) {
     await markExpensesBilled(billedExpenseIds, billDate, invoiceId);
+  }
+
+  // Roll forward (Part B, 2026-06-05): consolidate this contract's unpaid
+  // overdue invoices onto this new one, for a PORTAL-contract client only (the
+  // same executed-v6+ gate as the section 5.8 dunning/interest -- a non-portal
+  // client never accrues interest or rolls forward). For each carried invoice,
+  // computeRollForwardLines adds itemized past_due + late-interest lines (1.5%/mo
+  // simple from its invoice date, on principal only -- no interest-on-interest),
+  // then the old invoice is closed 'carried_forward' with a note linking this
+  // one. Fully-unpaid only (amount_paid = 0; a partial is a manual situation,
+  // matching the dunning eligibility). 'carried_forward' is terminal so it is
+  // never re-rolled, never dunned, never counted in the balance, but stays
+  // client-visible. addInvoiceItem recalculates the new invoice's total as each
+  // line is added.
+  if (agreement && agreement.status === 'executed' && agreement.template_version >= MIN_SECTION_5_8_VERSION) {
+    // due_date compared against the injectable `now` (not SQLite date('now')) so
+    // the SELECT is deterministic + consistent with the rest of this function.
+    // reminders_paused excluded: if collection was deliberately paused on an
+    // invoice (often a manual arrangement), it is left alone -- not consolidated
+    // or charged interest -- matching the dunning gates (dual audit 2026-06-05).
+    const overdue = await queryAll(
+      `SELECT id, invoice_number, issued_date, notes FROM invoices
+         WHERE contract_id = ? AND id != ? AND amount_paid = 0
+           AND (reminders_paused = 0 OR reminders_paused IS NULL)
+           AND (status = 'overdue' OR (status = 'sent' AND due_date < ?))
+         ORDER BY issued_date, invoice_number`,
+      [contract.id, invoiceId, fmtDate(now)]
+    );
+    for (const od of overdue) {
+      const items = await getInvoiceItems(od.id);
+      const lines = computeRollForwardLines(
+        { invoice_number: od.invoice_number, issued_date: od.issued_date },
+        items,
+        now,
+      );
+      if (lines.length === 0) continue; // nothing owed (defensive)
+      for (const l of lines) {
+        await addInvoiceItem({
+          invoice_id: invoiceId,
+          sort_order: so++,
+          name: l.name,
+          sub_description: l.sub_description,
+          description: l.name,
+          category: l.category,
+          quantity: 1,
+          unit_price: l.amount,
+        });
+      }
+      const carriedNote = `Carried forward to ${newInvoiceNumber} on ${billDate}.`;
+      await updateInvoice(od.id, {
+        status: 'carried_forward',
+        notes: od.notes ? `${od.notes}\n${carriedNote}` : carriedNote,
+      });
+    }
   }
 
   return invoiceId;
@@ -563,6 +617,90 @@ export type DunningMessageType = 'default' | 'firm' | 'final';
 export function dunningMessageType(section58Version: number, stage: DunningStage): DunningMessageType {
   if (section58Version === 0) return 'default';
   return stage;
+}
+
+// ============================================================
+// Overdue roll-forward + late interest (Part B, v7 section 5.8)
+// ============================================================
+// Late-payment interest, per v7/v6 section 5.8 + the Utah research
+// (utah-contract-law-research-2026-06-04.md): 1.5% per month (18%/yr), SIMPLE,
+// from the invoice date, enforceable B2B. Only portal-contract clients are
+// charged it (the same gate as the section 5.8 escalation); the caller enforces
+// that.
+export const LATE_INTEREST_MONTHLY_RATE = 0.015;
+// The line-item category for carried-forward overdue principal, and for the
+// late-interest lines. Interest is computed on everything EXCEPT late_interest
+// lines, so previously-charged interest never itself bears interest.
+export const PAST_DUE_CATEGORY = 'past_due';
+export const LATE_INTEREST_CATEGORY = 'late_interest';
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+// Simple interest on `principalBase` accruing from `issuedDate` to `asOf` at
+// 1.5%/month (prorated by whole days, UTC). 0 before/at the issue date, on a
+// non-positive base, or an unparseable date. Pure + unit-tested.
+export function accruedInterest(principalBase: number, issuedDate: string | null, asOf: Date = new Date()): number {
+  if (principalBase <= 0 || !issuedDate) return 0;
+  const issued = new Date(issuedDate + 'T00:00:00Z');
+  if (isNaN(issued.getTime())) return 0;
+  const days = Math.floor((asOf.getTime() - issued.getTime()) / 86400000);
+  if (days <= 0) return 0;
+  const dailyRate = LATE_INTEREST_MONTHLY_RATE * 12 / 365;
+  return round2(principalBase * dailyRate * days);
+}
+
+// Given an overdue invoice and its line items, compute the ITEMIZED lines to add
+// to the next invoice when rolling it forward. Pure + unit-tested.
+//   - past_due       : the carried principal = sum of all NON-late-interest lines
+//   - late_interest  : the newly accrued interest on that principal from the
+//                      invoice's own issue date (simple; segments sum to
+//                      simple-from-original across multiple roll-forwards because
+//                      simple interest is linear in time)
+//   - late_interest  : any PRIOR interest the invoice itself carried, moved over
+//                      as a NON-bearing line (only on a 2nd+ roll-forward)
+export function computeRollForwardLines(
+  inv: { invoice_number: string; issued_date: string | null },
+  items: Array<{ category?: string | null; amount: number }>,
+  now: Date = new Date()
+): Array<{ category: string; name: string; sub_description: string; amount: number }> {
+  // Principal base = the carried invoice's line items minus its own interest
+  // lines. This is the item subtotal, which equals the invoice total because
+  // recurring invoices carry no tax (Cody's services are not Utah-taxable; the
+  // tax column is inert -- see reference_utah_service_sales_tax). If a recurring
+  // invoice ever carried tax, base this on total-minus-interest instead.
+  const isInterest = (c?: string | null) => (c || 'services') === LATE_INTEREST_CATEGORY;
+  const principalBase = round2(items.filter(i => !isInterest(i.category)).reduce((s, i) => s + i.amount, 0));
+  const priorInterest = round2(items.filter(i => isInterest(i.category)).reduce((s, i) => s + i.amount, 0));
+  const interest = accruedInterest(principalBase, inv.issued_date, now);
+
+  const lines: Array<{ category: string; name: string; sub_description: string; amount: number }> = [];
+  if (principalBase > 0) {
+    lines.push({
+      category: PAST_DUE_CATEGORY,
+      name: `Past due: ${inv.invoice_number}`,
+      sub_description: inv.issued_date ? `Originally invoiced ${inv.issued_date}` : '',
+      amount: principalBase,
+    });
+  }
+  if (interest > 0) {
+    lines.push({
+      category: LATE_INTEREST_CATEGORY,
+      name: `Late interest: ${inv.invoice_number}`,
+      sub_description: `1.5% per month from ${inv.issued_date}`,
+      amount: interest,
+    });
+  }
+  if (priorInterest > 0) {
+    lines.push({
+      category: LATE_INTEREST_CATEGORY,
+      name: `Prior late interest: ${inv.invoice_number}`,
+      sub_description: 'carried forward',
+      amount: priorInterest,
+    });
+  }
+  return lines;
 }
 
 // The per-invoice extra recipient to honor for a CONSOLIDATED notice. An extra

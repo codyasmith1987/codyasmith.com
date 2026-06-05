@@ -35,12 +35,16 @@ const enriched = await Promise.all(invoices.map(async (inv) => {
     frequency: i.frequency, category: i.category,
     quantity: i.quantity, unit_price: i.unit_price, amount: i.amount,
   });
-  const services = allItems.filter(i => (i.category || 'services') !== 'reimbursements').map(mapItem);
-  const reimbursements = allItems.filter(i => (i.category || 'services') === 'reimbursements').map(mapItem);
+  const cat = (i: any) => i.category || 'services';
+  const isPastDue = (i: any) => cat(i) === 'past_due' || cat(i) === 'late_interest';
+  const services = allItems.filter(i => cat(i) !== 'reimbursements' && !isPastDue(i)).map(mapItem);
+  const reimbursements = allItems.filter(i => cat(i) === 'reimbursements').map(mapItem);
+  const pastDue = allItems.filter(isPastDue).map(mapItem);
   return {
     ...inv,
     services,
     reimbursements,
+    pastDue,
     subs: splitSubtotals(allItems),
     payments: payments.map(p => ({ amount: p.amount, paid_at: p.paid_at, payment_method: p.payment_method })),
   };
@@ -53,6 +57,7 @@ const statusLabels: Record<string, string> = {
   partial: 'Partially paid',
   overdue: 'Overdue',
   cancelled: 'Cancelled',
+  carried_forward: 'Carried forward',
 };
 
 const statusColors: Record<string, string> = {
@@ -62,6 +67,7 @@ const statusColors: Record<string, string> = {
   partial: 'bg-amber-500/10 text-amber-600',
   overdue: 'bg-red-500/10 text-red-400',
   cancelled: 'bg-neutral-700/30 text-neutral-500',
+  carried_forward: 'bg-neutral-700/30 text-neutral-500',
 };
 ---
 
@@ -129,8 +135,8 @@ const statusColors: Record<string, string> = {
               {inv.notes && <p class="text-sm text-neutral-500 mt-3">{inv.notes}</p>}
             </div>
 
-            {/* Line items: Services, then Reimbursements when present (matches the PDF) */}
-            {(inv.services.length > 0 || inv.reimbursements.length > 0) && (
+            {/* Line items: Services, then Reimbursements, then Past due (matches the PDF) */}
+            {(inv.services.length > 0 || inv.reimbursements.length > 0 || inv.pastDue.length > 0) && (
               <div class="border-t border-white/5">
                 <table class="w-full text-sm">
                   <tbody>
@@ -158,6 +164,21 @@ const statusColors: Record<string, string> = {
                           {item.sub_description && <div class="text-xs text-neutral-500 mt-0.5">{item.sub_description}</div>}
                         </td>
                         <td class="px-4 py-3 text-right text-neutral-500 font-mono text-xs align-top">{item.quantity} x ${item.unit_price.toFixed(2)}</td>
+                        <td class="px-8 py-3 text-right text-neutral-200 font-mono align-top">${item.amount.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                    {inv.pastDue.length > 0 && (
+                      <tr class="border-b border-white/5 bg-neutral-900/40">
+                        <td colspan="3" class="px-8 py-2 text-[10px] font-mono text-neutral-500 uppercase tracking-wide">Past due (carried forward)</td>
+                      </tr>
+                    )}
+                    {inv.pastDue.map(item => (
+                      <tr class="border-b border-white/5 last:border-0">
+                        <td class="px-8 py-3">
+                          <span class="text-neutral-300">{item.name || item.description}</span>
+                          {item.sub_description && <div class="text-xs text-neutral-500 mt-0.5">{item.sub_description}</div>}
+                        </td>
+                        <td class="px-4 py-3 text-right text-neutral-500 font-mono text-xs align-top"></td>
                         <td class="px-8 py-3 text-right text-neutral-200 font-mono align-top">${item.amount.toFixed(2)}</td>
                       </tr>
                     ))}

@@ -50,9 +50,17 @@ the additions are safe.
 ## Closing the old invoice
 - New invoice status value 'carried_forward' (terminal): not open, not overdue,
   not dunned, not counted in the account balance, not re-rolled. The client sees
-  it labeled "Carried forward" with a link/reference to the new invoice number.
-- invoices.carried_to_invoice_id (new column) records the destination invoice,
-  for traceability and to make the close idempotent.
+  it labeled "Carried forward" with a note referencing the new invoice number.
+- AS BUILT: traceability is a NOTE on the old invoice ("Carried forward to
+  INV-YYYY on DATE"), NOT a carried_to_invoice_id column (the planned column was
+  dropped to avoid a migration + buildSafeUpdate-whitelist change). Idempotency
+  needs no column: (1) the terminal carried_forward status removes the old
+  invoice from the roll-forward SELECT, so it is never carried twice; (2)
+  invoiceExistsForPeriod dedups the new recurring invoice per period.
+- The roll-forward SELECT also excludes reminders_paused invoices (a deliberate
+  collection pause is honored) and fully-paid/partial invoices (amount_paid = 0
+  only), and recordPayment/deletePayment treat carried_forward as a sticky
+  terminal status so a stray payment cannot resurrect a carried invoice.
 - The roll-forward runs inside generateInvoiceForContract AFTER the new invoice
   is built, so it happens once per period (invoiceExistsForPeriod dedups the
   period; carried_forward excludes already-rolled invoices).

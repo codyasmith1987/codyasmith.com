@@ -27,7 +27,19 @@ test('splitSubtotals treats NULL/absent category as services (legacy invoices)',
 
 test('splitSubtotals of empty list is all zeros', () => {
   const r = splitSubtotals([]);
-  assert.deepStrictEqual(r, { services: 0, reimbursements: 0, total: 0 });
+  assert.deepStrictEqual(r, { services: 0, reimbursements: 0, pastDue: 0, total: 0 });
+});
+
+test('splitSubtotals groups past_due + late_interest into pastDue (not services)', () => {
+  const r = splitSubtotals([
+    { amount: 1360, category: 'services' },
+    { amount: 830, category: 'past_due' },
+    { amount: 24.55, category: 'late_interest' },
+  ]);
+  assert.strictEqual(cents(r.services), 1360);
+  assert.strictEqual(cents(r.pastDue), 854.55);
+  assert.strictEqual(cents(r.reimbursements), 0);
+  assert.strictEqual(cents(r.total), 2214.55);
 });
 
 // --- addMonthsToDate ---

@@ -47,7 +47,13 @@ async function queryAll(sql: string, args: any[] = []): Promise<any[]> {
 // Invoices
 // ============================================================
 
-export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'partial' | 'overdue' | 'cancelled';
+// 'carried_forward' (Part B, 2026-06-05): a terminal status for an overdue
+// invoice whose unpaid balance + accrued interest were rolled onto a newer
+// invoice. It is NOT open, NOT dunned, and NOT counted in the account balance
+// (every collection query whitelists sent/partial/overdue), but it stays
+// client-visible so the client sees it was carried forward (with a note linking
+// the new invoice).
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'partial' | 'overdue' | 'cancelled' | 'carried_forward';
 
 export interface Invoice {
   id: string;
@@ -271,22 +277,28 @@ export async function recalculateInvoiceTotals(invoiceId: string): Promise<void>
   await updateInvoice(invoiceId, { subtotal, total: subtotal + tax });
 }
 
-// --- Category-aware subtotals (Services vs Reimbursements) ---
+// --- Category-aware subtotals (Services / Reimbursements / Past due) ---
 // Pure. A NULL or absent category counts as 'services', so legacy flat invoices
-// keep a Services subtotal equal to their old subtotal and 0 reimbursements.
+// keep a Services subtotal equal to their old subtotal and 0 in the others.
+// past_due + late_interest (Part B roll-forward) are grouped into pastDue so a
+// carried balance + its interest render separately from current-period services
+// and the Services subtotal isn't inflated by carried debt.
 export function splitSubtotals(
   items: Array<{ amount: number; category?: string | null }>,
-): { services: number; reimbursements: number; total: number } {
+): { services: number; reimbursements: number; pastDue: number; total: number } {
   let services = 0;
   let reimbursements = 0;
+  let pastDue = 0;
   for (const item of items) {
-    if ((item.category || 'services') === 'reimbursements') reimbursements += item.amount;
+    const c = item.category || 'services';
+    if (c === 'reimbursements') reimbursements += item.amount;
+    else if (c === 'past_due' || c === 'late_interest') pastDue += item.amount;
     else services += item.amount;
   }
-  return { services, reimbursements, total: services + reimbursements };
+  return { services, reimbursements, pastDue, total: services + reimbursements + pastDue };
 }
 
-export async function getInvoiceSubtotals(invoiceId: string): Promise<{ services: number; reimbursements: number; total: number }> {
+export async function getInvoiceSubtotals(invoiceId: string): Promise<{ services: number; reimbursements: number; pastDue: number; total: number }> {
   return splitSubtotals(await getInvoiceItems(invoiceId));
 }
 
@@ -515,7 +527,12 @@ export async function recordPayment(data: {
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
   const invoice = await getInvoice(data.invoice_id);
   if (invoice) {
-    const newStatus: InvoiceStatus = totalPaid >= invoice.total ? 'paid' : 'partial';
+    // A terminal invoice (carried_forward / cancelled) keeps its status: a stray
+    // payment against a rolled-forward invoice must not resurrect it to
+    // partial/sent and reintroduce its balance alongside the new invoice (dual
+    // audit 2026-06-05). amount_paid still records for the audit trail.
+    const isTerminal = invoice.status === 'carried_forward' || invoice.status === 'cancelled';
+    const newStatus: InvoiceStatus = isTerminal ? invoice.status : (totalPaid >= invoice.total ? 'paid' : 'partial');
     await updateInvoice(data.invoice_id, { amount_paid: totalPaid, status: newStatus });
   }
 
@@ -536,7 +553,11 @@ export async function deletePayment(id: string): Promise<void> {
     const totalPaid = remaining.reduce((sum, p) => sum + p.amount, 0);
     const invoice = await getInvoice(payment.invoice_id);
     if (invoice) {
-      const newStatus: InvoiceStatus = totalPaid >= invoice.total ? 'paid' : totalPaid > 0 ? 'partial' : invoice.status === 'paid' ? 'sent' : invoice.status;
+      // Terminal statuses (carried_forward / cancelled) are sticky: deleting a
+      // payment must not resurrect a rolled-forward/cancelled invoice (dual audit
+      // 2026-06-05).
+      const isTerminal = invoice.status === 'carried_forward' || invoice.status === 'cancelled';
+      const newStatus: InvoiceStatus = isTerminal ? invoice.status : (totalPaid >= invoice.total ? 'paid' : totalPaid > 0 ? 'partial' : invoice.status === 'paid' ? 'sent' : invoice.status);
       await updateInvoice(payment.invoice_id, { amount_paid: totalPaid, status: newStatus });
     }
   }

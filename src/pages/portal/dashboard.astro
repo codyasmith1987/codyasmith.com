@@ -117,7 +117,11 @@ if (!isAdmin && user.client_id) {
     // Unpaid invoices (existing invoices system).
     try {
       const invRes = await turso.execute({
-        sql: `SELECT id, invoice_number, total, amount_paid FROM invoices WHERE client_id = ? AND (amount_paid IS NULL OR amount_paid < total) AND status != 'draft' ORDER BY issued_date DESC LIMIT 10`,
+        // Open-status whitelist (matches getClientOpenBalance + invoices.astro):
+        // a status != 'draft' blacklist would also match a 'carried_forward'
+        // invoice, double-prompting payment for a balance already rolled onto a
+        // newer invoice (dual audit 2026-06-05).
+        sql: `SELECT id, invoice_number, total, amount_paid FROM invoices WHERE client_id = ? AND status IN ('sent','partial','overdue') AND amount_paid < total ORDER BY issued_date DESC LIMIT 10`,
         args: [user.client_id],
       });
       for (const r of (invRes.rows as any[])) {

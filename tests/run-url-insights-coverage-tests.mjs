@@ -86,6 +86,33 @@ async function freshDb() {
     flesch_reading_ease REAL, spelling_errors INTEGER, grammar_errors INTEGER,
     near_duplicate_count INTEGER, closest_near_duplicate_url TEXT
   )`);
+  // url-insights reads MAX(month) from url_structure_urls unconditionally (for
+  // the duplicate-content widget), so the fixture must create it or every test
+  // errors with "no such table". Mirrors migration 061's columns.
+  await db.execute(`CREATE TABLE url_structure_urls (
+    id TEXT PRIMARY KEY, client_id TEXT, month TEXT, url TEXT, hostname TEXT,
+    content_type TEXT, status_code INTEGER, status TEXT, indexability TEXT,
+    indexability_status TEXT, content_hash TEXT, url_length INTEGER,
+    canonical_link_element TEXT, url_encoded_address TEXT, raw_json TEXT
+  )`);
+  // url-insights also reads MAX(month) from javascript_urls and hreflang_urls
+  // unconditionally. Same reason as above; mirrors migration 061's columns.
+  await db.execute(`CREATE TABLE javascript_urls (
+    id TEXT PRIMARY KEY, client_id TEXT, month TEXT, url TEXT, hostname TEXT,
+    status_code INTEGER, html_word_count INTEGER, rendered_word_count INTEGER,
+    word_count_change INTEGER, js_word_count_pct REAL, html_title TEXT,
+    rendered_title TEXT, html_h1 TEXT, rendered_h1 TEXT, html_meta_description TEXT,
+    rendered_meta_description TEXT, html_canonical TEXT, rendered_canonical TEXT,
+    unique_inlinks INTEGER, unique_js_inlinks INTEGER, unique_outlinks INTEGER,
+    unique_js_outlinks INTEGER, html_meta_robots TEXT, rendered_meta_robots TEXT, raw_json TEXT
+  )`);
+  await db.execute(`CREATE TABLE hreflang_urls (
+    id TEXT PRIMARY KEY, client_id TEXT, month TEXT, url TEXT, hostname TEXT,
+    title TEXT, occurrences INTEGER, indexability TEXT, indexability_status TEXT,
+    hreflang_count INTEGER, html_hreflang_1 TEXT, html_hreflang_1_url TEXT,
+    http_hreflang_1 TEXT, http_hreflang_1_url TEXT, sitemap_hreflang_1 TEXT,
+    sitemap_hreflang_1_url TEXT, raw_json TEXT
+  )`);
   return db;
 }
 

@@ -1,7 +1,7 @@
 ---
 import Portal from '../../../layouts/Portal.astro';
 import { getAllClients } from '../../../lib/auth';
-import { getInvoicesByClient } from '../../../lib/invoices';
+import { getInvoicesByClient, getClientOpenBalance } from '../../../lib/invoices';
 import { getClientExpenses } from '../../../lib/client-expenses';
 import { getClientMetadata } from '../../../lib/agreements';
 export const prerender = false;
@@ -11,6 +11,9 @@ const clientId = Astro.url.searchParams.get('client');
 const invoices = clientId ? await getInvoicesByClient(clientId) : [];
 const expenses = clientId ? await getClientExpenses(clientId) : [];
 const meta = clientId ? await getClientMetadata(clientId).catch(() => null) : null;
+// Read-only account statement: open balance, overdue portion, count. Across
+// all of this client's invoices (admin sees everything, visible or not).
+const balance = clientId ? await getClientOpenBalance(clientId) : null;
 
 const statusColors: Record<string, string> = {
   draft: 'bg-neutral-700/30 text-neutral-400',
@@ -52,6 +55,25 @@ const statusColors: Record<string, string> = {
         ))}
       </select>
     </form>
+
+    {clientId && balance && (
+      <div class="mb-6 bg-neutral-900/30 border border-white/5 rounded-xl p-5 flex flex-wrap items-center gap-8">
+        <div>
+          <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Open balance</p>
+          <p class="text-2xl font-mono text-neutral-100">${balance.open.toFixed(2)}</p>
+        </div>
+        {balance.overdue > 0 && (
+          <div>
+            <p class="text-[10px] font-mono text-red-400/80 tracking-wide uppercase mb-1">Overdue</p>
+            <p class="text-2xl font-mono text-red-400">${balance.overdue.toFixed(2)}</p>
+          </div>
+        )}
+        <div>
+          <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Open invoices</p>
+          <p class="text-2xl font-mono text-neutral-300">{balance.count}</p>
+        </div>
+      </div>
+    )}
 
     {!clientId ? (
       <div class="text-center py-16">

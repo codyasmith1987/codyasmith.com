@@ -202,6 +202,24 @@ export async function getOverdueInvoices(): Promise<Invoice[]> {
   );
 }
 
+// Account-statement aggregate for one client: total owed across all open
+// invoices, the portion of that already overdue (same predicate as
+// getOverdueInvoices), and the count. Open = total - amount_paid summed over
+// not-fully-settled sent/partial/overdue rows. Used by the admin invoices
+// summary strip. (The client portal computes its own balance from the
+// client_visible subset so the figure always matches the rows it renders.)
+export async function getClientOpenBalance(clientId: string): Promise<{ open: number; overdue: number; count: number }> {
+  const row = await queryOne(
+    `SELECT
+       COALESCE(SUM(total - amount_paid), 0) AS open,
+       COALESCE(SUM(CASE WHEN status = 'overdue' OR (status IN ('sent','partial') AND due_date < date('now')) THEN total - amount_paid ELSE 0 END), 0) AS overdue,
+       COUNT(*) AS count
+     FROM invoices
+     WHERE client_id = ? AND status IN ('sent','partial','overdue') AND amount_paid < total`,
+    [clientId]);
+  return { open: row?.open ?? 0, overdue: row?.overdue ?? 0, count: row?.count ?? 0 };
+}
+
 // Client-safe: excludes created_by, contract_id, milestone_id (admin context)
 export async function getClientVisibleInvoices(clientId: string): Promise<Pick<Invoice, 'id' | 'invoice_number' | 'status' | 'issued_date' | 'due_date' | 'total' | 'amount_paid' | 'notes'>[]> {
   return queryAll(

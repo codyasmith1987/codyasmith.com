@@ -391,7 +391,7 @@ export async function addInvoiceItem(data: {
     args: [
       id, data.invoice_id, data.name ?? null, data.sub_description ?? null,
       data.description, data.frequency ?? null, data.category ?? 'services',
-      qty, data.unit_price, amount, data.sort_order ?? null,
+      qty, data.unit_price, amount, data.sort_order ?? 0,
     ],
   });
   await recalculateInvoiceTotals(data.invoice_id);

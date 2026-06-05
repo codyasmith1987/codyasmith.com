@@ -325,12 +325,19 @@ export async function onPaymentRecorded(invoiceId: string, amount: number): Prom
     if (!invoice) return;
 
     // Email the client a receipt (financial notice -> carries the accountant CC
-    // per the recipient model). Soft-fails so it never breaks payment recording.
+    // per the recipient model). Soft-fails so it never breaks payment recording,
+    // but a soft failure (Brevo rejected, etc.) now alerts the admin so a paid
+    // client never silently goes without a receipt. 'no_recipient' is a config
+    // state (no billing contact), not a send failure, so it does not alert.
     try {
       const { sendPaymentReceiptEmail } = await import('./invoice-emails');
-      await sendPaymentReceiptEmail(invoiceId, amount);
+      const r = await sendPaymentReceiptEmail(invoiceId, amount);
+      if (!r.ok && r.reason !== 'no_recipient') {
+        await onAutomatedFailure('sendPaymentReceiptEmail', `Invoice ${invoiceId}: receipt not sent (${r.reason})`);
+      }
     } catch (err) {
       logger.error('payment receipt email failed', err);
+      await onAutomatedFailure('sendPaymentReceiptEmail', `Invoice ${invoiceId}: receipt threw`);
     }
 
     // Notify admin

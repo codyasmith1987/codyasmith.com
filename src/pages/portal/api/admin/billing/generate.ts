@@ -12,9 +12,14 @@ export const POST: APIRoute = async ({ locals }) => {
 
   try {
     const result = await generateRecurringInvoices(locals.user!.id);
+    // generateRecurringInvoices auto-emails each generated invoice to the client
+    // (PR #295), so surface emailed/email_failed -- otherwise this admin action
+    // silently sends real client email with no feedback.
     return json({
       generated: result.generated.length,
       skipped: result.skipped.length,
+      emailed: result.emailed,
+      email_failed: result.email_failed,
       invoice_ids: result.generated,
     });
   } catch (err) {

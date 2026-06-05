@@ -12,7 +12,7 @@ import { join } from 'node:path';
 const ROOT = new URL('../', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 
 // Files/globs to scan: portal pages + client-facing copy modules.
-const SCAN_DIRS = ['src/pages/portal'];
+const SCAN_DIRS = ['src/pages/portal', 'src/contracts/templates'];
 const SCAN_FILES = ['src/lib/contract-emails.ts', 'src/lib/triggers.ts'];
 
 // Admin tooling (/portal/admin/**) is internal-facing (Cody's own UI), not
@@ -23,7 +23,7 @@ function walk(dir, out) {
     if (/\/(portal|api)\/admin\//.test(p.replace(/\\/g, '/'))) continue;
     const st = statSync(p);
     if (st.isDirectory()) walk(p, out);
-    else if (/\.(astro|ts)$/.test(name)) out.push(p);
+    else if (/\.(astro|ts|md)$/.test(name)) out.push(p);
   }
 }
 

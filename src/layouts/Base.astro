@@ -29,7 +29,7 @@ interface Props {
   noIndex?: boolean;            // when true, emits robots noindex,nofollow
 }
 
-const DEFAULT_DESCRIPTION = "Cody Smith: web management, marketing strategy, and consulting for small businesses in Cedar City, Utah and beyond.";
+const DEFAULT_DESCRIPTION = "Cody Smith: web management, strategy consulting, implementation, and training for businesses that have outgrown their website.";
 const {
   title,
   description = DEFAULT_DESCRIPTION,
@@ -44,7 +44,7 @@ const {
 const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
 const resolvedOgImage = new URL(ogImage ?? '/og-default.png', 'https://codyasmith.com').href;
 const resolvedOgImageAlt = ogImageAlt
-  ?? (ogType === 'article' ? title : 'Cody Smith: web management, marketing strategy, and consulting in Cedar City, Utah');
+  ?? (ogType === 'article' ? title : 'Cody Smith: web management, strategy consulting, implementation, and training');
 
 const breadcrumbJsonLd = breadcrumbs && breadcrumbs.length > 0 ? JSON.stringify({
   '@context': 'https://schema.org',
@@ -174,7 +174,7 @@ const breadcrumbJsonLd = breadcrumbs && breadcrumbs.length > 0 ? JSON.stringify(
       html.quiz-active, html.quiz-active body { overflow: hidden; }
     </style>
   </head>
-  <body class="min-h-screen flex flex-col">
+  <body class="site-editorial min-h-screen flex flex-col">
     <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:px-4 focus:py-2 focus:bg-amber-500 focus:text-neutral-950 focus:text-sm focus:font-semibold focus:rounded-lg">
       Skip to content
     </a>
@@ -184,18 +184,6 @@ const breadcrumbJsonLd = breadcrumbs && breadcrumbs.length > 0 ? JSON.stringify(
     </main>
     <Footer />
     <Quiz />
-
-    {import.meta.env.DEV && (
-      <div class="theme-switcher" id="theme-switcher">
-        <button data-set-theme="" title="Original (no theme)">Orig</button>
-        <button data-set-theme="sun-mountain-fall-stars" title="Sun+Mtn+Fall+Stars">SmFs</button>
-        <button data-set-theme="sun-mountain-fall-clouds" title="Sun+Mtn+Fall+Clouds">SmFc</button>
-        <button data-set-theme="moon-mountain-fall-stars" title="Moon+Mtn+Fall+Stars">MmFs</button>
-        <button data-set-theme="moon-mountain-fall-clouds" title="Moon+Mtn+Fall+Clouds">MmFc</button>
-        <button data-set-theme="moon-beach-spring-stars" title="Moon+Beach+Spring+Stars">MbSs</button>
-        <button data-set-theme="sun-beach-spring-clouds" title="Sun+Beach+Spring+Clouds">SbSc</button>
-      </div>
-    )}
 
     <script>
       function initPersonalization() {
@@ -304,45 +292,14 @@ const breadcrumbJsonLd = breadcrumbs && breadcrumbs.length > 0 ? JSON.stringify(
         document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
       }
 
-      function initThemeSwitcher() {
-        const switcher = document.getElementById('theme-switcher');
-        if (!switcher) return;
-
-        function setActive() {
-          const current = document.documentElement.getAttribute('data-theme') || '';
-          switcher.querySelectorAll('button').forEach(btn => {
-            const theme = (btn as HTMLButtonElement).dataset.setTheme || '';
-            btn.classList.toggle('active', theme === current);
-          });
-        }
-
-        switcher.addEventListener('click', (e) => {
-          const btn = (e.target as HTMLElement).closest('button');
-          if (!btn) return;
-          const theme = (btn as HTMLButtonElement).dataset.setTheme || '';
-          if (theme) {
-            document.documentElement.setAttribute('data-theme', theme);
-            localStorage.setItem('cs-theme', theme);
-          } else {
-            document.documentElement.removeAttribute('data-theme');
-            localStorage.removeItem('cs-theme');
-          }
-          setActive();
-        });
-
-        setActive();
-      }
-
       initReveals();
       initPersonalization();
-      initThemeSwitcher();
       document.addEventListener('astro:after-swap', () => {
         // Re-apply theme from localStorage after view transition swap
         var saved = localStorage.getItem('cs-theme');
         if (saved) document.documentElement.setAttribute('data-theme', saved);
         initReveals();
         initPersonalization();
-        initThemeSwitcher();
       });
     </script>
   </body>

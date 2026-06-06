@@ -10,6 +10,7 @@
 export type ContactFrame = 'sun' | 'moon' | 'default';
 export type ContactInterest =
   | 'web-management'
+  | 'strategy-consulting'
   | 'marketing-strategy'
   | 'implementation'
   | 'training'
@@ -28,20 +29,21 @@ function frameFromTheme(theme: string): ContactFrame {
 }
 
 // Pick the "primary" interest from a list that may contain multiple boxes.
-// Form order: web-management, marketing-strategy, implementation, training,
+// Form order: web-management, strategy-consulting, implementation, training,
 // not-sure. Honor that order and skip 'not-sure' if anything substantive
 // was also picked.
 function primaryInterest(interests: string[]): ContactInterest {
   const valid: ContactInterest[] = [
     'web-management',
+    'strategy-consulting',
     'marketing-strategy',
     'implementation',
     'training',
     'not-sure',
   ];
-  const filtered = interests.filter((i): i is ContactInterest =>
-    valid.includes(i as ContactInterest),
-  );
+  const filtered = interests
+    .map(i => i === 'marketing-strategy' ? 'strategy-consulting' : i)
+    .filter((i): i is ContactInterest => valid.includes(i as ContactInterest));
   if (filtered.length === 0) return 'not-sure';
   if (filtered.length > 1) {
     const substantive = filtered.find((i) => i !== 'not-sure');
@@ -57,10 +59,11 @@ function preCallQuestions(interest: ContactInterest): [string, string] {
         "What's the URL, and what's the thing on the site that breaks, slows down, or worries you most right now?",
         "What's the one number on the site you'd want to move in the next six months, and what does moving it actually look like to you?",
       ];
+    case 'strategy-consulting':
     case 'marketing-strategy':
       return [
-        "Who's the competitor you can't stop checking on, and what do they do that you don't?",
-        "What have you already tried that didn't stick, and what's your honest theory on why?",
+        "What decision are you trying to make, and what keeps making it muddy?",
+        "Where does this feel most tangled right now: visibility, positioning, search, operations, vendors, hiring, or something else?",
       ];
     case 'implementation':
       return [
@@ -96,10 +99,11 @@ function valuePointer(interest: ContactInterest): ValuePointer {
         url: aiPiece,
         html: `While you're waiting, here's the piece I wrote on <a href="${aiPiece}">why AI shows outdated information about your business</a>. Useful read if web visibility is part of what's worrying you.`,
       };
+    case 'strategy-consulting':
     case 'marketing-strategy':
       return {
         url: aiPiece,
-        html: `While you're waiting, here's the piece I wrote on <a href="${aiPiece}">why AI shows outdated information about your business</a>. Closest thing on the site to how I actually think about strategy work.`,
+        html: `While you're waiting, here's the piece I wrote on <a href="${aiPiece}">why AI shows outdated information about your business</a>. Closest thing on the site to how I actually think about visibility and strategy work.`,
       };
     case 'implementation':
       return {

@@ -10,7 +10,7 @@ const faqSchema = JSON.stringify({
       "name": "How do you scope a project?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "You describe the problem. I write a scope document listing every deliverable, integration point, testing criteria, and exclusion. Then I quote a fixed price against that scope. Nothing ambiguous. You know what you're getting and what it costs before you sign anything."
+        "text": "You describe the problem. I write a scope document listing the deliverables, integration points, testing criteria, and exclusions. Then I quote against that scope. Nothing ambiguous. You know what is being built before anything starts."
       }
     },
     {
@@ -18,7 +18,7 @@ const faqSchema = JSON.stringify({
       "name": "What happens if scope changes mid-build?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Change orders get quoted separately before any additional work begins. I don't surprise you with a bigger invoice at the end. If you want to add something or pivot, we talk about it, I quote it, you approve, and then I build it. The original scope stays the original scope."
+        "text": "Scope changes get discussed before additional work begins. I do not surprise you at the end. If you want to add something or pivot, we talk about it, scope it, approve it, and then I build it. The original scope stays the original scope."
       }
     },
     {
@@ -61,61 +61,15 @@ const serviceSchema = JSON.stringify({
   "@type": "Service",
   "name": "Implementation",
   "url": "https://codyasmith.com/services/implementation",
-  "description": "CRM integrations, page builds, analytics setup. Scoped projects with a start and a finish.",
+  "description": "CRM integrations, page builds, analytics setup, features, and scoped build work with a start and a finish.",
   "provider": { "@id": "https://codyasmith.com/#organization" },
-  "serviceType": "Implementation",
+  "serviceType": "Implementation and Build Work",
   "areaServed": { "@type": "Country", "name": "United States" },
-  "termsOfService": "Fixed-price quotes against a written scope document. Payment at signing. Change orders quoted separately before execution. Production deployment with handoff documentation.",
-  "offers": [
-    {
-      "@type": "Offer",
-      "name": "Implementation work",
-      "priceSpecification": {
-        "@type": "UnitPriceSpecification",
-        "price": 125,
-        "priceCurrency": "USD",
-        "unitText": "hour",
-        "referenceQuantity": { "@type": "QuantitativeValue", "value": 1, "unitText": "hour" }
-      }
-    },
-    {
-      "@type": "Offer",
-      "name": "Advisory work",
-      "priceSpecification": {
-        "@type": "UnitPriceSpecification",
-        "price": 150,
-        "priceCurrency": "USD",
-        "unitText": "hour",
-        "referenceQuantity": { "@type": "QuantitativeValue", "value": 1, "unitText": "hour" }
-      }
-    },
-    {
-      "@type": "Offer",
-      "name": "Rush implementation",
-      "priceSpecification": {
-        "@type": "UnitPriceSpecification",
-        "price": 187.50,
-        "priceCurrency": "USD",
-        "unitText": "hour",
-        "referenceQuantity": { "@type": "QuantitativeValue", "value": 1, "unitText": "hour" }
-      }
-    },
-    {
-      "@type": "Offer",
-      "name": "Emergency implementation",
-      "priceSpecification": {
-        "@type": "UnitPriceSpecification",
-        "price": 250,
-        "priceCurrency": "USD",
-        "unitText": "hour",
-        "referenceQuantity": { "@type": "QuantitativeValue", "value": 1, "unitText": "hour" }
-      }
-    }
-  ]
+  "termsOfService": "Scoped against a written scope document before execution. Production deployment includes handoff documentation."
 });
 ---
 
-<Base title="Implementation | CRM Integrations, Page Builds & Analytics" description="CRM integrations, page builds, analytics setup. Scoped projects with a start and a finish." ogImage="/og/services/implementation.png" ogImageAlt="Implementation: scoped projects. Start, build, hand over.">
+<Base title="Implementation | Scoped Build Work" description="CRM integrations, page builds, analytics setup, features, and scoped build work with a start and a finish." ogImage="/og/services/implementation.png" ogImageAlt="Implementation: scoped build work. Start, build, hand over.">
   <script type="application/ld+json" set:html={faqSchema} />
   <script type="application/ld+json" set:html={serviceSchema} />
   <script type="application/ld+json" set:html={JSON.stringify({"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://codyasmith.com/"},{"@type":"ListItem","position":2,"name":"Services","item":"https://codyasmith.com/services"},{"@type":"ListItem","position":3,"name":"Implementation","item":"https://codyasmith.com/services/implementation"}]})} />
@@ -138,13 +92,13 @@ const serviceSchema = JSON.stringify({
       </h1>
       <p class="reveal text-neutral-500 italic text-sm tracking-wide mb-10">Scoped projects. Start, build, hand over.</p>
       <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" data-frame="default">
-        Someone fills out your contact form and the submission goes into a folder nobody checks. Your CRM doesn't know it happened. The lead calls a competitor the next day. You find out three weeks later when you finally open that folder. These are the gaps between your website and your business. I build the connections that close them.
+        Someone fills out your contact form and the submission goes into a folder nobody checks. Your CRM doesn't know it happened. You find out three weeks later when you finally open that folder. These are the gaps between your website and your business. I build the connections that close them.
       </p>
       <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="sun">
-        Your website and your business tools should talk to each other. Form submissions that land in your CRM instantly. Analytics that track what actually matters. Landing pages built for the markets you're entering. I scope it, build it, and hand it over working.
+        Your website and your business tools should talk to each other. Form submissions should land where your team works. Analytics should track actions you actually care about. New pages should fit the structure around them. I scope it, build it, and hand it over working.
       </p>
       <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="moon">
-        Someone fills out your contact form and the submission goes into a folder nobody checks. Your CRM doesn't know it happened. The lead calls a competitor the next day. These are the gaps between your website and your business. I build the connections that close them.
+        Someone fills out your contact form and the submission goes into a folder nobody checks. Your CRM doesn't know it happened. These are the gaps between your website and your business. I build the connections that close them.
       </p>
     </div>
   </section>
@@ -159,7 +113,7 @@ const serviceSchema = JSON.stringify({
           Integrations, page builds, and analytics setup. Scoped projects with clear deliverables.
         </p>
         <p class="text-neutral-400 mt-4 max-w-2xl" style="display:none" data-vibe="beach">
-          Your competitors already have their CRM connected, their analytics tracking conversions, and their landing pages converting. These are the projects that close that gap.
+          Your website, CRM, analytics, and pages should not feel like separate rooms. These are the scoped projects that connect the rooms.
         </p>
         <p class="text-neutral-400 mt-4 max-w-2xl" style="display:none" data-vibe="mountain">
           This is the engineering that makes everything reliable. Proper integrations, correct analytics, pages built on solid architecture. Every connection tested, documented, and handed over working.
@@ -175,7 +129,7 @@ const serviceSchema = JSON.stringify({
                 Your forms submit but nothing happens on the other end. Leads don't reach your CRM. Email sequences never fire. Payment confirmations vanish. The connections between your site and your business tools are either broken or they never existed.
               </p>
               <p class="text-neutral-400 leading-relaxed" data-processing="default">
-                I build those connections. Form submissions that land in your CRM tagged and ready. Email sequences that trigger when someone downloads a guide. Payment links that actually track conversions.
+                I build those connections. Form submissions that land in your CRM tagged and ready. Email sequences that trigger when someone downloads a guide. Payment links that report clearly.
               </p>
               <p class="text-neutral-400 leading-relaxed" style="display:none" data-processing="stars">
                 Most integrations break in failure modes nobody tested: timeouts, malformed payloads, silent failures. The connections I build assume the failure modes happen, log them, and recover. Every integration ships with a runbook for what to check when something looks off.
@@ -213,7 +167,7 @@ const serviceSchema = JSON.stringify({
             <div class="lg:col-span-2">
               <h3 class="text-neutral-100 text-xl font-medium mb-4">Page builds</h3>
               <p class="text-neutral-400 leading-relaxed mb-4" data-frame="default">
-                The pages that need to exist for your marketing to work. You need location pages for three markets you're entering. Your homepage hasn't been rewritten since 2020 and it shows. Your pricing page reads like a legal document and converts at 0.3%.
+                The pages that need to exist for your marketing to make sense. You need location pages for three markets you're entering. Your homepage hasn't been rewritten since 2020 and it shows. Your pricing page reads like a legal document.
               </p>
               <p class="text-neutral-400 leading-relaxed" data-frame="default">
                 I handle everything from the keyword-targeted content architecture to the actual build in WordPress. You review, approve, and it goes live.
@@ -222,7 +176,7 @@ const serviceSchema = JSON.stringify({
                 Pages built to compound over time. Location pages with the local search architecture each region needs, service pages structured for organic ranking on their own terms, homepage rewrites that close the gap between what the business does and what visitors think it does.
               </p>
               <p class="text-neutral-400 leading-relaxed" style="display:none" data-frame="moon">
-                Pages that reclaim what's leaking. Underperforming pricing pages, homepages stuck two years behind your business, location pages that should exist but don't. The build covers keyword research, content architecture, and WordPress implementation; what ships is a page that earns its slot.
+                Pages that close the obvious gaps: underexplained pricing pages, homepages stuck two years behind your business, location pages that should exist but don't. The build covers the page strategy, structure, and WordPress implementation.
               </p>
             </div>
             <div class="border-l border-white/5 pl-8">
@@ -254,10 +208,10 @@ const serviceSchema = JSON.stringify({
             <div class="lg:col-span-2">
               <h3 class="text-neutral-100 text-xl font-medium mb-4">Analytics setup</h3>
               <p class="text-neutral-400 leading-relaxed mb-4" data-processing="default">
-                Most sites have analytics installed. Very few have analytics configured correctly. Your GA4 might be running, but if events, conversions, and filters aren't set up right, the data is just noise pretending to be signal.
+                Most sites have analytics installed. Very few have analytics configured clearly. Your GA4 might be running, but if events, filters, and reports are not set up around the questions you ask, the data is just noise pretending to be signal.
               </p>
               <p class="text-neutral-400 leading-relaxed" data-processing="default">
-                I configure GA4, Google Search Console, Microsoft Clarity, and conversion tracking so the numbers you see actually mean something.
+                I configure GA4, Google Search Console, Microsoft Clarity, and event tracking so the numbers you see actually mean something.
               </p>
               <p class="text-neutral-400 leading-relaxed" style="display:none" data-processing="stars">
                 The configuration question isn't "is it installed" but "is it tuned." Events fire on actions that match a buyer decision. Conversions trigger only when the action completes. Every dashboard cleans up because every input is intentional.
@@ -307,7 +261,7 @@ const serviceSchema = JSON.stringify({
             <span class="text-amber-400 text-sm font-mono font-bold">1</span>
           </div>
           <h3 class="text-neutral-100 font-medium mb-2">Scope</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">You describe the problem. I define exactly what's included, what's not, and what it costs.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">You describe the problem. I define exactly what's included, what's not, and what it takes to ship.</p>
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">You tell me what outcome you need. I define what it takes to get there.</p>
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">Written scope document listing every deliverable, integration point, testing criteria, and exclusion. Nothing ambiguous.</p>
         </div>
@@ -316,16 +270,16 @@ const serviceSchema = JSON.stringify({
             <span class="text-amber-400/70 text-sm font-mono font-bold">2</span>
           </div>
           <h3 class="text-neutral-100 font-medium mb-2">Quote</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">Fixed price. No hourly surprises. You approve the quote, pay at signing, and work begins.</p>
-          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">One price, agreed upfront. No surprises on either side.</p>
-          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">Fixed-price quote based on the scope document. Payment at signing. Change orders quoted separately before any additional work begins.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">Written quote. Clear scope. No "we'll figure it out later" bucket.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">One agreed shape before work starts. No surprises on either side.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">Quote based on the scope document. Scope changes discussed before additional work begins.</p>
         </div>
         <div class="reveal glow-card p-6 text-center" style="--i:2">
           <div class="w-10 h-10 rounded-full border-2 border-amber-500/50 flex items-center justify-center mx-auto mb-4">
             <span class="text-amber-400/50 text-sm font-mono font-bold">3</span>
           </div>
           <h3 class="text-neutral-100 font-medium mb-2">Build</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">I build it. You get updates. If scope changes, we discuss it before the price does.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">I build it. You get updates. If scope changes, we discuss it before the work changes.</p>
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">I build it and keep you in the loop. You focus on your business.</p>
           <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">Development with progress updates at each milestone. Staging environment for review. Scope changes documented and quoted before execution.</p>
         </div>
@@ -352,20 +306,17 @@ const serviceSchema = JSON.stringify({
     </div>
   </section>
 
-  <!-- Pricing note -->
+  <!-- Scope note -->
   <section class="py-28 px-6 surface-1">
     <div class="max-w-3xl mx-auto text-center">
       <div class="reveal">
-        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Pricing</p>
-        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100 mb-8">Project-based pricing.</h2>
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Scope</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100 mb-8">Scoped before built.</h2>
         <p class="text-neutral-400 text-lg leading-relaxed mb-4">
-          Implementation work is quoted per-project, not billed hourly. The scope defines the price. You know the cost before work begins.
-        </p>
-        <p class="text-neutral-400 leading-relaxed mb-4">
-          Rate card for reference: <span class="text-neutral-200">$125/hr</span> implementation, <span class="text-neutral-200">$150/hr</span> advisory. Rush work is <span class="text-neutral-200">1.5x</span>. Emergency is <span class="text-neutral-200">2x</span>.
+          Implementation starts with scope. Once I understand what needs to be built, I give you a written quote, timeline, handoff shape, and exclusions before work begins.
         </p>
         <p class="text-neutral-500 text-sm">
-          Most projects are scoped at a fixed price so you know the cost before work begins.
+          If the request is really Strategy Consulting, Web Management, or Training, I will say that before turning it into a build.
         </p>
       </div>
     </div>
@@ -386,7 +337,7 @@ const serviceSchema = JSON.stringify({
             <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
           </summary>
           <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
-            You describe the problem. I write a scope document listing every deliverable, integration point, testing criteria, and exclusion. Then I quote a fixed price against that scope. Nothing ambiguous. You know what you're getting and what it costs before you sign anything.
+            You describe the problem. I write a scope document listing the deliverables, integration points, testing criteria, and exclusions. Then I quote against that scope. Nothing ambiguous. You know what is being built before anything starts.
           </div>
         </details>
 
@@ -396,7 +347,7 @@ const serviceSchema = JSON.stringify({
             <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
           </summary>
           <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
-            Change orders get quoted separately before any additional work begins. I don't surprise you with a bigger invoice at the end. If you want to add something or pivot, we talk about it, I quote it, you approve, and then I build it. The original scope stays the original scope.
+            Scope changes get discussed before additional work begins. I do not surprise you at the end. If you want to add something or pivot, we talk about it, scope it, approve it, and then I build it. The original scope stays the original scope.
           </div>
         </details>
 

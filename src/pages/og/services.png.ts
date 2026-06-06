@@ -5,7 +5,7 @@ export const prerender = true;
 
 export const GET: APIRoute = async () => {
   const png = await renderOg({
-    title: 'Web management, marketing strategy, implementation, training.',
+    title: 'Web management, strategy consulting, implementation, training.',
     eyebrow: 'Services',
     kicker: 'Cedar City, Utah',
     subtitle: 'Monthly retainers, not hourly surprises.',

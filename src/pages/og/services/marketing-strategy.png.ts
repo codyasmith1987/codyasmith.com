@@ -5,10 +5,10 @@ export const prerender = true;
 
 export const GET: APIRoute = async () => {
   const png = await renderOg({
-    title: 'I direct it. You execute it.',
-    eyebrow: 'Marketing Strategy',
+    title: 'Marketing-fluent advisory.',
+    eyebrow: 'Strategy Consulting',
     kicker: 'Cedar City, Utah',
-    subtitle: 'SEO, competitive analysis, content direction.',
+    subtitle: 'Visibility, positioning, search, operations, vendors, hiring, growth.',
   });
   return new Response(new Uint8Array(png), {
     headers: {

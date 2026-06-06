@@ -2,40 +2,55 @@
 import Base from '../layouts/Base.astro';
 ---
 
-<Base title="Contact Cody Smith | Web Management & Marketing Consulting" description="Start a conversation about web management, marketing strategy, or training." ogImage="/og/contact.png" ogImageAlt="Contact Cody Smith. Let's talk.">
-  <!-- Hero -->
-  <section class="relative pt-40 pb-16 px-6 overflow-hidden">
-    <div class="absolute top-0 left-1/3 w-[400px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
-    <div class="relative max-w-4xl mx-auto">
-      <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Contact</p>
-      <!-- Stacked H1 variants are intentional. Each is server-rendered for SEO weight on
-           segment-targeted copy (data-frame axis: default / sun / moon). swapAxis in
-           Base.astro toggles display and aria-hidden so one variant is visible and announced
-           per session. See swapAxis comment for the full rationale. -->
-      <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10" data-frame="default">
-        Let's talk<span data-personalize="name-comma" style="display:none"></span>.
-      </h1>
-      <div class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10" style="display:none" aria-hidden="true" role="heading" aria-level="1" data-frame="sun">
-        Let's build something<span data-personalize="name-comma" style="display:none"></span>.
+<Base title="Contact Cody Smith | Web Management & Strategy Consulting" description="Start a conversation about web management, strategy consulting, implementation, or training." ogImage="/og/contact.png" ogImageAlt="Contact Cody Smith. Let's talk.">
+  <section class="broadsheet pt-ed-7 pb-ed-6">
+    <p class="dateline reveal">
+      <span>No. 05</span>
+      <span class="dateline-divider"></span>
+      <span>Contact</span>
+      <span class="dateline-divider"></span>
+      <span>Reply within one business day</span>
+    </p>
+    <hr class="masthead-rule-thick reveal mt-ed-3" />
+    <!-- Stacked H1 variants are intentional. Each is server-rendered for SEO weight on
+         segment-targeted copy (data-frame axis: default / sun / moon). swapAxis in
+         Base.astro toggles display and aria-hidden so one variant is visible and announced
+         per session. See swapAxis comment for the full rationale. -->
+    <h1 class="display-h1 reveal mt-ed-5" data-frame="default">
+      Let's talk<span data-personalize="name-comma" style="display:none"></span>.
+    </h1>
+    <div class="display-h1 reveal mt-ed-5" style="display:none" aria-hidden="true" role="heading" aria-level="1" data-frame="sun">
+      Let's build something<span data-personalize="name-comma" style="display:none"></span>.
+    </div>
+    <div class="display-h1 reveal mt-ed-5" style="display:none" aria-hidden="true" role="heading" aria-level="1" data-frame="moon">
+      Let's fix this<span data-personalize="name-comma" style="display:none"></span>.
+    </div>
+    <hr class="masthead-rule-hair mt-ed-5" />
+
+    <div class="editorial-grid mt-ed-5">
+      <aside class="reveal pt-ed-2">
+        <p class="byline">Send the real version</p>
+        <p class="byline mt-ed-1" style="color: var(--color-neutral-300); letter-spacing: 0.14em">
+          No board deck required
+        </p>
+      </aside>
+      <div>
+        <p class="lede reveal" data-processing="default">
+          Tell me what's going on. The version you'd tell a friend, not the one you'd put in a board presentation. I'll tell you if I can help, what shape it would take, and what happens next. If I can't help, I'll say that in the first email.
+        </p>
+        <p class="lede reveal" style="display:none" data-processing="stars">
+          Tell me what's going on. What's working, what's not, what you've tried. I'll reply within one business day with an honest assessment: can I help, what shape would it take, and what comes next. If I can't help, I'll say that in the first email.
+        </p>
+        <p class="lede reveal" style="display:none" data-processing="clouds">
+          Tell me the version you'd tell a friend, not the one you'd put in a board presentation. I'm good at reading between the lines. I'll tell you if I can help, and if I can't, I'll say that in the first email instead of dragging you through a call to find out.
+        </p>
       </div>
-      <div class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10" style="display:none" aria-hidden="true" role="heading" aria-level="1" data-frame="moon">
-        Let's fix this<span data-personalize="name-comma" style="display:none"></span>.
-      </div>
-      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" data-processing="default">
-        Tell me what's going on. The version you'd tell a friend, not the one you'd put in a board presentation. I'll tell you if I can help, what it would cost, and how long it takes. If I can't help, I'll say that in the first email.
-      </p>
-      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-processing="stars">
-        Tell me what's going on. What's working, what's not, what you've tried. I'll reply within one business day with an honest assessment: can I help, what would it cost, and how long it takes. If I can't help, I'll say that in the first email.
-      </p>
-      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-processing="clouds">
-        Tell me the version you'd tell a friend, not the one you'd put in a board presentation. I'm good at reading between the lines. I'll tell you if I can help, and if I can't, I'll say that in the first email instead of dragging you through a call to find out.
-      </p>
     </div>
   </section>
 
   <!-- Form + Info -->
-  <section class="pb-28 px-6">
-    <div class="max-w-5xl mx-auto">
+  <section class="broadsheet pt-ed-4 pb-ed-6">
+    <div>
       <div class="grid lg:grid-cols-5 gap-16">
         <!-- Form -->
         <div class="lg:col-span-3 reveal">
@@ -84,13 +99,13 @@ import Base from '../layouts/Base.astro';
                   </div>
                 </label>
 
-                <label class="cursor-pointer block" data-service="marketing-strategy">
-                  <input type="checkbox" name="interest" value="marketing-strategy" class="sr-only" />
+                <label class="cursor-pointer block" data-service="strategy-consulting">
+                  <input type="checkbox" name="interest" value="strategy-consulting" class="sr-only" />
                   <div class="svc-card relative p-4 rounded-lg border border-white/5 bg-neutral-900/50 transition-all duration-500 hover:border-white/15 overflow-hidden">
                     <div class="svc-glow absolute inset-0 rounded-lg opacity-0 transition-opacity duration-700 pointer-events-none" style="background: radial-gradient(ellipse at center, rgba(251,191,36,0.08) 0%, transparent 70%);"></div>
                     <div class="relative">
-                      <p class="svc-title text-neutral-300 text-sm font-medium transition-all duration-300">Marketing Strategy</p>
-                      <p class="svc-sub text-neutral-600 text-xs mt-1 transition-all duration-500">SEO, content, competitive</p>
+                      <p class="svc-title text-neutral-300 text-sm font-medium transition-all duration-300">Strategy Consulting</p>
+                      <p class="svc-sub text-neutral-600 text-xs mt-1 transition-all duration-500">Visibility, positioning, decisions</p>
                     </div>
                   </div>
                 </label>
@@ -203,43 +218,52 @@ import Base from '../layouts/Base.astro';
   </section>
 
   <!-- How it starts -->
-  <section class="py-28 px-6 surface-1">
-    <div class="max-w-5xl mx-auto">
-      <div class="reveal mb-16">
-        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">How it starts</p>
-        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">What happens after you reach out.</h2>
-        <p class="text-neutral-400 mt-4 max-w-2xl" data-phase="default">
-          Three steps. Same shape every time. No mystery, no surprises.
+  <section class="broadsheet pt-ed-6 pb-ed-8">
+    <div class="editorial-grid">
+      <aside class="section-marker reveal">
+        <span class="section-marker__num">01</span>
+        <span class="section-marker__label">After you reach out</span>
+      </aside>
+      <div>
+        <h2 class="display-h2 reveal">Same shape every time.</h2>
+        <p class="lede mt-ed-3 reveal" data-phase="default">
+          Three steps. No mystery, no surprises.
         </p>
-        <p class="text-neutral-400 mt-4 max-w-2xl" style="display:none" data-phase="spring">
+        <p class="lede mt-ed-3 reveal" style="display:none" data-phase="spring">
           It's a path, not a procedure. Each step earns the next, the shape is consistent, and you always know where you're heading.
         </p>
-        <p class="text-neutral-400 mt-4 max-w-2xl" style="display:none" data-phase="fall">
-          Three discrete steps in defined order. Each step has a named action and a named output. The sequence runs the same way every time.
+        <p class="lede mt-ed-3 reveal" style="display:none" data-phase="fall">
+          Three discrete steps in defined order. Each step has a named action and a named output.
         </p>
-      </div>
-      <div class="grid md:grid-cols-3 gap-8 reveal-stagger">
-        <div class="reveal glow-card p-6" style="--i:0">
-          <div class="w-8 h-8 rounded-full border-2 border-amber-500 flex items-center justify-center mb-4">
-            <span class="text-amber-400 text-xs font-mono font-bold">1</span>
-          </div>
-          <h3 class="text-neutral-100 font-medium mb-2">You tell me what's going on</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed">Use the form, send an email, call me. I don't need a brief. I need the version you'd tell a friend, not the one you'd put in a board presentation.</p>
-        </div>
-        <div class="reveal glow-card p-6" style="--i:1">
-          <div class="w-8 h-8 rounded-full border-2 border-amber-500/60 flex items-center justify-center mb-4">
-            <span class="text-amber-400/60 text-xs font-mono font-bold">2</span>
-          </div>
-          <h3 class="text-neutral-100 font-medium mb-2">We have a conversation</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed">I reply within one business day. Usually faster. We'll talk through what you're dealing with and whether any of my services actually fit. If they don't, I'll say so.</p>
-        </div>
-        <div class="reveal glow-card p-6" style="--i:2">
-          <div class="w-8 h-8 rounded-full border-2 border-amber-500/30 flex items-center justify-center mb-4">
-            <span class="text-amber-400/30 text-xs font-mono font-bold">3</span>
-          </div>
-          <h3 class="text-neutral-100 font-medium mb-2">You get a clear next step</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed">If it's a fit, you get a proposal. Scope, price, timeline. If it's not, I tell you that and point you somewhere better. Nobody's time gets wasted pretending.</p>
-        </div>
+        <ol class="service-ol mt-ed-5 reveal-stagger">
+          <li class="reveal" style="--i:0">
+            <div class="grid gap-ed-2 py-ed-4" style="grid-template-columns: 4.5rem 1fr">
+              <span class="service-ol__num" style="grid-column:1">01</span>
+              <div style="grid-column:2">
+                <h3 class="font-display text-2xl text-neutral-100">You tell me what's going on.</h3>
+                <p class="body-news mt-ed-2">Use the form, send an email, call me. I don't need a brief. I need the real version.</p>
+              </div>
+            </div>
+          </li>
+          <li class="reveal" style="--i:1">
+            <div class="grid gap-ed-2 py-ed-4" style="grid-template-columns: 4.5rem 1fr">
+              <span class="service-ol__num" style="grid-column:1">02</span>
+              <div style="grid-column:2">
+                <h3 class="font-display text-2xl text-neutral-100">We have a conversation.</h3>
+                <p class="body-news mt-ed-2">I reply within one business day. Usually faster. We talk through whether any of my services actually fit.</p>
+              </div>
+            </div>
+          </li>
+          <li class="reveal" style="--i:2">
+            <div class="grid gap-ed-2 py-ed-4" style="grid-template-columns: 4.5rem 1fr">
+              <span class="service-ol__num" style="grid-column:1">03</span>
+              <div style="grid-column:2">
+                <h3 class="font-display text-2xl text-neutral-100">You get a clear next step.</h3>
+                <p class="body-news mt-ed-2">If it's a fit, you get a proposal. If it isn't, I tell you and point you somewhere better.</p>
+              </div>
+            </div>
+          </li>
+        </ol>
       </div>
     </div>
   </section>
@@ -251,7 +275,7 @@ import Base from '../layouts/Base.astro';
 
       const defaults = {
         'web-management': 'Hosting, security, updates',
-        'marketing-strategy': 'SEO, content, competitive',
+        'strategy-consulting': 'Visibility, positioning, decisions',
         'implementation': 'Integrations, page builds',
         'training': 'WordPress, SEO, AI workflows',
         'not-sure': 'That\'s fine. Tell me what\'s happening and we\'ll figure it out.',
@@ -260,12 +284,12 @@ import Base from '../layouts/Base.astro';
       // When ONE service is checked, companion cards transform their subtitle
       const whispers = {
         'web-management': {
-          'marketing-strategy': { text: 'Most clients add this next \u2192', icon: '\u2728' },
+          'strategy-consulting': { text: 'Pairs with the monthly report', icon: '\u2728' },
           'implementation': { text: 'Pairs naturally with this', icon: '\u{1F517}' },
         },
-        'marketing-strategy': {
-          'web-management': { text: 'Strategy needs a stable foundation', icon: '\u{1F3D7}\uFE0F' },
-          'implementation': { text: 'You\'ll need pages built for this', icon: '\u{1F4C4}' },
+        'strategy-consulting': {
+          'web-management': { text: 'Advice needs a stable site', icon: '\u{1F3D7}\uFE0F' },
+          'implementation': { text: 'Some decisions become builds', icon: '\u{1F4C4}' },
         },
         'implementation': {
           'web-management': { text: 'Someone should watch it after', icon: '\u{1F441}\uFE0F' },
@@ -273,17 +297,17 @@ import Base from '../layouts/Base.astro';
         },
         'training': {
           'web-management': { text: 'Easier on a well-managed site', icon: '\u2699\uFE0F' },
-          'marketing-strategy': { text: 'Know the direction first', icon: '\u{1F9ED}' },
+          'strategy-consulting': { text: 'Know the direction first', icon: '\u{1F9ED}' },
         },
       };
 
       // 2+ selected: the checked cards celebrate
       const combos = {
-        'web-management+marketing-strategy': 'Most popular combo.',
+        'strategy-consulting+web-management': 'Strong monthly shape.',
         'web-management+implementation': 'Strong pairing.',
         'web-management+training': 'Good instinct.',
-        'marketing-strategy+implementation': 'Natural sequence.',
-        'marketing-strategy+training': 'Builds real independence.',
+        'implementation+strategy-consulting': 'Natural sequence.',
+        'strategy-consulting+training': 'Builds real independence.',
         'implementation+training': 'Build it, then own it.',
       };
 
@@ -502,7 +526,8 @@ import Base from '../layouts/Base.astro';
       if (!grid) return;
 
       interests.forEach(value => {
-        const input = grid.querySelector(`input[value="${value}"]`) as HTMLInputElement;
+        const normalized = value === 'marketing-strategy' ? 'strategy-consulting' : value;
+        const input = grid.querySelector(`input[value="${normalized}"]`) as HTMLInputElement;
         if (input) input.checked = true;
       });
 

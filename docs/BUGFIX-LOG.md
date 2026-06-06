@@ -8,6 +8,18 @@ When working on the portal, **check this file before guessing at any auth, redir
 
 ---
 
+## 2026-06-05 — `npm run build` fails on a fresh DB: "table client_metadata has no column named billing_cc_email"
+
+**Symptom.** `npm run build` fails against a fresh/empty database (e.g. a new contributor's local build, or CI on a clean DB) with `LibsqlError: SQLITE_ERROR: table client_metadata has no column named billing_cc_email`, thrown from `runMigrations`. Existing databases (prod, an already-migrated dev2.db) build fine — only a from-scratch DB breaks. The failing migration logged just before the error is `025-seed-cody-test`.
+
+**Root cause.** Two things combined. (1) Migrations run inside `src/middleware.ts` (`await runMigrations()` on every request), and `astro build` prerenders the public marketing/blog/OG pages — so the migration chain executes at build time against whatever DB `.env` points at. On a fresh DB it runs the whole chain 001→069 in order. (2) `025-seed-cody-test` imported the LIVE `upsertClientMetadata` helper from `src/lib/agreements.ts`. That helper INSERTs the *current* full column set (`CLIENT_METADATA_COLS`), which gained `billing_cc_email` in migration **067** (PR #293). On a fresh DB, 025 runs long before 067 exists, so the seed INSERT references a column that isn't there yet and the chain dies. Existing DBs never hit it because 025 was already in `_migrations` and never re-runs — the bug is invisible until someone builds from zero.
+
+**Fix.** Made 025 a self-contained snapshot: dropped the `../agreements` import and inlined an idempotent `INSERT ... ON CONFLICT(client_id) DO UPDATE` using only the columns that existed at migration 019 (when `client_metadata` was created). Added a regression guard, `tests/run-migration-imports-lint.mjs` (wired into `npm test`), that fails if any migration imports outside a tiny verified-safe allowlist — so importing a schema-bearing data helper into a migration can never silently ship again. Verified by replaying the full chain on a throwaway fresh DB: `npm run build` now exits 0 with all 69 migrations applied.
+
+**Watch for.** If a fresh-DB build dies in `runMigrations` with "no such column" / "no column named X", the culprit is almost always a SEED or BACKFILL migration that imports app code whose column list drifted, OR a seed that hardcodes a column added by a later migration. Migrations are immutable snapshots: never import `agreements`/`invoices`/`clients`/`billing` or any helper whose SQL evolves — inline the columns valid at that migration's position. The import lint catches the import-based form; the behavioral form (hardcoded later column) is caught by actually building against a fresh DB. Note also that `astro build` exercises migrations via prerender, so a migration bug surfaces as a *build* failure, not just a runtime one.
+
+---
+
 ## 2026-05-25 — CSV folder uploads return HTTP 524 even though data lands in DB
 
 **Symptom.** Uploading a full Screaming Frog export folder (~150 CSVs) at `/portal/admin/csv` returns HTTP 524 on every file in most batches. The 524 response body is a Cloudflare gateway-timeout HTML page. Looking at "Recent uploads" on the same page shows many of the failed-batch files actually did land in the DB. The client UI displays the CF HTML as raw text for each file ("HTTP 524: <!DOCTYPE html>..."), making it look like total failure.

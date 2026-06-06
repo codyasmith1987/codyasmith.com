@@ -16,7 +16,6 @@
 import turso from '../turso';
 import { nanoid } from 'nanoid';
 import type { Migration } from '../migrate';
-import { upsertClientMetadata } from '../agreements';
 
 const CLIENT_SLUG = 'cody-test';
 const CLIENT_NAME = 'Cody Test';
@@ -61,17 +60,46 @@ const migration: Migration = {
     // real values for legal entity, contact, etc., instead of the
     // [to be confirmed] placeholders. Mirrors what the admin wizard
     // will capture for real proposals.
-    await upsertClientMetadata({
-      client_id: clientId,
-      legal_entity_name: 'Cody Test LLC',
-      entity_type: 'limited liability company',
-      state_of_organization: 'Utah',
-      principal_address: '604 Morningside Circle, Cedar City, UT 84720',
-      notice_address: '604 Morningside Circle, Cedar City, UT 84720',
-      primary_contact_name: SIGNER_NAME,
-      primary_contact_title: 'Member',
-      primary_contact_email: SIGNER_EMAIL,
-      primary_contact_phone: '435-868-7133',
+    //
+    // Inlined deliberately (NOT via upsertClientMetadata): a migration must
+    // be an immutable snapshot and may only ever touch the client_metadata
+    // columns that existed when it was written (migration 019). The live
+    // upsertClientMetadata helper's column list grows over time (it gained
+    // billing_cc_email in migration 067); importing it made a FRESH-DB
+    // replay of 025 fail with "table client_metadata has no column named
+    // billing_cc_email", because 025 runs long before 067 adds that column.
+    // Existing DBs were unaffected (025 already applied), so only fresh
+    // builds broke. See docs/BUGFIX-LOG.md.
+    await turso.execute({
+      sql: `INSERT INTO client_metadata (
+              client_id, legal_entity_name, entity_type, state_of_organization,
+              principal_address, notice_address, primary_contact_name,
+              primary_contact_title, primary_contact_email, primary_contact_phone
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(client_id) DO UPDATE SET
+              legal_entity_name = COALESCE(excluded.legal_entity_name, client_metadata.legal_entity_name),
+              entity_type = COALESCE(excluded.entity_type, client_metadata.entity_type),
+              state_of_organization = COALESCE(excluded.state_of_organization, client_metadata.state_of_organization),
+              principal_address = COALESCE(excluded.principal_address, client_metadata.principal_address),
+              notice_address = COALESCE(excluded.notice_address, client_metadata.notice_address),
+              primary_contact_name = COALESCE(excluded.primary_contact_name, client_metadata.primary_contact_name),
+              primary_contact_title = COALESCE(excluded.primary_contact_title, client_metadata.primary_contact_title),
+              primary_contact_email = COALESCE(excluded.primary_contact_email, client_metadata.primary_contact_email),
+              primary_contact_phone = COALESCE(excluded.primary_contact_phone, client_metadata.primary_contact_phone),
+              updated_at = datetime('now')`,
+      args: [
+        clientId,
+        'Cody Test LLC',
+        'limited liability company',
+        'Utah',
+        '604 Morningside Circle, Cedar City, UT 84720',
+        '604 Morningside Circle, Cedar City, UT 84720',
+        SIGNER_NAME,
+        'Member',
+        SIGNER_EMAIL,
+        '435-868-7133',
+      ],
     });
 
     // No proposal is seeded. The cody-test proposal is created via

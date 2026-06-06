@@ -67,8 +67,16 @@ const statusLabels: Record<string, string> = {
         <div>
           <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" title="draft: not yet sent | sent: emailed to client, awaiting payment | paid: full balance received | partial: payment received but balance remains | overdue: past due date, not paid | cancelled: voided, no payment expected">Status</label>
           <select id="f-status" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
-            {['draft', 'sent', 'paid', 'partial', 'overdue', 'cancelled'].map(s => (
-              <option value={s} selected={s === invoice.status}>{s}</option>
+            {/* Always include the invoice's own status as an option so a terminal
+                status (carried_forward) renders + selects correctly; otherwise the
+                browser would show the first option (draft) and a plain Save would
+                silently flip it. carried_forward is shown disabled (terminal); the
+                PUT endpoint also guards against moving out of a terminal status. */}
+            {(['draft', 'sent', 'paid', 'partial', 'overdue', 'cancelled'].includes(invoice.status)
+              ? ['draft', 'sent', 'paid', 'partial', 'overdue', 'cancelled']
+              : [invoice.status, 'draft', 'sent', 'paid', 'partial', 'overdue', 'cancelled']
+            ).map(s => (
+              <option value={s} selected={s === invoice.status} disabled={s === 'carried_forward'}>{s === 'carried_forward' ? 'carried forward' : s}</option>
             ))}
           </select>
           <details class="mt-2 group">

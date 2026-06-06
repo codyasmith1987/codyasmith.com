@@ -166,30 +166,39 @@ export async function getContractHoursForPeriod(contractId: string, periodStart:
 export async function updateOverageCharge(contractId: string, periodStart: string, periodEnd: string): Promise<void> {
   const hours = await getContractHoursForPeriod(contractId, periodStart, periodEnd);
 
-  // Find existing overage pending charge for this period
+  // Match the existing overage charge for this period by a STRUCTURED period key
+  // in source_id ("overage:start:end"), not a fragile description substring
+  // (whole-system audit 2026-06-05: the old `description LIKE '%date%'` would
+  // break if the description format changed or a date appeared coincidentally).
+  // Also match the legacy "start to end" description form so a pre-existing row
+  // (source_id NULL, created before this change) is FOUND and HEALED below rather
+  // than duplicated.
+  const periodKey = `overage:${periodStart}:${periodEnd}`;
   const existing = await queryOne(
-    "SELECT id, amount FROM pending_charges WHERE contract_id = ? AND source_type = 'overage' AND billed_invoice_id IS NULL AND description LIKE ?",
-    [contractId, `%${periodStart}%`]
+    `SELECT id FROM pending_charges WHERE contract_id = ? AND source_type = 'overage' AND billed_invoice_id IS NULL
+       AND (source_id = ? OR (source_id IS NULL AND description LIKE ?))`,
+    [contractId, periodKey, `%${periodStart} to ${periodEnd}%`]
   );
+  const description = `Overage: ${hours.overage.toFixed(1)}h over ${hours.included}h included (${periodStart} to ${periodEnd})`;
 
   if (hours.overageAmount > 0) {
     if (existing) {
-      // Update existing charge
+      // Update + heal source_id (a legacy row gains the structured key).
       await turso.execute({
-        sql: 'UPDATE pending_charges SET amount = ?, description = ? WHERE id = ?',
-        args: [hours.overageAmount, `Overage: ${hours.overage.toFixed(1)}h over ${hours.included}h included (${periodStart} to ${periodEnd})`, existing.id],
+        sql: 'UPDATE pending_charges SET amount = ?, description = ?, source_id = ? WHERE id = ?',
+        args: [hours.overageAmount, description, periodKey, existing.id],
       });
     } else {
-      // Create new charge
       await createPendingCharge({
         contract_id: contractId,
-        description: `Overage: ${hours.overage.toFixed(1)}h over ${hours.included}h included (${periodStart} to ${periodEnd})`,
+        description,
         amount: hours.overageAmount,
         source_type: 'overage',
+        source_id: periodKey,
       });
     }
   } else if (existing) {
-    // No overage — remove the pending charge
+    // No overage — remove the pending charge.
     await turso.execute({ sql: 'DELETE FROM pending_charges WHERE id = ?', args: [existing.id] });
   }
 }

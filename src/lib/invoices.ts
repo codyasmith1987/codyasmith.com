@@ -324,10 +324,6 @@ export function splitSubtotals(
   return { services, reimbursements, pastDue, total: services + reimbursements + pastDue };
 }
 
-export async function getInvoiceSubtotals(invoiceId: string): Promise<{ services: number; reimbursements: number; pastDue: number; total: number }> {
-  return splitSubtotals(await getInvoiceItems(invoiceId));
-}
-
 // --- Duplicate ---
 // Pure. Advance a 'YYYY-MM-DD' date by n months, clamping the day to the target
 // month length (e.g. Jan 31 plus 1 month becomes Feb 28). Used to roll a

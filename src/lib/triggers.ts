@@ -137,8 +137,9 @@ export async function onAutomatedFailure(context: string, detail: string): Promi
 // names interest + the suspension consequence). The cron tells the CLIENT; this
 // surfaces the highest-stakes dunning step to the OWNER too. Informational (not
 // a failure). Best-effort; never throws into the caller. The caller fires this
-// only in the FIRST final week (maxDaysPast < 37) so the weekly cadence does not
-// re-alert -- no stored marker needed.
+// on every 'final' send; THIS function dedups via notification existence (one
+// alert per client per ~25 days), so the weekly cadence does not re-alert and a
+// cron gap can never miss the first alert. No stored marker / migration needed.
 // ============================================================
 export async function onDunningEscalation(clientId: string, clientName: string, balanceStr: string, daysPast: number): Promise<void> {
   // Dedup via notification existence (no stored marker / no migration, and
@@ -373,6 +374,12 @@ export async function onPaymentRecorded(invoiceId: string, amount: number): Prom
   try {
     const invoice = await getInvoice(invoiceId);
     if (!invoice) return;
+    // A payment recorded against a terminal invoice (carried_forward / cancelled)
+    // does not fire a client receipt or notification: the balance lives on the
+    // invoice it rolled into, so a "paid in full" receipt here would be wrong
+    // (whole-system audit 2026-06-05). The payment still records on the invoice;
+    // it just does not generate client-facing comms.
+    if (invoice.status === 'carried_forward' || invoice.status === 'cancelled') return;
 
     // Email the client a receipt (financial notice -> carries the accountant CC
     // per the recipient model). Soft-fails so it never breaks payment recording,

@@ -85,6 +85,19 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
       }
     }
 
+    // Terminal-status guard (whole-system audit 2026-06-05): never let an admin
+    // save move an invoice OUT of a terminal status (carried_forward/cancelled).
+    // A carried_forward invoice's balance lives on the invoice it rolled into;
+    // resurrecting it to draft/sent would double-count that balance. A plain Save
+    // (status unchanged) and non-status edits still go through; only an actual
+    // status CHANGE away from terminal is rejected.
+    if (body.status !== undefined) {
+      const current = await getInvoice(params.id!);
+      if (current && (current.status === 'carried_forward' || current.status === 'cancelled') && body.status !== current.status) {
+        return json({ error: `This invoice is ${String(current.status).replace('_', ' ')} (a closed/terminal state) and its status cannot be changed here.` }, 409);
+      }
+    }
+
     // Standard invoice field updates
     await updateInvoice(params.id!, {
       ...(body.status !== undefined && { status: body.status }),

@@ -53,7 +53,13 @@ async function queryAll(sql: string, args: any[] = []): Promise<any[]> {
 // (every collection query whitelists sent/partial/overdue), but it stays
 // client-visible so the client sees it was carried forward (with a note linking
 // the new invoice).
-export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'partial' | 'overdue' | 'cancelled' | 'carried_forward';
+// payment_pending (2026-06-09): an intermediary state between an open invoice and
+// 'paid' for "the check is in the mail" — payment promised/in transit but not yet
+// received. It counts toward the open balance (money still owed) but is NEVER
+// treated as overdue, is excluded from all reminder/overdue dunning, and fires no
+// client email when set. Recording the actual payment later flips it to
+// paid/partial (and only THEN does the receipt send). Not a terminal status.
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'partial' | 'overdue' | 'payment_pending' | 'cancelled' | 'carried_forward';
 
 export interface Invoice {
   id: string;
@@ -190,7 +196,7 @@ export async function getAwaitingAtSigningInvoices(): Promise<Array<{
        FROM invoices i JOIN clients c ON c.id = i.client_id
       WHERE i.billing_period_start IS NULL
         AND i.amount_paid < i.total
-        AND i.status IN ('sent','partial','overdue')
+        AND i.status IN ('sent','partial','overdue','payment_pending')
       ORDER BY i.issued_date ASC, i.created_at ASC`
   );
 }
@@ -222,7 +228,7 @@ export async function getClientOpenBalance(clientId: string): Promise<{ open: nu
        COALESCE(MAX(CASE WHEN due_date IS NOT NULL AND (status = 'overdue' OR (status IN ('sent','partial') AND due_date < date('now'))) THEN CAST(julianday('now') - julianday(due_date) AS INTEGER) ELSE 0 END), 0) AS oldest_days_past,
        COUNT(*) AS count
      FROM invoices
-     WHERE client_id = ? AND status IN ('sent','partial','overdue') AND amount_paid < total`,
+     WHERE client_id = ? AND status IN ('sent','partial','overdue','payment_pending') AND amount_paid < total`,
     [clientId]);
   return { open: row?.open ?? 0, overdue: row?.overdue ?? 0, count: row?.count ?? 0, oldestDaysPast: row?.oldest_days_past ?? 0 };
 }
@@ -239,7 +245,7 @@ export async function getAllClientsOpenBalance(): Promise<Array<{ client_id: str
        COALESCE(MAX(CASE WHEN due_date IS NOT NULL AND (status = 'overdue' OR (status IN ('sent','partial') AND due_date < date('now'))) THEN CAST(julianday('now') - julianday(due_date) AS INTEGER) ELSE 0 END), 0) AS oldest_days_past,
        COUNT(*) AS count
      FROM invoices
-     WHERE status IN ('sent','partial','overdue') AND amount_paid < total
+     WHERE status IN ('sent','partial','overdue','payment_pending') AND amount_paid < total
      GROUP BY client_id
      HAVING SUM(total - amount_paid) > 0`,
   );
@@ -284,7 +290,7 @@ export async function updateInvoice(id: string, data: Partial<Pick<Invoice,
   // the caller is explicitly setting it (so a deliberate hide still wins). Covers
   // admin status edits + recordPayment's flip to 'partial'; markOverdueInvoices
   // sets it in its own raw UPDATE.
-  if (data.status && ['sent', 'partial', 'overdue'].includes(data.status) && data.client_visible === undefined) {
+  if (data.status && ['sent', 'partial', 'overdue', 'payment_pending'].includes(data.status) && data.client_visible === undefined) {
     data = { ...data, client_visible: 1 };
   }
   const update = buildSafeUpdate('invoices', id, data);

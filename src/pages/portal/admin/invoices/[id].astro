@@ -22,10 +22,12 @@ const statusColors: Record<string, string> = {
   paid: 'bg-emerald-500/10 text-emerald-400',
   partial: 'bg-amber-500/10 text-amber-600',
   overdue: 'bg-red-500/10 text-red-400',
+  payment_pending: 'bg-violet-500/10 text-violet-400',
   cancelled: 'bg-red-500/10 text-red-400',
   carried_forward: 'bg-neutral-700/30 text-neutral-500',
 };
 const statusLabels: Record<string, string> = {
+  payment_pending: 'Payment pending',
   carried_forward: 'Carried forward',
 };
 ---
@@ -65,18 +67,18 @@ const statusLabels: Record<string, string> = {
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-4 gap-5">
         <div>
-          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" title="draft: not yet sent | sent: emailed to client, awaiting payment | paid: full balance received | partial: payment received but balance remains | overdue: past due date, not paid | cancelled: voided, no payment expected">Status</label>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" title="draft: not yet sent | sent: emailed to client, awaiting payment | paid: full balance received | partial: payment received but balance remains | overdue: past due date, not paid | payment pending: payment promised/in transit (e.g. check mailed), no reminders and no receipt until you record it | cancelled: voided, no payment expected">Status</label>
           <select id="f-status" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
             {/* Always include the invoice's own status as an option so a terminal
                 status (carried_forward) renders + selects correctly; otherwise the
                 browser would show the first option (draft) and a plain Save would
                 silently flip it. carried_forward is shown disabled (terminal); the
                 PUT endpoint also guards against moving out of a terminal status. */}
-            {(['draft', 'sent', 'paid', 'partial', 'overdue', 'cancelled'].includes(invoice.status)
-              ? ['draft', 'sent', 'paid', 'partial', 'overdue', 'cancelled']
-              : [invoice.status, 'draft', 'sent', 'paid', 'partial', 'overdue', 'cancelled']
+            {(['draft', 'sent', 'paid', 'partial', 'overdue', 'payment_pending', 'cancelled'].includes(invoice.status)
+              ? ['draft', 'sent', 'paid', 'partial', 'overdue', 'payment_pending', 'cancelled']
+              : [invoice.status, 'draft', 'sent', 'paid', 'partial', 'overdue', 'payment_pending', 'cancelled']
             ).map(s => (
-              <option value={s} selected={s === invoice.status} disabled={s === 'carried_forward'}>{s === 'carried_forward' ? 'carried forward' : s}</option>
+              <option value={s} selected={s === invoice.status} disabled={s === 'carried_forward'}>{s === 'carried_forward' ? 'carried forward' : s === 'payment_pending' ? 'payment pending' : s}</option>
             ))}
           </select>
           <details class="mt-2 group">
@@ -87,6 +89,7 @@ const statusLabels: Record<string, string> = {
               <p><strong class="text-neutral-200">paid:</strong> Full balance received.</p>
               <p><strong class="text-neutral-200">partial:</strong> Some payment received, balance remains.</p>
               <p><strong class="text-neutral-200">overdue:</strong> Past due date, no payment received.</p>
+              <p><strong class="text-neutral-200">payment pending:</strong> Payment promised or in transit (e.g. a check is in the mail). Still counts as owed, but gets no reminders and sends no receipt until you record the payment.</p>
               <p><strong class="text-neutral-200">cancelled:</strong> Voided. No payment expected.</p>
             </div>
           </details>

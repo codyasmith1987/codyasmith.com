@@ -74,13 +74,20 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
       return json({ error: 'Invoice number cannot be empty' }, 400);
     }
 
-    // Validate the per-invoice extra recipient (dual audit 2026-06-05): without
-    // this a typo'd address is saved silently and then dropped at send time, so
-    // that person never gets the invoice. Mirror billing-contacts.ts: a non-empty
-    // value must be a plain email; empty clears.
+    // Validate the per-invoice extra recipient (dual audit 2026-06-05): a typo'd
+    // address saved silently is dropped at send time, so that person never gets
+    // the invoice. A non-empty value must be a plain email; empty clears.
+    //
+    // BUT only validate a value the admin is actually CHANGING (2026-06-09). The
+    // Save button re-submits this field on every save, so a legacy/bad value left
+    // in the field would otherwise 400 an unrelated save (e.g. just marking the
+    // invoice paid) and brick the invoice. The send path already drops invalid
+    // CCs (email.ts), so the sole purpose of this check is to warn the admin when
+    // they ENTER a new bad address; an unchanged value (or clearing it) passes.
     if (body.extra_recipient_email !== undefined) {
       const v = String(body.extra_recipient_email).trim();
-      if (v && !isValidEmail(v)) {
+      const prev = String(invoice.extra_recipient_email || '').trim();
+      if (v && v !== prev && !isValidEmail(v)) {
         return json({ error: 'Extra recipient is not a valid email address (use a plain address like name@example.com)' }, 400);
       }
     }

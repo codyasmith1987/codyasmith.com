@@ -98,6 +98,16 @@ export async function sendInvoiceEmail(invoiceId: string): Promise<SendInvoiceRe
   const invoice = await getInvoice(invoiceId);
   if (!invoice) return { ok: false, to: [], cc: [], reason: 'not_found' };
 
+  // Never email a $0 / itemless invoice (overhaul design Slice 5: Send must refuse
+  // an empty invoice). A manually created invoice starts with no line items, so a
+  // total of 0 means the admin has not added charges yet; sending would drop
+  // "$0.00 due" in the client's inbox (the real INV-2026-0005 incident, 2026-06-09).
+  // Recurring/roll-forward invoices always carry a positive total, so this only
+  // catches the empty-shell mistake.
+  if (!(invoice.total > 0)) {
+    return { ok: false, to: [], cc: [], reason: 'empty_invoice' };
+  }
+
   const meta = await getClientMetadata(invoice.client_id).catch(() => null);
   const users = await getUsersByClientId(invoice.client_id);
   const clients = await getAllClients();

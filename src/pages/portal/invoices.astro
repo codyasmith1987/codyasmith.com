@@ -13,7 +13,7 @@ const invoices = await getClientVisibleInvoices(user.client_id);
 // overdue invoice; overdue = the portion already past due (status flagged
 // overdue, or still awaiting/partial with a due date in the past).
 const todayStr = new Date().toISOString().slice(0, 10);
-const isOpen = (s: string) => s === 'sent' || s === 'partial' || s === 'overdue';
+const isOpen = (s: string) => s === 'sent' || s === 'partial' || s === 'overdue' || s === 'payment_pending';
 const remainder = (inv: typeof invoices[number]) => Math.max(0, inv.total - inv.amount_paid);
 const openBalance = invoices
   .filter(inv => isOpen(inv.status) && inv.amount_paid < inv.total)
@@ -56,6 +56,7 @@ const statusLabels: Record<string, string> = {
   paid: 'Paid',
   partial: 'Partially paid',
   overdue: 'Overdue',
+  payment_pending: 'Payment pending',
   cancelled: 'Cancelled',
   carried_forward: 'Carried forward',
 };
@@ -66,6 +67,7 @@ const statusColors: Record<string, string> = {
   paid: 'bg-emerald-500/10 text-emerald-400',
   partial: 'bg-amber-500/10 text-amber-600',
   overdue: 'bg-red-500/10 text-red-400',
+  payment_pending: 'bg-violet-500/10 text-violet-400',
   cancelled: 'bg-neutral-700/30 text-neutral-500',
   carried_forward: 'bg-neutral-700/30 text-neutral-500',
 };

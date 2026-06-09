@@ -47,7 +47,10 @@ const statusLabels: Record<string, string> = {
         <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[invoice.status] || ''}`}>{statusLabels[invoice.status] || invoice.status}</span>
         {invoice.last_reminder_sent && <span class="text-[10px] text-neutral-400">Reminder sent {invoice.last_reminder_sent.split('T')[0]}</span>}
         <button id="send-invoice" class="text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-colors">Send to client</button>
+        <button id="send-reminder" class="text-xs text-amber-600 hover:text-amber-500 transition-colors">Send reminder</button>
+        <button id="send-overdue" class="text-xs text-red-400 hover:text-red-300 transition-colors">Send overdue notice</button>
         <button id="duplicate-invoice" class="text-xs text-amber-600 hover:text-amber-600 transition-colors">Duplicate</button>
+        <a href={`/portal/api/admin/invoices/${id}/email-preview`} target="_blank" rel="noopener" class="text-xs text-amber-600 hover:text-amber-600 transition-colors">Preview email</a>
         <a href={`/portal/api/admin/invoices/${id}/pdf`} class="text-xs text-amber-600 hover:text-amber-600 transition-colors">Download PDF</a>
         <button id="delete-invoice" class="text-xs text-neutral-400 hover:text-red-400 transition-colors">Delete</button>
       </div>
@@ -372,6 +375,44 @@ const statusLabels: Record<string, string> = {
         }
       });
     });
+
+    // Send a per-invoice reminder or overdue notice. Explicit admin action, so it
+    // is allowed even for hand-billed (manual_billing) clients. Shows the resolved
+    // recipients in the confirm first, like "Send to client".
+    async function sendNotice(variant, btn, label) {
+      let primary = '', cc = '';
+      try {
+        const r = await fetch(`/portal/api/admin/clients/billing-contacts?client=${encodeURIComponent(clientId)}`);
+        if (r.ok) { const d = await r.json(); primary = d.primary_contact_email || ''; cc = d.billing_cc_email || ''; }
+      } catch {}
+      const extra = document.getElementById('f-extra').value.trim();
+      const ccList = [cc, extra].filter(Boolean);
+      const toLine = primary || "(the client's portal login, since no primary contact is set)";
+      const ccLine = ccList.length ? `\nCC: ${ccList.join(', ')}` : '';
+      const confirmed = await window.__confirm({
+        title: label,
+        message: `This emails a ${label.toLowerCase()} to the client now.\n\nTo: ${toLine}${ccLine}\n\nTip: use "Preview email" first to see exactly what they get.`,
+        confirmLabel: label,
+      });
+      if (!confirmed) return;
+      await window.__withButtonLoading(btn, 'Sending…', async () => {
+        const res = await fetch(`/portal/api/admin/invoices/${invoiceId}/reminder`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ variant }),
+        });
+        if (res.ok) {
+          const d = await res.json();
+          const ccPart = d.cc && d.cc.length ? ` (cc ${d.cc.join(', ')})` : '';
+          window.__toast(`Sent to ${d.to.join(', ')}${ccPart}.`, 'success');
+          setTimeout(() => location.reload(), 900);
+        } else {
+          const d = await res.json().catch(() => ({}));
+          window.__toast(d.error || 'Failed to send.', 'error');
+        }
+      });
+    }
+    document.getElementById('send-reminder')?.addEventListener('click', (e) => sendNotice('reminder', e.currentTarget, 'Send reminder'));
+    document.getElementById('send-overdue')?.addEventListener('click', (e) => sendNotice('overdue', e.currentTarget, 'Send overdue notice'));
 
     // Duplicate invoice -> new draft, then open it
     document.getElementById('duplicate-invoice')?.addEventListener('click', async (e) => {

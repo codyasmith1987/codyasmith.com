@@ -13,7 +13,7 @@ const ROOT = new URL('../', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, 
 
 // Files/globs to scan: portal pages + client-facing copy modules.
 const SCAN_DIRS = ['src/pages/portal', 'src/contracts/templates'];
-const SCAN_FILES = ['src/lib/contract-emails.ts', 'src/lib/triggers.ts', 'src/lib/billing.ts', 'src/lib/invoice-emails.ts', 'src/lib/pdf.ts'];
+const SCAN_FILES = ['src/lib/contract-emails.ts', 'src/lib/triggers.ts', 'src/lib/billing.ts', 'src/lib/invoice-emails.ts', 'src/lib/invoice-email-templates.ts', 'src/lib/pdf.ts'];
 
 // Admin tooling (/portal/admin/**) is internal-facing (Cody's own UI), not
 // client copy; the rule targets what the client sees. Skip it.

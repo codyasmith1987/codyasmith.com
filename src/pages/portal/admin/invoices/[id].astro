@@ -139,7 +139,10 @@ const statusLabels: Record<string, string> = {
     <div class="mb-8">
       <div class="flex items-center justify-between mb-4">
         <p class="text-[10px] font-mono text-neutral-500 tracking-[0.15em] uppercase">Line items</p>
-        <button id="show-add-item" class="text-xs text-amber-600 hover:text-amber-600 transition-colors">+ Add item</button>
+        <div class="flex items-center gap-4">
+          {items.length === 0 && invoice.contract_id && <button id="build-from-contract" class="text-xs text-emerald-400 hover:text-emerald-300 transition-colors">Build from contract</button>}
+          <button id="show-add-item" class="text-xs text-amber-600 hover:text-amber-600 transition-colors">+ Add item</button>
+        </div>
       </div>
 
       <form id="add-item-form" class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 mb-4 hidden">
@@ -244,7 +247,7 @@ const statusLabels: Record<string, string> = {
           </table>
         </div>
       ) : (
-        <p class="text-sm text-neutral-400 py-4">No line items. Add items to calculate the invoice total.</p>
+        <p class="text-sm text-neutral-400 py-4">No line items yet. Use <span class="text-emerald-400">Build from contract</span> to pull the service lines from the signed Schedule A, or <span class="text-amber-600">+ Add item</span> to enter them by hand. An invoice with no charges cannot be sent.</p>
       )}
     </div>
 
@@ -433,6 +436,25 @@ const statusLabels: Record<string, string> = {
     const itemForm = document.getElementById('add-item-form');
     document.getElementById('show-add-item')?.addEventListener('click', () => itemForm.classList.remove('hidden'));
     document.getElementById('cancel-add-item')?.addEventListener('click', () => itemForm.classList.add('hidden'));
+
+    // Build line items from the contract's signed Schedule A (fills an empty
+    // invoice with its real service lines instead of leaving a $0 shell).
+    document.getElementById('build-from-contract')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      await window.__withButtonLoading(btn, 'Building…', async () => {
+        const res = await fetch(`/portal/api/admin/invoices/${invoiceId}/build-lines`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        });
+        if (res.ok) {
+          const d = await res.json();
+          window.__toast(`Added ${d.count} line item${d.count === 1 ? '' : 's'} from the contract. Totals recalculated.`, 'success');
+          setTimeout(() => location.reload(), 700);
+        } else {
+          const d = await res.json().catch(() => ({}));
+          window.__toast(d.error || 'Failed to build line items.', 'error');
+        }
+      });
+    });
 
     itemForm?.addEventListener('submit', async (e) => {
       e.preventDefault();

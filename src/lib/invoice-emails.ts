@@ -64,7 +64,7 @@ import { sendEmail } from './email';
 import { escapeHtml } from './email-safety';
 import { logger } from './logger';
 import {
-  money, invoiceShell, renderInvoiceEmail, variantForStatus,
+  money, invoiceShell, renderInvoiceEmail, variantForStatus, reminderEligibleStatus,
   type InvoiceEmailVariant, type InvoiceEmailView,
 } from './invoice-email-templates';
 
@@ -209,6 +209,17 @@ export async function sendInvoiceReminderEmail(
   invoiceId: string,
   variant: 'reminder' | 'overdue',
 ): Promise<SendInvoiceResult> {
+  // Status guard (triple audit 2026-06-09): only an OPEN invoice may be dunned.
+  // Without this, "Send overdue notice" on a carried_forward invoice emails a
+  // past-due demand for a balance already rolled onto a newer invoice (the
+  // double-count class the terminal-status guards block everywhere else), and a
+  // paid/cancelled/draft invoice gets an equally wrong demand.
+  const current = await getInvoice(invoiceId);
+  if (!current) return { ok: false, to: [], cc: [], reason: 'not_found' };
+  if (!reminderEligibleStatus(current.status)) {
+    return { ok: false, to: [], cc: [], reason: 'wrong_status' };
+  }
+
   const { result } = await deliverInvoiceEmail(invoiceId, variant);
   if (!result.ok) return result;
   try {

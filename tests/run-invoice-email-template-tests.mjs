@@ -3,7 +3,7 @@
 // No DB / no network -- exercises daysPastDue, the three variants, the amount
 // line, and HTML escaping. Runs via tsx.
 
-import { daysPastDue, renderInvoiceEmail, variantForStatus, money } from '../src/lib/invoice-email-templates.ts';
+import { daysPastDue, renderInvoiceEmail, variantForStatus, reminderEligibleStatus, money } from '../src/lib/invoice-email-templates.ts';
 
 let passed = 0;
 let failed = 0;
@@ -69,10 +69,28 @@ check('partial amount line', titled.html.includes('$1,360.00 total, $1,000.00 no
 const xss = renderInvoiceEmail({ ...base, greet_name: '<script>x</script>' }, 'ready', { portalUrl: 'https://codyasmith.com', now: NOW });
 check('greet escaped', xss.html.includes('&lt;script&gt;') && !xss.html.includes('<script>x'));
 
+// --- subjects are plain-text headers, never HTML-escaped (triple audit 2026-06-09:
+// escapeHtml in a subject ships a literal "&amp;" in the inbox) ---
+const amp = renderInvoiceEmail({ ...base, title: 'Web Management & Marketing' }, 'ready', { portalUrl: 'https://codyasmith.com', now: NOW });
+check('subject keeps & unescaped', amp.subject === 'Your invoice: Web Management & Marketing (INV-2026-0004)');
+check('subject has no entity', !amp.subject.includes('&amp;'));
+const ampOver = renderInvoiceEmail({ ...base, title: 'Web Management & Marketing' }, 'overdue', { portalUrl: 'https://codyasmith.com', now: NOW });
+check('overdue subject keeps & unescaped', ampOver.subject === 'Past due: Web Management & Marketing (INV-2026-0004)');
+
 // --- variantForStatus ---
 check('variantForStatus overdue', variantForStatus('overdue') === 'overdue');
 check('variantForStatus sent', variantForStatus('sent') === 'ready');
 check('variantForStatus payment_pending', variantForStatus('payment_pending') === 'ready');
+
+// --- reminderEligibleStatus: the manual reminder/overdue status guard (triple
+// audit 2026-06-09: dunning a carried_forward invoice demands money already
+// rolled onto a newer invoice; paid/cancelled/draft are equally wrong) ---
+for (const s of ['sent', 'partial', 'overdue', 'payment_pending']) {
+  check(`reminder eligible: ${s}`, reminderEligibleStatus(s) === true);
+}
+for (const s of ['draft', 'paid', 'cancelled', 'carried_forward', '', 'bogus']) {
+  check(`reminder NOT eligible: ${s || '(empty)'}`, reminderEligibleStatus(s) === false);
+}
 
 // --- money ---
 check('money formats', money(1360) === '$1,360.00' && money(0) === '$0.00');

@@ -9,9 +9,10 @@
 // "+ Add item".
 
 import type { APIRoute } from 'astro';
-import { getInvoice, getInvoiceItems, addInvoiceItem, recalculateInvoiceTotals } from '../../../../../../lib/invoices';
+import { getInvoice, getInvoiceItems, addInvoiceItem, recalculateInvoiceTotals, updateInvoice } from '../../../../../../lib/invoices';
 import { getAgreementByContractId } from '../../../../../../lib/agreements';
-import { deriveRecurringLineItems } from '../../../../../../lib/billing';
+import { getContract } from '../../../../../../lib/contracts';
+import { deriveRecurringLineItems, getUpcomingBillingPeriod } from '../../../../../../lib/billing';
 import { logActivity } from '../../../../../../lib/activity';
 import { logger } from '../../../../../../lib/logger';
 
@@ -46,9 +47,21 @@ export const POST: APIRoute = async ({ locals, params }) => {
 
     const agreement = await getAgreementByContractId(invoice.contract_id);
     const scheduleA = agreement && agreement.status === 'executed' ? agreement.schedule_a : null;
+    const contract = await getContract(invoice.contract_id);
+
+    // Period precedence: the invoice's own period if set; else the SAME upcoming
+    // anchored period the nightly engine would bill (generateInvoiceForContract
+    // uses getUpcomingBillingPeriod) so a hand-built invoice and the engine talk
+    // about the same cycle; else the current calendar month as a label of last
+    // resort. The period is STAMPED onto the invoice below -- a NULL period would
+    // slip past invoiceExistsForPeriod's equality dedupe (NULL = 'x' is never
+    // true) and let the engine bill the same service again (triple audit
+    // 2026-06-09).
     const period = (invoice.billing_period_start && invoice.billing_period_end)
       ? { start: invoice.billing_period_start, end: invoice.billing_period_end }
-      : currentMonthPeriod();
+      : (contract?.billing_cadence === 'monthly' && contract.billing_day)
+        ? getUpcomingBillingPeriod(contract.billing_day)
+        : currentMonthPeriod();
 
     const lines = deriveRecurringLineItems(scheduleA, period);
     if (!lines || lines.length === 0) {
@@ -57,11 +70,31 @@ export const POST: APIRoute = async ({ locals, params }) => {
       }, 422);
     }
 
+    // Reconcile-or-halt, same rule as the nightly engine (billing.ts, Cody:
+    // "never send a wrong invoice"): if the Schedule A lines do not sum to the
+    // contract's recurring amount, the schedule has drifted -- refuse rather
+    // than silently build a wrong-total invoice (triple audit 2026-06-09).
+    if (contract?.recurring_amount) {
+      const sum = lines.reduce((s, l) => s + l.unit_price * l.quantity, 0);
+      if (Math.abs(sum - contract.recurring_amount) > 0.01) {
+        return json({
+          error: `The contract's Schedule A lines total $${sum.toFixed(2)}, which does not match the contract's recurring amount of $${Number(contract.recurring_amount).toFixed(2)}. Fix the contract or the agreement before building line items, or add them manually.`,
+        }, 422);
+      }
+    }
+
     let sortOrder = 0;
     for (const l of lines) {
       await addInvoiceItem({ invoice_id: params.id!, sort_order: sortOrder++, ...l });
     }
     await recalculateInvoiceTotals(params.id!);
+
+    // Stamp the itemized period so the nightly engine's per-period dedupe
+    // (invoiceExistsForPeriod) sees this invoice and does not generate a second
+    // one for the same cycle.
+    if (!invoice.billing_period_start || !invoice.billing_period_end) {
+      await updateInvoice(params.id!, { billing_period_start: period.start, billing_period_end: period.end });
+    }
 
     await logActivity({
       clientId: invoice.client_id,

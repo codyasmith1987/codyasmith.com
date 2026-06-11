@@ -78,6 +78,10 @@ export function renderInvoiceEmail(
   let lead: string;
   let subject: string;
 
+  // Subjects are plain-text RFC 5322 headers, NOT HTML: sendEmail CRLF-strips
+  // them, and HTML-escaping here would ship literal "&amp;" in the inbox for a
+  // title like "Web Management & Marketing" (triple audit 2026-06-09). Only the
+  // HTML body uses escapeHtml.
   if (variant === 'overdue') {
     heading = 'Invoice past due';
     const dueClause = dpd > 0 && view.due_date
@@ -85,20 +89,20 @@ export function renderInvoiceEmail(
       : 'is now past due';
     lead = `Hi ${greet}, a quick note that your ${what} (<strong>${amount}</strong>) ${dueClause}. If payment is already on the way, thank you and please disregard. Otherwise we would appreciate settling it at your earliest convenience.`;
     subject = view.title
-      ? `Past due: ${escapeHtml(view.title)} (${escapeHtml(view.invoice_number)})`
-      : `Past due: invoice ${escapeHtml(view.invoice_number)}`;
+      ? `Past due: ${view.title} (${view.invoice_number})`
+      : `Past due: invoice ${view.invoice_number}`;
   } else if (variant === 'reminder') {
     heading = 'A reminder on your invoice';
     lead = `Hi ${greet}, a friendly reminder that your ${what} (<strong>${amount}</strong>) is due ${dueLine}. The same copy is in your portal, and the PDF is attached. Thank you.`;
     subject = view.title
-      ? `Reminder: ${escapeHtml(view.title)} (${escapeHtml(view.invoice_number)})`
-      : `Reminder: invoice ${escapeHtml(view.invoice_number)}`;
+      ? `Reminder: ${view.title} (${view.invoice_number})`
+      : `Reminder: invoice ${view.invoice_number}`;
   } else {
     heading = 'Your invoice is ready';
     lead = `Hi ${greet}, here is your ${what}: <strong>${amount}</strong>, due ${dueLine}. The PDF is attached, and the same copy is in your portal.`;
     subject = view.title
-      ? `Your invoice: ${escapeHtml(view.title)} (${escapeHtml(view.invoice_number)})`
-      : `Your invoice ${escapeHtml(view.invoice_number)} from ${FROM}`;
+      ? `Your invoice: ${view.title} (${view.invoice_number})`
+      : `Your invoice ${view.invoice_number} from ${FROM}`;
   }
 
   const inner = `
@@ -115,4 +119,18 @@ export function renderInvoiceEmail(
 // copy. (Explicit admin actions pass the variant directly.)
 export function variantForStatus(status: string): InvoiceEmailVariant {
   return status === 'overdue' ? 'overdue' : 'ready';
+}
+
+// Statuses for which a manual reminder/overdue notice may be sent. A draft has
+// never reached the client (nothing to remind about); paid is settled;
+// cancelled is voided; carried_forward's balance lives on the invoice it rolled
+// into, so dunning it would demand money already consolidated (the same
+// double-count class the terminal-status guards block elsewhere -- triple audit
+// 2026-06-09). payment_pending stays eligible: "the check is in the mail" can
+// still warrant a deliberate admin nudge if it never arrives. Single source of
+// truth for the lib guard AND the admin UI button visibility.
+export const REMINDER_ELIGIBLE_STATUSES = ['sent', 'partial', 'overdue', 'payment_pending'] as const;
+
+export function reminderEligibleStatus(status: string): boolean {
+  return (REMINDER_ELIGIBLE_STATUSES as readonly string[]).includes(status);
 }

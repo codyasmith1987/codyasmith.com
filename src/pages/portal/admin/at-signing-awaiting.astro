@@ -11,6 +11,10 @@ const statusColors: Record<string, string> = {
   overdue: 'bg-red-500/10 text-red-400',
   payment_pending: 'bg-violet-500/10 text-violet-400',
 };
+const statusLabels: Record<string, string> = {
+  payment_pending: 'Payment pending',
+  carried_forward: 'Carried forward',
+};
 
 const today = Date.now();
 function daysOutstanding(issued: string | null): number | null {
@@ -56,7 +60,7 @@ function daysOutstanding(issued: string | null): number | null {
                       <p class="text-[10px] text-neutral-400">Paid ${inv.amount_paid.toFixed(2)}</p>
                     )}
                   </div>
-                  <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[inv.status] || 'bg-neutral-700/30 text-neutral-400'}`}>{inv.status}</span>
+                  <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[inv.status] || 'bg-neutral-700/30 text-neutral-400'}`}>{statusLabels[inv.status] || inv.status}</span>
                 </div>
               </div>
             </a>

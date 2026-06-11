@@ -38,6 +38,10 @@ const statusColors: Record<string, string> = {
   cancelled: 'bg-red-500/10 text-red-400',
   carried_forward: 'bg-neutral-700/30 text-neutral-500',
 };
+const statusLabels: Record<string, string> = {
+  payment_pending: 'Payment pending',
+  carried_forward: 'Carried forward',
+};
 ---
 
 <Portal title="Invoices">
@@ -157,7 +161,7 @@ const statusColors: Record<string, string> = {
                     <p class="text-[10px] text-neutral-400">Paid: ${inv.amount_paid.toFixed(2)}</p>
                   )}
                 </div>
-                <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[inv.status] || ''}`}>{inv.status}</span>
+                <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[inv.status] || ''}`}>{statusLabels[inv.status] || inv.status}</span>
               </div>
             </div>
           </a>

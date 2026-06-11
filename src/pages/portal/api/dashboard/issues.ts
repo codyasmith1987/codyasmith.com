@@ -8,6 +8,7 @@
 
 import type { APIRoute } from 'astro';
 import { getHealthLatestMonth, getHealthPriorMonth, getHealthMonthData } from '../../../../lib/crawl-read';
+import { resolveSiteScope } from '../../../../lib/site-scope';
 
 export const prerender = false;
 
@@ -22,12 +23,18 @@ export const GET: APIRoute = async ({ locals, url }) => {
     : locals.user.client_id;
   if (!clientId) return json({ error: 'No client specified' }, 400);
 
-  const month = await getHealthLatestMonth(clientId);
-  if (!month) return json({ month: null, issues: [] });
+  // Per-site scoping for multi-site clients (Phase 1b): ?site=<domain>,
+  // default primary; single-site clients get undefined scope = unchanged.
+  // The response carries the site list so the page draws its chips once.
+  const scope = await resolveSiteScope(clientId, url.searchParams.get('site'));
+  const siteMeta = scope ? { sites: scope.sites, site: scope.domain } : {};
 
-  const current = await getHealthMonthData(clientId, month);
-  const priorMonth = await getHealthPriorMonth(clientId, month);
-  const prior = priorMonth ? await getHealthMonthData(clientId, priorMonth) : null;
+  const month = await getHealthLatestMonth(clientId, scope);
+  if (!month) return json({ month: null, issues: [], ...siteMeta });
+
+  const current = await getHealthMonthData(clientId, month, scope);
+  const priorMonth = await getHealthPriorMonth(clientId, month, scope);
+  const prior = priorMonth ? await getHealthMonthData(clientId, priorMonth, scope) : null;
 
   return json({
     month,
@@ -38,5 +45,6 @@ export const GET: APIRoute = async ({ locals, url }) => {
     prior_month: priorMonth,
     prior_by_priority: prior ? prior.byPriority : null,
     prior_total_issues: prior ? prior.totalIssues : null,
+    ...siteMeta,
   });
 };

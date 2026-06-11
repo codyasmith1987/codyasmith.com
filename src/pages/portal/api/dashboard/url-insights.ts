@@ -28,6 +28,7 @@ import {
 } from '../../../../lib/dashboard/content-quality-insights';
 import { realUserPageRowFilters, realUserPageUrlExclusions } from '../../../../lib/csv/page-count-sql';
 import { classifyUrl, isCrawlerBlockedHost } from '../../../../lib/url-classifier';
+import { resolveSiteScope, uploadScopeFragment } from '../../../../lib/site-scope';
 
 export const prerender = false;
 
@@ -189,9 +190,15 @@ export const GET: APIRoute = async ({ locals, url }) => {
     }
   }
 
+  // Per-site scoping for multi-site clients (Phase 1b): ?site=<domain>,
+  // default primary; single-site clients get undefined scope = byte-identical
+  // SQL to before (the fragment is empty).
+  const scope = await resolveSiteScope(clientId, url.searchParams.get('site'));
+  const S = uploadScopeFragment(clientId, scope);
+
   try {
-    const response = await loadUrlInsights(turso, clientId);
-    return json(response);
+    const response = await loadUrlInsights(turso, clientId, S);
+    return json({ ...response, ...(scope ? { sites: scope.sites, site: scope.domain } : {}) });
   } catch (err: any) {
     logger.error('url-insights endpoint failed', err);
     return json({ error: err?.message || 'Failed to load URL insights' }, 500);
@@ -204,43 +211,44 @@ export const GET: APIRoute = async ({ locals, url }) => {
 export async function loadUrlInsights(
   db: typeof turso,
   clientId: string,
+  S: { frag: string; args: any[] } = { frag: '', args: [] },
 ): Promise<UrlInsightsResponse> {
   {
     // Resolve the latest month present for each table; widgets fall
     // back to "no data" when a table is empty for this client.
     const crawlMonthRow = await db.execute({
-      sql: 'SELECT MAX(month) FROM crawl_urls WHERE client_id = ?',
-      args: [clientId],
+      sql: `SELECT MAX(month) FROM crawl_urls WHERE client_id = ?${S.frag}`,
+      args: [clientId, ...S.args],
     });
     const crawlMonth = (crawlMonthRow.rows[0]?.[0] as string | null) ?? null;
     const imageMonthRow = await db.execute({
-      sql: 'SELECT MAX(month) FROM image_urls WHERE client_id = ?',
-      args: [clientId],
+      sql: `SELECT MAX(month) FROM image_urls WHERE client_id = ?${S.frag}`,
+      args: [clientId, ...S.args],
     });
     const imageMonth = (imageMonthRow.rows[0]?.[0] as string | null) ?? null;
     const redirectMonthRow = await db.execute({
-      sql: 'SELECT MAX(month) FROM redirect_chains WHERE client_id = ?',
-      args: [clientId],
+      sql: `SELECT MAX(month) FROM redirect_chains WHERE client_id = ?${S.frag}`,
+      args: [clientId, ...S.args],
     });
     const redirectMonth = (redirectMonthRow.rows[0]?.[0] as string | null) ?? null;
     const linkMonthRow = await db.execute({
-      sql: 'SELECT MAX(month) FROM link_graph WHERE client_id = ?',
-      args: [clientId],
+      sql: `SELECT MAX(month) FROM link_graph WHERE client_id = ?${S.frag}`,
+      args: [clientId, ...S.args],
     });
     const linkMonth = (linkMonthRow.rows[0]?.[0] as string | null) ?? null;
     const urlStructureMonthRow = await db.execute({
-      sql: 'SELECT MAX(month) FROM url_structure_urls WHERE client_id = ?',
-      args: [clientId],
+      sql: `SELECT MAX(month) FROM url_structure_urls WHERE client_id = ?${S.frag}`,
+      args: [clientId, ...S.args],
     });
     const urlStructureMonth = (urlStructureMonthRow.rows[0]?.[0] as string | null) ?? null;
     const javascriptMonthRow = await db.execute({
-      sql: 'SELECT MAX(month) FROM javascript_urls WHERE client_id = ?',
-      args: [clientId],
+      sql: `SELECT MAX(month) FROM javascript_urls WHERE client_id = ?${S.frag}`,
+      args: [clientId, ...S.args],
     });
     const javascriptMonth = (javascriptMonthRow.rows[0]?.[0] as string | null) ?? null;
     const hreflangMonthRow = await db.execute({
-      sql: 'SELECT MAX(month) FROM hreflang_urls WHERE client_id = ?',
-      args: [clientId],
+      sql: `SELECT MAX(month) FROM hreflang_urls WHERE client_id = ?${S.frag}`,
+      args: [clientId, ...S.args],
     });
     const hreflangMonth = (hreflangMonthRow.rows[0]?.[0] as string | null) ?? null;
 
@@ -251,6 +259,8 @@ export async function loadUrlInsights(
     // measured "0 / all clear" for data that was never actually measured. We
     // read the latest coverage row per category (the month it points at is the
     // month whose data the widget queries). Absent coverage == not measured.
+    // data_coverage stays client-level (it states whether a category was
+    // measured at all); per-site coverage is out of scope for Phase 1b.
     const coverageByCategory: Record<string, { measured: 0 | 1; rows_total: number; rows_measured: number; month: string }> = {};
     const coverageRows = await db.execute({
       sql: `SELECT dc.category, dc.month, dc.measured, dc.rows_total, dc.rows_measured
@@ -354,8 +364,8 @@ export async function loadUrlInsights(
                 SUM(CASE WHEN title_length > 0 AND title_length < ? THEN 1 ELSE 0 END) AS short_n
               FROM crawl_urls
               WHERE client_id = ? AND month = ?
-                ${PAGE_FILTER}`,
-        args: [TITLE_LONG, TITLE_SHORT, clientId, crawlMonth],
+                ${PAGE_FILTER}${S.frag}`,
+        args: [TITLE_LONG, TITLE_SHORT, clientId, crawlMonth, ...S.args],
       });
       const tq = tqRow.rows[0] as any;
       response.title_quality.missing_count = Number(tq?.[0] || 0);
@@ -366,9 +376,9 @@ export async function loadUrlInsights(
         sql: `SELECT url FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 ${PAGE_FILTER}
-                AND (title IS NULL OR title = '')
+                AND (title IS NULL OR title = '')${S.frag}
               ORDER BY url LIMIT ?`,
-        args: [clientId, crawlMonth, SAMPLE_LIMIT],
+        args: [clientId, crawlMonth, ...S.args, SAMPLE_LIMIT],
       });
       response.title_quality.sample_missing = (titleMissingSamples.rows as any[]).map(r => ({ url: String(r[0]) }));
 
@@ -376,9 +386,9 @@ export async function loadUrlInsights(
         sql: `SELECT url, title, title_length FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 ${PAGE_FILTER}
-                AND title_length > ?
+                AND title_length > ?${S.frag}
               ORDER BY title_length DESC LIMIT ?`,
-        args: [clientId, crawlMonth, TITLE_LONG, SAMPLE_LIMIT],
+        args: [clientId, crawlMonth, TITLE_LONG, ...S.args, SAMPLE_LIMIT],
       });
       response.title_quality.sample_too_long = (titleLongSamples.rows as any[]).map(r => ({
         url: String(r[0]), title: String(r[1] || ''), title_length: Number(r[2] || 0),
@@ -388,9 +398,9 @@ export async function loadUrlInsights(
         sql: `SELECT url, title, title_length FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 ${PAGE_FILTER}
-                AND title_length > 0 AND title_length < ?
+                AND title_length > 0 AND title_length < ?${S.frag}
               ORDER BY title_length ASC LIMIT ?`,
-        args: [clientId, crawlMonth, TITLE_SHORT, SAMPLE_LIMIT],
+        args: [clientId, crawlMonth, TITLE_SHORT, ...S.args, SAMPLE_LIMIT],
       });
       response.title_quality.sample_too_short = (titleShortSamples.rows as any[]).map(r => ({
         url: String(r[0]), title: String(r[1] || ''), title_length: Number(r[2] || 0),
@@ -401,11 +411,11 @@ export async function loadUrlInsights(
               FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 ${PAGE_FILTER}
-                AND title IS NOT NULL AND title != ''
+                AND title IS NOT NULL AND title != ''${S.frag}
               GROUP BY title
               HAVING COUNT(*) > 1
               ORDER BY cnt DESC LIMIT ?`,
-        args: [clientId, crawlMonth, SAMPLE_LIMIT],
+        args: [clientId, crawlMonth, ...S.args, SAMPLE_LIMIT],
       });
       response.title_quality.sample_duplicates = (titleDupes.rows as any[]).map(r => ({
         title: String(r[0]), count: Number(r[1] || 0), sample_url: String(r[2]),
@@ -418,18 +428,18 @@ export async function loadUrlInsights(
         sql: `SELECT COUNT(*) FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 ${BLOCKED_PAGE_FILTER}
-                AND indexability IS NOT NULL AND indexability != 'Indexable'`,
-        args: [clientId, crawlMonth],
+                AND indexability IS NOT NULL AND indexability != 'Indexable'${S.frag}`,
+        args: [clientId, crawlMonth, ...S.args],
       });
       response.indexability_blocks.total_blocked = Number((ibCount.rows[0] as any)?.[0] || 0);
       const ibByStatus = await db.execute({
         sql: `SELECT indexability_status, COUNT(*) FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 ${BLOCKED_PAGE_FILTER}
-                AND indexability IS NOT NULL AND indexability != 'Indexable'
+                AND indexability IS NOT NULL AND indexability != 'Indexable'${S.frag}
               GROUP BY indexability_status
               ORDER BY COUNT(*) DESC`,
-        args: [clientId, crawlMonth],
+        args: [clientId, crawlMonth, ...S.args],
       });
       for (const row of (ibByStatus.rows as any[])) {
         const k = row[0] ? String(row[0]) : '(unspecified)';
@@ -439,9 +449,9 @@ export async function loadUrlInsights(
         sql: `SELECT url, indexability, indexability_status, status_code FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 ${BLOCKED_PAGE_FILTER}
-                AND indexability IS NOT NULL AND indexability != 'Indexable'
+                AND indexability IS NOT NULL AND indexability != 'Indexable'${S.frag}
               ORDER BY url LIMIT ?`,
-        args: [clientId, crawlMonth, SAMPLE_LIMIT],
+        args: [clientId, crawlMonth, ...S.args, SAMPLE_LIMIT],
       });
       response.indexability_blocks.samples = (ibSamples.rows as any[]).map(r => ({
         url: String(r[0]),
@@ -458,8 +468,8 @@ export async function loadUrlInsights(
               FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 ${PAGE_FILTER}
-                AND word_count > 0`,
-        args: [THIN_WORDS, VERY_THIN_WORDS, clientId, crawlMonth],
+                AND word_count > 0${S.frag}`,
+        args: [THIN_WORDS, VERY_THIN_WORDS, clientId, crawlMonth, ...S.args],
       });
       const tc = tcCounts.rows[0] as any;
       response.thin_content.under_200_count = Number(tc?.[0] || 0);
@@ -468,9 +478,9 @@ export async function loadUrlInsights(
         sql: `SELECT url, word_count, title FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 ${PAGE_FILTER}
-                AND word_count > 0 AND word_count < ?
+                AND word_count > 0 AND word_count < ?${S.frag}
               ORDER BY word_count ASC LIMIT ?`,
-        args: [clientId, crawlMonth, THIN_WORDS, SAMPLE_LIMIT],
+        args: [clientId, crawlMonth, THIN_WORDS, ...S.args, SAMPLE_LIMIT],
       });
       response.thin_content.samples = (tcSamples.rows as any[]).map(r => ({
         url: String(r[0]),
@@ -486,8 +496,8 @@ export async function loadUrlInsights(
               FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 ${PAGE_FILTER}
-                AND response_time_ms IS NOT NULL`,
-        args: [SLOW_MS, VERY_SLOW_MS, clientId, crawlMonth],
+                AND response_time_ms IS NOT NULL${S.frag}`,
+        args: [SLOW_MS, VERY_SLOW_MS, clientId, crawlMonth, ...S.args],
       });
       const rt = rtCounts.rows[0] as any;
       response.response_time.over_1500_count = Number(rt?.[0] || 0);
@@ -496,9 +506,9 @@ export async function loadUrlInsights(
         sql: `SELECT url, response_time_ms, content_type, status_code FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 ${PAGE_FILTER}
-                AND response_time_ms IS NOT NULL AND response_time_ms > ?
+                AND response_time_ms IS NOT NULL AND response_time_ms > ?${S.frag}
               ORDER BY response_time_ms DESC LIMIT ?`,
-        args: [clientId, crawlMonth, SLOW_MS, SAMPLE_LIMIT],
+        args: [clientId, crawlMonth, SLOW_MS, ...S.args, SAMPLE_LIMIT],
       });
       response.response_time.samples = (rtSamples.rows as any[]).map(r => ({
         url: String(r[0]),
@@ -512,17 +522,17 @@ export async function loadUrlInsights(
         sql: `SELECT COUNT(*) FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 ${PAGE_FILTER}
-                AND inlinks_count = 0`,
-        args: [clientId, crawlMonth],
+                AND inlinks_count = 0${S.frag}`,
+        args: [clientId, crawlMonth, ...S.args],
       });
       response.orphan_pages.count = Number((orphanCountRow.rows[0] as any)?.[0] || 0);
       const orphanSamples = await db.execute({
         sql: `SELECT url, status_code, indexability, title FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 ${PAGE_FILTER}
-                AND inlinks_count = 0
+                AND inlinks_count = 0${S.frag}
               ORDER BY url LIMIT ?`,
-        args: [clientId, crawlMonth, SAMPLE_LIMIT],
+        args: [clientId, crawlMonth, ...S.args, SAMPLE_LIMIT],
       });
       response.orphan_pages.samples = (orphanSamples.rows as any[]).map(r => ({
         url: String(r[0]),
@@ -539,8 +549,8 @@ export async function loadUrlInsights(
               FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 ${PAGE_FILTER}
-                AND crawl_depth IS NOT NULL`,
-        args: [DEEP_CLICKS, VERY_DEEP_CLICKS, clientId, crawlMonth],
+                AND crawl_depth IS NOT NULL${S.frag}`,
+        args: [DEEP_CLICKS, VERY_DEEP_CLICKS, clientId, crawlMonth, ...S.args],
       });
       const dp = depthCounts.rows[0] as any;
       response.deep_pages.over_5_count = Number(dp?.[0] || 0);
@@ -549,9 +559,9 @@ export async function loadUrlInsights(
         sql: `SELECT url, crawl_depth, inlinks_count FROM crawl_urls
               WHERE client_id = ? AND month = ?
                 ${PAGE_FILTER}
-                AND crawl_depth IS NOT NULL AND crawl_depth > ?
+                AND crawl_depth IS NOT NULL AND crawl_depth > ?${S.frag}
               ORDER BY crawl_depth DESC LIMIT ?`,
-        args: [clientId, crawlMonth, DEEP_CLICKS, SAMPLE_LIMIT],
+        args: [clientId, crawlMonth, DEEP_CLICKS, ...S.args, SAMPLE_LIMIT],
       });
       response.deep_pages.samples = (dpSamples.rows as any[]).map(r => ({
         url: String(r[0]),
@@ -568,8 +578,8 @@ export async function loadUrlInsights(
                 SUM(CASE WHEN size_bytes > ? THEN 1 ELSE 0 END) AS over_500
               FROM image_urls
               WHERE client_id = ? AND month = ?
-                AND size_bytes IS NOT NULL`,
-        args: [IMAGE_OVERSIZED, IMAGE_VERY_OVERSIZED, clientId, imageMonth],
+                AND size_bytes IS NOT NULL${S.frag}`,
+        args: [IMAGE_OVERSIZED, IMAGE_VERY_OVERSIZED, clientId, imageMonth, ...S.args],
       });
       const ic = imgCounts.rows[0] as any;
       response.oversized_images.over_100kb_count = Number(ic?.[0] || 0);
@@ -577,9 +587,9 @@ export async function loadUrlInsights(
       const imgSamples = await db.execute({
         sql: `SELECT url, size_bytes, dimensions, inlinks_count FROM image_urls
               WHERE client_id = ? AND month = ?
-                AND size_bytes IS NOT NULL AND size_bytes > ?
+                AND size_bytes IS NOT NULL AND size_bytes > ?${S.frag}
               ORDER BY size_bytes DESC LIMIT ?`,
-        args: [clientId, imageMonth, IMAGE_OVERSIZED, SAMPLE_LIMIT],
+        args: [clientId, imageMonth, IMAGE_OVERSIZED, ...S.args, SAMPLE_LIMIT],
       });
       response.oversized_images.samples = (imgSamples.rows as any[]).map(r => ({
         url: String(r[0]),
@@ -596,17 +606,17 @@ export async function loadUrlInsights(
                 SUM(CASE WHEN is_loop = 1 THEN 1 ELSE 0 END) AS loops,
                 SUM(CASE WHEN hop_count >= 2 THEN 1 ELSE 0 END) AS multi
               FROM redirect_chains
-              WHERE client_id = ? AND month = ?`,
-        args: [clientId, redirectMonth],
+              WHERE client_id = ? AND month = ?${S.frag}`,
+        args: [clientId, redirectMonth, ...S.args],
       });
       const rc = rcCounts.rows[0] as any;
       response.redirect_chains.loop_count = Number(rc?.[0] || 0);
       response.redirect_chains.multi_hop_count = Number(rc?.[1] || 0);
       const loopSamples = await db.execute({
         sql: `SELECT source_url, hop_count FROM redirect_chains
-              WHERE client_id = ? AND month = ? AND is_loop = 1
+              WHERE client_id = ? AND month = ? AND is_loop = 1${S.frag}
               ORDER BY hop_count DESC LIMIT ?`,
-        args: [clientId, redirectMonth, SAMPLE_LIMIT],
+        args: [clientId, redirectMonth, ...S.args, SAMPLE_LIMIT],
       });
       response.redirect_chains.sample_loops = (loopSamples.rows as any[]).map(r => ({
         source_url: String(r[0]),
@@ -614,9 +624,9 @@ export async function loadUrlInsights(
       }));
       const multiSamples = await db.execute({
         sql: `SELECT source_url, final_url, hop_count, final_status_code FROM redirect_chains
-              WHERE client_id = ? AND month = ? AND is_loop = 0 AND hop_count >= 2
+              WHERE client_id = ? AND month = ? AND is_loop = 0 AND hop_count >= 2${S.frag}
               ORDER BY hop_count DESC LIMIT ?`,
-        args: [clientId, redirectMonth, SAMPLE_LIMIT],
+        args: [clientId, redirectMonth, ...S.args, SAMPLE_LIMIT],
       });
       response.redirect_chains.sample_multi_hop = (multiSamples.rows as any[]).map(r => ({
         source_url: String(r[0]),
@@ -651,10 +661,10 @@ export async function loadUrlInsights(
                 SUBSTR(GROUP_CONCAT(DISTINCT source_url), 1, 4000) AS sources_concat
               FROM link_graph
               WHERE client_id = ? AND month = ?
-                AND status_code IS NOT NULL AND status_code >= 400
+                AND status_code IS NOT NULL AND status_code >= 400${S.frag}
               GROUP BY destination_url
               ORDER BY inbound_count DESC, destination_url`,
-        args: [clientId, linkMonth],
+        args: [clientId, linkMonth, ...S.args],
       });
       const kept = (brokenRows.rows as any[]).filter(r => {
         const dest = String(r[0]);
@@ -692,12 +702,12 @@ export async function loadUrlInsights(
               FROM url_structure_urls
               WHERE client_id = ? AND month = ?
                 AND content_hash IS NOT NULL AND content_hash != ''
-                ${realUserPageRowFilters('')} ${realUserPageUrlExclusions('url')}
+                ${realUserPageRowFilters('')} ${realUserPageUrlExclusions('url')}${S.frag}
               GROUP BY content_hash
               HAVING COUNT(*) > 1
               ORDER BY n DESC, content_hash
               LIMIT ?`,
-        args: [clientId, urlStructureMonth, SAMPLE_LIMIT],
+        args: [clientId, urlStructureMonth, ...S.args, SAMPLE_LIMIT],
       });
       const dupGroups = (dupRows.rows as any[]).map(r => ({
         count: Number(r[1] || 0),
@@ -718,8 +728,8 @@ export async function loadUrlInsights(
         sql: `SELECT COUNT(*) AS n FROM javascript_urls
               WHERE client_id = ? AND month = ?
                 AND status_code = 200 AND word_count_change >= ?
-                ${realUserPageUrlExclusions('url')}`,
-        args: [clientId, javascriptMonth, JS_DELTA],
+                ${realUserPageUrlExclusions('url')}${S.frag}`,
+        args: [clientId, javascriptMonth, JS_DELTA, ...S.args],
       });
       response.js_rendering.needs_js_count = Number((jsCountRow.rows[0] as any)?.[0] || 0);
       const jsRows = await db.execute({
@@ -727,10 +737,10 @@ export async function loadUrlInsights(
               FROM javascript_urls
               WHERE client_id = ? AND month = ?
                 AND status_code = 200 AND word_count_change >= ?
-                ${realUserPageUrlExclusions('url')}
+                ${realUserPageUrlExclusions('url')}${S.frag}
               ORDER BY word_count_change DESC
               LIMIT ?`,
-        args: [clientId, javascriptMonth, JS_DELTA, SAMPLE_LIMIT],
+        args: [clientId, javascriptMonth, JS_DELTA, ...S.args, SAMPLE_LIMIT],
       });
       response.js_rendering.samples = (jsRows.rows as any[]).map(r => ({
         url: String(r[0]),
@@ -745,15 +755,15 @@ export async function loadUrlInsights(
     if (hreflangMonth) {
       const hlCountRow = await db.execute({
         sql: `SELECT COUNT(*) AS n FROM hreflang_urls
-              WHERE client_id = ? AND month = ? AND hreflang_count > 0`,
-        args: [clientId, hreflangMonth],
+              WHERE client_id = ? AND month = ? AND hreflang_count > 0${S.frag}`,
+        args: [clientId, hreflangMonth, ...S.args],
       });
       response.hreflang.pages_with_hreflang = Number((hlCountRow.rows[0] as any)?.[0] || 0);
       const hlRows = await db.execute({
         sql: `SELECT url, hreflang_count FROM hreflang_urls
-              WHERE client_id = ? AND month = ? AND hreflang_count > 0
+              WHERE client_id = ? AND month = ? AND hreflang_count > 0${S.frag}
               ORDER BY hreflang_count DESC LIMIT ?`,
-        args: [clientId, hreflangMonth, SAMPLE_LIMIT],
+        args: [clientId, hreflangMonth, ...S.args, SAMPLE_LIMIT],
       });
       response.hreflang.samples = (hlRows.rows as any[]).map(r => ({
         url: String(r[0]), hreflang_count: Number(r[1] || 0),
@@ -769,8 +779,8 @@ export async function loadUrlInsights(
                 SUM(CASE WHEN all_violations > 0 THEN 1 ELSE 0 END) AS pages_with,
                 COALESCE(SUM(all_violations), 0) AS total
               FROM accessibility_urls
-              WHERE client_id = ? AND month = ?`,
-        args: [clientId, accessibilityMonth],
+              WHERE client_id = ? AND month = ?${S.frag}`,
+        args: [clientId, accessibilityMonth, ...S.args],
       });
       const ac = aCounts.rows[0] as any;
       response.accessibility.pages_with_violations = Number(ac?.[0] || 0);
@@ -786,8 +796,8 @@ export async function loadUrlInsights(
         sql: `SELECT
                 ${levelSelects}
               FROM accessibility_urls
-              WHERE client_id = ? AND month = ?`,
-        args: [clientId, accessibilityMonth],
+              WHERE client_id = ? AND month = ?${S.frag}`,
+        args: [clientId, accessibilityMonth, ...S.args],
       });
       const lr = levelRow.rows[0] as any;
       const countsByColumn: Record<string, number> = {};
@@ -797,9 +807,9 @@ export async function loadUrlInsights(
       const aSamples = await db.execute({
         sql: `SELECT url, all_violations, status_code FROM accessibility_urls
               WHERE client_id = ? AND month = ?
-                AND all_violations > 0
+                AND all_violations > 0${S.frag}
               ORDER BY all_violations DESC, url LIMIT ?`,
-        args: [clientId, accessibilityMonth, SAMPLE_LIMIT],
+        args: [clientId, accessibilityMonth, ...S.args, SAMPLE_LIMIT],
       });
       response.accessibility.samples = (aSamples.rows as any[]).map(r => ({
         url: String(r[0]),
@@ -819,8 +829,8 @@ export async function loadUrlInsights(
                 COALESCE(SUM(error_count), 0) AS total_err,
                 COALESCE(SUM(warning_count), 0) AS total_warn
               FROM structured_data_urls
-              WHERE client_id = ? AND month = ?`,
-        args: [clientId, structuredMonth],
+              WHERE client_id = ? AND month = ?${S.frag}`,
+        args: [clientId, structuredMonth, ...S.args],
       });
       const sd = sdCounts.rows[0] as any;
       response.structured_data.pages_with_errors = Number(sd?.[0] || 0);
@@ -833,8 +843,8 @@ export async function loadUrlInsights(
       const typeRows = await db.execute({
         sql: `SELECT types_list FROM structured_data_urls
               WHERE client_id = ? AND month = ?
-                AND types_list IS NOT NULL AND types_list != ''`,
-        args: [clientId, structuredMonth],
+                AND types_list IS NOT NULL AND types_list != ''${S.frag}`,
+        args: [clientId, structuredMonth, ...S.args],
       });
       response.structured_data.top_types = topSchemaTypes(
         (typeRows.rows as any[]).map(r => (r[0] != null ? String(r[0]) : null)),
@@ -844,9 +854,9 @@ export async function loadUrlInsights(
       const sdSamples = await db.execute({
         sql: `SELECT url, error_count, warning_count FROM structured_data_urls
               WHERE client_id = ? AND month = ?
-                AND (error_count > 0 OR warning_count > 0)
+                AND (error_count > 0 OR warning_count > 0)${S.frag}
               ORDER BY error_count DESC, warning_count DESC, url LIMIT ?`,
-        args: [clientId, structuredMonth, SAMPLE_LIMIT],
+        args: [clientId, structuredMonth, ...S.args, SAMPLE_LIMIT],
       });
       response.structured_data.samples = (sdSamples.rows as any[]).map(r => ({
         url: String(r[0]),
@@ -879,8 +889,8 @@ export async function loadUrlInsights(
                 SUM(CASE WHEN spelling_errors IS NOT NULL OR grammar_errors IS NOT NULL THEN 1 ELSE 0 END) AS sg_present,
                 SUM(CASE WHEN flesch_reading_ease IS NOT NULL THEN 1 ELSE 0 END) AS read_present
               FROM content_urls
-              WHERE client_id = ? AND month = ?`,
-        args: [HARD_TO_READ_FLESCH_THRESHOLD, clientId, contentMonth],
+              WHERE client_id = ? AND month = ?${S.frag}`,
+        args: [HARD_TO_READ_FLESCH_THRESHOLD, clientId, contentMonth, ...S.args],
       });
       const cq = cqCounts.rows[0] as any;
       response.content_quality.near_duplicate_count = Number(cq?.[0] || 0);
@@ -894,9 +904,9 @@ export async function loadUrlInsights(
       const dupeSamples = await db.execute({
         sql: `SELECT url, near_duplicate_count, closest_near_duplicate_url FROM content_urls
               WHERE client_id = ? AND month = ?
-                AND near_duplicate_count > 0
+                AND near_duplicate_count > 0${S.frag}
               ORDER BY near_duplicate_count DESC, url LIMIT ?`,
-        args: [clientId, contentMonth, SAMPLE_LIMIT],
+        args: [clientId, contentMonth, ...S.args, SAMPLE_LIMIT],
       });
       response.content_quality.near_duplicate_samples = (dupeSamples.rows as any[]).map(r => {
         const n = Number(r[1] || 0);
@@ -911,9 +921,9 @@ export async function loadUrlInsights(
       const sgSamples = await db.execute({
         sql: `SELECT url, COALESCE(spelling_errors,0) AS sp, COALESCE(grammar_errors,0) AS gr FROM content_urls
               WHERE client_id = ? AND month = ?
-                AND (COALESCE(spelling_errors,0) > 0 OR COALESCE(grammar_errors,0) > 0)
+                AND (COALESCE(spelling_errors,0) > 0 OR COALESCE(grammar_errors,0) > 0)${S.frag}
               ORDER BY (COALESCE(spelling_errors,0) + COALESCE(grammar_errors,0)) DESC, url LIMIT ?`,
-        args: [clientId, contentMonth, SAMPLE_LIMIT],
+        args: [clientId, contentMonth, ...S.args, SAMPLE_LIMIT],
       });
       response.content_quality.spelling_grammar_samples = (sgSamples.rows as any[]).map(r => {
         const sp = Number(r[1] || 0);
@@ -926,9 +936,9 @@ export async function loadUrlInsights(
       const hrSamples = await db.execute({
         sql: `SELECT url, flesch_reading_ease FROM content_urls
               WHERE client_id = ? AND month = ?
-                AND flesch_reading_ease IS NOT NULL AND flesch_reading_ease < ?
+                AND flesch_reading_ease IS NOT NULL AND flesch_reading_ease < ?${S.frag}
               ORDER BY flesch_reading_ease ASC, url LIMIT ?`,
-        args: [clientId, contentMonth, HARD_TO_READ_FLESCH_THRESHOLD, SAMPLE_LIMIT],
+        args: [clientId, contentMonth, HARD_TO_READ_FLESCH_THRESHOLD, ...S.args, SAMPLE_LIMIT],
       });
       response.content_quality.hard_to_read_samples = (hrSamples.rows as any[]).map(r => {
         const flesch = r[1] != null ? Number(r[1]) : null;

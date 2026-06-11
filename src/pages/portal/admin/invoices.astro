@@ -26,7 +26,7 @@ const arRows = !clientId
       .map(r => ({ ...r, name: clientById[r.client_id]?.name || 'Unknown', manual: !!clientById[r.client_id]?.manual_billing }))
       .sort((a, b) => (b.overdue - a.overdue) || (b.oldestDaysPast - a.oldestDaysPast) || (b.open - a.open))
   : [];
-const arTotals = arRows.reduce((t, r) => ({ open: t.open + r.open, overdue: t.overdue + r.overdue }), { open: 0, overdue: 0 });
+const arTotals = arRows.reduce((t, r) => ({ open: t.open + r.open, overdue: t.overdue + r.overdue, pending: t.pending + r.pending }), { open: 0, overdue: 0, pending: 0 });
 
 const statusColors: Record<string, string> = {
   draft: 'bg-neutral-700/30 text-neutral-400',
@@ -87,6 +87,12 @@ const statusLabels: Record<string, string> = {
             <p class="text-2xl font-mono text-red-400">${balance.overdue.toFixed(2)}</p>
           </div>
         )}
+        {balance.pending > 0 && (
+          <div>
+            <p class="text-[10px] font-mono text-violet-400/80 tracking-wide uppercase mb-1" title="Payment promised / in transit (payment pending status)">Pending</p>
+            <p class="text-2xl font-mono text-violet-400">${balance.pending.toFixed(2)}</p>
+          </div>
+        )}
         {balance.oldestDaysPast > 0 && (
           <div>
             <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Oldest past due</p>
@@ -105,7 +111,7 @@ const statusLabels: Record<string, string> = {
         <div>
           <div class="flex flex-wrap items-baseline justify-between gap-3 mb-3">
             <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase">Accounts receivable</p>
-            <p class="text-xs text-neutral-500 font-mono">${arTotals.open.toFixed(2)} open{arTotals.overdue > 0 ? <span class="text-red-400"> &middot; ${arTotals.overdue.toFixed(2)} overdue</span> : null}</p>
+            <p class="text-xs text-neutral-500 font-mono">${arTotals.open.toFixed(2)} open{arTotals.overdue > 0 ? <span class="text-red-400"> &middot; ${arTotals.overdue.toFixed(2)} overdue</span> : null}{arTotals.pending > 0 ? <span class="text-violet-400"> &middot; ${arTotals.pending.toFixed(2)} pending</span> : null}</p>
           </div>
           <div class="bg-neutral-900/30 border border-white/5 rounded-xl overflow-hidden">
             <table class="w-full text-sm">
@@ -114,6 +120,7 @@ const statusLabels: Record<string, string> = {
                   <th class="text-left px-5 py-3 font-normal">Client</th>
                   <th class="text-right px-4 py-3 font-normal">Open</th>
                   <th class="text-right px-4 py-3 font-normal">Overdue</th>
+                  <th class="text-right px-4 py-3 font-normal" title="Payment promised / in transit (payment pending status)">Pending</th>
                   <th class="text-right px-4 py-3 font-normal">Oldest</th>
                   <th class="text-right px-5 py-3 font-normal">Invoices</th>
                 </tr>
@@ -127,6 +134,7 @@ const statusLabels: Record<string, string> = {
                     </td>
                     <td class="px-4 py-3 text-right font-mono text-neutral-300">${r.open.toFixed(2)}</td>
                     <td class={`px-4 py-3 text-right font-mono ${r.overdue > 0 ? 'text-red-400' : 'text-neutral-600'}`}>{r.overdue > 0 ? `$${r.overdue.toFixed(2)}` : '-'}</td>
+                    <td class={`px-4 py-3 text-right font-mono ${r.pending > 0 ? 'text-violet-400' : 'text-neutral-600'}`}>{r.pending > 0 ? `$${r.pending.toFixed(2)}` : '-'}</td>
                     <td class={`px-4 py-3 text-right font-mono ${r.oldestDaysPast >= 30 ? 'text-red-400' : r.oldestDaysPast >= 7 ? 'text-amber-600' : 'text-neutral-600'}`}>{r.oldestDaysPast > 0 ? `${r.oldestDaysPast}d` : '-'}</td>
                     <td class="px-5 py-3 text-right font-mono text-neutral-400">{r.count}</td>
                   </tr>

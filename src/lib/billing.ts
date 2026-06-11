@@ -779,6 +779,21 @@ export async function sendDueReminders(): Promise<{ sent: number; failed: number
   for (const [clientId, invoices] of byClient) {
     try {
       if (await isManual(clientId)) continue;
+
+      // Single standard recurring invoice -> the SHARED delivery core (the same
+      // render + recipients + PDF the admin's Preview and Send buttons use), so
+      // what Preview shows is exactly what the cron ships for the common case
+      // (chat-wide audit 2026-06-11). The at-signing single case keeps the
+      // cron's "work begins once it clears" framing (the renderer does not
+      // model it), and the multi-invoice case keeps the consolidated table.
+      if (invoices.length === 1 && invoices[0].billing_period_start) {
+        const { sendInvoiceReminderEmail } = await import('./invoice-emails');
+        const r = await sendInvoiceReminderEmail(invoices[0].id, 'reminder');
+        // sendInvoiceReminderEmail stamps last_reminder_sent itself on success.
+        if (r.ok) sent++; else failed++;
+        continue;
+      }
+
       // Recipient model (Cody, 2026-06-04): a payment reminder is a financial
       // notice, so it goes to the billing contact + accountant CC, not every
       // portal user. Falls back to the first portal user if no contact is set.
@@ -956,6 +971,47 @@ export function isAutoOverdueEmailEligible(
   return true;
 }
 
+// A payment_pending invoice whose promised payment looks like it never
+// arrived. payment_pending is deliberately excluded from ALL client-facing
+// dunning ("the check is in the mail"), which also means a never-arriving
+// check would otherwise sit silent forever -- nothing ages it and nothing
+// escalates (chat-wide audit 2026-06-11). This flags it to the ADMIN only
+// (no client email). No pending_since column exists, so the due date is the
+// proxy clock: stale = still fully-ish unpaid AND due more than `staleDays`
+// ago. Pure + unit-tested.
+export function isStalePaymentPending(
+  inv: { status: string; amount_paid: number | null; total: number; due_date: string | null },
+  now: Date,
+  staleDays = 14,
+): boolean {
+  if (inv.status !== 'payment_pending') return false;
+  if ((inv.amount_paid || 0) >= inv.total) return false;
+  return daysPastDue(inv.due_date, now) >= staleDays;
+}
+
+// Alert the admin about stale payment_pending invoices. Deduped per invoice in
+// the trigger (notification existence), so the daily cron can call this every
+// run. Returns how many alerts fired.
+export async function alertStalePaymentPending(now: Date = new Date()): Promise<{ flagged: number }> {
+  const rows = await queryAll(
+    `SELECT i.*, c.name AS client_name FROM invoices i JOIN clients c ON c.id = i.client_id
+      WHERE i.status = 'payment_pending' AND i.due_date IS NOT NULL`
+  );
+  let flagged = 0;
+  for (const inv of rows) {
+    if (!isStalePaymentPending(inv, now)) continue;
+    try {
+      const { onStalePaymentPending } = await import('./triggers');
+      const balance = '$' + ((inv.total - (inv.amount_paid || 0))).toFixed(2);
+      const fired = await onStalePaymentPending(inv.id, inv.client_id, inv.client_name || inv.client_id, inv.invoice_number, balance, daysPastDue(inv.due_date, now));
+      if (fired) flagged++;
+    } catch (err) {
+      logger.error(`stale payment_pending alert failed for ${inv.id}`, err);
+    }
+  }
+  return { flagged };
+}
+
 // The overdue invoices that should receive an automatic notice right now. SQL
 // narrows to overdue + has-a-due-date; the pure predicates apply the
 // fully-unpaid eligibility rule and the due+7 / weekly cadence, so both are
@@ -974,6 +1030,17 @@ export async function getOverdueNoticeCandidates(now: Date = new Date()): Promis
 // the engagement uninterrupted). Stamps last_reminder_sent so the weekly
 // cadence advances. Honors reminders_paused via the candidate query. Returns
 // the count sent. Run from the daily cron, after markOverdueInvoices.
+//
+// DESIGN BOUNDARY (2026-06-11): unlike the pre-due reminder above, this
+// sender deliberately does NOT route through the shared renderInvoiceEmail
+// core. Its copy is the Cody-locked three-tier dunning model (default / firm /
+// section-5.8 final with version-specific consequence language) framed around
+// the per-client ACCOUNT balance, which the simple per-invoice renderer does
+// not model. Folding the tiers into the renderer is a real design change to
+// live dunning copy -- do it deliberately, not as a refactor side effect. The
+// admin's manual "Send overdue notice" button (renderer 'overdue' variant) is
+// the simple professional notice and previews exactly; the automated tiers are
+// this function.
 export async function sendOverdueNotices(now: Date = new Date()): Promise<{ sent: number; failed: number }> {
   const { sendEmail } = await import('./email');
   const candidates = await getOverdueNoticeCandidates(now);
@@ -1133,6 +1200,7 @@ export async function previewDailyCron(): Promise<{
   would_mark_overdue: Array<{ id: string; invoice_number: string; due_date: string | null }>;
   would_remind: Array<{ id: string; client_id: string; invoice_number: string; due_date: string | null; total: number }>;
   would_send_overdue: Array<{ id: string; client_id: string; invoice_number: string; due_date: string | null; balance: number }>;
+  would_flag_stale_pending: Array<{ id: string; client_id: string; invoice_number: string; due_date: string | null; days_past_due: number }>;
 }> {
   const now = new Date();
   // Shared cached lookups so the dry run matches the live senders/generator and
@@ -1225,5 +1293,22 @@ export async function previewDailyCron(): Promise<{
     });
   }
 
-  return { would_generate, would_mark_overdue, would_remind, would_send_overdue };
+  // Stale payment_pending invoices the cron would flag to the admin (no client
+  // email; mirrors alertStalePaymentPending minus the per-invoice 7-day dedupe,
+  // so the dry run shows everything currently stale).
+  const pendingRows = await queryAll(
+    `SELECT id, client_id, invoice_number, due_date, total, amount_paid, status FROM invoices
+      WHERE status = 'payment_pending' AND due_date IS NOT NULL`
+  );
+  const would_flag_stale_pending = pendingRows
+    .filter(i => isStalePaymentPending(i, now))
+    .map(i => ({
+      id: i.id as string,
+      client_id: i.client_id as string,
+      invoice_number: i.invoice_number as string,
+      due_date: (i.due_date as string | null) ?? null,
+      days_past_due: daysPastDue(i.due_date, now),
+    }));
+
+  return { would_generate, would_mark_overdue, would_remind, would_send_overdue, would_flag_stale_pending };
 }

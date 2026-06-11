@@ -2,10 +2,22 @@
 import Portal from '../../../layouts/Portal.astro';
 import { getAllClients } from '../../../lib/auth';
 import { getRecentUploads } from '../../../lib/csv/index';
+import { listManagedSites } from '../../../lib/client-sites';
 export const prerender = false;
 
 const clients = await getAllClients();
 const uploads = await getRecentUploads(undefined, 30);
+
+// Sites per client, for the per-site attribution picker (multi-site Phase 1).
+// Only clients with 2+ managed sites get a picker; everyone else uploads
+// exactly as before. Serialized into the page script below.
+const sitesByClient: Record<string, Array<{ id: string; domain: string; is_primary: boolean }>> = {};
+for (const c of clients) {
+  const sites = await listManagedSites(c.id);
+  if (sites.length > 1) {
+    sitesByClient[c.id] = sites.map(s => ({ id: s.id, domain: s.domain, is_primary: !!s.is_primary }));
+  }
+}
 
 function formatLabel(format: string): string {
   if (format === 'sf_generic') return 'Captured (queryable)';
@@ -59,6 +71,10 @@ function formatLabel(format: string): string {
             <option value="">Select...</option>
             {clients.map(c => <option value={c.id}>{c.name}</option>)}
           </select>
+          <div id="csv-site-wrap" class="hidden mt-3">
+            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" title="Which of this client's sites these files belong to. Crawl exports identify their site by URL automatically; the picker matters for exports that cannot (GA4, Search Console, keywords).">Site</label>
+            <select id="csv-site" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-300 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300"></select>
+          </div>
         </div>
         <div>
           <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Month</label>
@@ -171,12 +187,31 @@ function formatLabel(format: string): string {
     )}
   </div>
 
+  <script type="application/json" id="sites-by-client" set:html={JSON.stringify(sitesByClient)}></script>
   <script>
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const form = document.getElementById('csv-form') as HTMLFormElement;
     const btn = document.getElementById('csv-btn') as HTMLButtonElement;
     const progress = document.getElementById('csv-progress')!;
     const resultsDiv = document.getElementById('csv-results')!;
+
+    // Per-site attribution (multi-site Phase 1): clients with 2+ managed sites
+    // get a Site picker (default: primary). Everyone else sees nothing new.
+    const sitesByClient: Record<string, Array<{ id: string; domain: string; is_primary: boolean }>> =
+      JSON.parse(document.getElementById('sites-by-client')?.textContent || '{}');
+    const siteWrap = document.getElementById('csv-site-wrap')!;
+    const siteSelect = document.getElementById('csv-site') as HTMLSelectElement;
+    document.getElementById('csv-client')?.addEventListener('change', (e) => {
+      const cid = (e.target as HTMLSelectElement).value;
+      const sites = sitesByClient[cid];
+      if (!sites) { siteWrap.classList.add('hidden'); siteSelect.innerHTML = ''; return; }
+      siteSelect.innerHTML = sites
+        .slice()
+        .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
+        .map(s => `<option value="${s.id}">${s.domain}${s.is_primary ? ' (primary)' : ''}</option>`)
+        .join('');
+      siteWrap.classList.remove('hidden');
+    });
 
     // Folder-pick button forwards to the hidden webkitdirectory input.
     // When the folder picker resolves, copy its files onto the main
@@ -340,6 +375,10 @@ function formatLabel(format: string): string {
         const formData = new FormData();
         formData.append('client_id', clientId);
         formData.append('month', month);
+        // Site attribution: only sent when the multi-site picker is visible.
+        if (!siteWrap.classList.contains('hidden') && siteSelect.value) {
+          formData.append('site_id', siteSelect.value);
+        }
         for (const f of batch) formData.append('files', f);
 
         // Two-stage error parsing: surface real HTTP status + body

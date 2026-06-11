@@ -98,6 +98,7 @@ async function ingestOneCsv(
   month: string,
   userId: string,
   userName: string,
+  siteId: string | null = null,
 ): Promise<PerFileResult> {
   if (sizeBytes > MAX_BYTES_PER_FILE) {
     return { filename, error: 'CSV file must be under 10MB' };
@@ -107,7 +108,7 @@ async function ingestOneCsv(
     return { filename, error: `CSV exceeds ${MAX_ROWS_PER_FILE} row maximum (${lineCount} rows submitted)` };
   }
   try {
-    const result = await ingestWithRetry(() => ingestCSV(raw, clientId, month, filename, userId));
+    const result = await ingestWithRetry(() => ingestCSV(raw, clientId, month, filename, userId, siteId));
     await logActivity({
       clientId,
       userId,
@@ -136,6 +137,7 @@ async function processOne(
   month: string,
   userId: string,
   userName: string,
+  siteId: string | null = null,
 ): Promise<PerFileResult | PerFileResult[]> {
   const lowerName = file.name.toLowerCase();
 
@@ -175,7 +177,7 @@ async function processOne(
       // detectFormat strips the path internally before routing, so
       // detection is unaffected.
       const sizeBytes = raw.length; // approximate; rows still bounded
-      results.push(await ingestOneCsv(`${file.name}:${entry.name}`, raw, sizeBytes, clientId, month, userId, userName));
+      results.push(await ingestOneCsv(`${file.name}:${entry.name}`, raw, sizeBytes, clientId, month, userId, userName, siteId));
     }
     return results;
   }
@@ -192,7 +194,7 @@ async function processOne(
   // Preserving the path makes each file a DISTINCT dedup key so both
   // ingest. detectFormat and all parsers strip/normalize paths
   // internally before routing and keying, so they are unaffected.
-  return ingestOneCsv(file.name, raw, file.size, clientId, month, userId, userName);
+  return ingestOneCsv(file.name, raw, file.size, clientId, month, userId, userName, siteId);
 }
 
 export const POST: APIRoute = async ({ locals, request }) => {
@@ -242,6 +244,26 @@ export const POST: APIRoute = async ({ locals, request }) => {
     const userId = locals.user!.id;
     const userName = locals.user!.name;
 
+    // Optional site attribution (multi-site Phase 1). When supplied it must be
+    // one of THIS client's managed sites -- a site id from another client is
+    // rejected, not silently accepted. Absent/empty means the client's
+    // primary/only site (stored as NULL), which keeps single-site clients and
+    // legacy callers unchanged.
+    let siteId: string | null = null;
+    const siteRaw = (formData.get('site_id') as string | null)?.trim() || '';
+    if (siteRaw) {
+      const { listManagedSites } = await import('../../../../lib/client-sites');
+      const sites = await listManagedSites(clientId);
+      const match = sites.find(s => s.id === siteRaw);
+      if (!match) {
+        return json({ error: 'site_id does not belong to this client' }, 400);
+      }
+      // Primary-site uploads store NULL (the canonical "primary" marker), so
+      // the same file uploaded with and without an explicit primary selection
+      // shares one supersession key instead of silently coexisting twice.
+      siteId = match.is_primary ? null : match.id;
+    }
+
     // Process the batch with bounded concurrency (max 5 files in flight at
     // once). Sequential was the direct cause of Cloudflare 524 timeouts on
     // large SF batches: 4-5 big link CSVs (6000+ rows each) pushed a 25-file
@@ -264,7 +286,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     const settled = await mapLimit(
       files,
       5,
-      (file) => processOne(file, clientId, month, userId, userName),
+      (file) => processOne(file, clientId, month, userId, userName, siteId),
     );
     const results: PerFileResult[] = [];
     for (let i = 0; i < settled.length; i++) {

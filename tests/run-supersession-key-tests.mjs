@@ -16,7 +16,7 @@ async function seed() {
   // Each call to createClient with 'file::memory:' produces an isolated
   // in-memory SQLite database — no shared state between test cases.
   const db = createClient({ url: 'file::memory:' });
-  await db.execute(`CREATE TABLE csv_uploads (id TEXT PRIMARY KEY, client_id TEXT, original_name TEXT, detected_format TEXT, month TEXT, row_count INTEGER, error TEXT, created_at TEXT DEFAULT (datetime('now')))`);
+  await db.execute(`CREATE TABLE csv_uploads (id TEXT PRIMARY KEY, client_id TEXT, original_name TEXT, detected_format TEXT, month TEXT, row_count INTEGER, error TEXT, site_id TEXT, created_at TEXT DEFAULT (datetime('now')))`);
   await db.execute(`CREATE TABLE crawl_urls (id TEXT PRIMARY KEY, client_id TEXT, csv_upload_id TEXT, month TEXT, url TEXT)`);
   return db;
 }
@@ -164,6 +164,56 @@ await test('INVERSE assertion: OLD buggy order (restore prior while new still li
     );
   }
   assert.ok(threw, 'restoring prior row while new row is still live MUST violate the partial unique index');
+});
+
+// ─── Site-aware key (multi-site Phase 1, migration 070) ─────────────────────
+//
+// Two sites of ONE client share filenames (GA4 snapshots, GSC Queries.csv...).
+// Before site keying, the second site's upload superseded the first site's
+// data — silent loss. The key now includes COALESCE(site_id,'') so the same
+// filename lives once PER SITE per month, while a re-upload for the SAME site
+// still supersedes its own prior row. NULL = the client's primary site.
+
+await test("a DIFFERENT site's same-named upload does NOT supersede this site's data", async () => {
+  const db = await seed();
+  // Primary site's upload (site_id NULL) with a child row.
+  await db.execute({ sql: `INSERT INTO csv_uploads (id, client_id, original_name, detected_format, month, site_id) VALUES ('up_zkh','c1','data-export.csv','crawl_internal','2026-06', NULL)`, args: [] });
+  await db.execute({ sql: `INSERT INTO crawl_urls (id, client_id, csv_upload_id, month, url) VALUES ('r_zkh','c1','up_zkh','2026-06','https://zkh/x')`, args: [] });
+  // Second site uploads the SAME filename, same month, same format.
+  await db.execute({ sql: `INSERT INTO csv_uploads (id, client_id, original_name, detected_format, month, site_id) VALUES ('up_mvp','c1','data-export.csv','crawl_internal','2026-06','site-mvp')`, args: [] });
+  await __clearPreviousDataForTest(db, 'c1', '2026-06', 'crawl_internal', 'data-export.csv', 'up_mvp', 'site-mvp');
+
+  const zkhRows = await db.execute(`SELECT COUNT(*) FROM crawl_urls WHERE csv_upload_id='up_zkh'`);
+  const zkhLive = await db.execute(`SELECT COUNT(*) FROM csv_uploads WHERE id='up_zkh' AND error IS NULL`);
+  assert.strictEqual(Number(zkhRows.rows[0][0]), 1, "the OTHER site's child rows must survive");
+  assert.strictEqual(Number(zkhLive.rows[0][0]), 1, "the OTHER site's upload row must stay live");
+});
+
+await test("a re-upload for the SAME site still supersedes that site's prior row", async () => {
+  const db = await seed();
+  await db.execute({ sql: `INSERT INTO csv_uploads (id, client_id, original_name, detected_format, month, site_id) VALUES ('up_mvp1','c1','data-export.csv','crawl_internal','2026-06','site-mvp')`, args: [] });
+  await db.execute({ sql: `INSERT INTO crawl_urls (id, client_id, csv_upload_id, month, url) VALUES ('r_mvp','c1','up_mvp1','2026-06','https://mvp/x')`, args: [] });
+  await db.execute({ sql: `INSERT INTO csv_uploads (id, client_id, original_name, detected_format, month, site_id) VALUES ('up_mvp2','c1','data-export.csv','crawl_internal','2026-06','site-mvp')`, args: [] });
+  await __clearPreviousDataForTest(db, 'c1', '2026-06', 'crawl_internal', 'data-export.csv', 'up_mvp2', 'site-mvp');
+
+  const prior = await db.execute(`SELECT error FROM csv_uploads WHERE id='up_mvp1'`);
+  const rows = await db.execute(`SELECT COUNT(*) FROM crawl_urls WHERE csv_upload_id='up_mvp1'`);
+  assert.ok(prior.rows[0][0], "same site's prior upload must be superseded");
+  assert.strictEqual(Number(rows.rows[0][0]), 0, "same site's prior child rows must be cleared");
+});
+
+await test('the site-aware live unique index allows the same filename once PER SITE, still one per site', async () => {
+  const db = await seed();
+  await db.execute(`CREATE UNIQUE INDEX ux_csv_uploads_live ON csv_uploads (client_id, month, detected_format, original_name, COALESCE(site_id, '')) WHERE error IS NULL`);
+  // Same key, two sites: both live — allowed.
+  await db.execute({ sql: `INSERT INTO csv_uploads (id, client_id, original_name, detected_format, month, site_id) VALUES ('a','c1','Queries.csv','gsc_queries','2026-06', NULL)`, args: [] });
+  await db.execute({ sql: `INSERT INTO csv_uploads (id, client_id, original_name, detected_format, month, site_id) VALUES ('b','c1','Queries.csv','gsc_queries','2026-06','site-mvp')`, args: [] });
+  // A second LIVE row for the SAME site is still rejected.
+  let rejected = false;
+  try {
+    await db.execute({ sql: `INSERT INTO csv_uploads (id, client_id, original_name, detected_format, month, site_id) VALUES ('c','c1','Queries.csv','gsc_queries','2026-06','site-mvp')`, args: [] });
+  } catch { rejected = true; }
+  assert.ok(rejected, 'second live upload of the same key for the SAME site must be rejected');
 });
 
 console.log(`\n${passed}/${passed + failed} passed`);

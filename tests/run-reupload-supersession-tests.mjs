@@ -39,11 +39,12 @@ async function seed() {
     month TEXT,
     row_count INTEGER,
     error TEXT,
+    site_id TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`);
-  // Exact DDL shape from migration 055.
+  // Exact DDL shape from migration 070 (site-aware key superseding 055's).
   await db.execute(`CREATE UNIQUE INDEX ux_csv_uploads_live
-    ON csv_uploads (client_id, month, detected_format, original_name)
+    ON csv_uploads (client_id, month, detected_format, original_name, COALESCE(site_id, ''))
     WHERE error IS NULL`);
   // link_graph mirror (the columns the 'links' parser touches for dedup).
   await db.execute(`CREATE TABLE link_graph (

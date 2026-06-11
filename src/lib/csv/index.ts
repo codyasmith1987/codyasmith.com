@@ -159,12 +159,16 @@ async function collectClearStatements(
   filename: string,
   currentUploadId: string,
   db: typeof turso = turso,
+  siteId: string | null = null,
 ): Promise<{ latestPrevId: string | null; clearStatements: Array<{ sql: string; args: any[] }> }> {
   const config = FORMAT_SOURCES[format];
 
+  // Site-aware key (multi-site Phase 1, migration 070): the same filename from
+  // a DIFFERENT site of the same client must never supersede this one. NULL
+  // site_id means the client's primary/only site, so two NULLs still match.
   const prevUploads = await db.execute({
-    sql: 'SELECT id FROM csv_uploads WHERE client_id = ? AND month = ? AND detected_format = ? AND original_name = ? AND id != ? ORDER BY created_at ASC',
-    args: [clientId, month, format, filename, currentUploadId],
+    sql: `SELECT id FROM csv_uploads WHERE client_id = ? AND month = ? AND detected_format = ? AND original_name = ? AND id != ? AND COALESCE(site_id, '') = COALESCE(?, '') ORDER BY created_at ASC`,
+    args: [clientId, month, format, filename, currentUploadId, siteId],
   });
 
   if (prevUploads.rows.length === 0) return { latestPrevId: null, clearStatements: [] };
@@ -209,9 +213,10 @@ async function clearPreviousData(
   filename: string,
   currentUploadId: string,
   db: typeof turso = turso,
+  siteId: string | null = null,
 ): Promise<string | null> {
   const { latestPrevId, clearStatements } = await collectClearStatements(
-    clientId, month, format, filename, currentUploadId, db,
+    clientId, month, format, filename, currentUploadId, db, siteId,
   );
   for (const stmt of clearStatements) {
     await db.execute(stmt);
@@ -256,9 +261,9 @@ export async function runAtomicIngest(
 // Test-only seam: lets the unit test exercise clearPreviousData against an
 // in-memory libsql db without prod. Not used in app code.
 export async function __clearPreviousDataForTest(
-  db: typeof turso, clientId: string, month: string, format: string, filename: string, currentUploadId: string,
+  db: typeof turso, clientId: string, month: string, format: string, filename: string, currentUploadId: string, siteId: string | null = null,
 ): Promise<string | null> {
-  return clearPreviousData(clientId, month, format, filename, currentUploadId, db);
+  return clearPreviousData(clientId, month, format, filename, currentUploadId, db, siteId);
 }
 
 export interface IngestResult {
@@ -275,6 +280,12 @@ export async function ingestCSV(
   month: string,
   filename: string,
   uploadedBy: string,
+  // Which of the client's sites this file belongs to (multi-site Phase 1,
+  // migration 070). NULL = the client's primary/only site. Crawl-family data
+  // self-identifies per row by hostname; this matters for the families that
+  // cannot (GA4, GSC, keywords, metrics) so two sites' same-named exports
+  // never supersede each other.
+  siteId: string | null = null,
 ): Promise<IngestResult> {
   const { format, headers } = detectFormat(raw, filename);
   const uploadId = nanoid();
@@ -298,23 +309,23 @@ export async function ingestCSV(
     // restore it in the parse-failure catch below (mirrors the typed-branch
     // rollback ordering: new row errored first, then prior row restored).
     const priorUnknown = await turso.execute({
-      sql: `SELECT id FROM csv_uploads WHERE client_id = ? AND month = ? AND detected_format = 'unknown_stored' AND original_name = ? AND error IS NULL LIMIT 1`,
-      args: [clientId, month, filename],
+      sql: `SELECT id FROM csv_uploads WHERE client_id = ? AND month = ? AND detected_format = 'unknown_stored' AND original_name = ? AND COALESCE(site_id, '') = COALESCE(?, '') AND error IS NULL LIMIT 1`,
+      args: [clientId, month, filename, siteId],
     });
     const clearedUnknownId: string | null = priorUnknown.rows.length > 0 ? (priorUnknown.rows[0][0] as string) : null;
 
     await turso.execute({
       sql: `UPDATE csv_uploads SET error = 'Superseded by newer upload'
             WHERE client_id = ? AND month = ? AND detected_format = 'unknown_stored'
-              AND original_name = ? AND error IS NULL`,
-      args: [clientId, month, filename],
+              AND original_name = ? AND COALESCE(site_id, '') = COALESCE(?, '') AND error IS NULL`,
+      args: [clientId, month, filename, siteId],
     });
 
     // Create upload record
     try {
       await turso.execute({
-        sql: 'INSERT INTO csv_uploads (id, client_id, original_name, detected_format, month, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)',
-        args: [uploadId, clientId, filename, format, month, uploadedBy],
+        sql: 'INSERT INTO csv_uploads (id, client_id, original_name, detected_format, month, uploaded_by, site_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        args: [uploadId, clientId, filename, format, month, uploadedBy, siteId],
       });
     } catch (insertErr: any) {
       if (insertErr.message?.includes('UNIQUE constraint')) {
@@ -371,7 +382,7 @@ export async function ingestCSV(
     // SELECT the prior live upload OUTSIDE the batch (reads cannot be part of a
     // libsql write-batch) and get back the DELETE/supersede statements to fold
     // into the atomic batch — empty if there is no prior upload of this key.
-    const { clearStatements } = await collectClearStatements(clientId, month, format, filename, uploadId);
+    const { clearStatements } = await collectClearStatements(clientId, month, format, filename, uploadId, turso, siteId);
 
     const parserStatements = builder(raw, clientId, month, uploadId);
 
@@ -379,8 +390,8 @@ export async function ingestCSV(
       await runAtomicIngest(turso, {
         clearStatements,
         uploadInsert: {
-          sql: 'INSERT INTO csv_uploads (id, client_id, original_name, detected_format, month, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)',
-          args: [uploadId, clientId, filename, format, month, uploadedBy],
+          sql: 'INSERT INTO csv_uploads (id, client_id, original_name, detected_format, month, uploaded_by, site_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          args: [uploadId, clientId, filename, format, month, uploadedBy, siteId],
         },
         parserStatements,
         rowCountUpdate: {
@@ -449,13 +460,13 @@ export async function ingestCSV(
   // by a legitimate re-upload. Also clears the prior upload's child rows
   // for formats in FORMAT_SOURCES (per-filename key from Task 1).
   // Track what was cleared so we can undo if parsing fails.
-  const clearedUploadId = await clearPreviousData(clientId, month, format, filename, uploadId);
+  const clearedUploadId = await clearPreviousData(clientId, month, format, filename, uploadId, turso, siteId);
 
   // Create upload record (after supersede so the partial unique index is satisfied)
   try {
     await turso.execute({
-      sql: 'INSERT INTO csv_uploads (id, client_id, original_name, detected_format, month, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)',
-      args: [uploadId, clientId, filename, format, month, uploadedBy],
+      sql: 'INSERT INTO csv_uploads (id, client_id, original_name, detected_format, month, uploaded_by, site_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      args: [uploadId, clientId, filename, format, month, uploadedBy, siteId],
     });
   } catch (insertErr: any) {
     if (insertErr.message?.includes('UNIQUE constraint')) {

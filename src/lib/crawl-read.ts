@@ -9,6 +9,7 @@
 
 import turso from './turso';
 import { realUserPageRowFilters, realUserPageUrlExclusions } from './csv/page-count-sql';
+import { uploadScopeFragment, type SiteScope } from './site-scope';
 
 export interface SiteIssueRow {
   issue_name: string;
@@ -63,33 +64,39 @@ export function rollupByPriority(issues: SiteIssueRow[]): { high: number; medium
   return out;
 }
 
-export async function getHealthLatestMonth(clientId: string): Promise<string | null> {
+// All readers take an optional site scope (multi-site Phase 1b). Unscoped
+// calls (single-site clients, the report pipeline) produce byte-identical SQL
+// to before — the fragment is empty when scope is undefined.
+export async function getHealthLatestMonth(clientId: string, scope?: SiteScope): Promise<string | null> {
+  const s = uploadScopeFragment(clientId, scope);
   const r = await turso.execute({
-    sql: 'SELECT DISTINCT month FROM site_issues WHERE client_id = ? ORDER BY month DESC LIMIT 1',
-    args: [clientId],
+    sql: `SELECT DISTINCT month FROM site_issues WHERE client_id = ?${s.frag} ORDER BY month DESC LIMIT 1`,
+    args: [clientId, ...s.args],
   });
   return r.rows.length ? (r.rows[0][0] as string) : null;
 }
 
-export async function getHealthPriorMonth(clientId: string, currentMonth: string): Promise<string | null> {
+export async function getHealthPriorMonth(clientId: string, currentMonth: string, scope?: SiteScope): Promise<string | null> {
+  const s = uploadScopeFragment(clientId, scope);
   const r = await turso.execute({
-    sql: 'SELECT DISTINCT month FROM site_issues WHERE client_id = ? AND month < ? ORDER BY month DESC LIMIT 1',
-    args: [clientId, currentMonth],
+    sql: `SELECT DISTINCT month FROM site_issues WHERE client_id = ? AND month < ?${s.frag} ORDER BY month DESC LIMIT 1`,
+    args: [clientId, currentMonth, ...s.args],
   });
   return r.rows.length ? (r.rows[0][0] as string) : null;
 }
 
 // The issue rollup for one month. Deduped by name (MAX affected_urls wins
 // when multiple tools report the same issue), matching dashboard/issues.ts.
-export async function getHealthMonthData(clientId: string, month: string): Promise<HealthMonthData> {
+export async function getHealthMonthData(clientId: string, month: string, scope?: SiteScope): Promise<HealthMonthData> {
+  const s = uploadScopeFragment(clientId, scope);
   const res = await turso.execute({
     sql: `SELECT issue_name, issue_type, priority, MAX(affected_urls) AS affected_urls,
                  MAX(pct_of_total) AS pct_of_total, description, how_to_fix
           FROM site_issues
-          WHERE client_id = ? AND month = ?
+          WHERE client_id = ? AND month = ?${s.frag}
           GROUP BY issue_name
           ORDER BY affected_urls DESC`,
-    args: [clientId, month],
+    args: [clientId, month, ...s.args],
   });
   const allRows: SiteIssueRow[] = res.rows.map(row => ({
     issue_name: row[0] as string,
@@ -127,14 +134,15 @@ export async function getHealthMonthData(clientId: string, month: string): Promi
 // Navigable page count, matching the dashboard's "friendly" definition.
 // Optionally scoped to one crawl month so the report is month-correct (the
 // dashboard counts across all of a client's crawl_urls).
-export async function getNavigablePageCount(clientId: string, month?: string): Promise<number> {
+export async function getNavigablePageCount(clientId: string, month?: string, scope?: SiteScope): Promise<number> {
   const monthClause = month ? 'AND month = ?' : '';
-  const args = month ? [clientId, month] : [clientId];
+  const s = uploadScopeFragment(clientId, scope);
+  const args = month ? [clientId, month, ...s.args] : [clientId, ...s.args];
   const res = await turso.execute({
     sql: `SELECT COUNT(DISTINCT url) AS n
           FROM crawl_urls
           WHERE client_id = ?
-          ${monthClause}
+          ${monthClause}${s.frag}
           ${realUserPageRowFilters()}
           ${realUserPageUrlExclusions('url')}`,
     args,
@@ -145,18 +153,19 @@ export async function getNavigablePageCount(clientId: string, month?: string): P
 // Response-code bands derived directly from crawl_urls.status_code. Avoids
 // depending on an unverified metrics-table slug; the band math is the same
 // derivation the issue layer uses.
-export async function getResponseCodeCounts(clientId: string, month: string): Promise<ResponseCodeCount[]> {
+export async function getResponseCodeCounts(clientId: string, month: string, scope?: SiteScope): Promise<ResponseCodeCount[]> {
   // Restrict to real HTTP status ranges (100-599). This intentionally
   // excludes status 0 (no response / DNS or connection failure) and any
   // out-of-range value; the report's bands are 2xx-5xx and a no-response
   // URL is not a response code. Consistent with the navigable-page count,
   // which also only counts 200s.
+  const s = uploadScopeFragment(clientId, scope);
   const res = await turso.execute({
     sql: `SELECT (status_code / 100) AS band, COUNT(DISTINCT url) AS n
           FROM crawl_urls
-          WHERE client_id = ? AND month = ? AND status_code BETWEEN 100 AND 599
+          WHERE client_id = ? AND month = ? AND status_code BETWEEN 100 AND 599${s.frag}
           GROUP BY band`,
-    args: [clientId, month],
+    args: [clientId, month, ...s.args],
   });
   const byBand = new Map<number, number>();
   for (const r of res.rows) byBand.set(Number(r[0]), Number(r[1]));

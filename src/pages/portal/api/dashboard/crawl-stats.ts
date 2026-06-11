@@ -40,6 +40,7 @@
 import type { APIRoute } from 'astro';
 import turso from '../../../../lib/turso';
 import { realUserPageRowFilters, realUserPageUrlExclusions } from '../../../../lib/csv/page-count-sql';
+import { resolveSiteScope, uploadScopeFragment } from '../../../../lib/site-scope';
 
 export const prerender = false;
 
@@ -54,12 +55,18 @@ export const GET: APIRoute = async ({ locals, url }) => {
     : locals.user.client_id;
   if (!clientId) return json({ error: 'No client specified' }, 400);
 
+  // Per-site scoping for multi-site clients (Phase 1b): same semantics as the
+  // issues endpoint, so the headline X-of-Y and the issues panel describe the
+  // same site. Single-site clients are unscoped and unchanged.
+  const scope = await resolveSiteScope(clientId, url.searchParams.get('site'));
+  const S = uploadScopeFragment(clientId, scope);
+
   // Resolve the latest crawl cycle so the page count Y is ONE cycle, not
   // all-time. With 2+ crawls loaded, an all-months DISTINCT url denominator
   // mixes cycles and disagrees with the month-scoped numerator below. (M5)
   const crawlMonthRes = await turso.execute({
-    sql: 'SELECT MAX(month) AS m FROM crawl_urls WHERE client_id = ?',
-    args: [clientId],
+    sql: `SELECT MAX(month) AS m FROM crawl_urls WHERE client_id = ?${S.frag}`,
+    args: [clientId, ...S.args],
   });
   const crawlMonth = (crawlMonthRes.rows[0]?.[0] as string | null) ?? null;
 
@@ -69,10 +76,10 @@ export const GET: APIRoute = async ({ locals, url }) => {
     sql: `SELECT COUNT(DISTINCT url) AS n
           FROM crawl_urls
           WHERE client_id = ?
-          ${crawlMonth ? 'AND month = ?' : ''}
+          ${crawlMonth ? 'AND month = ?' : ''}${S.frag}
           ${realUserPageRowFilters()}
           ${realUserPageUrlExclusions('url')}`,
-    args: crawlMonth ? [clientId, crawlMonth] : [clientId],
+    args: crawlMonth ? [clientId, crawlMonth, ...S.args] : [clientId, ...S.args],
   });
   const navigablePages = (pagesResult.rows[0]?.[0] as number) || 0;
 
@@ -84,8 +91,8 @@ export const GET: APIRoute = async ({ locals, url }) => {
           FROM crawl_urls
           WHERE client_id = ?
             AND status_code = 200
-            AND LOWER(IFNULL(content_type, '')) LIKE '%html%'`,
-    args: [clientId],
+            AND LOWER(IFNULL(content_type, '')) LIKE '%html%'${S.frag}`,
+    args: [clientId, ...S.args],
   });
   const urlsCrawled = (urlsResult.rows[0]?.[0] as number) || 0;
 
@@ -94,9 +101,11 @@ export const GET: APIRoute = async ({ locals, url }) => {
   // numerator and the Y denominator describe the same set. Joined
   // back to crawl_urls so we can apply realUserPageRowFilters (status,
   // content-type, indexability live there, not on site_issue_urls).
+  // The JOIN needs a table-qualified scope column to avoid ambiguity.
+  const Ssiu = uploadScopeFragment(clientId, scope, 'siu.csv_upload_id');
   const monthResult = await turso.execute({
-    sql: 'SELECT DISTINCT month FROM site_issue_urls WHERE client_id = ? ORDER BY month DESC LIMIT 1',
-    args: [clientId],
+    sql: `SELECT DISTINCT month FROM site_issue_urls WHERE client_id = ?${S.frag} ORDER BY month DESC LIMIT 1`,
+    args: [clientId, ...S.args],
   });
   let distinctAffectedUrls = 0;
   let month: string | null = null;
@@ -109,10 +118,10 @@ export const GET: APIRoute = async ({ locals, url }) => {
               ON cu.url = siu.url AND cu.client_id = siu.client_id
               AND cu.month = siu.month
             WHERE siu.client_id = ?
-              AND siu.month = ?
+              AND siu.month = ?${Ssiu.frag}
             ${realUserPageRowFilters('cu')}
             ${realUserPageUrlExclusions('siu.url')}`,
-      args: [clientId, month],
+      args: [clientId, month, ...Ssiu.args],
     });
     distinctAffectedUrls = (affectedResult.rows[0]?.[0] as number) || 0;
   }

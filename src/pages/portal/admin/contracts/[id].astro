@@ -33,6 +33,12 @@ const statusColors: Record<string, string> = {
   overdue: 'bg-red-500/10 text-red-400',
   payment_pending: 'bg-violet-500/10 text-violet-400',
 };
+// Invoice rows only (the shared statusColors map above also serves projects/
+// agreements/change-orders, whose raw tokens are fine).
+const invoiceStatusLabels: Record<string, string> = {
+  payment_pending: 'Payment pending',
+  carried_forward: 'Carried forward',
+};
 ---
 
 <Portal title={contract.title}>
@@ -190,7 +196,7 @@ const statusColors: Record<string, string> = {
                   <p class="text-sm text-neutral-200 group-hover:text-amber-600 transition-colors font-mono">{inv.invoice_number}</p>
                   <p class="text-xs text-neutral-400 mt-0.5">${inv.total.toFixed(2)}{inv.amount_paid > 0 ? ` (paid: $${inv.amount_paid.toFixed(2)})` : ''}</p>
                 </div>
-                <span class={`text-[10px] font-mono tracking-wide uppercase px-2 py-0.5 rounded-full ${statusColors[inv.status] || ''}`}>{inv.status}</span>
+                <span class={`text-[10px] font-mono tracking-wide uppercase px-2 py-0.5 rounded-full ${statusColors[inv.status] || ''}`}>{invoiceStatusLabels[inv.status] || inv.status}</span>
               </div>
             </a>
           ))}

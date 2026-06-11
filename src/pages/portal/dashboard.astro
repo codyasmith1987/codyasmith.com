@@ -120,8 +120,13 @@ if (!isAdmin && user.client_id) {
         // Open-status whitelist (matches getClientOpenBalance + invoices.astro):
         // a status != 'draft' blacklist would also match a 'carried_forward'
         // invoice, double-prompting payment for a balance already rolled onto a
-        // newer invoice (dual audit 2026-06-05).
-        sql: `SELECT id, invoice_number, total, amount_paid FROM invoices WHERE client_id = ? AND status IN ('sent','partial','overdue','payment_pending') AND amount_paid < total ORDER BY issued_date DESC LIMIT 10`,
+        // newer invoice (dual audit 2026-06-05). payment_pending is deliberately
+        // EXCLUDED here even though it counts in balance totals: this query feeds
+        // the imperative "Pay invoice" action card, and nudging a client whose
+        // check is already in the mail contradicts the status's whole purpose
+        // (triple audit 2026-06-09). The invoices page still shows it as a
+        // "Payment pending" badge.
+        sql: `SELECT id, invoice_number, total, amount_paid FROM invoices WHERE client_id = ? AND status IN ('sent','partial','overdue') AND amount_paid < total ORDER BY issued_date DESC LIMIT 10`,
         args: [user.client_id],
       });
       for (const r of (invRes.rows as any[])) {

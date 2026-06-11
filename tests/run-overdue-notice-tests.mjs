@@ -61,6 +61,18 @@ test('non-overdue status is not auto-emailable', () => {
   assert.strictEqual(isAutoOverdueEmailEligible({ status: 'partial', amount_paid: 100, total: 500 }), false);
 });
 
+test('payment_pending is NEVER auto-dunned (the check is in the mail; triple audit 2026-06-09)', () => {
+  assert.strictEqual(isAutoOverdueEmailEligible({ status: 'payment_pending', amount_paid: 0, total: 500 }), false);
+});
+
+test('OVERDUE_MARK_WHERE never flips payment_pending or terminal statuses to overdue', () => {
+  // The cron's mark-overdue predicate whitelists sent/partial only; the whole
+  // safety of payment_pending ("counts as open, never overdue, never dunned")
+  // rests on it staying OUT of this list and the dunning queries.
+  assert.ok(OVERDUE_MARK_WHERE.includes("status IN ('sent', 'partial')"));
+  assert.ok(!OVERDUE_MARK_WHERE.includes('payment_pending'));
+});
+
 test('reminders-paused overdue invoice is not auto-emailed', () => {
   assert.strictEqual(isAutoOverdueEmailEligible({ status: 'overdue', amount_paid: 0, total: 500, reminders_paused: 1 }), false);
 });

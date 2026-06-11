@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { isOverdueNoticeDue, isAutoOverdueEmailEligible, OVERDUE_MARK_WHERE } from '../src/lib/billing.ts';
+import { isOverdueNoticeDue, isAutoOverdueEmailEligible, isStalePaymentPending, OVERDUE_MARK_WHERE } from '../src/lib/billing.ts';
 
 let passed = 0, failed = 0;
 function test(name, fn) { try { fn(); console.log(`[PASS] ${name}`); passed++; } catch (e) { console.error(`[FAIL] ${name}: ${e.message}`); failed++; } }
@@ -63,6 +63,36 @@ test('non-overdue status is not auto-emailable', () => {
 
 test('payment_pending is NEVER auto-dunned (the check is in the mail; triple audit 2026-06-09)', () => {
   assert.strictEqual(isAutoOverdueEmailEligible({ status: 'payment_pending', amount_paid: 0, total: 500 }), false);
+});
+
+// --- Stale payment_pending (admin-only aging alert; chat-wide audit 2026-06-11:
+// a never-arriving "check in the mail" must not sit silent forever) ---
+
+test('payment_pending 14+ days past due IS stale', () => {
+  const now = new Date('2026-06-25T12:00:00Z');
+  assert.strictEqual(isStalePaymentPending({ status: 'payment_pending', amount_paid: 0, total: 1360, due_date: '2026-06-09' }, now), true);
+});
+
+test('payment_pending under 14 days past due is NOT stale', () => {
+  const now = new Date('2026-06-15T12:00:00Z');
+  assert.strictEqual(isStalePaymentPending({ status: 'payment_pending', amount_paid: 0, total: 1360, due_date: '2026-06-09' }, now), false);
+});
+
+test('other statuses never flag as stale-pending', () => {
+  const now = new Date('2026-07-25T12:00:00Z');
+  for (const s of ['sent', 'overdue', 'partial', 'paid', 'carried_forward']) {
+    assert.strictEqual(isStalePaymentPending({ status: s, amount_paid: 0, total: 1360, due_date: '2026-06-09' }, now), false, s);
+  }
+});
+
+test('a settled payment_pending invoice is not stale (paid >= total)', () => {
+  const now = new Date('2026-07-25T12:00:00Z');
+  assert.strictEqual(isStalePaymentPending({ status: 'payment_pending', amount_paid: 1360, total: 1360, due_date: '2026-06-09' }, now), false);
+});
+
+test('no due date -> never stale (no clock to measure against)', () => {
+  const now = new Date('2026-07-25T12:00:00Z');
+  assert.strictEqual(isStalePaymentPending({ status: 'payment_pending', amount_paid: 0, total: 1360, due_date: null }, now), false);
 });
 
 test('OVERDUE_MARK_WHERE never flips payment_pending or terminal statuses to overdue', () => {

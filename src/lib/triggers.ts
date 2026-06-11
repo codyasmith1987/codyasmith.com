@@ -182,6 +182,34 @@ export async function onDunningEscalation(clientId: string, clientName: string, 
 }
 
 // ============================================================
+// Stale payment_pending alert (chat-wide audit 2026-06-11). payment_pending
+// is excluded from all client-facing dunning by design ("the check is in the
+// mail"), so a never-arriving check would sit silent forever. This alerts the
+// ADMIN only -- no client email -- once per invoice per ~7 days while it stays
+// stale, via the same notification-existence dedupe as onDunningEscalation.
+// Returns whether an alert actually fired (so the caller can count).
+// ============================================================
+export async function onStalePaymentPending(invoiceId: string, clientId: string, clientName: string, invoiceNumber: string, balanceStr: string, daysPast: number): Promise<boolean> {
+  try {
+    const existing = await turso.execute({
+      sql: `SELECT 1 FROM notifications WHERE entity_type = 'stale_payment_pending' AND entity_id = ? AND created_at > datetime('now', '-7 days') LIMIT 1`,
+      args: [invoiceId],
+    });
+    if (existing.rows.length > 0) return false;
+  } catch (err) {
+    logger.error('onStalePaymentPending dedup check failed', err);
+  }
+  const line = `${clientName}'s invoice ${invoiceNumber} (${balanceStr}) has been payment-pending for ${daysPast} days past its due date. The promised payment may not have arrived -- worth a check-in. No automatic reminders go out for a payment-pending invoice; the manual Send reminder button works if you want to nudge.`;
+  try {
+    await notifyAdmins({ type: 'general', title: `Payment pending ${daysPast} days: ${clientName} ${invoiceNumber}`, body: line, entity_type: 'stale_payment_pending', entity_id: invoiceId });
+  } catch (err) {
+    logger.error('onStalePaymentPending notify failed', err);
+    return false;
+  }
+  return true;
+}
+
+// ============================================================
 // Trigger 1: Task marked complete
 // ============================================================
 export async function onTaskCompleted(taskId: string): Promise<void> {

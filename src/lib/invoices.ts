@@ -115,6 +115,12 @@ export interface CreateInvoiceInput {
   due_date?: string;
   notes?: string;
   created_by: string;
+  // Service period (optional). A NULL period means at-signing/one-off; a set
+  // period makes the invoice visible to the recurring engine's per-period
+  // dedupe (invoiceExistsForPeriod), so a hand-created recurring invoice does
+  // not get double-billed by the nightly generator (chat-wide audit 2026-06-11).
+  billing_period_start?: string;
+  billing_period_end?: string;
 }
 
 function isInvoiceNumberCollision(err: any): boolean {
@@ -133,12 +139,13 @@ function delay(ms: number): Promise<void> {
 export async function createInvoice(data: CreateInvoiceInput): Promise<string> {
   const id = nanoid();
   await turso.execute({
-    sql: `INSERT INTO invoices (id, contract_id, client_id, milestone_id, invoice_number, due_date, notes, created_by)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO invoices (id, contract_id, client_id, milestone_id, invoice_number, due_date, notes, created_by, billing_period_start, billing_period_end)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id, data.contract_id, data.client_id, data.milestone_id ?? null,
       data.invoice_number, data.due_date ?? null, data.notes ?? null,
       data.created_by,
+      data.billing_period_start ?? null, data.billing_period_end ?? null,
     ],
   });
   return id;
@@ -220,28 +227,30 @@ export async function getOverdueInvoices(): Promise<Invoice[]> {
 // not-fully-settled sent/partial/overdue rows. Used by the admin invoices
 // summary strip. (The client portal computes its own balance from the
 // client_visible subset so the figure always matches the rows it renders.)
-export async function getClientOpenBalance(clientId: string): Promise<{ open: number; overdue: number; count: number; oldestDaysPast: number }> {
+export async function getClientOpenBalance(clientId: string): Promise<{ open: number; overdue: number; pending: number; count: number; oldestDaysPast: number }> {
   const row = await queryOne(
     `SELECT
        COALESCE(SUM(total - amount_paid), 0) AS open,
        COALESCE(SUM(CASE WHEN status = 'overdue' OR (status IN ('sent','partial') AND due_date < date('now')) THEN total - amount_paid ELSE 0 END), 0) AS overdue,
+       COALESCE(SUM(CASE WHEN status = 'payment_pending' THEN total - amount_paid ELSE 0 END), 0) AS pending,
        COALESCE(MAX(CASE WHEN due_date IS NOT NULL AND (status = 'overdue' OR (status IN ('sent','partial') AND due_date < date('now'))) THEN CAST(julianday('now') - julianday(due_date) AS INTEGER) ELSE 0 END), 0) AS oldest_days_past,
        COUNT(*) AS count
      FROM invoices
      WHERE client_id = ? AND status IN ('sent','partial','overdue','payment_pending') AND amount_paid < total`,
     [clientId]);
-  return { open: row?.open ?? 0, overdue: row?.overdue ?? 0, count: row?.count ?? 0, oldestDaysPast: row?.oldest_days_past ?? 0 };
+  return { open: row?.open ?? 0, overdue: row?.overdue ?? 0, pending: row?.pending ?? 0, count: row?.count ?? 0, oldestDaysPast: row?.oldest_days_past ?? 0 };
 }
 
 // Portfolio AR rollup: one row per client that has any open invoice, with the
 // same open/overdue/age semantics as getClientOpenBalance. Backs the admin
 // "who owes what" billing hub. Only clients with a balance are returned; the
 // caller joins client names (and the manual-billing flag) from getAllClients.
-export async function getAllClientsOpenBalance(): Promise<Array<{ client_id: string; open: number; overdue: number; count: number; oldestDaysPast: number }>> {
+export async function getAllClientsOpenBalance(): Promise<Array<{ client_id: string; open: number; overdue: number; pending: number; count: number; oldestDaysPast: number }>> {
   const rows = await queryAll(
     `SELECT client_id,
        COALESCE(SUM(total - amount_paid), 0) AS open,
        COALESCE(SUM(CASE WHEN status = 'overdue' OR (status IN ('sent','partial') AND due_date < date('now')) THEN total - amount_paid ELSE 0 END), 0) AS overdue,
+       COALESCE(SUM(CASE WHEN status = 'payment_pending' THEN total - amount_paid ELSE 0 END), 0) AS pending,
        COALESCE(MAX(CASE WHEN due_date IS NOT NULL AND (status = 'overdue' OR (status IN ('sent','partial') AND due_date < date('now'))) THEN CAST(julianday('now') - julianday(due_date) AS INTEGER) ELSE 0 END), 0) AS oldest_days_past,
        COUNT(*) AS count
      FROM invoices
@@ -253,6 +262,7 @@ export async function getAllClientsOpenBalance(): Promise<Array<{ client_id: str
     client_id: r.client_id as string,
     open: r.open ?? 0,
     overdue: r.overdue ?? 0,
+    pending: r.pending ?? 0,
     count: r.count ?? 0,
     oldestDaysPast: r.oldest_days_past ?? 0,
   }));

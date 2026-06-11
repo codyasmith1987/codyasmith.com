@@ -7,7 +7,7 @@
 
 import turso from './turso';
 import { logger } from './logger';
-import { markOverdueInvoices, generateRecurringInvoices, sendDueReminders, sendOverdueNotices } from './billing';
+import { markOverdueInvoices, generateRecurringInvoices, sendDueReminders, sendOverdueNotices, alertStalePaymentPending } from './billing';
 import { onAutomatedFailure } from './triggers';
 
 export async function runDailyBilling(): Promise<Record<string, unknown>> {
@@ -65,6 +65,19 @@ export async function runDailyBilling(): Promise<Record<string, unknown>> {
     logger.error('billing: sendOverdueNotices failed', err);
     result.overdue_notices_error = err?.message || 'failed';
     await onAutomatedFailure('sendOverdueNotices', err?.message || 'failed');
+  }
+
+  // Stale payment_pending check (admin-only alert, no client email): a
+  // "check is in the mail" invoice that is still unpaid well past its due
+  // date gets flagged to the admin, since payment_pending is excluded from
+  // all client-facing dunning and would otherwise age silently forever.
+  try {
+    const r = await alertStalePaymentPending();
+    result.stale_pending_flagged = r.flagged;
+  } catch (err: any) {
+    logger.error('billing: alertStalePaymentPending failed', err);
+    result.stale_pending_error = err?.message || 'failed';
+    await onAutomatedFailure('alertStalePaymentPending', err?.message || 'failed');
   }
 
   logger.info(`runDailyBilling ran: ${JSON.stringify(result)}`);

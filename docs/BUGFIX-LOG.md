@@ -8,6 +8,30 @@ When working on the portal, **check this file before guessing at any auth, redir
 
 ---
 
+## 2026-06-11 — Invoice saves brick with "Extra recipient is not a valid email address" (stored literal "null" string)
+
+**Symptom.** Saving ANY field change on an invoice (e.g. just flipping Status to paid) returns 400 "Extra recipient is not a valid email address," even though the admin never touched the Extra recipient field. Hit twice on real ZipKit invoices (2026-06-09 and again 2026-06-11 on INV-2026-0003).
+
+**Root cause.** Two layers. (1) The invoice editor's single Save button re-submits EVERY field on every save, including `extra_recipient_email` — so validation of that one optional field gates unrelated saves. (2) The field held the literal 4-character string `"null"` (a stringified JS null that round-tripped through the form at some point before validation existed). `isValidEmail("null")` is correctly false, so every save 400'd. PR #308 softened this to validate-only-on-change, but the corrupt value itself stayed in the DB, and any re-edit that counted as a "change" re-tripped it.
+
+**Fix.** PR #312: literal `"null"`/`"undefined"` strings are treated as serialization junk, not addresses — normalized to empty (clears the field) at the invoice PUT, at billing-contacts POST, and in `resolveInvoiceRecipients` so stored corruption can never block a save or ride into a send. The two corrupt ZKH values were cleared on prod directly. Regression pins in run-invoice-recipients-tests.
+
+**Watch for.** A 400 on save that names a field the admin didn't touch = a shared Save button gating on stale stored data. Check what the form re-submits and whether validation distinguishes "changed" from "re-submitted." For any new optional contact/email field: normalize junk strings at the boundary AND at send.
+
+---
+
+## 2026-06-09 — Manual invoice emails: "$0.00 due", no overdue wording, "Hi Zip"
+
+**Symptom.** Three client-facing email defects from the manual invoice flow, two on a REAL ZipKit send. (1) A hand-created invoice emailed "here is your invoice: $0.00 due" (INV-2026-0005, Cody Test) — the create endpoint required a contract but never read it, so the invoice was an empty shell, and Send had no empty-invoice guard. (2) An invoice Cody sent as an overdue reminder went out as a first-time "Your invoice is ready" with no past-due language (INV-2026-0004 to ZipKit) — the Send button had exactly one template, never branching on status; the real dunning copy lived only in the nightly cron, which deliberately skips hand-billed clients. (3) The greeting rendered "Hi Zip" — first whitespace token of a company-style contact name.
+
+**Root cause.** The manual path (create → itemize → send → remind) was half-wired: itemization existed only in the nightly engine, the send template was static, and there was no preview. The design docs called the empty-create result a regression vs intent.
+
+**Fix.** PRs #308-#312 across 6/9-6/11: $0/itemless send guard; status-aware send via one pure renderer (ready/reminder/overdue) feeding a read-only email preview (`email-preview?variant=`), per-invoice Send reminder / Send overdue notice (allowed for hand-billed clients on explicit click; status-guarded), "Build from contract" itemization with reconcile-or-422 + period stamping, payment_pending status, and a Contact name field driving the greeting. Full record: the 2026-06-09 and 2026-06-11 triple-audit rounds.
+
+**Watch for.** When a manual path mirrors an automated one (send vs cron dunning, build vs engine itemization), audit them as a PAIR — every guard the automated path has, ask where the manual path's equivalent is. The wrong-bill class (emailing a settled/rolled-forward balance) recurred three times across send/reminder paths before both were gated.
+
+---
+
 ## 2026-06-05 — `npm run build` fails on a fresh DB: "table client_metadata has no column named billing_cc_email"
 
 **Symptom.** `npm run build` fails against a fresh/empty database (e.g. a new contributor's local build, or CI on a clean DB) with `LibsqlError: SQLITE_ERROR: table client_metadata has no column named billing_cc_email`, thrown from `runMigrations`. Existing databases (prod, an already-migrated dev2.db) build fine — only a from-scratch DB breaks. The failing migration logged just before the error is `025-seed-cody-test`.

@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import turso from '../../../../lib/turso';
+import { getSiteTrendSeries, attachTrendDeltas } from '../../../../lib/trends';
 
 export const prerender = false;
 
@@ -20,6 +21,15 @@ export const GET: APIRoute = async ({ locals, url }) => {
   // explodes into an unbounded SQL LIMIT. See SEC2-004.
   const rawMonths = parseInt(url.searchParams.get('months') || '6', 10);
   const months = Number.isFinite(rawMonths) ? Math.min(Math.max(rawMonths, 1), 36) : 6;
+
+  // ?series=site: the month-over-month site-data series (GSC, GA4, health,
+  // crawl, keywords) aggregated live from the month-keyed upload tables, with
+  // report-grade deltas attached. The legacy metrics-table path below stays
+  // untouched for its existing consumers.
+  if (url.searchParams.get('series') === 'site') {
+    const series = await getSiteTrendSeries(clientId, months);
+    return json({ months: attachTrendDeltas(series) });
+  }
 
   const result = await turso.execute({
     sql: `SELECT month, metric_key, metric_value

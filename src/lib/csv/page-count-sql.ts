@@ -1,7 +1,8 @@
 // THE single definition of a "real user page": a published destination a
 // human navigates to. status 200 + text/html + indexable, minus taxonomy,
 // utility/system, attachment, and pagination URLs. This is the count WM
-// ecosystem routing / pricing MUST use (benchmarks: f3=6, zipkit=70).
+// ecosystem routing / pricing MUST use (benchmarks: f3=5, zipkit=70; the
+// earlier f3=6 double-counted an in-page #fragment, corrected 2026-06-02).
 // Extracted so crawl-read.ts (dashboard/report) and client-sites.ts
 // (pricing) cannot drift to different definitions.
 

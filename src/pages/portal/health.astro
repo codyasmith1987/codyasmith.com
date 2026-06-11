@@ -80,6 +80,9 @@ const clients = isAdmin ? await getAllClients() : [];
     <!-- Optional hardening recommendations (advisories: not scored, not problems) -->
     <div id="advisory-section" class="mb-8 hidden"></div>
 
+    <!-- Month-over-month movement of the site data (trends) -->
+    <div id="trend-section" class="mb-8 hidden"></div>
+
     <!-- Per-URL insights from crawl_urls / image_urls / redirect_chains -->
     <div id="url-insights" class="space-y-6 mb-8 hidden"></div>
 
@@ -1152,7 +1155,91 @@ const clients = isAdmin ? await getAllClients() : [];
       }
     }
 
+    // ----- Month-over-month trends -----
+    // Renders how the site's numbers moved across recent monthly uploads:
+    // search clicks/impressions/position (GSC), sessions (GA4), scored issues,
+    // broken links, page count, top-10 keywords. Quiet on failure (the issues
+    // panel is the primary surface); hidden entirely with fewer than 2 months.
+    async function loadTrends() {
+      const cid = activeClientId;
+      const container = document.getElementById('trend-section');
+      container.classList.add('hidden');
+      container.innerHTML = '';
+      if (!cid) return;
+
+      let data;
+      try {
+        const res = await fetch(`/portal/api/dashboard/trends?series=site&months=6&client_id=${encodeURIComponent(cid)}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        data = await res.json();
+      } catch { return; }
+
+      const months = data.months || [];
+      if (months.length < 2) return;
+
+      // A value cell: the number plus a small movement chip against the prior
+      // month with data. Improved = emerald, worsened = red, flat = neutral --
+      // direction already accounts for lower-is-better metrics server-side.
+      const chip = (delta) => {
+        if (!delta || delta.direction === 'none' || delta.isNew) return '';
+        if (delta.direction === 'flat') return `<span class="text-neutral-600 ml-1">&middot;</span>`;
+        const up = (delta.absoluteChange ?? 0) > 0;
+        const cls = delta.direction === 'improved' ? 'text-emerald-400' : 'text-red-400';
+        // percentChange is a FRACTION (0.25 = +25%), matching the report
+        // pipeline's Delta shape -- scale to percent for display.
+        const pctVal = delta.percentChange == null ? null : Math.abs(delta.percentChange) * 100;
+        const pct = pctVal == null ? '' : `${pctVal >= 100 ? Math.round(pctVal) : pctVal.toFixed(1)}%`;
+        return `<span class="${cls} ml-1">${up ? '&#9650;' : '&#9660;'}${pct ? ' ' + pct : ''}</span>`;
+      };
+      const cell = (val, delta, fmt) => {
+        if (val == null) return '<td class="px-3 py-2 text-right font-mono text-neutral-700">-</td>';
+        return `<td class="px-3 py-2 text-right font-mono text-neutral-300 whitespace-nowrap">${fmt ? fmt(val) : val.toLocaleString()}<span class="text-[10px]">${chip(delta)}</span></td>`;
+      };
+
+      const COLS = [
+        { label: 'Clicks', get: m => m.gsc?.clicks ?? null, d: 'gsc.clicks' },
+        { label: 'Impressions', get: m => m.gsc?.impressions ?? null, d: 'gsc.impressions' },
+        { label: 'Avg position', get: m => m.gsc?.avg_position ?? null, d: 'gsc.avg_position', fmt: v => v.toFixed(1) },
+        { label: 'Sessions', get: m => m.ga4?.sessions ?? null, d: 'ga4.sessions' },
+        { label: 'Issues', get: m => m.health?.scored_issues ?? null, d: 'health.scored_issues' },
+        { label: 'Broken', get: m => m.crawl?.broken ?? null, d: 'crawl.broken' },
+        { label: 'Pages', get: m => m.crawl?.pages ?? null, d: 'crawl.pages' },
+        { label: 'Top 10 kw', get: m => m.keywords?.top10 ?? null, d: 'keywords.top10' },
+      ];
+      // Only show columns where at least one month has data.
+      const cols = COLS.filter(c => months.some(m => c.get(m) != null));
+      if (cols.length === 0) return;
+
+      const monthLabel = (m) => {
+        const [y, mo] = m.split('-').map(Number);
+        return new Date(y, mo - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      };
+
+      const head = `<tr class="text-[10px] font-mono text-neutral-500 uppercase tracking-wide border-b border-white/5">
+        <th class="text-left px-4 py-3 font-normal">Month</th>
+        ${cols.map(c => `<th class="text-right px-3 py-3 font-normal">${c.label}</th>`).join('')}
+      </tr>`;
+      const rows = months.map(m => `<tr class="border-b border-white/5 last:border-0">
+        <td class="px-4 py-2 font-mono text-xs text-neutral-400 whitespace-nowrap">${monthLabel(m.month)}</td>
+        ${cols.map(c => cell(c.get(m), (m.deltas || {})[c.d], c.fmt)).join('')}
+      </tr>`).join('');
+
+      container.innerHTML = `
+        <div class="health-animate bg-neutral-900/30 border border-white/5 rounded-2xl overflow-hidden">
+          <div class="px-6 py-5 border-b border-white/5">
+            <p class="text-[10px] font-mono text-amber-600 tracking-[0.15em] uppercase mb-1">Month over month</p>
+            <h2 class="font-serif text-xl text-neutral-100">How the numbers are moving</h2>
+            <p class="text-xs text-neutral-500 mt-1">Each month compared with the one before it. Green is moving the right way for that metric; a dash means no data was uploaded for that month.</p>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">${head}${rows}</table>
+          </div>
+        </div>`;
+      container.classList.remove('hidden');
+    }
+
     loadHealth();
     loadUrlInsights();
+    loadTrends();
   </script>
 </Portal>

@@ -21,6 +21,7 @@ const REASONS: Record<string, { status: number; message: string }> = {
   not_found: { status: 404, message: 'Invoice not found' },
   no_recipient: { status: 400, message: 'No billing contact set for this client. Add a primary contact email first.' },
   empty_invoice: { status: 400, message: 'This invoice has no charges yet (total is $0.00). Add line items before sending it.' },
+  wrong_status: { status: 409, message: 'This invoice is settled, voided, or carried forward; it cannot be emailed as due. Only drafts and open invoices can be sent.' },
   pdf_failed: { status: 500, message: 'Could not generate the invoice PDF' },
   send_failed: { status: 502, message: 'The email could not be sent. Check the email configuration and try again.' },
 };

@@ -134,3 +134,15 @@ export const REMINDER_ELIGIBLE_STATUSES = ['sent', 'partial', 'overdue', 'paymen
 export function reminderEligibleStatus(status: string): boolean {
   return (REMINDER_ELIGIBLE_STATUSES as readonly string[]).includes(status);
 }
+
+// Statuses for which "Send to client" (the first-send/re-send action) may fire.
+// Same wrong-bill class as the reminder guard (chat-wide audit 2026-06-11): a
+// carried_forward invoice's balance lives on the invoice it rolled into, so
+// emailing it demands money already billed elsewhere; paid would email a
+// "$X total, $0.00 now due" non-demand; cancelled is voided. draft IS eligible
+// (that is what first-send is for), and open statuses allow a deliberate re-send.
+export const SEND_ELIGIBLE_STATUSES = ['draft', 'sent', 'partial', 'overdue', 'payment_pending'] as const;
+
+export function sendEligibleStatus(status: string): boolean {
+  return (SEND_ELIGIBLE_STATUSES as readonly string[]).includes(status);
+}

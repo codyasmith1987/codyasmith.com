@@ -8,7 +8,7 @@
 // the period bounds are always real, parseable YYYY-MM-DD dates with
 // start strictly before end, for every plausible anchor day. Runs via tsx.
 
-import { getCurrentBillingPeriod, getUpcomingBillingPeriod } from '../src/lib/billing.ts';
+import { getCurrentBillingPeriod, getUpcomingBillingPeriod, manualBuildPeriod } from '../src/lib/billing.ts';
 
 const results = [];
 function test(name, pass, detail = '') {
@@ -78,6 +78,27 @@ function run() {
       const [y, m] = up.end.split('-').map(Number);
       return dayOf(up.end) <= new Date(y, m, 0).getDate();
     })(), `end=${up.end}`);
+  }
+
+  // manualBuildPeriod: the hand-built ("Build from contract") period choice.
+  // Mid-cycle -> the cycle in progress; inside the engine's 7-day pre-issue
+  // window -> the upcoming cycle (matches the engine, so the per-period dedupe
+  // collides instead of double-billing). Chat-wide audit 2026-06-11.
+  {
+    // billing_day=9, clicked 2026-06-11 (2 days INTO the cycle, well before the
+    // next window) -> current cycle 06-09..07-08, NOT the upcoming one.
+    const mid = manualBuildPeriod(9, new Date(2026, 5, 11, 18));
+    test('manualBuildPeriod mid-cycle uses the cycle in progress', mid.start === '2026-06-09' && mid.end === '2026-07-08', JSON.stringify(mid));
+    // Same anchor, clicked 2026-07-03 (inside the 7-day window before 07-09)
+    // -> the upcoming cycle, same as the engine would bill.
+    const win = manualBuildPeriod(9, new Date(2026, 6, 3, 18));
+    test('manualBuildPeriod inside the 7-day window uses the upcoming cycle', win.start === '2026-07-09' && win.end === '2026-08-08', JSON.stringify(win));
+    // Equals the engine's period exactly in the window (dedupe collision).
+    const eng = getUpcomingBillingPeriod(9, new Date(2026, 6, 3, 18));
+    test('manualBuildPeriod window choice equals the engine upcoming period', win.start === eng.start && win.end === eng.end);
+    // ON the billing day itself: the cycle starting today is the current one.
+    const onDay = manualBuildPeriod(9, new Date(2026, 6, 9, 12));
+    test('manualBuildPeriod on the billing day covers the cycle starting that day', onDay.start === '2026-07-09' && onDay.end === '2026-08-08', JSON.stringify(onDay));
   }
 
   const failed = results.filter(r => !r.pass);

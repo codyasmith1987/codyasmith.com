@@ -36,8 +36,19 @@ export const POST: APIRoute = async ({ locals, request }) => {
   if (!client) return json({ error: 'Client not found' }, 404);
 
   // Build the partial update: present-and-empty clears, absent leaves alone.
-  const update: { client_id: string; primary_contact_email?: string; billing_cc_email?: string } = { client_id: clientId };
+  const update: { client_id: string; primary_contact_email?: string; billing_cc_email?: string; primary_contact_name?: string } = { client_id: clientId };
   const changes: string[] = [];
+
+  // The contact NAME drives the email greeting ("Hi <first name>") and the To:
+  // header name. Without it every invoice/reminder/receipt greets "Hi there"
+  // (chat-wide audit 2026-06-11: no admin surface could set it; only contract
+  // intake wrote it). Plain text; serialization junk normalized away.
+  if (body.primary_contact_name !== undefined) {
+    let v = (body.primary_contact_name ?? '').toString().trim();
+    if (/^(null|undefined)$/i.test(v)) v = '';
+    update.primary_contact_name = v; // '' clears
+    changes.push('contact name');
+  }
 
   if (body.primary_contact_email !== undefined) {
     const v = (body.primary_contact_email ?? '').toString().trim();
@@ -67,6 +78,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
     });
     return json({
       ok: true,
+      primary_contact_name: meta.primary_contact_name,
       primary_contact_email: meta.primary_contact_email,
       billing_cc_email: meta.billing_cc_email,
     });
@@ -82,6 +94,7 @@ export const GET: APIRoute = async ({ locals, url }) => {
   if (!clientId) return json({ error: 'client is required' }, 400);
   const meta = await getClientMetadata(clientId).catch(() => null);
   return json({
+    primary_contact_name: meta?.primary_contact_name ?? null,
     primary_contact_email: meta?.primary_contact_email ?? null,
     billing_cc_email: meta?.billing_cc_email ?? null,
   });

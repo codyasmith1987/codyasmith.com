@@ -85,7 +85,13 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
     // CCs (email.ts), so the sole purpose of this check is to warn the admin when
     // they ENTER a new bad address; an unchanged value (or clearing it) passes.
     if (body.extra_recipient_email !== undefined) {
-      const v = String(body.extra_recipient_email).trim();
+      let v = String(body.extra_recipient_email).trim();
+      // Serialization junk is data corruption, not an address: a literal
+      // "null"/"undefined" string (a stringified JS null that round-tripped
+      // through the form) bricked saves on a real ZKH invoice (2026-06-11).
+      // Treat it as empty -> clears the field instead of failing validation.
+      if (/^(null|undefined)$/i.test(v)) v = '';
+      body.extra_recipient_email = v;
       const prev = String(invoice.extra_recipient_email || '').trim();
       if (v && v !== prev && !isValidEmail(v)) {
         return json({ error: 'Extra recipient is not a valid email address (use a plain address like name@example.com)' }, 400);
@@ -111,6 +117,11 @@ export const PUT: APIRoute = async ({ locals, params, request }) => {
       ...(body.invoice_number !== undefined && { invoice_number: String(body.invoice_number).trim() }),
       ...(body.issued_date !== undefined && { issued_date: body.issued_date }),
       ...(body.due_date !== undefined && { due_date: body.due_date }),
+      // Service period: drives the engine's per-period dedupe and the period
+      // label on the PDF. Editable so a hand-built invoice's period can be
+      // corrected (chat-wide audit 2026-06-11: it was stamped but invisible).
+      ...(body.billing_period_start !== undefined && { billing_period_start: body.billing_period_start }),
+      ...(body.billing_period_end !== undefined && { billing_period_end: body.billing_period_end }),
       ...(body.tax !== undefined && { tax: body.tax }),
       ...(body.notes !== undefined && { notes: body.notes }),
       ...(body.client_visible !== undefined && { client_visible: body.client_visible ? 1 : 0 }),

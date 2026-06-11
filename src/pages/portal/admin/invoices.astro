@@ -181,7 +181,12 @@ const statusLabels: Record<string, string> = {
           <p class="text-sm text-neutral-400">Who invoices and payment notices go to. The primary contact is the recipient; the accountant is CC'd on financial notices only. Leave a field blank to clear it. (A per-invoice extra recipient is set on the invoice itself.)</p>
         </div>
         <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" title="Used in the email greeting ('Hi <first name>') and the To: name on invoices, reminders, and receipts. Without it, emails open with 'Hi there'.">Contact name</label>
+              <input type="text" id="bc-name" value={meta?.primary_contact_name || ''} placeholder="Sven Heistad" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+              {!meta?.primary_contact_name && <p class="text-[11px] text-amber-600/80 mt-1.5">No name on file: emails greet this client as "Hi there".</p>}
+            </div>
             <div>
               <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Primary contact email</label>
               <input type="email" id="bc-primary" value={meta?.primary_contact_email || ''} placeholder="client@example.com" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
@@ -311,6 +316,7 @@ const statusLabels: Record<string, string> = {
           headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
           body: JSON.stringify({
             client_id: clientId,
+            primary_contact_name: (document.getElementById('bc-name') as HTMLInputElement).value.trim(),
             primary_contact_email: (document.getElementById('bc-primary') as HTMLInputElement).value.trim(),
             billing_cc_email: (document.getElementById('bc-cc') as HTMLInputElement).value.trim(),
           }),

@@ -3,7 +3,7 @@
 // No DB / no network -- exercises daysPastDue, the three variants, the amount
 // line, and HTML escaping. Runs via tsx.
 
-import { daysPastDue, renderInvoiceEmail, variantForStatus, reminderEligibleStatus, money } from '../src/lib/invoice-email-templates.ts';
+import { daysPastDue, renderInvoiceEmail, variantForStatus, reminderEligibleStatus, sendEligibleStatus, money } from '../src/lib/invoice-email-templates.ts';
 
 let passed = 0;
 let failed = 0;
@@ -90,6 +90,16 @@ for (const s of ['sent', 'partial', 'overdue', 'payment_pending']) {
 }
 for (const s of ['draft', 'paid', 'cancelled', 'carried_forward', '', 'bogus']) {
   check(`reminder NOT eligible: ${s || '(empty)'}`, reminderEligibleStatus(s) === false);
+}
+
+// --- sendEligibleStatus: the "Send to client" guard (chat-wide audit 2026-06-11:
+// the primary send path had the same wrong-bill hole the reminder guard closed;
+// a carried_forward/paid/cancelled invoice must never be emailed as due) ---
+for (const s of ['draft', 'sent', 'partial', 'overdue', 'payment_pending']) {
+  check(`send eligible: ${s}`, sendEligibleStatus(s) === true);
+}
+for (const s of ['paid', 'cancelled', 'carried_forward', '', 'bogus']) {
+  check(`send NOT eligible: ${s || '(empty)'}`, sendEligibleStatus(s) === false);
 }
 
 // --- money ---

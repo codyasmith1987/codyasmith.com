@@ -48,5 +48,12 @@ test('empty/whitespace fields are ignored', () => {
   assert.deepStrictEqual(r, { to: ['a@x.com'], cc: [] });
 });
 
+test("literal 'null'/'undefined' strings are serialization junk, not recipients (ZKH incident 2026-06-11)", () => {
+  const r = resolveInvoiceRecipients({ primaryEmail: 'a@x.com', billingCcEmail: 'NULL', extraEmail: 'null' });
+  assert.deepStrictEqual(r, { to: ['a@x.com'], cc: [] });
+  const r2 = resolveInvoiceRecipients({ primaryEmail: 'undefined', fallbackEmails: ['fallback@x.com'] });
+  assert.deepStrictEqual(r2.to, ['fallback@x.com']);
+});
+
 console.log(`\n${passed}/${passed + failed} passed`);
 if (failed > 0) process.exit(1);

@@ -78,6 +78,20 @@ export function getUpcomingBillingPeriod(billingDay: number, now: Date = new Dat
   return getCurrentBillingPeriod(billingDay, nextStart);
 }
 
+// The period a HAND-built invoice most plausibly covers (the admin "Build from
+// contract" action). Inside the engine's 7-day pre-issue window for the next
+// cycle it matches the engine (the upcoming period -- so the period-equality
+// dedupe collides instead of double-billing); otherwise it is the cycle in
+// progress, which is what an admin billing mid-cycle means. The engine's bare
+// "always upcoming" choice mislabeled a mid-cycle build with NEXT month's dates
+// on the client-facing PDF (chat-wide audit 2026-06-11). Pure + unit-tested.
+export function manualBuildPeriod(billingDay: number, now: Date = new Date()): { start: string; end: string } {
+  const upcoming = getUpcomingBillingPeriod(billingDay, now);
+  const windowOpen = new Date(upcoming.start + 'T00:00:00');
+  windowOpen.setDate(windowOpen.getDate() - 7);
+  return now >= windowOpen ? upcoming : getCurrentBillingPeriod(billingDay, now);
+}
+
 export async function invoiceExistsForPeriod(contractId: string, periodStart: string, periodEnd: string): Promise<boolean> {
   const row = await queryOne(
     'SELECT COUNT(*) as cnt FROM invoices WHERE contract_id = ? AND billing_period_start = ? AND billing_period_end = ?',

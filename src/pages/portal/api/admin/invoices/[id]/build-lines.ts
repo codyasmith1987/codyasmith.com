@@ -12,7 +12,7 @@ import type { APIRoute } from 'astro';
 import { getInvoice, getInvoiceItems, addInvoiceItem, recalculateInvoiceTotals, updateInvoice } from '../../../../../../lib/invoices';
 import { getAgreementByContractId } from '../../../../../../lib/agreements';
 import { getContract } from '../../../../../../lib/contracts';
-import { deriveRecurringLineItems, getUpcomingBillingPeriod } from '../../../../../../lib/billing';
+import { deriveRecurringLineItems, manualBuildPeriod } from '../../../../../../lib/billing';
 import { logActivity } from '../../../../../../lib/activity';
 import { logger } from '../../../../../../lib/logger';
 
@@ -49,18 +49,17 @@ export const POST: APIRoute = async ({ locals, params }) => {
     const scheduleA = agreement && agreement.status === 'executed' ? agreement.schedule_a : null;
     const contract = await getContract(invoice.contract_id);
 
-    // Period precedence: the invoice's own period if set; else the SAME upcoming
-    // anchored period the nightly engine would bill (generateInvoiceForContract
-    // uses getUpcomingBillingPeriod) so a hand-built invoice and the engine talk
-    // about the same cycle; else the current calendar month as a label of last
-    // resort. The period is STAMPED onto the invoice below -- a NULL period would
-    // slip past invoiceExistsForPeriod's equality dedupe (NULL = 'x' is never
-    // true) and let the engine bill the same service again (triple audit
-    // 2026-06-09).
+    // Period precedence: the invoice's own period if set; else the period a
+    // hand-built invoice plausibly covers (manualBuildPeriod: the cycle in
+    // progress, or the upcoming cycle once inside the engine's 7-day pre-issue
+    // window, so a build near cycle start matches what the engine would bill);
+    // else the current calendar month as a label of last resort. The earlier
+    // bare always-upcoming choice mislabeled a mid-cycle build with NEXT
+    // month's dates on the client-facing PDF (chat-wide audit 2026-06-11).
     const period = (invoice.billing_period_start && invoice.billing_period_end)
       ? { start: invoice.billing_period_start, end: invoice.billing_period_end }
       : (contract?.billing_cadence === 'monthly' && contract.billing_day)
-        ? getUpcomingBillingPeriod(contract.billing_day)
+        ? manualBuildPeriod(contract.billing_day)
         : currentMonthPeriod();
 
     const lines = deriveRecurringLineItems(scheduleA, period);
@@ -74,6 +73,11 @@ export const POST: APIRoute = async ({ locals, params }) => {
     // "never send a wrong invoice"): if the Schedule A lines do not sum to the
     // contract's recurring amount, the schedule has drifted -- refuse rather
     // than silently build a wrong-total invoice (triple audit 2026-06-09).
+    // When the contract has NO recurring amount the cross-check cannot run; the
+    // lines still come from the signed Schedule A (the source of truth), so we
+    // proceed but SAY so instead of implying the check passed (chat-wide audit
+    // 2026-06-11).
+    let warning: string | undefined;
     if (contract?.recurring_amount) {
       const sum = lines.reduce((s, l) => s + l.unit_price * l.quantity, 0);
       if (Math.abs(sum - contract.recurring_amount) > 0.01) {
@@ -81,6 +85,17 @@ export const POST: APIRoute = async ({ locals, params }) => {
           error: `The contract's Schedule A lines total $${sum.toFixed(2)}, which does not match the contract's recurring amount of $${Number(contract.recurring_amount).toFixed(2)}. Fix the contract or the agreement before building line items, or add them manually.`,
         }, 422);
       }
+    } else {
+      warning = 'Heads up: this contract has no recurring amount recorded, so the usual price cross-check was skipped. The lines come straight from the signed Schedule A; double-check the total before sending.';
+    }
+
+    // Stamp the itemized period FIRST (chat-wide audit 2026-06-11): the stamp is
+    // what the nightly engine's per-period dedupe (invoiceExistsForPeriod) keys
+    // on, so it must exist before any items do -- a mid-flow failure then leaves
+    // a stamped-but-empty invoice (harmless: $0, unsendable, engine-deduped)
+    // rather than an itemized invoice the engine cannot see.
+    if (!invoice.billing_period_start || !invoice.billing_period_end) {
+      await updateInvoice(params.id!, { billing_period_start: period.start, billing_period_end: period.end });
     }
 
     let sortOrder = 0;
@@ -89,23 +104,16 @@ export const POST: APIRoute = async ({ locals, params }) => {
     }
     await recalculateInvoiceTotals(params.id!);
 
-    // Stamp the itemized period so the nightly engine's per-period dedupe
-    // (invoiceExistsForPeriod) sees this invoice and does not generate a second
-    // one for the same cycle.
-    if (!invoice.billing_period_start || !invoice.billing_period_end) {
-      await updateInvoice(params.id!, { billing_period_start: period.start, billing_period_end: period.end });
-    }
-
     await logActivity({
       clientId: invoice.client_id,
       userId: locals.user!.id,
       action: 'updated',
       entityType: 'invoice',
       entityId: params.id!,
-      summary: `${locals.user!.name} built ${lines.length} line item${lines.length === 1 ? '' : 's'} from the contract on invoice ${invoice.invoice_number}`,
+      summary: `${locals.user!.name} built ${lines.length} line item${lines.length === 1 ? '' : 's'} from the contract on invoice ${invoice.invoice_number} (period ${period.start} to ${period.end})`,
     });
 
-    return json({ ok: true, count: lines.length });
+    return json({ ok: true, count: lines.length, period, warning });
   } catch (err) {
     logger.error('Build invoice lines error', err);
     return json({ error: 'Failed to build line items' }, 500);

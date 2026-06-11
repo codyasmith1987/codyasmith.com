@@ -3,7 +3,7 @@ import Portal from '../../../../layouts/Portal.astro';
 import { getInvoice, getInvoiceItems, getPaymentsByInvoice, splitSubtotals } from '../../../../lib/invoices';
 import { getContract } from '../../../../lib/contracts';
 import { getAllClients } from '../../../../lib/auth';
-import { reminderEligibleStatus } from '../../../../lib/invoice-email-templates';
+import { reminderEligibleStatus, sendEligibleStatus, variantForStatus } from '../../../../lib/invoice-email-templates';
 export const prerender = false;
 
 const { id } = Astro.params;
@@ -47,11 +47,13 @@ const statusLabels: Record<string, string> = {
       <div class="flex items-center gap-3">
         <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[invoice.status] || ''}`}>{statusLabels[invoice.status] || invoice.status}</span>
         {invoice.last_reminder_sent && <span class="text-[10px] text-neutral-400">Reminder sent {invoice.last_reminder_sent.split('T')[0]}</span>}
-        <button id="send-invoice" class="text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-colors">Send to client</button>
+        {sendEligibleStatus(invoice.status) && <button id="send-invoice" class="text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-colors">Send to client</button>}
         {reminderEligibleStatus(invoice.status) && <button id="send-reminder" class="text-xs text-amber-600 hover:text-amber-500 transition-colors">Send reminder</button>}
         {reminderEligibleStatus(invoice.status) && <button id="send-overdue" class="text-xs text-red-400 hover:text-red-300 transition-colors">Send overdue notice</button>}
         <button id="duplicate-invoice" class="text-xs text-amber-600 hover:text-amber-600 transition-colors">Duplicate</button>
-        <a href={`/portal/api/admin/invoices/${id}/email-preview`} target="_blank" rel="noopener" class="text-xs text-amber-600 hover:text-amber-600 transition-colors">Preview email</a>
+        {/* Preview opens on the variant Send would actually use, so what you
+            preview is what ships (an overdue invoice previews overdue copy). */}
+        <a href={`/portal/api/admin/invoices/${id}/email-preview?variant=${variantForStatus(invoice.status)}`} target="_blank" rel="noopener" class="text-xs text-amber-600 hover:text-amber-600 transition-colors">Preview email</a>
         <a href={`/portal/api/admin/invoices/${id}/pdf`} class="text-xs text-amber-600 hover:text-amber-600 transition-colors">Download PDF</a>
         <button id="delete-invoice" class="text-xs text-neutral-400 hover:text-red-400 transition-colors">Delete</button>
       </div>
@@ -71,7 +73,7 @@ const statusLabels: Record<string, string> = {
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-4 gap-5">
         <div>
-          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" title="draft: not yet sent | sent: emailed to client, awaiting payment | paid: full balance received | partial: payment received but balance remains | overdue: past due date, not paid | payment pending: payment promised/in transit (e.g. check mailed), no reminders and no receipt until you record it | cancelled: voided, no payment expected">Status</label>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" title="draft: not yet sent | sent: emailed to client, awaiting payment | paid: full balance received | partial: payment received but balance remains | overdue: past due date, not paid | payment pending: payment promised/in transit (e.g. check mailed), no automatic reminders and no receipt until you record it | cancelled: voided, no payment expected">Status</label>
           <select id="f-status" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
             {/* Always include the invoice's own status as an option so a terminal
                 status (carried_forward) renders + selects correctly; otherwise the
@@ -93,7 +95,7 @@ const statusLabels: Record<string, string> = {
               <p><strong class="text-neutral-200">paid:</strong> Full balance received.</p>
               <p><strong class="text-neutral-200">partial:</strong> Some payment received, balance remains.</p>
               <p><strong class="text-neutral-200">overdue:</strong> Past due date, no payment received.</p>
-              <p><strong class="text-neutral-200">payment pending:</strong> Payment promised or in transit (e.g. a check is in the mail). Still counts as owed, but gets no reminders and sends no receipt until you record the payment.</p>
+              <p><strong class="text-neutral-200">payment pending:</strong> Payment promised or in transit (e.g. a check is in the mail). Still counts as owed, but gets no automatic reminders and sends no receipt until you record the payment. (The Send reminder buttons above still work if the promised payment never arrives.)</p>
               <p><strong class="text-neutral-200">cancelled:</strong> Voided. No payment expected.</p>
             </div>
           </details>
@@ -116,6 +118,14 @@ const statusLabels: Record<string, string> = {
         <div>
           <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Payment terms</label>
           <input type="text" id="f-terms" value={invoice.terms_label || ''} placeholder="Upon Receipt" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" title="The service period this invoice covers. Drives the period label on the PDF and stops the automatic biller from invoicing the same cycle twice. Blank = a one-off/at-signing invoice.">Service period start</label>
+          <input type="date" id="f-period-start" value={invoice.billing_period_start || ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" title="The service period this invoice covers. Drives the period label on the PDF and stops the automatic biller from invoicing the same cycle twice. Blank = a one-off/at-signing invoice.">Service period end</label>
+          <input type="date" id="f-period-end" value={invoice.billing_period_end || ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
         </div>
         <div>
           <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" title="Active: due and overdue reminder emails send on schedule. Paused: this invoice is skipped.">Reminders</label>
@@ -311,6 +321,8 @@ const statusLabels: Record<string, string> = {
             status: document.getElementById('f-status').value,
             issued_date: document.getElementById('f-issued').value || null,
             due_date: document.getElementById('f-due').value || null,
+            billing_period_start: document.getElementById('f-period-start').value || null,
+            billing_period_end: document.getElementById('f-period-end').value || null,
             client_visible: Number(document.getElementById('f-visible').value),
             notes: document.getElementById('f-notes').value.trim() || null,
             title: document.getElementById('f-title').value.trim() || null,
@@ -448,8 +460,10 @@ const statusLabels: Record<string, string> = {
         });
         if (res.ok) {
           const d = await res.json();
-          window.__toast(`Added ${d.count} line item${d.count === 1 ? '' : 's'} from the contract. Totals recalculated.`, 'success');
-          setTimeout(() => location.reload(), 700);
+          const periodNote = d.period ? ` Service period ${d.period.start} to ${d.period.end}.` : '';
+          window.__toast(`Added ${d.count} line item${d.count === 1 ? '' : 's'} from the contract.${periodNote}`, 'success');
+          if (d.warning) window.__toast(d.warning, 'error');
+          setTimeout(() => location.reload(), d.warning ? 2200 : 900);
         } else {
           const d = await res.json().catch(() => ({}));
           window.__toast(d.error || 'Failed to build line items.', 'error');

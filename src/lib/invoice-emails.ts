@@ -17,7 +17,14 @@ export interface InvoiceRecipients {
 }
 
 const norm = (e?: string | null): string => (e || '').trim().toLowerCase();
-const clean = (e?: string | null): string => (e || '').trim();
+// A literal "null"/"undefined" string is serialization junk (a stringified JS
+// null that round-tripped through a form), not an address -- treat as empty so
+// stored corruption never rides into a recipient list (real ZKH incident,
+// 2026-06-11). Invalid addresses are additionally dropped at send (email.ts).
+const clean = (e?: string | null): string => {
+  const v = (e || '').trim();
+  return /^(null|undefined)$/i.test(v) ? '' : v;
+};
 
 // to: the primary billing contact (or, only if none is set, the first fallback
 // such as a portal user, as a safety so a misconfigured invoice still reaches
@@ -64,7 +71,7 @@ import { sendEmail } from './email';
 import { escapeHtml } from './email-safety';
 import { logger } from './logger';
 import {
-  money, invoiceShell, renderInvoiceEmail, variantForStatus, reminderEligibleStatus,
+  money, invoiceShell, renderInvoiceEmail, variantForStatus, reminderEligibleStatus, sendEligibleStatus,
   type InvoiceEmailVariant, type InvoiceEmailView,
 } from './invoice-email-templates';
 
@@ -175,6 +182,15 @@ async function deliverInvoiceEmail(
 // Transitions a draft to 'sent', stamps an issue date, makes it client-visible,
 // and fires the in-portal notification only on the draft->sent transition.
 export async function sendInvoiceEmail(invoiceId: string): Promise<SendInvoiceResult> {
+  // Status guard (chat-wide audit 2026-06-11): same wrong-bill protection the
+  // reminder path got in the prior round, closed on the primary send path too.
+  // A paid/cancelled/carried_forward invoice must never be emailed as a demand.
+  const current = await getInvoice(invoiceId);
+  if (!current) return { ok: false, to: [], cc: [], reason: 'not_found' };
+  if (!sendEligibleStatus(current.status)) {
+    return { ok: false, to: [], cc: [], reason: 'wrong_status' };
+  }
+
   const { result, invoice } = await deliverInvoiceEmail(invoiceId, 'auto');
   if (!result.ok || !invoice) return result;
 

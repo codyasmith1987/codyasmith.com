@@ -71,9 +71,25 @@ const qAll = async (sql: string, args: any[]): Promise<any[]> => {
   return res.rows as any[];
 };
 
+// Optional per-site scoping (multi-site Phase 1). Crawl rows self-identify by
+// hostname; upload-attributed families (GSC/GA4/keywords/issues) filter on
+// csv_uploads.site_id where NULL means the client's primary site.
+export interface TrendSiteScope {
+  id: string;
+  domain: string;
+  isPrimary: boolean;
+}
+
 // The trend series for one client, last `monthCount` months ascending.
-export async function getSiteTrendSeries(clientId: string, monthCount = 6): Promise<TrendMonth[]> {
+export async function getSiteTrendSeries(clientId: string, monthCount = 6, site?: TrendSiteScope): Promise<TrendMonth[]> {
   const n = Math.min(Math.max(monthCount, 2), 36);
+
+  // Upload-level site predicate: rows attributed to this site, plus legacy
+  // NULL rows when this site is the primary (NULL = primary by convention).
+  const siteClause = site ? `AND (cu.site_id = ? OR (cu.site_id IS NULL AND ?))` : '';
+  const siteArgs = site ? [site.id, site.isPrimary ? 1 : 0] : [];
+  // Crawl rows carry their hostname, the strongest attribution available.
+  const hostClause = site ? `AND cr.hostname = ?` : '';
 
   // GSC: daily rows summed per month. CTR/position aggregate correctly only
   // from the raw sums (SUM/SUM, not AVG of daily CTRs).
@@ -83,15 +99,15 @@ export async function getSiteTrendSeries(clientId: string, monthCount = 6): Prom
             SUM(gc.impressions) AS impressions,
             ROUND(AVG(gc.position), 1) AS avg_position
        FROM csv_uploads cu JOIN gsc_chart gc ON gc.csv_upload_id = cu.id
-      WHERE cu.client_id = ? AND cu.error IS NULL
-      GROUP BY cu.month`, [clientId]);
+      WHERE cu.client_id = ? AND cu.error IS NULL ${siteClause}
+      GROUP BY cu.month`, [clientId, ...siteArgs]);
 
   // GA4: topline is one pre-aggregated row per upload (source of truth for
   // sessions; channel sums de-dupe differently).
   const ga4 = await qAll(
     `SELECT cu.month, gt.sessions, gt.active_users
        FROM csv_uploads cu JOIN ga4_topline gt ON gt.csv_upload_id = cu.id
-      WHERE cu.client_id = ? AND cu.error IS NULL`, [clientId]);
+      WHERE cu.client_id = ? AND cu.error IS NULL ${siteClause}`, [clientId, ...siteArgs]);
 
   // Health: scored problems only -- advisories (Warning/Opportunity/audit) are
   // filtered in JS via the same isAdvisoryIssue the health page/score uses, so
@@ -99,8 +115,8 @@ export async function getSiteTrendSeries(clientId: string, monthCount = 6): Prom
   const issueRows = await qAll(
     `SELECT cu.month, si.issue_name, si.issue_type, si.priority, MAX(si.affected_urls) AS affected
        FROM csv_uploads cu JOIN site_issues si ON si.csv_upload_id = cu.id
-      WHERE cu.client_id = ? AND cu.error IS NULL
-      GROUP BY cu.month, si.issue_name, si.issue_type, si.priority`, [clientId]);
+      WHERE cu.client_id = ? AND cu.error IS NULL ${siteClause}
+      GROUP BY cu.month, si.issue_name, si.issue_type, si.priority`, [clientId, ...siteArgs]);
 
   // Crawl: real-user page count via the ONE shared SQL definition (pricing,
   // dashboard, and reports all key on it), plus broken (4xx/5xx) URLs. The
@@ -111,8 +127,8 @@ export async function getSiteTrendSeries(clientId: string, monthCount = 6): Prom
             COUNT(DISTINCT CASE WHEN 1=1 ${realUserPageRowFilters('cr')} ${realUserPageUrlExclusions('cr.url')} THEN cr.url END) AS pages,
             COUNT(DISTINCT CASE WHEN cr.status_code >= 400 THEN cr.url END) AS broken
        FROM csv_uploads cu JOIN crawl_urls cr ON cr.csv_upload_id = cu.id
-      WHERE cu.client_id = ? AND cu.error IS NULL
-      GROUP BY cu.month`, [clientId]);
+      WHERE cu.client_id = ? AND cu.error IS NULL ${hostClause}
+      GROUP BY cu.month`, site ? [clientId, site.domain] : [clientId]);
 
   // Keywords: tracked count, average position, and top-10 share.
   const kw = await qAll(
@@ -121,8 +137,8 @@ export async function getSiteTrendSeries(clientId: string, monthCount = 6): Prom
             ROUND(AVG(kr.position), 1) AS avg_position,
             COUNT(DISTINCT CASE WHEN kr.position <= 10 THEN kr.keyword END) AS top10
        FROM csv_uploads cu JOIN keyword_rankings kr ON kr.csv_upload_id = cu.id
-      WHERE cu.client_id = ? AND cu.error IS NULL
-      GROUP BY cu.month`, [clientId]);
+      WHERE cu.client_id = ? AND cu.error IS NULL ${siteClause}
+      GROUP BY cu.month`, [clientId, ...siteArgs]);
 
   const byMonth = new Map<string, TrendMonth>();
   const monthOf = (m: string): TrendMonth => {

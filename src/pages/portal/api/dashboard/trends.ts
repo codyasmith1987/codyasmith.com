@@ -26,9 +26,26 @@ export const GET: APIRoute = async ({ locals, url }) => {
   // crawl, keywords) aggregated live from the month-keyed upload tables, with
   // report-grade deltas attached. The legacy metrics-table path below stays
   // untouched for its existing consumers.
+  //
+  // Multi-site clients are scoped per site (?site=<domain>, default primary)
+  // so two sites' numbers never blend; single-site clients are unscoped and
+  // unchanged. The response carries the site list so the UI can draw chips.
   if (url.searchParams.get('series') === 'site') {
-    const series = await getSiteTrendSeries(clientId, months);
-    return json({ months: attachTrendDeltas(series) });
+    const { listManagedSites } = await import('../../../../lib/client-sites');
+    const sites = await listManagedSites(clientId);
+    let scope: { id: string; domain: string; isPrimary: boolean } | undefined;
+    let siteMeta: { sites: Array<{ domain: string; is_primary: boolean }>; site: string } | {} = {};
+    if (sites.length > 1) {
+      const wanted = (url.searchParams.get('site') || '').trim().toLowerCase();
+      const match = wanted
+        ? sites.find(s => s.domain.toLowerCase() === wanted)
+        : (sites.find(s => s.is_primary) || sites[0]);
+      if (!match) return json({ error: 'Unknown site for this client' }, 400);
+      scope = { id: match.id, domain: match.domain, isPrimary: !!match.is_primary };
+      siteMeta = { sites: sites.map(s => ({ domain: s.domain, is_primary: !!s.is_primary })), site: match.domain };
+    }
+    const series = await getSiteTrendSeries(clientId, months, scope);
+    return json({ months: attachTrendDeltas(series), ...siteMeta });
   }
 
   const result = await turso.execute({

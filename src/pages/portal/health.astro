@@ -1160,7 +1160,7 @@ const clients = isAdmin ? await getAllClients() : [];
     // search clicks/impressions/position (GSC), sessions (GA4), scored issues,
     // broken links, page count, top-10 keywords. Quiet on failure (the issues
     // panel is the primary surface); hidden entirely with fewer than 2 months.
-    async function loadTrends() {
+    async function loadTrends(siteDomain) {
       const cid = activeClientId;
       const container = document.getElementById('trend-section');
       container.classList.add('hidden');
@@ -1169,7 +1169,8 @@ const clients = isAdmin ? await getAllClients() : [];
 
       let data;
       try {
-        const res = await fetch(`/portal/api/dashboard/trends?series=site&months=6&client_id=${encodeURIComponent(cid)}`);
+        const siteQ = siteDomain ? `&site=${encodeURIComponent(siteDomain)}` : '';
+        const res = await fetch(`/portal/api/dashboard/trends?series=site&months=6&client_id=${encodeURIComponent(cid)}${siteQ}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         data = await res.json();
       } catch { return; }
@@ -1224,17 +1225,31 @@ const clients = isAdmin ? await getAllClients() : [];
         ${cols.map(c => cell(c.get(m), (m.deltas || {})[c.d], c.fmt)).join('')}
       </tr>`).join('');
 
+      // Per-site chips for multi-site clients: the API scopes the series to one
+      // site at a time (default primary) so two sites' numbers never blend.
+      const siteChips = (data.sites && data.sites.length > 1)
+        ? `<div class="flex flex-wrap gap-2 mt-3">${data.sites.map(s => {
+            const active = s.domain === data.site;
+            const cls = active ? 'bg-amber-500 text-neutral-950' : 'bg-neutral-800/60 text-neutral-400 hover:text-neutral-200';
+            return `<button data-trend-site="${escapeHtml(s.domain)}" class="text-[11px] font-mono px-2.5 py-1 rounded-full transition-colors ${cls}">${escapeHtml(s.domain)}${s.is_primary ? ' &middot; primary' : ''}</button>`;
+          }).join('')}</div>`
+        : '';
+
       container.innerHTML = `
         <div class="health-animate bg-neutral-900/30 border border-white/5 rounded-2xl overflow-hidden">
           <div class="px-6 py-5 border-b border-white/5">
             <p class="text-[10px] font-mono text-amber-600 tracking-[0.15em] uppercase mb-1">Month over month</p>
-            <h2 class="font-serif text-xl text-neutral-100">How the numbers are moving</h2>
+            <h2 class="font-serif text-xl text-neutral-100">How the numbers are moving${data.site ? ` <span class="text-sm text-neutral-500 font-sans">for ${escapeHtml(data.site)}</span>` : ''}</h2>
             <p class="text-xs text-neutral-500 mt-1">Each month compared with the one before it. Green is moving the right way for that metric; a dash means no data was uploaded for that month.</p>
+            ${siteChips}
           </div>
           <div class="overflow-x-auto">
             <table class="w-full text-sm">${head}${rows}</table>
           </div>
         </div>`;
+      container.querySelectorAll('[data-trend-site]').forEach(btn => {
+        btn.addEventListener('click', () => loadTrends(btn.getAttribute('data-trend-site')));
+      });
       container.classList.remove('hidden');
     }
 

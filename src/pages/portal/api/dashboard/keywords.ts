@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import turso from '../../../../lib/turso';
+import { resolveSiteScope, uploadScopeFragment } from '../../../../lib/site-scope';
 
 export const prerender = false;
 
@@ -24,14 +25,21 @@ export const GET: APIRoute = async ({ locals, url }) => {
   const rawLimit = parseInt(url.searchParams.get('limit') || '100', 10);
   const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 500) : 100;
 
+  // Per-site scoping for multi-site clients (Phase 1c): ?site=<domain>,
+  // default primary; single-site clients get undefined scope = unchanged.
+  // The response carries the site list so the page draws its chips once.
+  const scope = await resolveSiteScope(clientId, url.searchParams.get('site'));
+  const siteMeta = scope ? { sites: scope.sites, site: scope.domain } : {};
+  const s = uploadScopeFragment(clientId, scope);
+
   // Get latest month with keyword data
   const monthResult = await turso.execute({
-    sql: 'SELECT DISTINCT month FROM keyword_rankings WHERE client_id = ? AND source = ? ORDER BY month DESC LIMIT 1',
-    args: [clientId, source],
+    sql: `SELECT DISTINCT month FROM keyword_rankings WHERE client_id = ? AND source = ?${s.frag} ORDER BY month DESC LIMIT 1`,
+    args: [clientId, source, ...s.args],
   });
 
   if (monthResult.rows.length === 0) {
-    return json({ month: null, keywords: [] });
+    return json({ month: null, keywords: [], ...siteMeta });
   }
 
   const month = monthResult.rows[0][0] as string;
@@ -42,10 +50,10 @@ export const GET: APIRoute = async ({ locals, url }) => {
   const result = await turso.execute({
     sql: `SELECT keyword, position, search_volume, url, change_val, seo_difficulty
           FROM keyword_rankings
-          WHERE client_id = ? AND month = ? AND source = ?
+          WHERE client_id = ? AND month = ? AND source = ?${s.frag}
           ORDER BY ${validSort} ${validOrder} NULLS LAST
           LIMIT ?`,
-    args: [clientId, month, source, limit],
+    args: [clientId, month, source, ...s.args, limit],
   });
 
   const keywords = result.rows.map(row => ({
@@ -57,5 +65,5 @@ export const GET: APIRoute = async ({ locals, url }) => {
     seo_difficulty: row[5] as number | null,
   }));
 
-  return json({ month, keywords });
+  return json({ month, keywords, ...siteMeta });
 };

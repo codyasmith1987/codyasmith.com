@@ -159,6 +159,11 @@ actionItems.sort((a, b) => a.urgency - b.urgency);
       {isAdmin && <ClientSelector clients={clients} />}
     </div>
 
+    <!-- Per-site picker (multi-site clients only; Phase 1c) -->
+    <div id="site-picker" class="hidden mb-6 flex flex-wrap items-center gap-2">
+      <span class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase mr-1">Site</span>
+    </div>
+
     {!isAdmin && actionItems.length > 0 && (
       <section class="mb-12">
         <p class="text-[10px] font-mono tracking-[0.18em] uppercase text-amber-600 mb-4">Needs your attention</p>
@@ -291,11 +296,35 @@ actionItems.sort((a, b) => a.urgency - b.urgency);
 
     let activeClientId = isAdmin ? firstClientId : clientId;
     let scoreChart = null;
+    // Per-site scope for multi-site clients (Phase 1c): null = API default
+    // (the primary site). One picker drives the whole dashboard pass.
+    let activeSiteDomain = null;
+    const siteQuery = () => activeSiteDomain ? `&site=${encodeURIComponent(activeSiteDomain)}` : '';
+    function renderSitePicker(sites, active) {
+      const wrap = document.getElementById('site-picker');
+      if (!sites || sites.length < 2) { wrap.classList.add('hidden'); return; }
+      activeSiteDomain = active;
+      wrap.querySelectorAll('button').forEach(b => b.remove());
+      for (const s of sites) {
+        const btn = document.createElement('button');
+        const isActive = s.domain === active;
+        btn.className = `text-[11px] font-mono px-2.5 py-1 rounded-full transition-colors ${isActive ? 'bg-amber-500 text-neutral-950' : 'bg-neutral-800/60 text-neutral-400 hover:text-neutral-200'}`;
+        btn.innerHTML = `${escapeHtml(s.domain)}${s.is_primary ? ' &middot; primary' : ''}`;
+        btn.addEventListener('click', () => {
+          if (s.domain === activeSiteDomain) return;
+          activeSiteDomain = s.domain;
+          loadDashboard();
+        });
+        wrap.appendChild(btn);
+      }
+      wrap.classList.remove('hidden');
+    }
 
     const selector = document.getElementById('client-selector');
     if (selector) {
       selector.addEventListener('change', (e) => {
         activeClientId = e.target.value;
+        activeSiteDomain = null; // new client, new site set
         loadDashboard();
       });
     }
@@ -361,7 +390,7 @@ actionItems.sort((a, b) => a.urgency - b.urgency);
       }
 
       try {
-        const qs = `?client_id=${activeClientId}`;
+        const qs = `?client_id=${activeClientId}${siteQuery()}`;
         // Score moved server-side. Fetched alongside the other dashboard
         // data so the score component breakdown renders in the same
         // pass as the keyword and issue chapters.
@@ -378,6 +407,10 @@ actionItems.sort((a, b) => a.urgency - b.urgency);
         const kwData = await kwR.json();
         const isData = await isR.json();
         const scoreData = scoreR.ok ? await scoreR.json() : null;
+
+        // Multi-site: draw the page-level site chips + sync with the API's
+        // resolution (the issues response carries the site list).
+        renderSitePicker(isData.sites, isData.site);
 
         const kws = (kwData.keywords || []).filter(k => k.position);
         const issues = isData.issues || [];

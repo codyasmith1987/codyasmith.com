@@ -30,6 +30,11 @@ const clients = isAdmin ? await getAllClients() : [];
       </div>
     </div>
 
+    <!-- Per-site picker (multi-site clients only; Phase 1c) -->
+    <div id="site-picker" class="hidden mb-6 flex flex-wrap items-center gap-2">
+      <span class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase mr-1">Site</span>
+    </div>
+
     <!-- Visibility summary -->
     <div id="kw-summary" class="mb-10 hidden kw-animate">
       <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
@@ -105,11 +110,35 @@ const clients = isAdmin ? await getAllClients() : [];
     let allKeywords = [];
     let searchTimeout;
     let visibleCount = 100;
+    // Per-site scope for multi-site clients (Phase 1c): null = API default
+    // (the primary site). Chips render from the keywords response's site list.
+    let activeSiteDomain = null;
+    const siteQuery = () => activeSiteDomain ? `&site=${encodeURIComponent(activeSiteDomain)}` : '';
+    function renderSitePicker(sites, active) {
+      const wrap = document.getElementById('site-picker');
+      if (!sites || sites.length < 2) { wrap.classList.add('hidden'); return; }
+      activeSiteDomain = active;
+      wrap.querySelectorAll('button').forEach(b => b.remove());
+      for (const s of sites) {
+        const btn = document.createElement('button');
+        const isActive = s.domain === active;
+        btn.className = `text-[11px] font-mono px-2.5 py-1 rounded-full transition-colors ${isActive ? 'bg-amber-500 text-neutral-950' : 'bg-neutral-800/60 text-neutral-400 hover:text-neutral-200'}`;
+        btn.innerHTML = `${escapeHtml(s.domain)}${s.is_primary ? ' &middot; primary' : ''}`;
+        btn.addEventListener('click', () => {
+          if (s.domain === activeSiteDomain) return;
+          activeSiteDomain = s.domain;
+          loadKeywords();
+        });
+        wrap.appendChild(btn);
+      }
+      wrap.classList.remove('hidden');
+    }
 
     const selector = document.getElementById('client-selector');
     if (selector) {
       selector.addEventListener('change', (e) => {
         activeClientId = e.target.value;
+        activeSiteDomain = null; // new client, new site set
         loadKeywords();
       });
     }
@@ -136,12 +165,15 @@ const clients = isAdmin ? await getAllClients() : [];
       }
 
       try {
-        const res = await fetch(`/portal/api/dashboard/keywords?client_id=${cid}&source=${source}&limit=500`);
+        const res = await fetch(`/portal/api/dashboard/keywords?client_id=${cid}&source=${source}&limit=500${siteQuery()}`);
         if (!res.ok) throw new Error('Failed to load keyword data');
         const data = await res.json();
         allKeywords = data.keywords || [];
 
         loadingEl.classList.add('hidden');
+
+        // Multi-site: draw the site chips + sync with the API's resolution.
+        renderSitePicker(data.sites, data.site);
 
         const summaryEl = document.getElementById('kw-summary');
         const emptyEl = document.getElementById('kw-empty');

@@ -9,6 +9,7 @@
 
 import turso from './turso';
 import { AI_REFERRAL_PATTERNS } from './csv/parsers/ga4';
+import { uploadScopeFragment, type SiteScope } from './site-scope';
 
 export interface Ga4Topline {
   start_date: string | null;
@@ -51,39 +52,45 @@ function num(v: any): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export async function getGa4LatestMonth(clientId: string): Promise<string | null> {
+// All readers take an optional site scope (multi-site Phase 1c). Unscoped
+// calls (single-site clients, the report pipeline) produce byte-identical SQL
+// to before — the fragment is empty when scope is undefined.
+export async function getGa4LatestMonth(clientId: string, scope?: SiteScope): Promise<string | null> {
+  const s = uploadScopeFragment(clientId, scope);
   const r = await turso.execute({
     sql: `SELECT month FROM (
-            SELECT month FROM ga4_topline WHERE client_id = ?
-            UNION SELECT month FROM ga4_channels WHERE client_id = ?
-            UNION SELECT month FROM ga4_pages WHERE client_id = ?
-            UNION SELECT month FROM ga4_geography WHERE client_id = ?
+            SELECT month FROM ga4_topline WHERE client_id = ?${s.frag}
+            UNION SELECT month FROM ga4_channels WHERE client_id = ?${s.frag}
+            UNION SELECT month FROM ga4_pages WHERE client_id = ?${s.frag}
+            UNION SELECT month FROM ga4_geography WHERE client_id = ?${s.frag}
           ) ORDER BY month DESC LIMIT 1`,
-    args: [clientId, clientId, clientId, clientId],
+    args: [clientId, ...s.args, clientId, ...s.args, clientId, ...s.args, clientId, ...s.args],
   });
   return r.rows.length ? (r.rows[0][0] as string) : null;
 }
 
 // Latest month strictly before currentMonth (the prior reporting cycle).
-export async function getGa4PriorMonth(clientId: string, currentMonth: string): Promise<string | null> {
+export async function getGa4PriorMonth(clientId: string, currentMonth: string, scope?: SiteScope): Promise<string | null> {
+  const s = uploadScopeFragment(clientId, scope);
   const r = await turso.execute({
     sql: `SELECT month FROM (
-            SELECT month FROM ga4_topline WHERE client_id = ?
-            UNION SELECT month FROM ga4_channels WHERE client_id = ?
-            UNION SELECT month FROM ga4_pages WHERE client_id = ?
-            UNION SELECT month FROM ga4_geography WHERE client_id = ?
+            SELECT month FROM ga4_topline WHERE client_id = ?${s.frag}
+            UNION SELECT month FROM ga4_channels WHERE client_id = ?${s.frag}
+            UNION SELECT month FROM ga4_pages WHERE client_id = ?${s.frag}
+            UNION SELECT month FROM ga4_geography WHERE client_id = ?${s.frag}
           ) WHERE month < ? ORDER BY month DESC LIMIT 1`,
-    args: [clientId, clientId, clientId, clientId, currentMonth],
+    args: [clientId, ...s.args, clientId, ...s.args, clientId, ...s.args, clientId, ...s.args, currentMonth],
   });
   return r.rows.length ? (r.rows[0][0] as string) : null;
 }
 
 // All GA4 sections for one month, assembled into the dashboard shape.
-export async function getGa4MonthData(clientId: string, month: string): Promise<Ga4MonthData> {
+export async function getGa4MonthData(clientId: string, month: string, scope?: SiteScope): Promise<Ga4MonthData> {
+  const s = uploadScopeFragment(clientId, scope);
   const toplineRes = await turso.execute({
     sql: `SELECT start_date, end_date, active_users, new_users, sessions, avg_engagement_time_per_active_user
-          FROM ga4_topline WHERE client_id = ? AND month = ? ORDER BY created_at DESC LIMIT 1`,
-    args: [clientId, month],
+          FROM ga4_topline WHERE client_id = ? AND month = ?${s.frag} ORDER BY created_at DESC LIMIT 1`,
+    args: [clientId, month, ...s.args],
   });
   const tRow = toplineRes.rows[0];
   const topline: Ga4Topline | null = tRow ? {
@@ -98,8 +105,8 @@ export async function getGa4MonthData(clientId: string, month: string): Promise<
   const channelsRes = await turso.execute({
     sql: `SELECT channel, sessions, engaged_sessions, engagement_rate,
                  avg_engagement_time_per_session, key_events, total_revenue
-          FROM ga4_channels WHERE client_id = ? AND month = ? ORDER BY sessions DESC NULLS LAST`,
-    args: [clientId, month],
+          FROM ga4_channels WHERE client_id = ? AND month = ?${s.frag} ORDER BY sessions DESC NULLS LAST`,
+    args: [clientId, month, ...s.args],
   });
   const channels: Ga4Channel[] = channelsRes.rows.map(r => ({
     channel: r[0] as string, sessions: num(r[1]), engaged_sessions: num(r[2]),
@@ -109,8 +116,8 @@ export async function getGa4MonthData(clientId: string, month: string): Promise<
 
   const pagesRes = await turso.execute({
     sql: `SELECT page_path, views, active_users, avg_engagement_time_per_active_user, key_events
-          FROM ga4_pages WHERE client_id = ? AND month = ? ORDER BY views DESC NULLS LAST LIMIT 25`,
-    args: [clientId, month],
+          FROM ga4_pages WHERE client_id = ? AND month = ?${s.frag} ORDER BY views DESC NULLS LAST LIMIT 25`,
+    args: [clientId, month, ...s.args],
   });
   const pages: Ga4Page[] = pagesRes.rows.map(r => ({
     page_path: r[0] as string, views: num(r[1]), active_users: num(r[2]),
@@ -119,9 +126,9 @@ export async function getGa4MonthData(clientId: string, month: string): Promise<
 
   const smRes = await turso.execute({
     sql: `SELECT source_medium, sessions, key_events, total_revenue
-          FROM ga4_source_medium WHERE client_id = ? AND month = ? AND kind = 'session'
+          FROM ga4_source_medium WHERE client_id = ? AND month = ? AND kind = 'session'${s.frag}
           ORDER BY sessions DESC NULLS LAST LIMIT 25`,
-    args: [clientId, month],
+    args: [clientId, month, ...s.args],
   });
   const sources: Ga4Source[] = smRes.rows.map(r => ({
     source_medium: r[0] as string, sessions: num(r[1]), key_events: num(r[2]), total_revenue: num(r[3]),
@@ -130,8 +137,8 @@ export async function getGa4MonthData(clientId: string, month: string): Promise<
 
   const techRes = await turso.execute({
     sql: `SELECT kind, label, active_users FROM ga4_tech
-          WHERE client_id = ? AND month = ? ORDER BY active_users DESC NULLS LAST`,
-    args: [clientId, month],
+          WHERE client_id = ? AND month = ?${s.frag} ORDER BY active_users DESC NULLS LAST`,
+    args: [clientId, month, ...s.args],
   });
   const tech = {
     platform: techRes.rows.filter(r => r[0] === 'platform').map(r => ({ label: r[1] as string, active_users: num(r[2]) })),
@@ -141,8 +148,8 @@ export async function getGa4MonthData(clientId: string, month: string): Promise<
 
   const geoRes = await turso.execute({
     sql: `SELECT country, active_users, new_users, engaged_sessions, engagement_rate
-          FROM ga4_geography WHERE client_id = ? AND month = ? ORDER BY active_users DESC NULLS LAST LIMIT 15`,
-    args: [clientId, month],
+          FROM ga4_geography WHERE client_id = ? AND month = ?${s.frag} ORDER BY active_users DESC NULLS LAST LIMIT 15`,
+    args: [clientId, month, ...s.args],
   });
   const geography: Ga4Geo[] = geoRes.rows.map(r => ({
     country: r[0] as string, active_users: num(r[1]), new_users: num(r[2]),
@@ -151,8 +158,8 @@ export async function getGa4MonthData(clientId: string, month: string): Promise<
 
   const campsRes = await turso.execute({
     sql: `SELECT campaign_name, sessions FROM ga4_campaigns
-          WHERE client_id = ? AND month = ? ORDER BY sessions DESC NULLS LAST`,
-    args: [clientId, month],
+          WHERE client_id = ? AND month = ?${s.frag} ORDER BY sessions DESC NULLS LAST`,
+    args: [clientId, month, ...s.args],
   });
   const campaigns: Ga4Campaign[] = campsRes.rows.map(r => ({ campaign_name: r[0] as string, sessions: num(r[1]) }));
 
@@ -166,11 +173,12 @@ export async function getGa4MonthData(clientId: string, month: string): Promise<
 // cycle). The page reads the current fields exactly as before.
 export async function getGa4DashboardWithPrior(
   clientId: string,
+  scope?: SiteScope,
 ): Promise<(Ga4MonthData & { prior_month: string | null; prior: Ga4MonthData | null }) | { month: null; has_data: false; prior_month: null; prior: null }> {
-  const month = await getGa4LatestMonth(clientId);
+  const month = await getGa4LatestMonth(clientId, scope);
   if (!month) return { month: null, has_data: false, prior_month: null, prior: null };
-  const current = await getGa4MonthData(clientId, month);
-  const priorMonth = await getGa4PriorMonth(clientId, month);
-  const prior = priorMonth ? await getGa4MonthData(clientId, priorMonth) : null;
+  const current = await getGa4MonthData(clientId, month, scope);
+  const priorMonth = await getGa4PriorMonth(clientId, month, scope);
+  const prior = priorMonth ? await getGa4MonthData(clientId, priorMonth, scope) : null;
   return { ...current, prior_month: priorMonth, prior };
 }

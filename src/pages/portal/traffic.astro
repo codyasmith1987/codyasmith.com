@@ -29,6 +29,11 @@ const clients = isAdmin ? await getAllClients() : [];
       {isAdmin && <ClientSelector clients={clients} />}
     </div>
 
+    <!-- Per-site picker (multi-site clients only; Phase 2) -->
+    <div id="site-picker" class="hidden mb-6 flex flex-wrap items-center gap-2">
+      <span class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase mr-1">Site</span>
+    </div>
+
     <StateLoading id="ga4-loading" message="Loading traffic data..." />
     <StateError id="ga4-error" detailId="ga4-error-detail" retryFn="loadGa4" />
 
@@ -82,11 +87,35 @@ const clients = isAdmin ? await getAllClients() : [];
     }
 
     let activeClientId = isAdmin ? firstClientId : clientId;
+    // Per-site scope for multi-site clients (Phase 2): null = API default
+    // (the primary site). The chips render from the GA4 response's site list.
+    let activeSiteDomain = null;
+    const siteQuery = () => activeSiteDomain ? `&site=${encodeURIComponent(activeSiteDomain)}` : '';
+    function renderSitePicker(sites, active) {
+      const wrap = document.getElementById('site-picker');
+      if (!sites || sites.length < 2) { wrap.classList.add('hidden'); return; }
+      activeSiteDomain = active;
+      wrap.querySelectorAll('button').forEach(b => b.remove());
+      for (const s of sites) {
+        const btn = document.createElement('button');
+        const isActive = s.domain === active;
+        btn.className = `text-[11px] font-mono px-2.5 py-1 rounded-full transition-colors ${isActive ? 'bg-amber-500 text-neutral-950' : 'bg-neutral-800/60 text-neutral-400 hover:text-neutral-200'}`;
+        btn.innerHTML = `${escapeHtml(s.domain)}${s.is_primary ? ' &middot; primary' : ''}`;
+        btn.addEventListener('click', () => {
+          if (s.domain === activeSiteDomain) return;
+          activeSiteDomain = s.domain;
+          loadGa4();
+        });
+        wrap.appendChild(btn);
+      }
+      wrap.classList.remove('hidden');
+    }
 
     const selector = document.getElementById('client-selector');
     if (selector) {
       selector.addEventListener('change', (e) => {
         activeClientId = e.target.value;
+        activeSiteDomain = null; // new client, new site set
         loadGa4();
         refreshRequestChip();
       });
@@ -205,10 +234,13 @@ const clients = isAdmin ? await getAllClients() : [];
       }
 
       try {
-        const res = await fetch(`/portal/api/dashboard/ga4?client_id=${activeClientId}`);
+        const res = await fetch(`/portal/api/dashboard/ga4?client_id=${activeClientId}${siteQuery()}`);
         if (!res.ok) throw new Error('Failed to load traffic data');
         const data = await res.json();
         loadingEl.classList.add('hidden');
+
+        // Multi-site: draw the site chips + sync with the API's resolution.
+        renderSitePicker(data.sites, data.site);
 
         if (!data.has_data) {
           emptyEl.classList.remove('hidden');

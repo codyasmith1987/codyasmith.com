@@ -44,6 +44,7 @@
 import type { APIRoute } from 'astro';
 import turso from '../../../../lib/turso';
 import { getHealthMonthData } from '../../../../lib/crawl-read';
+import { resolveSiteScope, uploadScopeFragment, type SiteScope } from '../../../../lib/site-scope';
 
 export const prerender = false;
 
@@ -65,13 +66,14 @@ function num(v: any): number | null {
 }
 
 // ===== Component 1: Search Visibility =====
-async function computeVisibility(clientId: string): Promise<Component> {
+async function computeVisibility(clientId: string, scope?: SiteScope): Promise<Component> {
+  const s = uploadScopeFragment(clientId, scope);
   // Pull latest-month keywords with positions.
   const monthRow = await turso.execute({
     sql: `SELECT DISTINCT month FROM keyword_rankings
-          WHERE client_id = ? AND position IS NOT NULL
+          WHERE client_id = ? AND position IS NOT NULL${s.frag}
           ORDER BY month DESC LIMIT 1`,
-    args: [clientId],
+    args: [clientId, ...s.args],
   });
   if (monthRow.rows.length === 0) {
     return {
@@ -83,8 +85,8 @@ async function computeVisibility(clientId: string): Promise<Component> {
   const month = monthRow.rows[0][0] as string;
   const positionsRes = await turso.execute({
     sql: `SELECT position FROM keyword_rankings
-          WHERE client_id = ? AND month = ? AND position IS NOT NULL`,
-    args: [clientId, month],
+          WHERE client_id = ? AND month = ? AND position IS NOT NULL${s.frag}`,
+    args: [clientId, month, ...s.args],
   });
   const positions = positionsRes.rows
     .map(r => num(r[0]))
@@ -111,11 +113,12 @@ async function computeVisibility(clientId: string): Promise<Component> {
 }
 
 // ===== Component 2: Technical Health =====
-async function computeHealth(clientId: string): Promise<Component> {
+async function computeHealth(clientId: string, scope?: SiteScope): Promise<Component> {
+  const s = uploadScopeFragment(clientId, scope);
   const monthRow = await turso.execute({
     sql: `SELECT DISTINCT month FROM site_issues
-          WHERE client_id = ? ORDER BY month DESC LIMIT 1`,
-    args: [clientId],
+          WHERE client_id = ?${s.frag} ORDER BY month DESC LIMIT 1`,
+    args: [clientId, ...s.args],
   });
   if (monthRow.rows.length === 0) {
     return {
@@ -128,7 +131,7 @@ async function computeHealth(clientId: string): Promise<Component> {
   // Use the shared deduped rollup so the health score basis matches the
   // /portal/health page chips and the report (one issue reported by two tools
   // counts once, not twice).
-  const { byPriority } = await getHealthMonthData(clientId, month);
+  const { byPriority } = await getHealthMonthData(clientId, month, scope);
   const high = byPriority.high, medium = byPriority.medium, low = byPriority.low;
   const total = high + medium + low;
   const raw = 100 - (high * 8 + medium * 3 + low * 1);
@@ -140,11 +143,12 @@ async function computeHealth(clientId: string): Promise<Component> {
 }
 
 // ===== Component 3: Traffic Engagement =====
-async function computeEngagement(clientId: string): Promise<Component> {
+async function computeEngagement(clientId: string, scope?: SiteScope): Promise<Component> {
+  const s = uploadScopeFragment(clientId, scope);
   const monthRow = await turso.execute({
     sql: `SELECT DISTINCT month FROM ga4_channels
-          WHERE client_id = ? ORDER BY month DESC LIMIT 1`,
-    args: [clientId],
+          WHERE client_id = ?${s.frag} ORDER BY month DESC LIMIT 1`,
+    args: [clientId, ...s.args],
   });
   if (monthRow.rows.length === 0) {
     return {
@@ -157,8 +161,8 @@ async function computeEngagement(clientId: string): Promise<Component> {
   const res = await turso.execute({
     sql: `SELECT sessions, engagement_rate FROM ga4_channels
           WHERE client_id = ? AND month = ?
-            AND sessions IS NOT NULL AND engagement_rate IS NOT NULL`,
-    args: [clientId, month],
+            AND sessions IS NOT NULL AND engagement_rate IS NOT NULL${s.frag}`,
+    args: [clientId, month, ...s.args],
   });
   if (res.rows.length === 0) {
     return {
@@ -182,11 +186,12 @@ async function computeEngagement(clientId: string): Promise<Component> {
 }
 
 // ===== Component 4: Search Performance =====
-async function computeSearchPerf(clientId: string): Promise<Component> {
+async function computeSearchPerf(clientId: string, scope?: SiteScope): Promise<Component> {
+  const s = uploadScopeFragment(clientId, scope);
   const monthRow = await turso.execute({
     sql: `SELECT DISTINCT month FROM gsc_chart
-          WHERE client_id = ? ORDER BY month DESC LIMIT 1`,
-    args: [clientId],
+          WHERE client_id = ?${s.frag} ORDER BY month DESC LIMIT 1`,
+    args: [clientId, ...s.args],
   });
   if (monthRow.rows.length === 0) {
     return {
@@ -198,8 +203,8 @@ async function computeSearchPerf(clientId: string): Promise<Component> {
   const month = monthRow.rows[0][0] as string;
   const totalsRes = await turso.execute({
     sql: `SELECT SUM(clicks), SUM(impressions), AVG(position)
-          FROM gsc_chart WHERE client_id = ? AND month = ?`,
-    args: [clientId, month],
+          FROM gsc_chart WHERE client_id = ? AND month = ?${s.frag}`,
+    args: [clientId, month, ...s.args],
   });
   const tRow = totalsRes.rows[0];
   const clicks = num(tRow?.[0]) || 0;
@@ -229,13 +234,19 @@ export const GET: APIRoute = async ({ locals, url }) => {
     : locals.user.client_id;
   if (!clientId) return json({ error: 'No client specified' }, 400);
 
+  // Per-site scoping for multi-site clients (Phase 1c): ?site=<domain>,
+  // default primary; single-site clients get undefined scope = unchanged.
+  // The response carries the site list so the page draws its chips once.
+  const scope = await resolveSiteScope(clientId, url.searchParams.get('site'));
+  const siteMeta = scope ? { sites: scope.sites, site: scope.domain } : {};
+
   // Compute all four components in parallel. They're independent
   // queries against different tables; no reason to serialize.
   const [visibility, health, engagement, search] = await Promise.all([
-    computeVisibility(clientId),
-    computeHealth(clientId),
-    computeEngagement(clientId),
-    computeSearchPerf(clientId),
+    computeVisibility(clientId, scope),
+    computeHealth(clientId, scope),
+    computeEngagement(clientId, scope),
+    computeSearchPerf(clientId, scope),
   ]);
 
   const components: Component[] = [visibility, health, engagement, search];
@@ -250,5 +261,6 @@ export const GET: APIRoute = async ({ locals, url }) => {
     components_used: available.length,
     components_total: components.length,
     has_data: available.length > 0,
+    ...siteMeta,
   });
 };

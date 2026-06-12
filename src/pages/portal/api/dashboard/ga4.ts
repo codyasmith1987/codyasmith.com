@@ -7,6 +7,7 @@
 
 import type { APIRoute } from 'astro';
 import { getGa4DashboardWithPrior } from '../../../../lib/ga4-read';
+import { resolveSiteScope } from '../../../../lib/site-scope';
 
 export const prerender = false;
 
@@ -21,6 +22,12 @@ export const GET: APIRoute = async ({ locals, url }) => {
     : locals.user.client_id;
   if (!clientId) return json({ error: 'No client specified' }, 400);
 
-  const data = await getGa4DashboardWithPrior(clientId);
-  return json(data);
+  // Per-site scoping for multi-site clients (Phase 1c): ?site=<domain>,
+  // default primary; single-site clients get undefined scope = unchanged.
+  // The response carries the site list so the page draws its chips once.
+  const scope = await resolveSiteScope(clientId, url.searchParams.get('site'));
+  const siteMeta = scope ? { sites: scope.sites, site: scope.domain } : {};
+
+  const data = await getGa4DashboardWithPrior(clientId, scope);
+  return json({ ...data, ...siteMeta });
 };

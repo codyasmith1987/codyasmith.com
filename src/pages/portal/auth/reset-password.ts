@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { consumePasswordResetToken, setPassword, PasswordPolicyError, PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } from '../../../lib/auth';
+import { consumePasswordResetToken, setPassword, PasswordPolicyError, PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH, isUserActive } from '../../../lib/auth';
 import { rateLimit } from '../../../lib/rate-limit';
 import { logger } from '../../../lib/logger';
 import { logActivity } from '../../../lib/activity';
@@ -45,6 +45,16 @@ export const POST: APIRoute = async ({ request, clientAddress }) => {
 
     const userId = await consumePasswordResetToken(token);
     if (!userId) {
+      return json({ error: 'This reset link is invalid or has expired. Request a new one from the login page.' }, 400);
+    }
+
+    // A deactivated user must not be able to change their password, even with a
+    // token minted in the window before they were deactivated. No access is
+    // granted either way (login rejects inactive users), but this keeps the
+    // invariant consistent with every other auth path. Neutral message: this
+    // endpoint is unauthenticated, so do not reveal that the address maps to a
+    // real-but-deactivated account.
+    if (!await isUserActive(userId)) {
       return json({ error: 'This reset link is invalid or has expired. Request a new one from the login page.' }, 400);
     }
 

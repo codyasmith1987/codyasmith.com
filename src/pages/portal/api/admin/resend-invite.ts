@@ -28,13 +28,16 @@ export const POST: APIRoute = async ({ locals, request, url }) => {
 
     // Look up the user
     const lookup = await turso.execute({
-      sql: 'SELECT id, email, name FROM users WHERE id = ?',
+      sql: 'SELECT id, email, name, active FROM users WHERE id = ?',
       args: [user_id],
     });
     if (lookup.rows.length === 0) return json({ error: 'User not found' }, 404);
     const userRow = lookup.rows[0];
     const userEmail = userRow[1] as string;
     const userName = userRow[2] as string;
+    if ((userRow[3] as number | null) === 0) {
+      return json({ error: 'This user is deactivated. Reactivate them before resending an invite.' }, 409);
+    }
 
     // Mint a fresh magic link
     const token = await createMagicLink(user_id);

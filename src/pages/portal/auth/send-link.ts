@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { getUserByEmail, createMagicLink, userHasPassword } from '../../../lib/auth';
+import { getUserByEmail, createMagicLink, userHasPassword, isUserActive } from '../../../lib/auth';
 import { rateLimit } from '../../../lib/rate-limit';
 import { logger } from '../../../lib/logger';
 import { logActivity } from '../../../lib/activity';
@@ -43,6 +43,11 @@ export const POST: APIRoute = async ({ request, url, clientAddress }) => {
 
     // Always return success to prevent email enumeration
     if (!user) {
+      return json({ ok: true });
+    }
+
+    // Do not issue a sign-in link to a deactivated user. Respond uniformly.
+    if (!await isUserActive(user.id)) {
       return json({ ok: true });
     }
 

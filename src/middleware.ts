@@ -120,6 +120,15 @@ async function handleRequest(context: Parameters<Parameters<typeof defineMiddlew
   context.locals.session = result.session;
   context.locals.csrfToken = generateCsrfToken(result.session!.id);
 
+  // Block deactivated users immediately (admins included). The account and all
+  // its data are retained; this only governs access. setUserActive revokes
+  // sessions when deactivating, so normally there is no live session to catch
+  // here. This is the belt-and-suspenders gate for any in-flight session.
+  if (result.user && result.user.active === false) {
+    context.cookies.delete(SESSION_COOKIE, { path: '/portal' });
+    return context.redirect('/portal/login?error=inactive');
+  }
+
   // Reject oversized request bodies (1MB limit) on portal API routes
   // Default 1MB cap on portal API routes. CSV upload bumped to 25MB
   // because SF folder uploads ship 2-file batches that can total

@@ -173,7 +173,7 @@ export async function validateSession(token: string): Promise<{
 
   const result = await turso.execute({
     sql: `SELECT s.id as session_id, s.expires_at, s.user_id, s.created_at,
-                 u.email, u.name, u.role, u.client_id, u.permissions
+                 u.email, u.name, u.role, u.client_id, u.permissions, u.active
           FROM sessions s
           JOIN users u ON u.id = s.user_id
           WHERE s.id = ?`,
@@ -222,7 +222,7 @@ export async function validateSession(token: string): Promise<{
   //   2: s.user_id                  3: s.created_at
   //   4: u.email                    5: u.name
   //   6: u.role                     7: u.client_id
-  //   8: u.permissions
+  //   8: u.permissions              9: u.active
   //
   // Previous mapping started at row[4] for id, which silently put u.email
   // into user.id and shifted every other field by one. The portal's
@@ -237,6 +237,10 @@ export async function validateSession(token: string): Promise<{
       role: row[6] as 'admin' | 'client',
       client_id: row[7] as string | null,
       permissions: (row[8] as string | null) || null,
+      // Default to active if the column is null (pre-migration rows): the
+      // migration backfills DEFAULT 1, but be defensive so a missing value
+      // never accidentally locks an existing user out.
+      active: (row[9] as number | null) == null ? true : (row[9] as number) !== 0,
     },
     session: {
       id: sessionId,
@@ -579,6 +583,35 @@ export async function revokeUserSessions(userId: string): Promise<number> {
   return result.rowsAffected;
 }
 
+export async function isUserActive(userId: string): Promise<boolean> {
+  const result = await turso.execute({
+    sql: 'SELECT active FROM users WHERE id = ?',
+    args: [userId],
+  });
+  if (result.rows.length === 0) return false;
+  const v = result.rows[0][0] as number | null;
+  // Null (pre-migration row) is treated as active; only an explicit 0 deactivates.
+  return v == null ? true : v !== 0;
+}
+
+// Deactivate / reactivate a user. The account, audit trail, notifications, and
+// all business records are RETAINED; this only governs access. Deactivating
+// also revokes the user's sessions so they are signed out immediately.
+// Re-entry is blocked at every path (login, verify, middleware session check,
+// and the link-issuing endpoints), so toggling this flag is the single switch.
+export async function setUserActive(userId: string, active: boolean): Promise<void> {
+  await turso.execute({
+    sql: 'UPDATE users SET active = ? WHERE id = ?',
+    args: [active ? 1 : 0, userId],
+  });
+  if (!active) {
+    await turso.execute({
+      sql: 'DELETE FROM sessions WHERE user_id = ?',
+      args: [userId],
+    });
+  }
+}
+
 export async function getUsersByClientId(clientId: string) {
   const result = await turso.execute({
     sql: 'SELECT id, email, name, role, client_id FROM users WHERE client_id = ?',
@@ -605,7 +638,7 @@ export async function getAdminUsers() {
 
 export async function getAllUsers() {
   const result = await turso.execute(
-    `SELECT u.id, u.email, u.name, u.role, u.client_id, u.created_at, u.last_login_at, c.name as client_name
+    `SELECT u.id, u.email, u.name, u.role, u.client_id, u.created_at, u.last_login_at, c.name as client_name, u.active
      FROM users u LEFT JOIN clients c ON c.id = u.client_id
      ORDER BY u.created_at DESC`
   );
@@ -618,5 +651,6 @@ export async function getAllUsers() {
     created_at: row[5] as string,
     last_login_at: row[6] as string | null,
     client_name: row[7] as string | null,
+    active: (row[8] as number | null) == null ? true : (row[8] as number) !== 0,
   }));
 }

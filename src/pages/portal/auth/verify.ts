@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { validateMagicLink, createSession, SESSION_COOKIE } from '../../../lib/auth';
+import { validateMagicLink, createSession, SESSION_COOKIE, isUserActive } from '../../../lib/auth';
 import { logActivity } from '../../../lib/activity';
 import { rateLimit } from '../../../lib/rate-limit';
 
@@ -40,6 +40,11 @@ export const GET: APIRoute = async ({ url, cookies, redirect, clientAddress, req
   if (!userId) {
     // Token invalid or expired — redirect to login with error hint
     return redirect('/portal/login?error=expired');
+  }
+
+  // A deactivated user must not be able to ride a magic link back in.
+  if (!await isUserActive(userId)) {
+    return redirect('/portal/login?error=inactive');
   }
 
   // 1-hour session for magic-link arrivals. Middleware bounces them to

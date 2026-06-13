@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { verifyPassword, createSession, SESSION_COOKIE } from '../../../lib/auth';
+import { verifyPassword, createSession, SESSION_COOKIE, isUserActive } from '../../../lib/auth';
 import { rateLimit } from '../../../lib/rate-limit';
 import { logger } from '../../../lib/logger';
 import { logActivity } from '../../../lib/activity';
@@ -34,6 +34,12 @@ export const POST: APIRoute = async ({ request, cookies, clientAddress }) => {
     const userId = await verifyPassword(email, password);
     if (!userId) {
       return json({ error: 'Invalid email or password' }, 401);
+    }
+
+    // A deactivated user has a valid password but no access. Reject before
+    // issuing a session.
+    if (!await isUserActive(userId)) {
+      return json({ error: 'Your account is inactive. Contact Cody if you think this is a mistake.' }, 403);
     }
 
     const sessionToken = await createSession(userId);

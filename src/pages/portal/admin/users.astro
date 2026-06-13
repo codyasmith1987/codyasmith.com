@@ -86,6 +86,11 @@ const clients = await getAllClients();
               ]}>
                 {u.role}
               </span>
+              {!u.active && (
+                <span class="text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full bg-red-500/10 text-red-400">
+                  Deactivated
+                </span>
+              )}
               {u.last_login_at && (
                 <span class="text-[10px] text-neutral-500">
                   {new Date(u.last_login_at).toLocaleDateString()}
@@ -104,6 +109,14 @@ const clients = await getAllClients();
                   class="text-xs text-neutral-400 hover:text-amber-600 transition-colors duration-300"
                 >
                   Revoke sessions
+                </button>
+                <button
+                  data-toggle-active={u.id}
+                  data-active={u.active ? '1' : '0'}
+                  data-user-name={u.name}
+                  class="text-xs text-neutral-400 hover:text-amber-600 transition-colors duration-300"
+                >
+                  {u.active ? 'Deactivate' : 'Activate'}
                 </button>
                 <button
                   data-delete-user={u.id}
@@ -181,6 +194,40 @@ const clients = await getAllClients();
             (window as any).__toast(`Revoked ${data.sessions_revoked} session${data.sessions_revoked === 1 ? '' : 's'}.`, 'success');
           } else {
             (window as any).__toast('Failed to revoke sessions.', 'error');
+          }
+        });
+      });
+    });
+
+    // Deactivate / reactivate user
+    document.querySelectorAll('[data-toggle-active]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const button = btn as HTMLButtonElement;
+        const userId = button.dataset.toggleActive!;
+        const currentlyActive = button.dataset.active === '1';
+        const userName = button.dataset.userName!;
+        const next = !currentlyActive;
+        if (!next) {
+          const confirmed = await (window as any).__confirm({
+            title: `Deactivate ${userName}`,
+            message: 'This revokes their access and signs them out. The account and all of its history are kept, and you can reactivate any time.',
+            confirmLabel: 'Deactivate',
+            danger: true,
+          });
+          if (!confirmed) return;
+        }
+        await (window as any).__withButtonLoading(button, next ? 'Activating…' : 'Deactivating…', async () => {
+          const res = await fetch('/portal/api/admin/set-user-active', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ user_id: userId, active: next }),
+          });
+          if (res.ok) {
+            (window as any).__toast(`${userName} ${next ? 'reactivated' : 'deactivated'}.`, 'success');
+            setTimeout(() => location.reload(), 800);
+          } else {
+            const data = await res.json();
+            (window as any).__toast(data.error || 'Failed to update user', 'error');
           }
         });
       });

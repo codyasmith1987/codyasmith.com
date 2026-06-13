@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { validateMagicLink, createSession, SESSION_COOKIE } from '../../../lib/auth';
 import { logActivity } from '../../../lib/activity';
+import { rateLimit } from '../../../lib/rate-limit';
 
 export const prerender = false;
 
@@ -17,12 +18,21 @@ function safeNextPath(raw: string | null): string | null {
   return raw;
 }
 
-export const GET: APIRoute = async ({ url, cookies, redirect }) => {
+export const GET: APIRoute = async ({ url, cookies, redirect, clientAddress, request }) => {
   const token = url.searchParams.get('token');
   const next = safeNextPath(url.searchParams.get('next'));
 
   if (!token) {
     return redirect('/portal/login');
+  }
+
+  // Defense-in-depth rate limit on token validation. The token is a 48-char
+  // nanoid, so guessing is already infeasible; this just caps brute-force/DoS
+  // attempts per IP. Fail-OPEN (4th arg false) so a transient Turso outage
+  // never blocks a legitimate user arriving from their email link.
+  const ip = clientAddress || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  if (!await rateLimit(`verify:ip:${ip}`, 30, 15 * 60 * 1000, false)) {
+    return redirect('/portal/login?error=expired');
   }
 
   const userId = await validateMagicLink(token);

@@ -554,12 +554,25 @@ export async function toggleClientActive(clientId: string): Promise<boolean> {
 }
 
 export async function deleteUser(userId: string): Promise<void> {
-  // Delete sessions, magic links, and reset tokens first, then the user, so no
-  // child row outlives the user (and FK enforcement, if enabled, is satisfied).
+  // Remove the rows that BELONG to the user (sessions, magic links, reset
+  // tokens, their own notifications), then anonymize the audit trail
+  // (activity_log.user_id is nullable by design) so a logged-in user's history
+  // does not block deletion while the record of what happened is preserved.
+  //
+  // Business-authorship rows are intentionally NOT touched here:
+  // invoices.created_by, payments.recorded_by, contracts.created_by,
+  // files.uploaded_by, client_expenses.created_by, and approvals /
+  // change_orders.requested_by are all NOT NULL and represent real business
+  // records. Their foreign key is a deliberate safety guard: a user who
+  // created any of them cannot be hard-deleted (deletion will fail rather than
+  // orphan or destroy business data). Deactivate such a user instead, or add a
+  // reassign-authorship step if hard delete of an author is ever required.
   await turso.batch([
     { sql: 'DELETE FROM sessions WHERE user_id = ?', args: [userId] },
     { sql: 'DELETE FROM magic_links WHERE user_id = ?', args: [userId] },
     { sql: 'DELETE FROM password_reset_tokens WHERE user_id = ?', args: [userId] },
+    { sql: 'DELETE FROM notifications WHERE user_id = ?', args: [userId] },
+    { sql: 'UPDATE activity_log SET user_id = NULL WHERE user_id = ?', args: [userId] },
     { sql: 'DELETE FROM users WHERE id = ?', args: [userId] },
   ], 'write');
 }

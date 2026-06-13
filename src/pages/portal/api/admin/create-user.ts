@@ -69,7 +69,7 @@ export const POST: APIRoute = async ({ locals, request, url }) => {
                   Cody has set up a client portal for you at codyasmith.com. This is where you'll find your reports, deliverables, and dashboard.
                 </p>
                 <p style="color: #525252; line-height: 1.6; margin-bottom: 24px;">
-                  Click below to log in. This link expires in 15 minutes. After that, just enter your email on the login page to get a new one.
+                  Click below to log in. This link expires in 15 minutes. If it expires, go to the login page and use "Email me a sign-in link" to get a fresh one.
                 </p>
                 <a href="${escapeHtml(loginUrl)}" style="display: inline-block; background: #f59e0b; color: #0a0a0a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">
                   Log in to your Portal

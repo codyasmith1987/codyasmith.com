@@ -9,6 +9,7 @@ const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days rolling
 const SESSION_REFRESH_MS = 15 * 24 * 60 * 60 * 1000;  // refresh if within 15 days of expiry
 const SESSION_ABSOLUTE_MAX_MS = 90 * 24 * 60 * 60 * 1000; // hard cap from created_at
 const MAGIC_LINK_DURATION_MS = 15 * 60 * 1000;         // 15 minutes
+const PASSWORD_RESET_DURATION_MS = 60 * 60 * 1000;     // 1 hour
 
 export { SESSION_COOKIE };
 
@@ -297,6 +298,91 @@ export async function validateMagicLink(token: string): Promise<string | null> {
   return userId;
 }
 
+// --- Password Reset Tokens ---
+//
+// Deliberately separate from magic links. A magic link mints a 1-hour session
+// and is the onboarding path for users with NO password yet (validated +
+// session created in verify.ts). A password reset token is the opposite: it
+// authorizes setting a NEW password for a user who ALREADY has one, and it
+// NEVER mints a session. The reset endpoints validate the token, call
+// setPassword (which revokes all sessions), and send the user to /portal/login
+// to sign in with the new password. Because no session is ever created from a
+// reset token, it cannot be used as a passwordless login bypass. Single-use,
+// short-lived, hashed at rest. See the 2026-06-13 auth-recovery work.
+
+export async function createPasswordResetToken(userId: string): Promise<string> {
+  // Supersede any earlier unused reset tokens for this user so only the newest
+  // emailed link works. Reset is user-initiated and low-volume, so the small
+  // race (user clicks an older link as a new one is minted) is acceptable and
+  // the stricter single-live-link behavior is the safer default.
+  await turso.execute({
+    sql: 'UPDATE password_reset_tokens SET used = 1 WHERE user_id = ? AND used = 0',
+    args: [userId],
+  });
+
+  const token = nanoid(48);
+  const tokenHash = hashToken(token);
+  const id = nanoid();
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_DURATION_MS).toISOString();
+
+  await turso.execute({
+    sql: 'INSERT INTO password_reset_tokens (id, token_hash, user_id, expires_at) VALUES (?, ?, ?, ?)',
+    args: [id, tokenHash, userId, expiresAt],
+  });
+
+  return token;
+}
+
+// Read-only validity check for the reset page GET. Does NOT consume the token,
+// so an email-client prefetch of the reset link cannot burn it before the user
+// submits. Returns true only when the token exists, is unused, and unexpired.
+export async function isPasswordResetTokenValid(token: string): Promise<boolean> {
+  if (!token) return false;
+  const tokenHash = hashToken(token);
+  const result = await turso.execute({
+    sql: 'SELECT expires_at, used FROM password_reset_tokens WHERE token_hash = ?',
+    args: [tokenHash],
+  });
+  const row = result.rows[0];
+  if (!row) return false;
+  const expiresAt = new Date(row[0] as string);
+  const used = row[1] as number;
+  return !used && expiresAt > new Date();
+}
+
+// Consume the token (single-use) and return the user id, or null if missing /
+// expired / already used. Mirrors validateMagicLink's constant-time shape:
+// always perform a write when a matching row exists so timing does not leak
+// whether a given token hash is present.
+export async function consumePasswordResetToken(token: string): Promise<string | null> {
+  const tokenHash = hashToken(token);
+
+  const result = await turso.execute({
+    sql: 'SELECT id, user_id, expires_at, used FROM password_reset_tokens WHERE token_hash = ?',
+    args: [tokenHash],
+  });
+
+  const row = result.rows[0];
+  const linkId = row ? (row[0] as string) : '';
+  const userId = row ? (row[1] as string) : '';
+  const expiresAt = row ? new Date(row[2] as string) : new Date(0);
+  const used = row ? (row[3] as number) : 1;
+
+  if (!row || used || expiresAt <= new Date()) {
+    if (linkId) {
+      await turso.execute({ sql: 'UPDATE password_reset_tokens SET used = 1 WHERE id = ?', args: [linkId] });
+    }
+    return null;
+  }
+
+  await turso.execute({
+    sql: 'UPDATE password_reset_tokens SET used = 1 WHERE id = ?',
+    args: [linkId],
+  });
+
+  return userId;
+}
+
 // --- User/Client helpers ---
 
 export async function getUserByEmail(email: string) {
@@ -468,10 +554,12 @@ export async function toggleClientActive(clientId: string): Promise<boolean> {
 }
 
 export async function deleteUser(userId: string): Promise<void> {
-  // Delete sessions first, then magic links, then user
+  // Delete sessions, magic links, and reset tokens first, then the user, so no
+  // child row outlives the user (and FK enforcement, if enabled, is satisfied).
   await turso.batch([
     { sql: 'DELETE FROM sessions WHERE user_id = ?', args: [userId] },
     { sql: 'DELETE FROM magic_links WHERE user_id = ?', args: [userId] },
+    { sql: 'DELETE FROM password_reset_tokens WHERE user_id = ?', args: [userId] },
     { sql: 'DELETE FROM users WHERE id = ?', args: [userId] },
   ], 'write');
 }

@@ -88,7 +88,18 @@ if (token) {
         </form>
       </div>
 
-      <div id="error-message" class="hidden mt-6 p-4 bg-red-500/5 border border-red-500/15 rounded-lg text-sm text-red-400 leading-relaxed"></div>
+      {/* Self-serve recovery. Both actions always render for every visitor and
+          show an identical confirmation regardless of account state, so they
+          cannot be used to probe who has an account or a password. */}
+      <div class="mt-6 flex flex-col items-center gap-2 text-xs">
+        <button type="button" id="forgot-btn" class="text-neutral-500 hover:text-amber-600 transition-colors duration-300">Forgot your password?</button>
+        <p class="text-neutral-600 text-center leading-relaxed">
+          First time here, or your invite link expired?<br />
+          <button type="button" id="signin-link-btn" class="text-neutral-500 hover:text-amber-600 transition-colors duration-300 underline-offset-2">Email me a sign-in link</button>
+        </p>
+      </div>
+
+      <div id="error-message" role="status" aria-live="polite" class="hidden mt-6 p-4 bg-red-500/5 border border-red-500/15 rounded-lg text-sm text-red-400 leading-relaxed"></div>
 
       <p class="text-center text-xs text-neutral-500 mt-12">
         Don't have access yet? <a href="mailto:cody@codyasmith.com?subject=Portal%20Access%20Request" class="text-neutral-500 hover:text-amber-600 transition-colors duration-300">Request it here</a>
@@ -99,23 +110,33 @@ if (token) {
       const form = document.getElementById('login-form') as HTMLFormElement;
       const btn = document.getElementById('submit-btn') as HTMLButtonElement;
       const errorEl = document.getElementById('error-message')!;
+      const emailInput = form.querySelector('#email') as HTMLInputElement;
 
-      // Show error from redirect (e.g. expired session, inactive account)
+      // One message slot, reused for errors (red) and confirmations (emerald).
+      function showMessage(text: string, kind: 'error' | 'success') {
+        errorEl.textContent = text;
+        errorEl.classList.remove('hidden');
+        if (kind === 'success') {
+          errorEl.classList.remove('bg-red-500/5', 'border-red-500/15', 'text-red-400');
+          errorEl.classList.add('bg-emerald-500/5', 'border-emerald-500/20', 'text-emerald-400');
+        } else {
+          errorEl.classList.remove('bg-emerald-500/5', 'border-emerald-500/20', 'text-emerald-400');
+          errorEl.classList.add('bg-red-500/5', 'border-red-500/15', 'text-red-400');
+        }
+      }
+
+      // Show status from a redirect: expired link/session, inactive account,
+      // or a just-completed password set / reset.
       const params = new URLSearchParams(window.location.search);
       const urlError = params.get('error');
       if (urlError === 'expired') {
-        errorEl.textContent = 'Your session has expired. Please log in again.';
-        errorEl.classList.remove('hidden');
+        showMessage('Your link or session has expired. Log in with your password below, or use one of the options under the form to email yourself a fresh link.', 'error');
       } else if (urlError === 'inactive') {
-        errorEl.textContent = 'Your account is currently inactive. Contact Cody if you think this is a mistake.';
-        errorEl.classList.remove('hidden');
+        showMessage('Your account is currently inactive. Contact Cody if you think this is a mistake.', 'error');
       } else if (params.get('passwordSet') === '1') {
-        // Repurpose the error slot as a success confirmation; reuse the
-        // same container so no extra DOM is needed.
-        errorEl.textContent = 'Password set. Sign in with your new password.';
-        errorEl.classList.remove('bg-red-500/5', 'border-red-500/15', 'text-red-400');
-        errorEl.classList.add('bg-emerald-500/5', 'border', 'border-emerald-500/20', 'text-emerald-400');
-        errorEl.classList.remove('hidden');
+        showMessage('Password set. Sign in with your new password.', 'success');
+      } else if (params.get('passwordReset') === '1') {
+        showMessage('Password reset. Sign in with your new password.', 'success');
       }
 
       document.getElementById('toggle-pw')!.addEventListener('click', () => {
@@ -126,13 +147,42 @@ if (token) {
         document.getElementById('eye-open')!.classList.toggle('hidden', !show);
       });
 
+      // Self-serve link requests. Always show the same confirmation regardless
+      // of whether an email was actually sent — the endpoints return ok
+      // uniformly so neither the response nor the UI leaks who has an account.
+      const emailPattern = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+      async function requestLink(endpoint: string, successText: string) {
+        const email = emailInput.value.trim();
+        if (!emailPattern.test(email)) {
+          showMessage('Enter your email in the field above first.', 'error');
+          emailInput.focus();
+          return;
+        }
+        try {
+          await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+          });
+        } catch {
+          // Keep the confirmation uniform even on a network hiccup; the user
+          // can retry. Never reveal request outcome details.
+        }
+        showMessage(successText, 'success');
+      }
+
+      document.getElementById('forgot-btn')!.addEventListener('click', () =>
+        requestLink('/portal/auth/request-reset', 'If your email has portal access, a password reset link is on its way. Check your inbox and spam folder.'));
+      document.getElementById('signin-link-btn')!.addEventListener('click', () =>
+        requestLink('/portal/auth/send-link', 'If your email has portal access, a sign-in link is on its way. Check your inbox and spam folder.'));
+
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         btn.disabled = true;
         btn.textContent = 'Logging in...';
         errorEl.classList.add('hidden');
 
-        const email = (form.querySelector('#email') as HTMLInputElement).value;
+        const email = emailInput.value;
         const password = (form.querySelector('#password') as HTMLInputElement).value;
 
         try {
@@ -147,14 +197,12 @@ if (token) {
           if (res.ok) {
             window.location.href = '/portal/dashboard';
           } else {
-            errorEl.textContent = data.error || 'Login failed';
-            errorEl.classList.remove('hidden');
+            showMessage(data.error || 'Login failed', 'error');
             btn.disabled = false;
             btn.textContent = 'Log in';
           }
         } catch (err: any) {
-          errorEl.textContent = 'Connection error. Try again.';
-          errorEl.classList.remove('hidden');
+          showMessage('Connection error. Try again.', 'error');
           btn.disabled = false;
           btn.textContent = 'Log in';
         }

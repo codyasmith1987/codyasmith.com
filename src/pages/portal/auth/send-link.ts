@@ -28,6 +28,17 @@ export const POST: APIRoute = async ({ request, url, clientAddress }) => {
       return json({ error: 'Invalid email address' }, 400);
     }
 
+    // Per-email throttle, in its own bucket (not the shared login:ip one).
+    // Now that this endpoint is a visible button on the login page, cap how
+    // often any single inbox can be mailed a sign-in link so it cannot be used
+    // to mailbomb a victim from rotating IPs. Return ok on throttle to keep the
+    // response uniform (no email enumeration). Fail-closed like the other
+    // auth-path limits.
+    const emailKey = email.toLowerCase().trim();
+    if (!await rateLimit(`signin-link:email:${emailKey}`, 5, 15 * 60 * 1000, true)) {
+      return json({ ok: true });
+    }
+
     const user = await getUserByEmail(email);
 
     // Always return success to prevent email enumeration
@@ -72,7 +83,7 @@ export const POST: APIRoute = async ({ request, url, clientAddress }) => {
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
               <h2 style="color: #171717; margin-bottom: 16px;">Hey ${escapeHtml(user.name.split(' ')[0])},</h2>
               <p style="color: #525252; line-height: 1.6; margin-bottom: 24px;">
-                Here's your login link for the client portal. It expires in 15 minutes.
+                Here's your sign-in link for the client portal. It expires in 15 minutes. If it expires before you use it, just request a fresh one from the login page.
               </p>
               <a href="${escapeHtml(loginUrl)}" style="display: inline-block; background: #f59e0b; color: #0a0a0a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">
                 Log in to Portal

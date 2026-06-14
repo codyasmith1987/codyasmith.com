@@ -565,20 +565,29 @@ export async function toggleClientActive(clientId: string): Promise<boolean> {
 // application code because the database does not have foreign-key enforcement
 // turned on, so a raw DELETE would silently ORPHAN these rows rather than fail.
 export async function userHasRetainedHistory(userId: string): Promise<boolean> {
+  // Covers EVERY table that declares a `REFERENCES users(id)` foreign key
+  // (besides the ephemeral session/magic-link/reset-token rows that deleteUser
+  // clears). With no FK enforcement in the DB, this is the only thing standing
+  // between a hard delete and an orphaned row, so it must be exhaustive: if a
+  // new table references users(id), add it here too.
   const result = await turso.execute({
     sql: `SELECT EXISTS (
-            SELECT 1 FROM activity_log     WHERE user_id = ?
-            UNION ALL SELECT 1 FROM notifications   WHERE user_id = ?
-            UNION ALL SELECT 1 FROM files           WHERE uploaded_by = ?
-            UNION ALL SELECT 1 FROM csv_uploads     WHERE uploaded_by = ?
-            UNION ALL SELECT 1 FROM invoices        WHERE created_by = ?
-            UNION ALL SELECT 1 FROM payments        WHERE recorded_by = ?
-            UNION ALL SELECT 1 FROM approvals       WHERE requested_by = ? OR responded_by = ?
-            UNION ALL SELECT 1 FROM change_orders   WHERE requested_by = ? OR approved_by = ?
-            UNION ALL SELECT 1 FROM contracts       WHERE created_by = ?
-            UNION ALL SELECT 1 FROM client_expenses WHERE created_by = ?
+            SELECT 1 FROM activity_log      WHERE user_id = ?
+            UNION ALL SELECT 1 FROM notifications     WHERE user_id = ?
+            UNION ALL SELECT 1 FROM files             WHERE uploaded_by = ?
+            UNION ALL SELECT 1 FROM csv_uploads       WHERE uploaded_by = ?
+            UNION ALL SELECT 1 FROM invoices          WHERE created_by = ?
+            UNION ALL SELECT 1 FROM payments          WHERE recorded_by = ?
+            UNION ALL SELECT 1 FROM approvals         WHERE requested_by = ? OR responded_by = ?
+            UNION ALL SELECT 1 FROM change_orders     WHERE requested_by = ? OR approved_by = ?
+            UNION ALL SELECT 1 FROM contracts         WHERE created_by = ?
+            UNION ALL SELECT 1 FROM client_expenses   WHERE created_by = ?
+            UNION ALL SELECT 1 FROM proposals         WHERE created_by = ?
+            UNION ALL SELECT 1 FROM client_agreements WHERE created_by = ?
+            UNION ALL SELECT 1 FROM agreement_signers WHERE user_id = ?
+            UNION ALL SELECT 1 FROM tasks             WHERE assigned_to = ?
           ) AS has_history`,
-    args: Array(12).fill(userId),
+    args: Array(16).fill(userId),
   });
   return (result.rows[0][0] as number) === 1;
 }

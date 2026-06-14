@@ -12,8 +12,9 @@ import { onAutomatedFailure } from './triggers';
 
 export async function runDailyBilling(): Promise<Record<string, unknown>> {
   // generateRecurringInvoices stamps created_by (FK to users); run as the
-  // earliest admin (a system actor).
-  const adminRow = await turso.execute("SELECT id FROM users WHERE role = 'admin' ORDER BY created_at LIMIT 1");
+  // earliest ACTIVE admin (a system actor) so a deactivated admin is never
+  // stamped onto new records.
+  const adminRow = await turso.execute("SELECT id FROM users WHERE role = 'admin' AND (active IS NULL OR active = 1) ORDER BY created_at LIMIT 1");
   const systemUserId = (adminRow.rows[0]?.[0] as string | undefined) || undefined;
 
   const result: Record<string, unknown> = { ok: true, ran_at: new Date().toISOString() };

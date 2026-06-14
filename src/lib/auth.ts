@@ -557,6 +557,32 @@ export async function toggleClientActive(clientId: string): Promise<boolean> {
   return newActive === 1;
 }
 
+// True if the user is referenced by any RETAINED record: the audit trail,
+// notifications, or a business document they authored. Such a user must NOT be
+// hard-deleted — deactivate instead, so access is removed but the records (and
+// their references) stay intact. Hard delete is only for a footprint-free
+// account, e.g. a mistyped invite that was never used. This is enforced in
+// application code because the database does not have foreign-key enforcement
+// turned on, so a raw DELETE would silently ORPHAN these rows rather than fail.
+export async function userHasRetainedHistory(userId: string): Promise<boolean> {
+  const result = await turso.execute({
+    sql: `SELECT EXISTS (
+            SELECT 1 FROM activity_log     WHERE user_id = ?
+            UNION ALL SELECT 1 FROM notifications   WHERE user_id = ?
+            UNION ALL SELECT 1 FROM files           WHERE uploaded_by = ?
+            UNION ALL SELECT 1 FROM csv_uploads     WHERE uploaded_by = ?
+            UNION ALL SELECT 1 FROM invoices        WHERE created_by = ?
+            UNION ALL SELECT 1 FROM payments        WHERE recorded_by = ?
+            UNION ALL SELECT 1 FROM approvals       WHERE requested_by = ? OR responded_by = ?
+            UNION ALL SELECT 1 FROM change_orders   WHERE requested_by = ? OR approved_by = ?
+            UNION ALL SELECT 1 FROM contracts       WHERE created_by = ?
+            UNION ALL SELECT 1 FROM client_expenses WHERE created_by = ?
+          ) AS has_history`,
+    args: Array(12).fill(userId),
+  });
+  return (result.rows[0][0] as number) === 1;
+}
+
 export async function deleteUser(userId: string): Promise<void> {
   // Only clears EPHEMERAL auth artifacts (login sessions, magic links, reset
   // tokens), then the user row. We deliberately do NOT touch notifications,
@@ -613,8 +639,13 @@ export async function setUserActive(userId: string, active: boolean): Promise<vo
 }
 
 export async function getUsersByClientId(clientId: string) {
+  // Excludes deactivated users (active = 0). Every caller uses this for
+  // targeting or picking (billing + invoice recipients, notification targets,
+  // the proposal signer picker), and a deactivated user must not be emailed or
+  // offered as a choice. The admin user list uses getAllUsers, which still
+  // returns everyone (with a Deactivated badge).
   const result = await turso.execute({
-    sql: 'SELECT id, email, name, role, client_id FROM users WHERE client_id = ?',
+    sql: 'SELECT id, email, name, role, client_id FROM users WHERE client_id = ? AND (active IS NULL OR active = 1)',
     args: [clientId],
   });
   return result.rows.map(row => ({
@@ -627,7 +658,9 @@ export async function getUsersByClientId(clientId: string) {
 }
 
 export async function getAdminUsers() {
-  const result = await turso.execute("SELECT id, email, name, role FROM users WHERE role = 'admin'");
+  // Excludes deactivated admins: used for admin notification targeting, so a
+  // deactivated admin should not be notified.
+  const result = await turso.execute("SELECT id, email, name, role FROM users WHERE role = 'admin' AND (active IS NULL OR active = 1)");
   return result.rows.map(row => ({
     id: row[0] as string,
     email: row[1] as string,

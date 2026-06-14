@@ -23,18 +23,12 @@ export const POST: APIRoute = async ({ locals, request }) => {
       return json({ error: 'Password is required' }, 400);
     }
 
-    // setPassword enforces the policy (>= 12 chars, <= 72 bytes) and
-    // revokes existing sessions for the user. The caller's current
-    // session is implicitly revoked too, so we re-issue cookies via a
-    // fresh login on the next request would normally be required.
-    // For this self-service flow we keep the current cookie because
-    // setPassword has just rotated the user's session row in the DB
-    // and the cookie holds the pre-rotation session token.
-    //
-    // To avoid logging the user out mid-flow we ALSO need to skip the
-    // session-revoke. We can't do that without changing setPassword,
-    // and forcing a re-login is acceptable UX here (user just chose
-    // the password they will use).
+    // setPassword enforces the password policy (>= 12 chars, <= 72 bytes) and
+    // revokes ALL of the user's sessions, including this one. That is
+    // intentional: the set-password client (set-password.astro) redirects to
+    // /portal/login?passwordSet=1 on success, so the user signs in fresh with
+    // the password they just chose. We do not try to keep the current session
+    // alive. See security-audit-2026-05-12 SEC3-008 / SEC-014.
     await setPassword(locals.user.id, password);
 
     await logActivity({

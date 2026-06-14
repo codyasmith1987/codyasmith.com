@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { deleteUser } from '../../../../lib/auth';
+import { deleteUser, userHasRetainedHistory } from '../../../../lib/auth';
 import { logger } from '../../../../lib/logger';
 import { logActivity } from '../../../../lib/activity';
 
@@ -18,6 +18,16 @@ export const POST: APIRoute = async ({ locals, request }) => {
     // Prevent self-deletion
     if (user_id === locals.user.id) {
       return json({ error: 'You cannot delete your own account' }, 400);
+    }
+
+    // Refuse to hard-delete a user who has any retained history (audit trail,
+    // notifications, or authored business records). The database has no
+    // foreign-key enforcement, so a raw delete would silently orphan those
+    // rows. Deactivate instead to remove access while keeping everything.
+    if (await userHasRetainedHistory(user_id)) {
+      return json({
+        error: 'This user has activity or business records (invoices, contracts, files, and the like) tied to them. Deactivate them instead to remove access while keeping the records.',
+      }, 409);
     }
 
     // Log before delete — the user record won't exist after

@@ -240,7 +240,7 @@ const clients = await getAllClients();
         const userName = (btn as HTMLElement).dataset.userName!;
         const confirmed = await (window as any).__confirm({
           title: `Delete ${userName}`,
-          message: 'This will permanently delete the user and revoke all their sessions.',
+          message: 'Permanently deletes a user who has no history yet. If they have any activity or business records, deletion is blocked and you should deactivate them instead, which removes access while keeping the records.',
           confirmLabel: 'Delete user',
           danger: true,
         });

@@ -52,4 +52,18 @@ async function sweepRetention(): Promise<void> {
     sql: 'DELETE FROM portal_rate_limits WHERE window_start < ?',
     args: [portalCutoff],
   }).catch(err => logger.info('portal_rate_limits sweep skipped: ' + (err?.message || 'unknown')));
+
+  // Magic links and password reset tokens are single-use and short-lived
+  // (15 min / 1 hour). Rows that expired more than a day ago are dead weight;
+  // sweep them so the token tables stay small. ISO cutoff matches the ISO
+  // timestamps stored in expires_at.
+  const tokenCutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  await turso.execute({
+    sql: 'DELETE FROM magic_links WHERE expires_at < ?',
+    args: [tokenCutoff],
+  }).catch(err => logger.info('magic_links sweep skipped: ' + (err?.message || 'unknown')));
+  await turso.execute({
+    sql: 'DELETE FROM password_reset_tokens WHERE expires_at < ?',
+    args: [tokenCutoff],
+  }).catch(err => logger.info('password_reset_tokens sweep skipped: ' + (err?.message || 'unknown')));
 }

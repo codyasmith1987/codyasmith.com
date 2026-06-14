@@ -27,11 +27,25 @@ export const POST: APIRoute = async ({ locals, request }) => {
     }
 
     const lookup = await turso.execute({
-      sql: 'SELECT name FROM users WHERE id = ?',
+      sql: 'SELECT name, role FROM users WHERE id = ?',
       args: [user_id],
     });
     if (lookup.rows.length === 0) return json({ error: 'User not found' }, 404);
     const userName = lookup.rows[0][0] as string;
+    const userRole = lookup.rows[0][1] as string;
+
+    // Never deactivate the last active admin — that would lock everyone out of
+    // the portal. (Self-deactivation is already blocked above; this also covers
+    // one admin deactivating the only other admin, including a mutual race.)
+    if (!active && userRole === 'admin') {
+      const others = await turso.execute({
+        sql: "SELECT COUNT(*) FROM users WHERE role = 'admin' AND (active IS NULL OR active = 1) AND id != ?",
+        args: [user_id],
+      });
+      if ((others.rows[0][0] as number) === 0) {
+        return json({ error: 'You cannot deactivate the last active admin.' }, 400);
+      }
+    }
 
     await setUserActive(user_id, active);
 

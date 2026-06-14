@@ -52,7 +52,7 @@ export async function ingestRaisedBarF3CsvChunk(args: {
   const client = await getClientBySlug(RAISED_BAR_F3_CLIENT_SLUG);
   if (!client) throw new Error(`Client '${RAISED_BAR_F3_CLIENT_SLUG}' not found; run migration 014 first`);
 
-  const adminLookup = await turso.execute("SELECT id FROM users WHERE role = 'admin' ORDER BY created_at ASC LIMIT 1");
+  const adminLookup = await turso.execute("SELECT id FROM users WHERE role = 'admin' AND (active IS NULL OR active = 1) ORDER BY created_at ASC LIMIT 1");
   if (adminLookup.rows.length === 0) throw new Error('No admin user found');
   const adminUserId = adminLookup.rows[0][0] as string;
 

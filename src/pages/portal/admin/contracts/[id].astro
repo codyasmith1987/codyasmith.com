@@ -288,7 +288,8 @@ const invoiceStatusLabels: Record<string, string> = {
     });
 
     // Delete contract
-    document.getElementById('delete-contract')?.addEventListener('click', async () => {
+    document.getElementById('delete-contract')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
       const confirmed = await window.__confirm({
         title: 'Delete contract',
         message: 'This will permanently delete this contract and its related invoices, approvals, and change orders.',
@@ -297,17 +298,19 @@ const invoiceStatusLabels: Record<string, string> = {
       });
       if (!confirmed) return;
 
-      const res = await fetch(`/portal/api/admin/contracts/${contractId}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-      });
+      await window.__withButtonLoading(btn, 'Deleting…', async () => {
+        const res = await fetch(`/portal/api/admin/contracts/${contractId}`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        });
 
-      if (res.ok) {
-        window.__toast('Contract deleted.', 'success');
-        setTimeout(() => window.location.href = '/portal/admin/contracts', 600);
-      } else {
-        window.__toast('Failed to delete contract.', 'error');
-      }
+        if (res.ok) {
+          window.__toast('Contract deleted.', 'success');
+          setTimeout(() => window.location.href = '/portal/admin/contracts', 600);
+        } else {
+          window.__toast('Failed to delete contract.', 'error');
+        }
+      });
     });
 
     // Add project
@@ -320,36 +323,42 @@ const invoiceStatusLabels: Record<string, string> = {
       const title = document.getElementById('ap-title').value.trim();
       if (!title) return;
 
-      const res = await fetch('/portal/api/admin/projects/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify({ contract_id: contractId, client_id: clientId, title }),
-      });
+      const submitBtn = apForm.querySelector('button[type="submit"]');
+      await window.__withButtonLoading(submitBtn, 'Creating…', async () => {
+        const res = await fetch('/portal/api/admin/projects/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ contract_id: contractId, client_id: clientId, title }),
+        });
 
-      if (res.ok) {
-        window.__toast({ type: 'success', message: 'Project created' });
-        setTimeout(() => location.reload(), 600);
-      } else {
-        const err = await res.json().catch(() => ({ error: 'Failed' }));
-        window.__toast({ type: 'error', message: err.error || 'Failed to create project' });
-      }
+        if (res.ok) {
+          window.__toast({ type: 'success', message: 'Project created' });
+          setTimeout(() => location.reload(), 600);
+        } else {
+          const err = await res.json().catch(() => ({ error: 'Failed' }));
+          window.__toast({ type: 'error', message: err.error || 'Failed to create project' });
+        }
+      });
     });
 
     // Create invoice
-    document.getElementById('create-invoice-btn')?.addEventListener('click', async () => {
-      const res = await fetch('/portal/api/admin/invoices/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify({ contract_id: contractId, client_id: clientId }),
-      });
+    document.getElementById('create-invoice-btn')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      await window.__withButtonLoading(btn, 'Creating…', async () => {
+        const res = await fetch('/portal/api/admin/invoices/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ contract_id: contractId, client_id: clientId }),
+        });
 
-      if (res.ok) {
-        const data = await res.json();
-        window.__toast({ type: 'success', message: `Invoice ${data.invoice_number} created` });
-        setTimeout(() => window.location.href = `/portal/admin/invoices/${data.id}`, 600);
-      } else {
-        window.__toast({ type: 'error', message: 'Failed to create invoice' });
-      }
+        if (res.ok) {
+          const data = await res.json();
+          window.__toast({ type: 'success', message: `Invoice ${data.invoice_number} created` });
+          setTimeout(() => window.location.href = `/portal/admin/invoices/${data.id}`, 600);
+        } else {
+          window.__toast({ type: 'error', message: 'Failed to create invoice' });
+        }
+      });
     });
   </script>
 </Portal>

@@ -563,7 +563,8 @@ function formatLabel(format: string): string {
     // page load, so files uploaded since then are not in it until reload).
     document.getElementById('refresh-uploads-btn')?.addEventListener('click', () => window.location.reload());
 
-    document.getElementById('wipe-client-btn')?.addEventListener('click', async () => {
+    document.getElementById('wipe-client-btn')?.addEventListener('click', async (ev) => {
+      const wipeBtn = ev.currentTarget as HTMLButtonElement;
       const clientSelect = document.getElementById('csv-client') as HTMLSelectElement;
       const clientId = clientSelect?.value;
       const clientLabel = clientSelect?.selectedOptions[0]?.text || '(picked client)';
@@ -575,74 +576,82 @@ function formatLabel(format: string): string {
         `Type WIPE to delete EVERY upload + all derived data (metrics, crawl_urls, site_issues, etc.) for "${clientLabel}". This is not reversible.`
       );
       if (typed !== 'WIPE') return;
-      try {
-        const res = await fetch('/portal/api/admin/csv/clear-all-for-client', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify({ client_id: clientId, confirm: 'WIPE' }),
-        });
-        const text = await res.text();
-        let data: any = null;
-        try { data = text ? JSON.parse(text) : null; } catch {}
-        if (res.ok && data && data.ok) {
-          alert(`Wiped ${data.uploads_removed} upload(s) and ${data.child_rows_removed} child row(s) for ${clientLabel}. Reloading...`);
-          window.location.reload();
-        } else {
-          const msg = (data && data.error) ? data.error : `HTTP ${res.status}${text ? ': ' + text.slice(0, 140) : ''}`;
-          alert(`Wipe failed: ${msg}`);
+      await (window as any).__withButtonLoading(wipeBtn, 'Wiping…', async () => {
+        try {
+          const res = await fetch('/portal/api/admin/csv/clear-all-for-client', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ client_id: clientId, confirm: 'WIPE' }),
+          });
+          const text = await res.text();
+          let data: any = null;
+          try { data = text ? JSON.parse(text) : null; } catch {}
+          if (res.ok && data && data.ok) {
+            alert(`Wiped ${data.uploads_removed} upload(s) and ${data.child_rows_removed} child row(s) for ${clientLabel}. Reloading...`);
+            window.location.reload();
+          } else {
+            const msg = (data && data.error) ? data.error : `HTTP ${res.status}${text ? ': ' + text.slice(0, 140) : ''}`;
+            alert(`Wipe failed: ${msg}`);
+          }
+        } catch (err: any) {
+          alert(`Wipe failed: ${err?.message || 'network error'}`);
         }
-      } catch (err: any) {
-        alert(`Wipe failed: ${err?.message || 'network error'}`);
-      }
+      });
     });
 
-    document.getElementById('clear-garbage-issues-btn')?.addEventListener('click', async () => {
+    document.getElementById('clear-garbage-issues-btn')?.addEventListener('click', async (ev) => {
+      const garbageBtn = ev.currentTarget as HTMLButtonElement;
       if (!confirm('Delete site_issues rows whose issue_name looks like a filename (contains "/", says "inlinks/outlinks/anchor text", or starts with an SF timestamp folder)? Caused by historical regression now fixed. Not reversible.')) return;
-      try {
-        const res = await fetch('/portal/api/admin/csv/clear-garbage-issues', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify({}),
-        });
-        const text = await res.text();
-        let data: any = null;
-        try { data = text ? JSON.parse(text) : null; } catch { /* noop */ }
-        if (res.ok && data?.ok) {
-          const sampleLine = data.sample && data.sample.length > 0
-            ? ` Examples: ${data.sample.slice(0, 3).map((s: string) => `"${s.slice(0, 50)}"`).join(', ')}.`
-            : '';
-          (window as any).__toast(`Removed ${data.deleted} garbage issue row(s).${sampleLine}`, 'success');
-          window.location.reload();
-        } else {
-          const msg = (data && data.error) ? data.error : `HTTP ${res.status}${text ? ': ' + text.slice(0, 140) : ''}`;
-          alert(`Clear garbage failed: ${msg}`);
+      await (window as any).__withButtonLoading(garbageBtn, 'Clearing…', async () => {
+        try {
+          const res = await fetch('/portal/api/admin/csv/clear-garbage-issues', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({}),
+          });
+          const text = await res.text();
+          let data: any = null;
+          try { data = text ? JSON.parse(text) : null; } catch { /* noop */ }
+          if (res.ok && data?.ok) {
+            const sampleLine = data.sample && data.sample.length > 0
+              ? ` Examples: ${data.sample.slice(0, 3).map((s: string) => `"${s.slice(0, 50)}"`).join(', ')}.`
+              : '';
+            (window as any).__toast(`Removed ${data.deleted} garbage issue row(s).${sampleLine}`, 'success');
+            window.location.reload();
+          } else {
+            const msg = (data && data.error) ? data.error : `HTTP ${res.status}${text ? ': ' + text.slice(0, 140) : ''}`;
+            alert(`Clear garbage failed: ${msg}`);
+          }
+        } catch (err: any) {
+          alert(`Clear garbage failed: ${err?.message || 'network error'}`);
         }
-      } catch (err: any) {
-        alert(`Clear garbage failed: ${err?.message || 'network error'}`);
-      }
+      });
     });
 
-    document.getElementById('clear-superseded-btn')?.addEventListener('click', async () => {
+    document.getElementById('clear-superseded-btn')?.addEventListener('click', async (ev) => {
+      const supersededBtn = ev.currentTarget as HTMLButtonElement;
       if (!confirm('Delete every csv_uploads row marked "Superseded by newer upload" across all clients? Data rows are already swept; this just clears the audit trail.')) return;
-      try {
-        const res = await fetch('/portal/api/admin/csv/clear-superseded', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify({}),
-        });
-        const text = await res.text();
-        let data: any = null;
-        try { data = text ? JSON.parse(text) : null; } catch { /* noop */ }
-        if (res.ok && data?.ok) {
-          (window as any).__toast(`Cleared ${data.deleted} superseded upload row(s). ${data.child_rows_removed} orphan child row(s) wiped too.`, 'success');
-          window.location.reload();
-        } else {
-          const msg = (data && data.error) ? data.error : `HTTP ${res.status}${text ? ': ' + text.slice(0, 140) : ''}`;
-          alert(`Clear superseded failed: ${msg}`);
+      await (window as any).__withButtonLoading(supersededBtn, 'Clearing…', async () => {
+        try {
+          const res = await fetch('/portal/api/admin/csv/clear-superseded', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({}),
+          });
+          const text = await res.text();
+          let data: any = null;
+          try { data = text ? JSON.parse(text) : null; } catch { /* noop */ }
+          if (res.ok && data?.ok) {
+            (window as any).__toast(`Cleared ${data.deleted} superseded upload row(s). ${data.child_rows_removed} orphan child row(s) wiped too.`, 'success');
+            window.location.reload();
+          } else {
+            const msg = (data && data.error) ? data.error : `HTTP ${res.status}${text ? ': ' + text.slice(0, 140) : ''}`;
+            alert(`Clear superseded failed: ${msg}`);
+          }
+        } catch (err: any) {
+          alert(`Clear superseded failed: ${err?.message || 'network error'}`);
         }
-      } catch (err: any) {
-        alert(`Clear superseded failed: ${err?.message || 'network error'}`);
-      }
+      });
     });
 
     // ---- Reparse stored files (chunked loop) ----
@@ -708,27 +717,30 @@ function formatLabel(format: string): string {
       }
     });
 
-    document.getElementById('clear-failed-btn')?.addEventListener('click', async () => {
+    document.getElementById('clear-failed-btn')?.addEventListener('click', async (ev) => {
+      const failedBtn = ev.currentTarget as HTMLButtonElement;
       if (!confirm('Clear ALL failed (0-row or error) uploads across every client? This is not reversible.')) return;
-      try {
-        const res = await fetch('/portal/api/admin/csv/clear-failed', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify({}),
-        });
-        const text = await res.text();
-        let data: any = null;
-        try { data = text ? JSON.parse(text) : null; } catch {}
-        if (res.ok && data && data.ok) {
-          alert(`Cleared ${data.deleted} failed upload(s). Reloading...`);
-          window.location.reload();
-        } else {
-          const msg = (data && data.error) ? data.error : `HTTP ${res.status}${text ? ': ' + text.slice(0, 140) : ''}`;
-          alert(`Clear failed: ${msg}`);
+      await (window as any).__withButtonLoading(failedBtn, 'Clearing…', async () => {
+        try {
+          const res = await fetch('/portal/api/admin/csv/clear-failed', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({}),
+          });
+          const text = await res.text();
+          let data: any = null;
+          try { data = text ? JSON.parse(text) : null; } catch {}
+          if (res.ok && data && data.ok) {
+            alert(`Cleared ${data.deleted} failed upload(s). Reloading...`);
+            window.location.reload();
+          } else {
+            const msg = (data && data.error) ? data.error : `HTTP ${res.status}${text ? ': ' + text.slice(0, 140) : ''}`;
+            alert(`Clear failed: ${msg}`);
+          }
+        } catch (err: any) {
+          alert(`Clear failed: ${err?.message || 'network error'}`);
         }
-      } catch (err: any) {
-        alert(`Clear failed: ${err?.message || 'network error'}`);
-      }
+      });
     });
 
     // Manual metric form

@@ -93,15 +93,23 @@ const user = Astro.locals.user!;
 
         list.querySelectorAll('[data-mark-read]').forEach(btn => {
           btn.addEventListener('click', async () => {
-            const id = (btn as HTMLElement).dataset.markRead;
-            await fetch('/portal/api/notifications/', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-              body: JSON.stringify({ id }),
+            await (window as any).__withButtonLoading(btn as HTMLButtonElement, 'Marking...', async () => {
+              const id = (btn as HTMLElement).dataset.markRead;
+              try {
+                const markRes = await fetch('/portal/api/notifications/', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                  body: JSON.stringify({ id }),
+                });
+                if (!markRes.ok) throw new Error('Request failed');
+                const row = document.querySelector(`[data-notif-id="${id}"]`);
+                if (row) row.classList.add('opacity-50');
+                btn.remove();
+                (window as any).__toast({ type: 'success', message: 'Marked as read' });
+              } catch {
+                (window as any).__toast({ type: 'error', message: 'Could not mark as read' });
+              }
             });
-            const row = document.querySelector(`[data-notif-id="${id}"]`);
-            if (row) row.classList.add('opacity-50');
-            btn.remove();
           });
         });
       } catch {
@@ -110,13 +118,20 @@ const user = Astro.locals.user!;
     }
 
     markAllBtn.addEventListener('click', async () => {
-      await fetch('/portal/api/notifications/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify({ all: true }),
+      await (window as any).__withButtonLoading(markAllBtn as HTMLButtonElement, 'Marking...', async () => {
+        try {
+          const allRes = await fetch('/portal/api/notifications/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ all: true }),
+          });
+          if (!allRes.ok) throw new Error('Request failed');
+          (window as any).__toast({ type: 'success', message: 'All marked as read' });
+          setTimeout(() => location.reload(), 600);
+        } catch {
+          (window as any).__toast({ type: 'error', message: 'Could not mark all as read' });
+        }
       });
-      (window as any).__toast({ type: 'success', message: 'All marked as read' });
-      setTimeout(() => location.reload(), 600);
     });
 
     loadNotifications();

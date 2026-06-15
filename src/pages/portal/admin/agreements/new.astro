@@ -212,11 +212,12 @@ const csrfToken = Astro.locals.csrfToken || '';
       if (seen[e]) {
         statusMsg.textContent = 'Duplicate signer email: "' + e + '". Each signer must have a unique email.';
         statusMsg.className = 'text-sm text-red-400 mt-3';
-        return;
+        // Reject so __withButtonLoading restores the button; nothing was sent.
+        return Promise.reject(new Error('duplicate-signer-email'));
       }
       seen[e] = true;
     }
-    fetch('/portal/api/admin/agreements', {
+    return fetch('/portal/api/admin/agreements', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-csrf-token': csrf },
       body: JSON.stringify(payload),
@@ -224,15 +225,17 @@ const csrfToken = Astro.locals.csrfToken || '';
       return r.json().then(function(d) { return { ok: r.ok, data: d }; });
     }).then(function(result) {
       if (!result.ok) {
-        statusMsg.textContent = (result.data && result.data.error) || 'Save failed';
+        var saveErr = (result.data && result.data.error) || 'Save failed';
+        statusMsg.textContent = saveErr;
         statusMsg.className = 'text-sm text-red-400 mt-3';
+        window.__toast(saveErr, 'error');
         return;
       }
       var agreementSlug = result.data.slug;
       var agreementId = result.data.agreement_id;
       if (thenIssue) {
         statusMsg.textContent = 'Saved. Issuing invites...';
-        fetch('/portal/api/admin/agreements/' + agreementSlug + '/issue', {
+        return fetch('/portal/api/admin/agreements/' + agreementSlug + '/issue', {
           method: 'POST',
           headers: { 'content-type': 'application/json', 'x-csrf-token': csrf },
           body: JSON.stringify({ personal_note: payload.personal_note }),
@@ -240,19 +243,31 @@ const csrfToken = Astro.locals.csrfToken || '';
           return r2.json().then(function(d2) { return { ok: r2.ok, data: d2 }; });
         }).then(function(issueResult) {
           if (!issueResult.ok) {
-            statusMsg.textContent = (issueResult.data && issueResult.data.error) || 'Issue failed';
+            var issueErr = (issueResult.data && issueResult.data.error) || 'Issue failed';
+            statusMsg.textContent = issueErr;
             statusMsg.className = 'text-sm text-red-400 mt-3';
+            window.__toast(issueErr, 'error');
             return;
           }
+          window.__toast('Agreement issued to signers.', 'success');
           window.location.href = '/portal/admin/agreements/' + agreementId;
         });
       } else {
+        window.__toast('Draft saved.', 'success');
         window.location.href = '/portal/admin/agreements/' + agreementId;
       }
     });
   }
 
-  saveDraftBtn.addEventListener('click', function() { submit(false); });
-  saveAndIssueBtn.addEventListener('click', function() { submit(true); });
+  saveDraftBtn.addEventListener('click', function() {
+    window.__withButtonLoading(saveDraftBtn, 'Saving...', function() {
+      return submit(false);
+    }).catch(function() {});
+  });
+  saveAndIssueBtn.addEventListener('click', function() {
+    window.__withButtonLoading(saveAndIssueBtn, 'Issuing...', function() {
+      return submit(true);
+    }).catch(function() {});
+  });
 })();
 </script>

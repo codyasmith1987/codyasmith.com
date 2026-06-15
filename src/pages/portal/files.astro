@@ -236,27 +236,25 @@ const categoryLabel = fileCategoryLabel;
           confirmLabel: 'Send',
         });
         if (!confirmed) return;
-        el.disabled = true;
-        el.textContent = 'Sending...';
         try {
-          const res = await fetch('/portal/api/files/issue', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-            body: JSON.stringify({ file_id: fileId }),
+          await (window as any).__withButtonLoading(el, 'Sending...', async () => {
+            const res = await fetch('/portal/api/files/issue', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+              body: JSON.stringify({ file_id: fileId }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Send failed');
+            (window as any).__toast(`Sent "${name}"`, 'success');
+            const badge = document.querySelector(`[data-issue-badge="${fileId}"]`);
+            if (badge) {
+              badge.textContent = 'Sent';
+              badge.className = 'px-2 py-0.5 text-[10px] font-mono uppercase rounded bg-emerald-500/10 text-emerald-400';
+            }
+            el.remove();
           });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Send failed');
-          (window as any).__toast(`Sent "${name}"`, 'success');
-          const badge = document.querySelector(`[data-issue-badge="${fileId}"]`);
-          if (badge) {
-            badge.textContent = 'Sent';
-            badge.className = 'px-2 py-0.5 text-[10px] font-mono uppercase rounded bg-emerald-500/10 text-emerald-400';
-          }
-          el.remove();
         } catch (err: any) {
           (window as any).__toast(err.message || 'Send failed', 'error');
-          el.disabled = false;
-          el.textContent = 'Send to client';
         }
       });
     });

@@ -129,35 +129,39 @@ const priorityColors: Record<string, string> = {
   <script define:vars={{ milestoneId: id, projectId: milestone.project_id }}>
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
-    document.getElementById('save-ms')?.addEventListener('click', async () => {
-      const res = await fetch(`/portal/api/admin/milestones/${milestoneId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify({
-          status: document.getElementById('f-status').value,
-          due_date: document.getElementById('f-due').value || null,
-          client_visible: Number(document.getElementById('f-visible').value),
-          description: document.getElementById('f-desc').value.trim() || null,
-          client_update_text: document.getElementById('f-client-text').value.trim() || null,
-        }),
+    document.getElementById('save-ms')?.addEventListener('click', async (e) => {
+      await window.__withButtonLoading(e.currentTarget, 'Saving...', async () => {
+        const res = await fetch(`/portal/api/admin/milestones/${milestoneId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({
+            status: document.getElementById('f-status').value,
+            due_date: document.getElementById('f-due').value || null,
+            client_visible: Number(document.getElementById('f-visible').value),
+            description: document.getElementById('f-desc').value.trim() || null,
+            client_update_text: document.getElementById('f-client-text').value.trim() || null,
+          }),
+        });
+        if (res.ok) window.__toast({ type: 'success', message: 'Milestone updated' });
+        else window.__toast({ type: 'error', message: 'Failed to save' });
       });
-      if (res.ok) window.__toast({ type: 'success', message: 'Milestone updated' });
-      else window.__toast({ type: 'error', message: 'Failed to save' });
     });
 
-    document.getElementById('delete-ms')?.addEventListener('click', async () => {
+    document.getElementById('delete-ms')?.addEventListener('click', async (e) => {
       const confirmed = await window.__confirm({
         title: 'Delete milestone', message: 'This will delete this milestone and all its tasks.',
         confirmLabel: 'Delete', danger: true,
       });
       if (!confirmed) return;
-      const res = await fetch(`/portal/api/admin/milestones/${milestoneId}`, {
-        method: 'DELETE', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+      await window.__withButtonLoading(e.currentTarget, 'Deleting...', async () => {
+        const res = await fetch(`/portal/api/admin/milestones/${milestoneId}`, {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        });
+        if (res.ok) {
+          window.__toast({ type: 'success', message: 'Milestone deleted' });
+          setTimeout(() => window.location.href = `/portal/admin/projects/${projectId}`, 600);
+        } else window.__toast({ type: 'error', message: 'Failed to delete' });
       });
-      if (res.ok) {
-        window.__toast({ type: 'success', message: 'Milestone deleted' });
-        setTimeout(() => window.location.href = `/portal/admin/projects/${projectId}`, 600);
-      } else window.__toast({ type: 'error', message: 'Failed to delete' });
     });
 
     const taskForm = document.getElementById('add-task-form');
@@ -169,15 +173,18 @@ const priorityColors: Record<string, string> = {
       const title = document.getElementById('at-title').value.trim();
       const priority = document.getElementById('at-priority').value;
       if (!title) return;
-      const res = await fetch('/portal/api/admin/tasks/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify({ milestone_id: milestoneId, title, priority }),
+      const submitBtn = taskForm.querySelector('button[type="submit"]');
+      await window.__withButtonLoading(submitBtn, 'Creating...', async () => {
+        const res = await fetch('/portal/api/admin/tasks/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ milestone_id: milestoneId, title, priority }),
+        });
+        if (res.ok) {
+          window.__toast({ type: 'success', message: 'Task created' });
+          setTimeout(() => location.reload(), 600);
+        } else window.__toast({ type: 'error', message: 'Failed to create task' });
       });
-      if (res.ok) {
-        window.__toast({ type: 'success', message: 'Task created' });
-        setTimeout(() => location.reload(), 600);
-      } else window.__toast({ type: 'error', message: 'Failed to create task' });
     });
   </script>
 </Portal>

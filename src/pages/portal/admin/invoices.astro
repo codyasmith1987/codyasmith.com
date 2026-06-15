@@ -340,13 +340,18 @@ const statusLabels: Record<string, string> = {
     document.getElementById('manual-billing-toggle')?.addEventListener('change', async (e) => {
       const cb = e.currentTarget as HTMLInputElement;
       const desired = cb.checked;
-      const res = await fetch('/portal/api/admin/clients/manual-billing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify({ client_id: clientId, manual_billing: desired }),
-      });
-      if (res.ok) (window as any).__toast?.(desired ? 'Client set to hand-billed. No automation will run.' : 'Client set to automated billing.', 'success');
-      else { cb.checked = !desired; const d = await res.json().catch(() => ({})); (window as any).__toast?.(d.error || 'Failed to update billing mode.', 'error'); }
+      cb.disabled = true;
+      try {
+        const res = await fetch('/portal/api/admin/clients/manual-billing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ client_id: clientId, manual_billing: desired }),
+        });
+        if (res.ok) (window as any).__toast?.(desired ? 'Client set to hand-billed. No automation will run.' : 'Client set to automated billing.', 'success');
+        else { cb.checked = !desired; const d = await res.json().catch(() => ({})); (window as any).__toast?.(d.error || 'Failed to update billing mode.', 'error'); }
+      } finally {
+        cb.disabled = false;
+      }
     });
 
     const form = document.getElementById('add-expense-form');
@@ -355,29 +360,39 @@ const statusLabels: Record<string, string> = {
 
     form?.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const res = await fetch('/portal/api/admin/expenses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify({
-          client_id: clientId,
-          name: (document.getElementById('ae-name') as HTMLInputElement).value.trim(),
-          amount: Number((document.getElementById('ae-amount') as HTMLInputElement).value),
-          frequency: (document.getElementById('ae-frequency') as HTMLSelectElement).value,
-        }),
-      });
-      if (res.ok) location.reload();
-      else { const d = await res.json().catch(() => ({})); (window as any).__toast?.(d.error || 'Failed to add expense', 'error'); }
+      const btn = (form as HTMLFormElement).querySelector('button[type="submit"]') as HTMLButtonElement;
+      const run = async () => {
+        const res = await fetch('/portal/api/admin/expenses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({
+            client_id: clientId,
+            name: (document.getElementById('ae-name') as HTMLInputElement).value.trim(),
+            amount: Number((document.getElementById('ae-amount') as HTMLInputElement).value),
+            frequency: (document.getElementById('ae-frequency') as HTMLSelectElement).value,
+          }),
+        });
+        if (res.ok) { (window as any).__toast?.('Expense added.', 'success'); location.reload(); }
+        else { const d = await res.json().catch(() => ({})); (window as any).__toast?.(d.error || 'Failed to add expense', 'error'); }
+      };
+      if (btn && (window as any).__withButtonLoading) await (window as any).__withButtonLoading(btn, 'Adding…', run);
+      else await run();
     });
 
     document.querySelectorAll('[data-toggle-expense]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const id = btn.getAttribute('data-toggle-expense');
         const active = btn.getAttribute('data-active') === '1';
-        const res = await fetch(`/portal/api/admin/expenses/${id}`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify({ active: !active }),
-        });
-        if (res.ok) location.reload();
+        const run = async () => {
+          const res = await fetch(`/portal/api/admin/expenses/${id}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ active: !active }),
+          });
+          if (res.ok) location.reload();
+          else { const d = await res.json().catch(() => ({})); (window as any).__toast?.(d.error || 'Failed to update expense.', 'error'); }
+        };
+        if ((window as any).__withButtonLoading) await (window as any).__withButtonLoading(btn as HTMLButtonElement, active ? 'Pausing…' : 'Activating…', run);
+        else await run();
       });
     });
 
@@ -386,8 +401,13 @@ const statusLabels: Record<string, string> = {
         const id = btn.getAttribute('data-delete-expense');
         const ok = await ((window as any).__confirm?.({ title: 'Delete expense', message: 'Remove this recurring expense template?', confirmLabel: 'Delete', danger: true }) ?? Promise.resolve(true));
         if (!ok) return;
-        const res = await fetch(`/portal/api/admin/expenses/${id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken } });
-        if (res.ok) location.reload();
+        const run = async () => {
+          const res = await fetch(`/portal/api/admin/expenses/${id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken } });
+          if (res.ok) location.reload();
+          else { const d = await res.json().catch(() => ({})); (window as any).__toast?.(d.error || 'Failed to delete expense.', 'error'); }
+        };
+        if ((window as any).__withButtonLoading) await (window as any).__withButtonLoading(btn as HTMLButtonElement, 'Deleting…', run);
+        else await run();
       });
     });
   </script>

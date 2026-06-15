@@ -272,22 +272,25 @@ import { CONTRACT_STATUS, badgeClass, lookupStatus, STATUS_PILL_BASE } from '../
     });
 
     // Generate invoices button
-    document.getElementById('generate-invoices-btn')?.addEventListener('click', async () => {
-      const res = await fetch('/portal/api/admin/billing/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.generated > 0) {
-          (window as any).__toast({ type: 'success', message: `Generated ${data.generated} invoice(s)` });
-          setTimeout(() => location.reload(), 800);
+    document.getElementById('generate-invoices-btn')?.addEventListener('click', async (e) => {
+      const genBtn = e.currentTarget as HTMLButtonElement;
+      await (window as any).__withButtonLoading(genBtn, 'Generating…', async () => {
+        const res = await fetch('/portal/api/admin/billing/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.generated > 0) {
+            (window as any).__toast({ type: 'success', message: `Generated ${data.generated} invoice(s)` });
+            setTimeout(() => location.reload(), 800);
+          } else {
+            (window as any).__toast({ type: 'info', message: 'No invoices due right now' });
+          }
         } else {
-          (window as any).__toast({ type: 'info', message: 'No invoices due right now' });
+          (window as any).__toast({ type: 'error', message: 'Failed to generate invoices' });
         }
-      } else {
-        (window as any).__toast({ type: 'error', message: 'Failed to generate invoices' });
-      }
+      });
     });
   </script>
 </Portal>

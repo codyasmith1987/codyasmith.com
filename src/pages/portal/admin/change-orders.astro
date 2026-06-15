@@ -117,38 +117,43 @@ const statusColors: Record<string, string> = {
 
     coForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const res = await fetch('/portal/api/admin/change-orders/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify({
-          contract_id: contractId,
-          title: document.getElementById('co-title').value.trim(),
-          description: document.getElementById('co-desc').value.trim() || undefined,
-          cost_impact: Number(document.getElementById('co-cost').value),
-          time_impact_days: Number(document.getElementById('co-days').value),
-        }),
+      const submitBtn = coForm.querySelector('button[type="submit"]');
+      await window.__withButtonLoading(submitBtn, 'Creating...', async () => {
+        const res = await fetch('/portal/api/admin/change-orders/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({
+            contract_id: contractId,
+            title: document.getElementById('co-title').value.trim(),
+            description: document.getElementById('co-desc').value.trim() || undefined,
+            cost_impact: Number(document.getElementById('co-cost').value),
+            time_impact_days: Number(document.getElementById('co-days').value),
+          }),
+        });
+        if (res.ok) {
+          window.__toast({ type: 'success', message: 'Change order created' });
+          setTimeout(() => location.reload(), 600);
+        } else window.__toast({ type: 'error', message: 'Failed to create' });
       });
-      if (res.ok) {
-        window.__toast({ type: 'success', message: 'Change order created' });
-        setTimeout(() => location.reload(), 600);
-      } else window.__toast({ type: 'error', message: 'Failed to create' });
     });
 
     document.querySelectorAll('[data-approve-co]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const coId = btn.dataset.approveCo;
-        const res = await fetch(`/portal/api/admin/change-orders/${coId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify({ action: 'approve' }),
+        await window.__withButtonLoading(btn, 'Approving...', async () => {
+          const res = await fetch(`/portal/api/admin/change-orders/${coId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ action: 'approve' }),
+          });
+          if (res.ok) {
+            window.__toast({ type: 'success', message: 'Change order approved' });
+            setTimeout(() => location.reload(), 600);
+          } else {
+            const err = await res.json().catch(() => ({}));
+            window.__toast({ type: 'error', message: err.error || 'Failed to approve' });
+          }
         });
-        if (res.ok) {
-          window.__toast({ type: 'success', message: 'Change order approved' });
-          setTimeout(() => location.reload(), 600);
-        } else {
-          const err = await res.json().catch(() => ({}));
-          window.__toast({ type: 'error', message: err.error || 'Failed to approve' });
-        }
       });
     });
   </script>

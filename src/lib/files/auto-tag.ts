@@ -103,6 +103,15 @@ function siteTokens(site: AutoTagSite): Set<string> {
   return tokens;
 }
 
+// Substring match that still respects word boundaries: the token must not have
+// an alphanumeric character directly before or after it. So "zipkithomes"
+// matches "pre-zipkithomes-render" (boundaries) but a 6-char root like "zipkit"
+// does NOT match the infix in "unzipkitchen-advisory".
+const RE_ESCAPE = /[.*+?^${}()|[\]\\]/g;
+function boundedIncludes(hay: string, tok: string): boolean {
+  return new RegExp(`(?<![a-z0-9])${tok.replace(RE_ESCAPE, '\\$&')}(?![a-z0-9])`).test(hay);
+}
+
 function detectSite(normName: string, sites: AutoTagSite[]): { ids: string[]; domains: string[] } {
   // Word-boundary match so "mvp" matches "mvp site health" but "zkh" does not
   // match inside an unrelated word. Aliases/initials are short, so guard them.
@@ -114,8 +123,10 @@ function detectSite(normName: string, sites: AutoTagSite[]): { ids: string[]; do
     for (const tok of siteTokens(site)) {
       if (!tok) continue;
       if (haystack.includes(` ${tok} `) || haystack.includes(` ${tok}-`) ||
-          // domain root can appear glued to other chars (e.g. a folder name)
-          (tok.length >= 5 && normName.includes(tok))) {
+          // a longer token (domain root) may appear glued to separators, but
+          // must still be at a word boundary so "zipkit" does not match inside
+          // "unzipkitchen"
+          (tok.length >= 5 && boundedIncludes(normName, tok))) {
         hit = true;
         break;
       }

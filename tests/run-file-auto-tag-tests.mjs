@@ -66,6 +66,16 @@ const SITES_NO_ALIAS = [
     `got site=${r.siteId} cat=${r.category} month=${r.month}`);
 })();
 
+// Word-boundary guard (triple-audit fix): a 5+ char token (domain root / alias)
+// must NOT match as an infix inside a longer word.
+(() => {
+  const rootAliasSites = [{ id: 'zk', domain: 'zipkit.com', label: 'ZipKit', aliases: 'zipkit', is_primary: true }];
+  const r = detectFileTags('unzipkitchen-renovation-advisory-2026.docx', rootAliasSites);
+  test('5+ char token does not match as an infix (no false site attribution)', r.siteId === null, `got site=${r.siteId}`);
+  const r2 = detectFileTags('zipkit-performance-summary-2026.docx', rootAliasSites);
+  test('5+ char token still matches at a real boundary', r2.siteId === 'zk', `got site=${r2.siteId}`);
+})();
+
 // Single-site client: no site dimension ever attributed.
 (() => {
   const r = detectFileTags('Some-Report-April-2026.docx', [{ id: 'solo', domain: 'example.com', label: 'Example', aliases: null, is_primary: true }]);

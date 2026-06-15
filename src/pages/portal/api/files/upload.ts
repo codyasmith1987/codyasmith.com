@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { uploadFile } from '../../../../lib/storage';
+import { uploadFile, FILE_CATEGORY_LABELS } from '../../../../lib/storage';
 import turso from '../../../../lib/turso';
 import { logger } from '../../../../lib/logger';
 import { logActivity } from '../../../../lib/activity';
@@ -17,7 +17,11 @@ export const POST: APIRoute = async ({ locals, request }) => {
     const file = formData.get('file') as File | null;
     const clientId = formData.get('client_id') as string;
     const month = formData.get('month') as string;
-    const category = (formData.get('category') as string) || 'general';
+    // Allowlist the category against the canonical taxonomy so the UI and
+    // storage.ts can't silently drift (e.g. a select option referencing a
+    // category that no longer exists). Unknown/absent -> 'general'.
+    const categoryRaw = (formData.get('category') as string) || 'general';
+    const category = Object.prototype.hasOwnProperty.call(FILE_CATEGORY_LABELS, categoryRaw) ? categoryRaw : 'general';
     // Optional per-site attribution (multi-site clients). Empty/absent = null
     // (engagement-level / not site-specific). Validated against the client's
     // managed sites below so a stray id can't be stored.

@@ -51,6 +51,10 @@ export interface ClientSite {
   // pipeline behavior.
   monthly_override: number | null;
   onboarding_override: number | null;
+  // Optional comma-separated short codes used to recognize this site from an
+  // uploaded document's filename during auto-tagging (e.g. "ZKH,ZipKit" for
+  // zipkithomes.com). NULL = derive from domain + label only. Migration 073.
+  aliases: string | null;
 }
 
 function rowToSite(row: any): ClientSite {
@@ -69,6 +73,7 @@ function rowToSite(row: any): ClientSite {
     went_live_at: (row[11] as string | null) ?? null,
     monthly_override: (row[12] as number | null) ?? null,
     onboarding_override: (row[13] as number | null) ?? null,
+    aliases: (row[14] as string | null) ?? null,
   };
 }
 
@@ -78,7 +83,7 @@ function rowToSite(row: any): ClientSite {
 // `notes`. Selecting it caused a 'no such column' parse error. The
 // field is unused anywhere in the code, so dropping it from the
 // model fixes the bug without losing functionality.
-const SELECT_COLS = 'id, client_id, domain, is_primary, is_managed, label, sort_order, page_count, cloudflare_zone_id, cloudflare_api_token, cloudflare_last_synced_at, went_live_at, monthly_override, onboarding_override';
+const SELECT_COLS = 'id, client_id, domain, is_primary, is_managed, label, sort_order, page_count, cloudflare_zone_id, cloudflare_api_token, cloudflare_last_synced_at, went_live_at, monthly_override, onboarding_override, aliases';
 
 export async function listClientSites(clientId: string): Promise<ClientSite[]> {
   const result = await turso.execute({
@@ -372,6 +377,23 @@ export async function setSiteOnboardingOverride(clientId: string, siteId: string
   await turso.execute({
     sql: 'UPDATE client_sites SET onboarding_override = ? WHERE id = ? AND client_id = ?',
     args: [safe, siteId, clientId],
+  });
+}
+
+// Set or clear the comma-separated filename-aliases used to auto-tag uploaded
+// documents to this site. Normalizes to trimmed, de-duped, comma-joined codes;
+// empty/null clears (auto-tag then derives from domain + label only).
+export async function setSiteAliases(clientId: string, siteId: string, aliases: string | null): Promise<void> {
+  let normalized: string | null = null;
+  if (aliases && aliases.trim()) {
+    const parts = Array.from(new Set(
+      aliases.split(',').map(a => a.trim()).filter(Boolean),
+    ));
+    normalized = parts.length > 0 ? parts.join(',') : null;
+  }
+  await turso.execute({
+    sql: 'UPDATE client_sites SET aliases = ? WHERE id = ? AND client_id = ?',
+    args: [normalized, siteId, clientId],
   });
 }
 

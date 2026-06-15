@@ -123,6 +123,7 @@ export async function uploadFile(
   clientId: string,
   uploadedBy: string,
   category: string = 'general',
+  siteId: string | null = null,
 ): Promise<{ id: string; s3_key: string }> {
   if (!ALLOWED_TYPES.has(mimeType)) {
     throw new Error(`File type "${mimeType}" not allowed`);
@@ -164,9 +165,9 @@ export async function uploadFile(
 
   const id = nanoid();
   await turso.execute({
-    sql: `INSERT INTO files (id, client_id, filename, original_name, mime_type, size_bytes, category, month, s3_key, uploaded_by)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [id, clientId, filename, originalName, mimeType, buffer.length, category, month, s3Key, uploadedBy],
+    sql: `INSERT INTO files (id, client_id, filename, original_name, mime_type, size_bytes, category, month, s3_key, uploaded_by, site_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [id, clientId, filename, originalName, mimeType, buffer.length, category, month, s3Key, uploadedBy, siteId],
   });
 
   return { id, s3_key: s3Key };
@@ -189,6 +190,9 @@ export async function deleteFileFromStorage(s3Key: string, fileId: string): Prom
 // which categories are deliverables, drafts, or ad-hoc.
 export const FILE_CATEGORY_LABELS: Record<string, string> = {
   strategic_recommendation: 'Strategic Recommendations',
+  performance_summary: 'Performance Summary',
+  site_health_report: 'Site Health Report',
+  advisory: 'Advisory',
   research: 'Research Reports',
   invoice: 'Invoice',
   spreadsheet: 'Spreadsheet',
@@ -208,11 +212,26 @@ export function fileCategoryLabel(category: string): string {
 // drafting aid, not a client deliverable).
 export const ADMIN_ONLY_FILE_CATEGORIES = ['internal_draft'];
 
-// Prescriptive deliverables Cody authors and deliberately issues (a strategic
-// recommendation or a research report). They are drafts (admin-only) until
+// Deliverables Cody authors and deliberately issues: the end-of-month report
+// set (Performance Summary, Site Health Report, Strategic Recommendations) plus
+// ad-hoc Advisories and Research Reports. They are drafts (admin-only) until
 // issued, then surface on the client's documents hub via
 // getIssuedReportsForClient. They never appear in the ad-hoc Files list.
-export const ISSUABLE_FILE_CATEGORIES = ['strategic_recommendation', 'research'];
+// (Per the 2026-06-15 end-state intent, Performance Summary + Site Health are
+// transitional documents — the live portal pages are meant to replace them —
+// but while they are still uploaded they belong here, as proper sent
+// deliverables, not as "General" files.)
+// INVARIANT: a file must only receive one of these categories via the upload
+// route (i.e. as a draft the admin will later Send). Writing one of these
+// category strings through any other path would hide the file from the
+// client's Files tab AND block client download until issued_at is set.
+export const ISSUABLE_FILE_CATEGORIES = [
+  'strategic_recommendation',
+  'performance_summary',
+  'site_health_report',
+  'advisory',
+  'research',
+];
 
 export async function getFilesForClient(clientId: string): Promise<any[]> {
   // The Files page is the ad-hoc exchange: hide internal drafts and the
@@ -241,11 +260,11 @@ export async function getFilesForClient(clientId: string): Promise<any[]> {
 // issuable categories with issued_at set; newest issue first.
 export async function getIssuedReportsForClient(clientId: string): Promise<Array<{
   id: string; original_name: string; mime_type: string; size_bytes: number;
-  category: string; month: string; issued_at: string;
+  category: string; month: string; issued_at: string; site_id: string | null;
 }>> {
   const placeholders = ISSUABLE_FILE_CATEGORIES.map(() => '?').join(', ');
   const result = await turso.execute({
-    sql: `SELECT id, original_name, mime_type, size_bytes, category, month, issued_at
+    sql: `SELECT id, original_name, mime_type, size_bytes, category, month, issued_at, site_id
           FROM files
           WHERE client_id = ? AND category IN (${placeholders}) AND issued_at IS NOT NULL
           ORDER BY issued_at DESC`,
@@ -259,6 +278,7 @@ export async function getIssuedReportsForClient(clientId: string): Promise<Array
     category: row[4] as string,
     month: row[5] as string,
     issued_at: row[6] as string,
+    site_id: (row[7] as string | null) ?? null,
   }));
 }
 
@@ -299,7 +319,7 @@ export async function getFileById(fileId: string): Promise<{
 
 export async function getAllFilesAdmin(): Promise<any[]> {
   const result = await turso.execute(
-    `SELECT f.id, f.original_name, f.mime_type, f.size_bytes, f.category, f.month, f.created_at, c.name as client_name, c.id as client_id, f.issued_at
+    `SELECT f.id, f.original_name, f.mime_type, f.size_bytes, f.category, f.month, f.created_at, c.name as client_name, c.id as client_id, f.issued_at, f.site_id
      FROM files f JOIN clients c ON c.id = f.client_id
      ORDER BY f.month DESC, f.created_at DESC`
   );
@@ -314,5 +334,6 @@ export async function getAllFilesAdmin(): Promise<any[]> {
     client_name: row[7] as string,
     client_id: row[8] as string,
     issued_at: row[9] as string | null,
+    site_id: (row[10] as string | null) ?? null,
   }));
 }

@@ -18,6 +18,10 @@ export const POST: APIRoute = async ({ locals, request }) => {
     const clientId = formData.get('client_id') as string;
     const month = formData.get('month') as string;
     const category = (formData.get('category') as string) || 'general';
+    // Optional per-site attribution (multi-site clients). Empty/absent = null
+    // (engagement-level / not site-specific). Validated against the client's
+    // managed sites below so a stray id can't be stored.
+    const siteIdRaw = ((formData.get('site_id') as string | null) || '').trim();
 
     if (!file || !clientId || !month) {
       return json({ error: 'File, client_id, and month are required' }, 400);
@@ -37,6 +41,17 @@ export const POST: APIRoute = async ({ locals, request }) => {
     }
     const clientSlug = clientResult.rows[0][0] as string;
 
+    // Validate the optional site_id belongs to this client; otherwise store
+    // null (engagement-level) rather than a stray/foreign site id.
+    let siteId: string | null = null;
+    if (siteIdRaw) {
+      const siteCheck = await turso.execute({
+        sql: 'SELECT id FROM client_sites WHERE id = ? AND client_id = ? LIMIT 1',
+        args: [siteIdRaw, clientId],
+      });
+      if (siteCheck.rows.length > 0) siteId = siteIdRaw;
+    }
+
     const buffer = Buffer.from(await file.arrayBuffer());
     const result = await uploadFile(
       clientSlug,
@@ -47,6 +62,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
       clientId,
       locals.user.id,
       category,
+      siteId,
     );
 
     await logActivity({

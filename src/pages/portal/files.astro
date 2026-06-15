@@ -1,8 +1,14 @@
 ---
 import Portal from '../../layouts/Portal.astro';
-import { getFilesForClient, getAllFilesAdmin, fileCategoryLabel, ISSUABLE_FILE_CATEGORIES } from '../../lib/storage';
+import { getFilesForClient, getAllFilesAdmin, fileCategoryLabel, ISSUABLE_FILE_CATEGORIES, FILE_CATEGORY_LABELS } from '../../lib/storage';
 import { getAllClients } from '../../lib/auth';
 export const prerender = false;
+
+// Categories an admin can assign at upload (excludes internal_draft, which is
+// admin-only auto-generated, and the legacy 'report'). Labels come from the
+// canonical taxonomy so this can't drift from storage.ts.
+const UPLOAD_CATEGORY_KEYS = ['strategic_recommendation', 'performance_summary', 'site_health_report', 'advisory', 'research', 'invoice', 'spreadsheet', 'general'];
+const uploadCategories = UPLOAD_CATEGORY_KEYS.map(k => ({ value: k, label: FILE_CATEGORY_LABELS[k] || k }));
 
 const user = Astro.locals.user!;
 const isAdmin = user.role === 'admin';
@@ -45,7 +51,7 @@ const categoryLabel = fileCategoryLabel;
     {/* Admin upload form */}
     {isAdmin && (
       <form id="upload-form" class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-10">
-        <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-5">Upload file</p>
+        <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-5">Upload files</p>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div>
             <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Client</label>
@@ -55,38 +61,31 @@ const categoryLabel = fileCategoryLabel;
             </select>
           </div>
           <div>
-            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Month</label>
+            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Month (default)</label>
             <input type="month" id="upload-month" name="month" required
               value={new Date().toISOString().slice(0, 7)}
               class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-300 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300" />
           </div>
-          <div>
-            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Category</label>
-            <select id="upload-category" name="category" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-300 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300">
-              <option value="strategic_recommendation">Strategic Recommendations</option>
-              <option value="performance_summary">Performance Summary</option>
-              <option value="site_health_report">Site Health Report</option>
-              <option value="advisory">Advisory</option>
-              <option value="research">Research Reports</option>
-              <option value="invoice">Invoice</option>
-              <option value="spreadsheet">Spreadsheet</option>
-              <option value="general">General</option>
-            </select>
-            <p class="text-[10px] text-neutral-500 mt-2 leading-relaxed">Strategic Recommendations, Performance Summaries, Site Health Reports, Advisories, and Research Reports stay private until you send them to the client. Everything else is visible to the client right away.</p>
-          </div>
-          <div>
-            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">File</label>
-            <input type="file" id="upload-file" name="file" required
+          <div class="sm:col-span-2">
+            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Files</label>
+            <input type="file" id="upload-file" name="file" multiple required
               accept=".pdf,.docx,.xlsx,.xls,.csv,.png,.jpg,.jpeg,.webp"
               class="w-full text-sm text-neutral-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-amber-500 file:text-neutral-950 hover:file:bg-amber-400 file:cursor-pointer file:transition-colors file:duration-300" />
+            <p class="text-[10px] text-neutral-500 mt-2 leading-relaxed">Drop several at once. Each file's site, type, and month are auto-detected from its name (fix any before uploading). Strategic Recommendations, Performance Summaries, Site Health Reports, Advisories, and Research Reports stay private until you send them; everything else is visible to the client right away.</p>
           </div>
         </div>
+
+        {/* Per-file auto-tagged rows, populated by JS after files are picked. */}
+        <div id="file-stage" class="hidden mt-6 space-y-2"></div>
+
         <div class="mt-6 flex items-center gap-4">
           <button type="submit" id="upload-btn" class="px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.2)] disabled:opacity-50 disabled:hover:shadow-none">
-            Upload
+            Upload all
           </button>
-          <p id="upload-msg" class="text-sm hidden"></p>
+          <span id="upload-progress" class="text-sm text-neutral-400 hidden"></span>
         </div>
+
+        <script type="application/json" id="upload-categories" set:html={JSON.stringify(uploadCategories)}></script>
       </form>
     )}
 
@@ -162,38 +161,128 @@ const categoryLabel = fileCategoryLabel;
     const form = document.getElementById('upload-form') as HTMLFormElement | null;
     if (form) {
       const btn = document.getElementById('upload-btn') as HTMLButtonElement;
-      const msg = document.getElementById('upload-msg')!;
+      const progress = document.getElementById('upload-progress')!;
+      const fileInput = document.getElementById('upload-file') as HTMLInputElement;
+      const clientSel = document.getElementById('upload-client') as HTMLSelectElement;
+      const monthDefault = document.getElementById('upload-month') as HTMLInputElement;
+      const stage = document.getElementById('file-stage')!;
+      const uploadCategories: Array<{ value: string; label: string }> =
+        JSON.parse(document.getElementById('upload-categories')?.textContent || '[]');
+
+      // The picked File objects, paired with their rendered editable rows.
+      let staged: Array<{ file: File; row: HTMLElement }> = [];
+      // Generation guard: a slow detect-tags response from an earlier pick must
+      // not overwrite a newer one if the user changes files/client rapidly.
+      let restageGen = 0;
+
+      const esc = (s: any) => String(s ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+      const catOptions = (selected: string) => uploadCategories
+        .map(c => `<option value="${esc(c.value)}"${c.value === selected ? ' selected' : ''}>${esc(c.label)}</option>`)
+        .join('');
+
+      const siteOptions = (sites: Array<{ id: string; domain: string; is_primary: boolean }>, selectedId: string | null) =>
+        ['<option value="">Not site-specific</option>']
+          .concat(sites.map(s => `<option value="${esc(s.id)}"${s.id === selectedId ? ' selected' : ''}>${esc(s.domain)}${s.is_primary ? ' (primary)' : ''}</option>`))
+          .join('');
+
+      // On every file/client change, ask the server to auto-tag the filenames
+      // for the picked client and render an editable row per file.
+      async function restage() {
+        const gen = ++restageGen;
+        const files = Array.from(fileInput.files || []);
+        const clientId = clientSel.value;
+        staged = [];
+        if (files.length === 0) { stage.classList.add('hidden'); stage.innerHTML = ''; return; }
+        stage.classList.remove('hidden');
+        if (!clientId) { stage.innerHTML = '<p class="text-xs text-amber-500/90">Pick a client first to auto-detect site and type.</p>'; return; }
+
+        stage.innerHTML = '<p class="text-xs text-neutral-400">Reading filenames...</p>';
+        let detect: any;
+        try {
+          const res = await fetch('/portal/api/files/detect-tags', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ client_id: clientId, filenames: files.map(f => f.name) }),
+          });
+          detect = await res.json();
+          if (!res.ok) throw new Error(detect.error || 'Auto-detect failed');
+        } catch {
+          // Detection is best-effort; fall back to blank tags so upload still works.
+          detect = { sites: [], results: files.map(f => ({ filename: f.name, site_id: null, category: null, month: null })) };
+        }
+        if (gen !== restageGen) return; // a newer file/client pick superseded this one
+        const sites = detect.sites || [];
+        const multiSite = sites.length > 1;
+        stage.innerHTML = '';
+        files.forEach((file, i) => {
+          const tag = (detect.results && detect.results[i]) || {};
+          const row = document.createElement('div');
+          row.className = 'bg-neutral-900/40 border border-white/5 rounded-lg p-3 flex flex-wrap items-center gap-2';
+          row.innerHTML = `
+            <div class="flex-1 min-w-0"><p class="text-xs text-neutral-200 truncate" title="${esc(file.name)}">${esc(file.name)}</p></div>
+            ${multiSite ? `<select data-row-site class="px-2 py-1.5 bg-neutral-900/60 border border-white/5 rounded text-xs text-neutral-300">${siteOptions(sites, tag.site_id || null)}</select>` : ''}
+            <select data-row-category class="px-2 py-1.5 bg-neutral-900/60 border border-white/5 rounded text-xs text-neutral-300">${catOptions(tag.category || 'general')}</select>
+            <input data-row-month type="month" value="${esc(tag.month || monthDefault.value)}" class="px-2 py-1.5 bg-neutral-900/60 border border-white/5 rounded text-xs text-neutral-300" />
+            <span data-row-status class="text-[10px] font-mono text-neutral-500 w-16 text-right"></span>
+          `;
+          stage.appendChild(row);
+          staged.push({ file, row });
+        });
+      }
+
+      fileInput.addEventListener('change', restage);
+      clientSel.addEventListener('change', restage);
 
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        const clientId = clientSel.value;
+        if (!clientId) { (window as any).__toast('Pick a client first.', 'error'); return; }
+        if (staged.length === 0) { (window as any).__toast('Pick at least one file.', 'error'); return; }
+
+        const origText = btn.textContent;
         btn.disabled = true;
         btn.textContent = 'Uploading...';
-        msg.classList.add('hidden');
+        progress.classList.remove('hidden');
 
-        const formData = new FormData();
-        formData.append('file', (document.getElementById('upload-file') as HTMLInputElement).files![0]);
-        formData.append('client_id', (document.getElementById('upload-client') as HTMLSelectElement).value);
-        formData.append('month', (document.getElementById('upload-month') as HTMLInputElement).value);
-        formData.append('category', (document.getElementById('upload-category') as HTMLSelectElement).value);
+        let done = 0, failed = 0;
+        for (let i = 0; i < staged.length; i++) {
+          const { file, row } = staged[i];
+          const status = row.querySelector('[data-row-status]')!;
+          const siteSel = row.querySelector('[data-row-site]') as HTMLSelectElement | null;
+          const catSel = row.querySelector('[data-row-category]') as HTMLSelectElement;
+          const monthInp = row.querySelector('[data-row-month]') as HTMLInputElement;
+          status.textContent = 'Uploading';
+          status.className = 'text-[10px] font-mono text-amber-500/90 w-16 text-right';
+          progress.textContent = `Uploading ${i + 1} of ${staged.length}: ${file.name}`;
 
-        try {
-          const res = await fetch('/portal/api/files/upload', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken }, body: formData });
-          const data = await res.json();
-
-          if (res.ok) {
-            (window as any).__toast(`Uploaded "${data.filename}"`, 'success');
-            setTimeout(() => location.reload(), 1500);
-          } else {
-            throw new Error(data.error || 'Upload failed');
+          const fd = new FormData();
+          fd.append('file', file);
+          fd.append('client_id', clientId);
+          fd.append('month', monthInp.value || monthDefault.value);
+          fd.append('category', catSel.value);
+          if (siteSel && siteSel.value) fd.append('site_id', siteSel.value);
+          try {
+            const res = await fetch('/portal/api/files/upload', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken }, body: fd });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Upload failed');
+            status.textContent = 'Done';
+            status.className = 'text-[10px] font-mono text-emerald-400 w-16 text-right';
+            done++;
+          } catch (err: any) {
+            status.textContent = 'Failed';
+            status.className = 'text-[10px] font-mono text-red-400 w-16 text-right';
+            (row as HTMLElement).title = err?.message || 'Upload failed';
+            failed++;
           }
-        } catch (err: any) {
-          msg.textContent = err.message;
-          msg.className = 'text-sm text-red-400';
-          msg.classList.remove('hidden');
-        } finally {
-          btn.disabled = false;
-          btn.textContent = 'Upload';
         }
+
+        progress.textContent = `Done. ${done} uploaded${failed ? `, ${failed} failed` : ''}.`;
+        (window as any).__toast(`Uploaded ${done} file${done === 1 ? '' : 's'}${failed ? `, ${failed} failed` : ''}.`, failed ? 'error' : 'success');
+        btn.textContent = origText;
+        btn.disabled = false;
+        if (failed === 0) setTimeout(() => location.reload(), 1200);
       });
     }
 

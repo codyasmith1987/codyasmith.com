@@ -19,6 +19,7 @@ import {
   setSiteWentLive,
   setSiteMonthlyOverride,
   setSiteOnboardingOverride,
+  setSiteAliases,
   addManualSite,
   deleteClientSite,
 } from '../../../../../lib/client-sites';
@@ -203,6 +204,25 @@ export const POST: APIRoute = async ({ locals, request }) => {
         summary: amount === null
           ? `${locals.user!.name} cleared ${field} for ${target.domain}`
           : `${locals.user!.name} set ${target.domain} ${field} to $${amount.toFixed(2)}`,
+      });
+      const next = await listClientSites(clientId);
+      return json({ ok: true, sites: next });
+    }
+
+    if (action === 'set_aliases') {
+      // Comma-separated filename short codes used to auto-tag uploaded
+      // documents to this site (e.g. "ZKH,ZipKit"). Empty/null clears.
+      const siteId = (body?.site_id || '').toString().trim();
+      if (!siteId) return json({ error: 'site_id is required' }, 400);
+      const aliases = body?.aliases === null || body?.aliases === undefined ? null : String(body.aliases);
+      const sites = await listClientSites(clientId);
+      const target = sites.find(s => s.id === siteId);
+      if (!target) return json({ error: 'Site not found' }, 404);
+      await setSiteAliases(clientId, siteId, aliases);
+      await logActivity({
+        clientId, userId: locals.user!.id, action: 'updated',
+        entityType: 'client', entityId: clientId,
+        summary: `${locals.user!.name} set filename aliases for ${target.domain}`,
       });
       const next = await listClientSites(clientId);
       return json({ ok: true, sites: next });

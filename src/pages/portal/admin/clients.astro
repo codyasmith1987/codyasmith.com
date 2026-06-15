@@ -236,6 +236,18 @@ function ecoChipLabel(pageCount: number | null): string {
                           data-site-eco-chip={site.id}
                         >{ecoChipLabel(site.page_count)}</span>
                       </div>
+                      <div class="mt-1 ml-[16.67%] flex items-center gap-2 flex-wrap">
+                        <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-wide">Filename aliases:</span>
+                        <input
+                          type="text"
+                          data-site-aliases={site.id}
+                          data-client-id={client.id}
+                          value={site.aliases || ''}
+                          placeholder="e.g. ZKH, ZipKit"
+                          class="flex-1 min-w-[140px] px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono focus:outline-none focus:border-amber-500/30"
+                        />
+                        <span class="text-[10px] text-neutral-500" title="Comma-separated short codes used to auto-detect this site from an uploaded document's filename (e.g. a file named MVP-Site-Health-Report tags to this site). The domain and label are matched automatically; add the shorthand your filenames use.">auto-tags uploads by filename</span>
+                      </div>
                       {site.is_managed && (
                         <div class="mt-1 ml-[16.67%] flex items-center gap-2 flex-wrap">
                           <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-wide">Live since:</span>
@@ -570,6 +582,37 @@ function ecoChipLabel(pageCount: number | null): string {
           priorValue = inputEl.value;
         } catch {
           (window as any).__toast?.('Network error saving page count.', 'error');
+          inputEl.value = priorValue;
+        }
+      });
+    });
+
+    // Per-site filename-alias editors. Blur posts to the client_sites endpoint
+    // (action=set_aliases). These short codes let the document uploader
+    // auto-detect which site a file belongs to from its filename.
+    document.querySelectorAll('[data-site-aliases]').forEach(input => {
+      const inputEl = input as HTMLInputElement;
+      const siteId = inputEl.dataset.siteAliases!;
+      const clientId = inputEl.dataset.clientId!;
+      let priorValue = inputEl.value;
+      inputEl.addEventListener('blur', async () => {
+        if (inputEl.value === priorValue) return;
+        try {
+          const res = await fetch('/portal/api/admin/clients/sites', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ client_id: clientId, action: 'set_aliases', site_id: siteId, aliases: inputEl.value.trim() }),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            (window as any).__toast?.(data.error || 'Failed to save aliases.', 'error');
+            inputEl.value = priorValue;
+            return;
+          }
+          (window as any).__toast?.('Aliases saved.', 'success');
+          priorValue = inputEl.value;
+        } catch {
+          (window as any).__toast?.('Network error saving aliases.', 'error');
           inputEl.value = priorValue;
         }
       });

@@ -1,19 +1,21 @@
-// Admin endpoint: delete a single csv_uploads row and any child rows
+// Admin endpoint: delete a single csv_uploads row and every child row
 // across the data tables that reference it.
 //
 // POST { upload_id }
 //
-// Tables walked: every table in CSV_CHILD_TABLES (the canonical child
-// list). Child deletes run before the parent so foreign-key constraints
-// stay clean, and each table delete is individually guarded so one
-// missing table on a stale schema can't 500 the whole delete (mirrors
-// the resilience in clear-superseded.ts).
+// Child tables are DISCOVERED dynamically (every existing table with a
+// csv_upload_id column) so the sweep can never miss one — a hardcoded list
+// had drifted (data_coverage + the parse-everything tables), and the missed
+// rows made the parent delete fail its foreign key. The children + parent
+// run in ONE atomic batch (children first, parent last) so the FK is
+// satisfied at commit and the whole delete is a single fast round-trip
+// instead of ~30 sequential ones.
 
 import type { APIRoute } from 'astro';
 import turso from '../../../../../lib/turso';
 import { logger } from '../../../../../lib/logger';
 import { logActivity } from '../../../../../lib/activity';
-import { CSV_CHILD_TABLES as CHILD_TABLES } from '../../../../../lib/csv-child-tables';
+import { getCsvUploadChildTables } from '../../../../../lib/csv-child-tables';
 
 export const prerender = false;
 
@@ -41,29 +43,21 @@ export const POST: APIRoute = async ({ locals, request }) => {
   const originalName = String(r[2] || '');
 
   try {
-    let totalChildDeletes = 0;
-    for (const table of CHILD_TABLES) {
-      try {
-        const del = await turso.execute({
-          sql: `DELETE FROM ${table} WHERE csv_upload_id = ?`,
-          args: [uploadId],
-        });
-        totalChildDeletes += del.rowsAffected || 0;
-      } catch (err: any) {
-        const msg: string = err?.message || '';
-        // A missing table/column is expected on a stale schema — skip it so
-        // one absent child table can't 500 the whole delete. Anything else
-        // is a real failure: surface it (outer catch -> 500) rather than
-        // silently orphaning child rows and deleting the parent anyway.
-        if (msg.includes('no such table') || msg.includes('no such column')) continue;
-        logger.error(`Child delete failed for table ${table} on upload ${uploadId}`, err);
-        throw err;
-      }
-    }
-    await turso.execute({
-      sql: 'DELETE FROM csv_uploads WHERE id = ?',
+    const childTables = await getCsvUploadChildTables();
+    // Children first, parent last, in one transaction: the FK is satisfied at
+    // commit and it's a single round-trip. Every table is discovered to exist
+    // and carry csv_upload_id, so no statement can fail on a missing
+    // table/column.
+    const stmts = childTables.map(t => ({
+      sql: `DELETE FROM ${t} WHERE csv_upload_id = ?`,
       args: [uploadId],
-    });
+    }));
+    stmts.push({ sql: 'DELETE FROM csv_uploads WHERE id = ?', args: [uploadId] });
+    const batchRes = await turso.batch(stmts, 'write');
+    // Sum child rows removed (all results except the final parent delete).
+    const totalChildDeletes = batchRes
+      .slice(0, -1)
+      .reduce((sum, r) => sum + (Number((r as any).rowsAffected) || 0), 0);
 
     await logActivity({
       clientId,

@@ -11,7 +11,7 @@ import type { APIRoute } from 'astro';
 import turso from '../../../../../lib/turso';
 import { logger } from '../../../../../lib/logger';
 import { logActivity } from '../../../../../lib/activity';
-import { CSV_CHILD_TABLES as CHILD_TABLES } from '../../../../../lib/csv-child-tables';
+import { getCsvUploadChildTables } from '../../../../../lib/csv-child-tables';
 
 export const prerender = false;
 
@@ -51,6 +51,7 @@ export const POST: APIRoute = async ({ locals, request }) => {
   }
 
   try {
+    const CHILD_TABLES = await getCsvUploadChildTables();
     let totalChildDeletes = 0;
     // Chunked DELETE so the in-clause does not get too large.
     const CHUNK = 100;

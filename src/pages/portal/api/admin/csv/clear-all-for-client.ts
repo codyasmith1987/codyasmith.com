@@ -13,7 +13,7 @@ import type { APIRoute } from 'astro';
 import turso from '../../../../../lib/turso';
 import { logger } from '../../../../../lib/logger';
 import { logActivity } from '../../../../../lib/activity';
-import { CSV_CHILD_TABLES } from '../../../../../lib/csv-child-tables';
+import { getCsvUploadChildTables } from '../../../../../lib/csv-child-tables';
 
 export const prerender = false;
 
@@ -35,17 +35,40 @@ export const POST: APIRoute = async ({ locals, request }) => {
   }
 
   try {
-    // First: delete child rows directly by client_id. Some child tables
-    // (metrics, site_issues, keyword_rankings) have client_id directly,
-    // so we can drop everything for this client in one statement per
-    // table without enumerating upload ids.
+    const childTables = await getCsvUploadChildTables();
+    // This client's upload ids — every child table is guaranteed to have a
+    // csv_upload_id column, so that is the reliable key to sweep on.
+    const idsRes = await turso.execute({
+      sql: 'SELECT id FROM csv_uploads WHERE client_id = ?',
+      args: [clientId],
+    });
+    const ids = (idsRes.rows as any[]).map(r => String(r[0]));
+
     let totalChildDeletes = 0;
-    for (const table of CSV_CHILD_TABLES) {
-      const del = await turso.execute({
-        sql: `DELETE FROM ${table} WHERE client_id = ?`,
-        args: [clientId],
-      });
-      totalChildDeletes += del.rowsAffected || 0;
+    const CHUNK = 100;
+    for (const table of childTables) {
+      // 1) Rows tied to this client's uploads (by csv_upload_id).
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const chunk = ids.slice(i, i + CHUNK);
+        const placeholders = chunk.map(() => '?').join(',');
+        const del = await turso.execute({
+          sql: `DELETE FROM ${table} WHERE csv_upload_id IN (${placeholders})`,
+          args: chunk,
+        });
+        totalChildDeletes += Number(del.rowsAffected) || 0;
+      }
+      // 2) Rows keyed directly to the client but not to an upload (e.g.
+      //    backfilled coverage rows with csv_upload_id NULL, manually-entered
+      //    metrics). Skipped for tables that have no client_id column.
+      try {
+        const del = await turso.execute({
+          sql: `DELETE FROM ${table} WHERE client_id = ?`,
+          args: [clientId],
+        });
+        totalChildDeletes += Number(del.rowsAffected) || 0;
+      } catch (err: any) {
+        if (!String(err?.message || '').includes('no such column')) throw err;
+      }
     }
 
     // Then: delete the csv_uploads rows for this client.

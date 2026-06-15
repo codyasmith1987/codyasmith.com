@@ -511,8 +511,18 @@ function formatLabel(format: string): string {
     });
 
     // ---- Per-row delete + bulk clear-failed ----
-    async function deleteUpload(uploadId: string, row: HTMLElement) {
+    async function deleteUpload(uploadId: string, row: HTMLElement, btnEl: HTMLElement | null) {
       if (!confirm('Delete this upload and any data tied to it?')) return;
+      // Immediate feedback: the delete clears many child tables, so it is not
+      // instant. Show it is working the moment it starts (disabled + "Deleting…"
+      // + dim the row) so it never looks frozen/broken.
+      const origText = btnEl ? btnEl.textContent : '';
+      if (btnEl) { (btnEl as HTMLButtonElement).disabled = true; btnEl.textContent = 'Deleting…'; }
+      row.style.opacity = '0.5';
+      const restore = () => {
+        row.style.opacity = '';
+        if (btnEl) { (btnEl as HTMLButtonElement).disabled = false; btnEl.textContent = origText; }
+      };
       try {
         const res = await fetch('/portal/api/admin/csv/delete-upload', {
           method: 'POST',
@@ -524,12 +534,15 @@ function formatLabel(format: string): string {
         try { data = text ? JSON.parse(text) : null; } catch {}
         if (res.ok && data && data.ok) {
           row.remove();
+          (window as any).__toast?.('Upload deleted.', 'success');
         } else {
           const msg = (data && data.error) ? data.error : `HTTP ${res.status}${text ? ': ' + text.slice(0, 140) : ''}`;
           alert(`Delete failed: ${msg}`);
+          restore();
         }
       } catch (err: any) {
         alert(`Delete failed: ${err?.message || 'network error'}`);
+        restore();
       }
     }
 
@@ -543,7 +556,7 @@ function formatLabel(format: string): string {
       if (!trigger) return;
       const uploadId = trigger.getAttribute('data-delete-upload') || '';
       const row = trigger.closest('[data-upload-row]') as HTMLElement | null;
-      if (uploadId && row) deleteUpload(uploadId, row);
+      if (uploadId && row) deleteUpload(uploadId, row, trigger);
     });
 
     // Refresh re-renders the Recent uploads list (it is server-rendered at

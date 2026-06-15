@@ -3,9 +3,11 @@
 //
 // POST { upload_id }
 //
-// Tables walked: metrics, site_issues, keyword_rankings, crawl_urls,
-// redirect_chains, image_urls. Child deletes run before the parent so
-// foreign-key constraints stay clean.
+// Tables walked: every table in CSV_CHILD_TABLES (the canonical child
+// list). Child deletes run before the parent so foreign-key constraints
+// stay clean, and each table delete is individually guarded so one
+// missing table on a stale schema can't 500 the whole delete (mirrors
+// the resilience in clear-superseded.ts).
 
 import type { APIRoute } from 'astro';
 import turso from '../../../../../lib/turso';
@@ -41,11 +43,22 @@ export const POST: APIRoute = async ({ locals, request }) => {
   try {
     let totalChildDeletes = 0;
     for (const table of CHILD_TABLES) {
-      const del = await turso.execute({
-        sql: `DELETE FROM ${table} WHERE csv_upload_id = ?`,
-        args: [uploadId],
-      });
-      totalChildDeletes += del.rowsAffected || 0;
+      try {
+        const del = await turso.execute({
+          sql: `DELETE FROM ${table} WHERE csv_upload_id = ?`,
+          args: [uploadId],
+        });
+        totalChildDeletes += del.rowsAffected || 0;
+      } catch (err: any) {
+        const msg: string = err?.message || '';
+        // A missing table/column is expected on a stale schema — skip it so
+        // one absent child table can't 500 the whole delete. Anything else
+        // is a real failure: surface it (outer catch -> 500) rather than
+        // silently orphaning child rows and deleting the parent anyway.
+        if (msg.includes('no such table') || msg.includes('no such column')) continue;
+        logger.error(`Child delete failed for table ${table} on upload ${uploadId}`, err);
+        throw err;
+      }
     }
     await turso.execute({
       sql: 'DELETE FROM csv_uploads WHERE id = ?',

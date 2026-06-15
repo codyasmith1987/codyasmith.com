@@ -94,6 +94,9 @@ function formatLabel(format: string): string {
         <button type="submit" id="csv-btn" class="px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.2)] disabled:opacity-50 disabled:hover:shadow-none">
           Upload & Process
         </button>
+        <button type="button" id="csv-cancel" class="hidden px-5 py-3 border border-red-400/30 text-red-300 font-semibold text-sm rounded-lg hover:bg-red-500/10 transition-all duration-300 disabled:opacity-50">
+          Cancel
+        </button>
         <span id="csv-progress" class="text-sm text-neutral-400 hidden"></span>
       </div>
     </form>
@@ -132,6 +135,9 @@ function formatLabel(format: string): string {
         <div class="flex items-center justify-between mb-4">
           <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase">Recent uploads</p>
           <div class="flex items-center gap-4">
+            <button type="button" id="refresh-uploads-btn" class="text-[11px] text-neutral-400 hover:text-neutral-200 transition-colors">
+              Refresh
+            </button>
             <button type="button" id="reparse-stored-btn" class="text-[11px] text-emerald-400/90 hover:text-emerald-300 transition-colors">
               Reparse stored files
             </button>
@@ -192,8 +198,24 @@ function formatLabel(format: string): string {
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const form = document.getElementById('csv-form') as HTMLFormElement;
     const btn = document.getElementById('csv-btn') as HTMLButtonElement;
+    const cancelBtn = document.getElementById('csv-cancel') as HTMLButtonElement;
     const progress = document.getElementById('csv-progress')!;
     const resultsDiv = document.getElementById('csv-results')!;
+
+    // Cancel support: an in-flight batch upload had no stop button, so the
+    // only way to halt a wrong-site/wrong-folder upload was to refresh the
+    // page (which leaves the server mid-write). uploadCancelled breaks the
+    // batch loop before the next request; uploadController aborts the one
+    // in flight.
+    let uploadCancelled = false;
+    let uploadController: AbortController | null = null;
+    cancelBtn?.addEventListener('click', () => {
+      uploadCancelled = true;
+      uploadController?.abort();
+      cancelBtn.disabled = true;
+      cancelBtn.textContent = 'Cancelling…';
+      progress.textContent = 'Cancelling… no new files will start.';
+    });
 
     // Per-site attribution (multi-site Phase 1): clients with 2+ managed sites
     // get a Site picker (default: primary). Everyone else sees nothing new.
@@ -204,12 +226,23 @@ function formatLabel(format: string): string {
     document.getElementById('csv-client')?.addEventListener('change', (e) => {
       const cid = (e.target as HTMLSelectElement).value;
       const sites = sitesByClient[cid];
-      if (!sites) { siteWrap.classList.add('hidden'); siteSelect.innerHTML = ''; return; }
-      siteSelect.innerHTML = sites
+      if (!sites) {
+        siteWrap.classList.add('hidden');
+        siteSelect.innerHTML = '';
+        siteSelect.required = false;
+        return;
+      }
+      // Multi-site client: force a conscious choice. We do NOT auto-select the
+      // primary — a silent default is exactly how a secondary site's export
+      // (e.g. mountainvalleyprefab.com) lands on the primary (zipkithomes.com)
+      // by accident. The disabled placeholder + `required` makes the browser
+      // block submit until a real site is picked.
+      siteSelect.innerHTML = '<option value="" disabled selected>Select a site…</option>' + sites
         .slice()
         .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
-        .map(s => `<option value="${s.id}">${s.domain}${s.is_primary ? ' (primary)' : ''}</option>`)
+        .map(s => `<option value="${escAll(s.id)}">${escAll(s.domain)}${s.is_primary ? ' (primary)' : ''}</option>`)
         .join('');
+      siteSelect.required = true;
       siteWrap.classList.remove('hidden');
     });
 
@@ -276,9 +309,23 @@ function formatLabel(format: string): string {
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+
+      // Multi-site safety net: never let a batch proceed without an explicit
+      // site choice. The select is also `required` (native validation blocks
+      // submit first); this covers any path that reaches the handler anyway.
+      if (!siteWrap.classList.contains('hidden') && !siteSelect.value) {
+        (window as any).__toast('Pick which site these files belong to before uploading.', 'error');
+        siteSelect.focus();
+        return;
+      }
+
       const originalBtnText = btn.textContent;
+      uploadCancelled = false;
       btn.disabled = true;
       btn.textContent = 'Uploading…';
+      cancelBtn.classList.remove('hidden');
+      cancelBtn.disabled = false;
+      cancelBtn.textContent = 'Cancel';
       resultsDiv.innerHTML = '';
       resultsDiv.classList.remove('hidden');
 
@@ -365,6 +412,7 @@ function formatLabel(format: string): string {
       let completedFiles = 0;
       let cardIdx = 0;
       for (let bi = 0; bi < batches.length; bi++) {
+        if (uploadCancelled) break;
         const batch = batches[bi];
         // Show which files are in flight right now so the user can
         // tell something is happening rather than seeing a generic
@@ -385,13 +433,18 @@ function formatLabel(format: string): string {
         // snippet when the body is HTML (CF block, 5xx error page)
         // instead of collapsing to a generic JSON-parse error.
         let res;
+        uploadController = new AbortController();
         try {
           res = await fetch('/portal/api/csv/upload', {
             method: 'POST',
             headers: { 'X-CSRF-Token': csrfToken },
             body: formData,
+            signal: uploadController.signal,
           });
         } catch (err: any) {
+          // A cancel aborts the in-flight fetch; don't render that as a scary
+          // network error, just stop the loop.
+          if (uploadCancelled || err?.name === 'AbortError') break;
           for (const f of batch) {
             renderResultCard(f.name, { error: `Network error: ${err?.message || 'fetch failed'}` }, cardIdx++);
           }
@@ -437,13 +490,22 @@ function formatLabel(format: string): string {
         }
       }
 
-      progress.textContent = `Done. ${files.length} file(s) processed across ${batches.length} batch(es).`;
+      if (uploadCancelled) {
+        progress.textContent = `Cancelled. ${completedFiles}/${totalFiles} file(s) processed before stopping. Hit Refresh below to review and delete anything that landed.`;
+        (window as any).__toast(`Upload cancelled — ${completedFiles} of ${totalFiles} file(s) had already processed.`, 'error');
+      } else {
+        progress.textContent = `Done. ${files.length} file(s) processed across ${batches.length} batch(es).`;
+        // Toast confirms upload completion regardless of scroll position;
+        // results cards still render below, but the admin doesn't have to
+        // scroll to see that something happened.
+        (window as any).__toast(`Processed ${files.length} CSV file${files.length === 1 ? '' : 's'}. Updates feed dashboard, health, and metrics.`, 'success');
+      }
       btn.textContent = originalBtnText;
       btn.disabled = false;
-      // Toast confirms upload completion regardless of scroll position;
-      // results cards still render below, but the admin doesn't have to
-      // scroll to see that something happened.
-      (window as any).__toast(`Processed ${files.length} CSV file${files.length === 1 ? '' : 's'}. Updates feed dashboard, health, and metrics.`, 'success');
+      cancelBtn.classList.add('hidden');
+      cancelBtn.disabled = false;
+      cancelBtn.textContent = 'Cancel';
+      uploadController = null;
       // Auto-scroll to the results so admin sees the cards.
       resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });
@@ -471,14 +533,22 @@ function formatLabel(format: string): string {
       }
     }
 
-    document.querySelectorAll('[data-delete-upload]').forEach(btn => {
-      btn.addEventListener('click', (ev) => {
-        const target = ev.currentTarget as HTMLElement;
-        const uploadId = target.getAttribute('data-delete-upload') || '';
-        const row = target.closest('[data-upload-row]') as HTMLElement | null;
-        if (uploadId && row) deleteUpload(uploadId, row);
-      });
+    // Event delegation on the list container so Delete works for every row,
+    // including any added/re-rendered after the initial server render.
+    // (Per-element listeners bound once at load missed dynamically present
+    // rows — the likely cause of "delete did nothing" after a mid-upload
+    // page reload.)
+    document.getElementById('uploads-list')?.addEventListener('click', (ev) => {
+      const trigger = (ev.target as HTMLElement)?.closest('[data-delete-upload]') as HTMLElement | null;
+      if (!trigger) return;
+      const uploadId = trigger.getAttribute('data-delete-upload') || '';
+      const row = trigger.closest('[data-upload-row]') as HTMLElement | null;
+      if (uploadId && row) deleteUpload(uploadId, row);
     });
+
+    // Refresh re-renders the Recent uploads list (it is server-rendered at
+    // page load, so files uploaded since then are not in it until reload).
+    document.getElementById('refresh-uploads-btn')?.addEventListener('click', () => window.location.reload());
 
     document.getElementById('wipe-client-btn')?.addEventListener('click', async () => {
       const clientSelect = document.getElementById('csv-client') as HTMLSelectElement;
@@ -678,5 +748,16 @@ function formatLabel(format: string): string {
       }
       mMsg.classList.remove('hidden');
     });
+
+    // If the client select already holds a value on load (back/forward cache
+    // restore, autofill, or a browser remembering the prior pick), the change
+    // event never fires on its own — so the multi-site Site picker and its
+    // `required` guard would stay hidden and an upload could proceed with no
+    // site. Synthesize the change once at init to wire the picker up. Placed
+    // at the end of the script so escAll (used by the handler) is defined.
+    {
+      const clientSel = document.getElementById('csv-client') as HTMLSelectElement | null;
+      if (clientSel && clientSel.value) clientSel.dispatchEvent(new Event('change'));
+    }
   </script>
 </Portal>

@@ -506,6 +506,23 @@ function formatLabel(format: string): string {
       cancelBtn.disabled = false;
       cancelBtn.textContent = 'Cancel';
       uploadController = null;
+
+      // Bind detected sites + page counts ONCE now the whole upload is done.
+      // This used to run once PER BATCH inside the upload endpoint (scanning the
+      // client's whole crawl set each time), which piled overhead onto every
+      // batch and tripped Cloudflare's ~100s window on large uploads. Running it
+      // once here keeps the batches lean. Best-effort: the data is already
+      // saved, and the sync also runs when the wizard/dashboard next touches it.
+      if (clientId && completedFiles > 0) {
+        try {
+          await fetch('/portal/api/admin/csv/post-upload-sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ client_id: clientId }),
+          });
+        } catch { /* non-fatal */ }
+      }
+
       // Auto-scroll to the results so admin sees the cards.
       resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     });

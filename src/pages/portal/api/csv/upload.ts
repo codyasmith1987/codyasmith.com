@@ -19,7 +19,6 @@ import JSZip from 'jszip';
 import { ingestCSV } from '../../../../lib/csv/index';
 import { logger } from '../../../../lib/logger';
 import { logActivity } from '../../../../lib/activity';
-import { syncDetectedDomains, syncPerSitePageCounts } from '../../../../lib/client-sites';
 
 export const prerender = false;
 
@@ -283,11 +282,16 @@ export const POST: APIRoute = async ({ locals, request }) => {
     // out to multiple CSV uploads); flatten so the UI gets one chip per
     // ingested CSV. mapLimit returns the same settled shape as
     // Promise.allSettled so the result-aggregation loop below is unchanged.
+    const batchStart = Date.now();
     const settled = await mapLimit(
       files,
       5,
       (file) => processOne(file, clientId, month, userId, userName, siteId),
     );
+    // Timing instrumentation: surfaces per-batch wall time in the DO run logs
+    // so a future 504/524 can be measured (is it the parse, or per-batch
+    // overhead?) instead of guessed. Cloudflare's origin window is ~100s.
+    logger.info(`[csv-upload] batch of ${files.length} file(s) ingested in ${Date.now() - batchStart}ms (client ${clientId})`);
     const results: PerFileResult[] = [];
     for (let i = 0; i < settled.length; i++) {
       const s = settled[i];
@@ -302,22 +306,14 @@ export const POST: APIRoute = async ({ locals, request }) => {
       }
     }
 
-    // Auto-bind detected domains + per-site page counts to
-    // client_sites. The data has already landed in crawl_urls and
-    // keyword_rankings; this propagates that into the canonical
-    // sites table so the proposal wizard, Schedule A, and pricing
-    // pipeline see a populated record without requiring a wizard
-    // visit to trigger sync. Runs once per batch.
-    //
-    // Wrapped in try/catch so a sync failure never breaks the
-    // upload response — the data is already saved and the user
-    // sees their chips. Errors logged for diagnosis.
-    try {
-      await syncDetectedDomains(clientId);
-      await syncPerSitePageCounts(clientId);
-    } catch (err) {
-      logger.error('post-upload client_sites sync failed', err);
-    }
+    // client_sites auto-bind (syncDetectedDomains + syncPerSitePageCounts) used
+    // to run HERE, once per batch. Both scan the client's entire crawl_urls set,
+    // so running them once PER BATCH (~13x for a 128-file upload) piled per-batch
+    // overhead onto Cloudflare's ~100s window and was a direct cause of the
+    // 504/524 timeouts that grew with the client's dataset. They now run ONCE
+    // after the whole upload via POST /portal/api/admin/csv/post-upload-sync,
+    // which the client calls when its batch loop finishes. Identical end result,
+    // no per-batch tax.
 
     // Backward compat: when only one file was sent via legacy 'file'
     // field, return the old single-result shape so older callers

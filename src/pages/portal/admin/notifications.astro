@@ -58,9 +58,7 @@ export const prerender = false;
 
     async function loadNotifications() {
       try {
-        const res = await fetch('/portal/api/notifications/', {
-          headers: { Cookie: document.cookie },
-        });
+        const res = await fetch('/portal/api/notifications/');
         const notifications = await res.json();
         loading.classList.add('hidden');
 

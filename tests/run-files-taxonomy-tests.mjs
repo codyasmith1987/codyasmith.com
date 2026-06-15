@@ -33,6 +33,13 @@ function run() {
 
   test('strategic_recommendation label', fileCategoryLabel('strategic_recommendation') === 'Strategic Recommendations');
   test('research label', fileCategoryLabel('research') === 'Research Reports');
+  test('performance_summary label', fileCategoryLabel('performance_summary') === 'Performance Summary');
+  test('site_health_report label', fileCategoryLabel('site_health_report') === 'Site Health Report');
+  test('advisory label', fileCategoryLabel('advisory') === 'Advisory');
+  // The EOM report types are draft-until-sent deliverables (issuable).
+  test('performance_summary is issuable', ISSUABLE_FILE_CATEGORIES.includes('performance_summary'));
+  test('site_health_report is issuable', ISSUABLE_FILE_CATEGORIES.includes('site_health_report'));
+  test('advisory is issuable', ISSUABLE_FILE_CATEGORIES.includes('advisory'));
   test('internal_draft is admin-only', ADMIN_ONLY_FILE_CATEGORIES.includes('internal_draft'));
   test('report is retired (not issuable, not labeled distinctly)', !ISSUABLE_FILE_CATEGORIES.includes('report'));
 

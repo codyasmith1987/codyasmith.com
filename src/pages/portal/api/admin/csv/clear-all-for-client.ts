@@ -57,12 +57,15 @@ export const POST: APIRoute = async ({ locals, request }) => {
         });
         totalChildDeletes += Number(del.rowsAffected) || 0;
       }
-      // 2) Rows keyed directly to the client but not to an upload (e.g.
+      // 2) Rows keyed directly to the client but NOT to an upload (e.g.
       //    backfilled coverage rows with csv_upload_id NULL, manually-entered
-      //    metrics). Skipped for tables that have no client_id column.
+      //    metrics). The `csv_upload_id IS NULL` guard makes this pass delete
+      //    exactly the rows pass 1 cannot reach — no overlap with pass 1, and
+      //    no risk of removing a row whose csv_upload_id points at another
+      //    client's upload. Skipped for tables that have no client_id column.
       try {
         const del = await turso.execute({
-          sql: `DELETE FROM ${table} WHERE client_id = ?`,
+          sql: `DELETE FROM ${table} WHERE client_id = ? AND csv_upload_id IS NULL`,
           args: [clientId],
         });
         totalChildDeletes += Number(del.rowsAffected) || 0;

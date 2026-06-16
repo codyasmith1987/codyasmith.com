@@ -82,7 +82,7 @@ function splitCsvLine(line: string): string[] {
   return out.map(s => s.trim());
 }
 
-export async function parse(raw: string, clientId: string, month: string, uploadId: string): Promise<number> {
+export async function parse(raw: string, clientId: string, month: string, uploadId: string, siteId: string | null = null): Promise<number> {
   const lines = raw.replace(/\r\n/g, '\n').replace(/^﻿/, '').split('\n');
   let currentSection = 'crawl';
 
@@ -179,12 +179,12 @@ export async function parse(raw: string, clientId: string, month: string, upload
   // INSERT ... ON CONFLICT so existing values get updated. Chunks
   // of 100 keep individual batch payloads small.
   const statements: Array<{ sql: string; args: any[] }> = [];
-  const sql = `INSERT INTO metrics (id, client_id, month, category, metric_key, metric_value, source, csv_upload_id)
-               VALUES (?, ?, ?, ?, ?, ?, 'csv_upload', ?)
-               ON CONFLICT(client_id, month, category, metric_key)
+  const sql = `INSERT INTO metrics (id, client_id, month, category, metric_key, metric_value, source, csv_upload_id, site_id)
+               VALUES (?, ?, ?, ?, ?, ?, 'csv_upload', ?, ?)
+               ON CONFLICT(client_id, month, category, metric_key, COALESCE(site_id, ''))
                DO UPDATE SET metric_value = excluded.metric_value, csv_upload_id = excluded.csv_upload_id`;
   for (const [, [category, key, value]] of dedup) {
-    statements.push({ sql, args: [nanoid(), clientId, month, category, key, value, uploadId] });
+    statements.push({ sql, args: [nanoid(), clientId, month, category, key, value, uploadId, siteId] });
   }
 
   // Match the 450-statement write chunk used across the ingest write path

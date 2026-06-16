@@ -58,7 +58,7 @@ export function buildAccessibilityMetrics(raw: string): AccessibilityMetric[] {
 
 // Thin executor — back-compat for direct callers. Writes nothing when the
 // file was present but unmeasured. Returns the page-row count seen.
-export async function parse(raw: string, clientId: string, month: string, uploadId: string): Promise<number> {
+export async function parse(raw: string, clientId: string, month: string, uploadId: string, siteId: string | null = null): Promise<number> {
   const result = Papa.parse(raw, { header: true, skipEmptyLines: true, dynamicTyping: true });
   const rowCount = (result.data as any[]).length;
 
@@ -66,11 +66,11 @@ export async function parse(raw: string, clientId: string, month: string, upload
 
   for (const m of metrics) {
     await turso.execute({
-      sql: `INSERT OR REPLACE INTO metrics (id, client_id, month, category, metric_key, metric_value, source, csv_upload_id)
-            VALUES (?, ?, ?, 'accessibility', ?, ?, 'csv_upload', ?)
-            ON CONFLICT(client_id, month, category, metric_key)
+      sql: `INSERT OR REPLACE INTO metrics (id, client_id, month, category, metric_key, metric_value, source, csv_upload_id, site_id)
+            VALUES (?, ?, ?, 'accessibility', ?, ?, 'csv_upload', ?, ?)
+            ON CONFLICT(client_id, month, category, metric_key, COALESCE(site_id, ''))
             DO UPDATE SET metric_value = excluded.metric_value, csv_upload_id = excluded.csv_upload_id`,
-      args: [nanoid(), clientId, month, m.key, m.value, uploadId],
+      args: [nanoid(), clientId, month, m.key, m.value, uploadId, siteId],
     });
   }
 

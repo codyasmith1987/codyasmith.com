@@ -23,7 +23,7 @@ function looksLikeFilenameLeak(name: string): boolean {
   return false;
 }
 
-export async function parse(raw: string, clientId: string, month: string, uploadId: string, filename: string): Promise<number> {
+export async function parse(raw: string, clientId: string, month: string, uploadId: string, filename: string, siteId: string | null = null): Promise<number> {
   const result = Papa.parse(raw, { header: true, skipEmptyLines: true });
   const rows = result.data as any[];
 
@@ -46,9 +46,9 @@ export async function parse(raw: string, clientId: string, month: string, upload
   // audit file, or a derived name that collides with an issues_overview
   // row. Last-writer-wins refreshes the count instead of erroring.
   await turso.execute({
-    sql: `INSERT INTO site_issues (id, client_id, month, issue_name, issue_type, priority, affected_urls, pct_of_total, description, how_to_fix, csv_upload_id)
-          VALUES (?, ?, ?, ?, 'audit', 'medium', ?, ?, ?, ?, ?)
-          ON CONFLICT(client_id, month, issue_name)
+    sql: `INSERT INTO site_issues (id, client_id, month, issue_name, issue_type, priority, affected_urls, pct_of_total, description, how_to_fix, csv_upload_id, site_id)
+          VALUES (?, ?, ?, ?, 'audit', 'medium', ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(client_id, month, issue_name, COALESCE(site_id, ''))
           DO UPDATE SET
             issue_type = excluded.issue_type,
             priority = excluded.priority,
@@ -67,6 +67,7 @@ export async function parse(raw: string, clientId: string, month: string, upload
       `${rows.length} URLs affected`,
       null,
       uploadId,
+      siteId,
     ],
   });
 

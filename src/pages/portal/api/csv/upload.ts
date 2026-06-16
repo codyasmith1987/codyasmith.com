@@ -17,6 +17,8 @@
 import type { APIRoute } from 'astro';
 import JSZip from 'jszip';
 import { ingestCSV } from '../../../../lib/csv/index';
+import { recomputeCategoryCoverage, FORMAT_TO_CATEGORY } from '../../../../lib/csv/coverage-signals';
+import turso from '../../../../lib/turso';
 import { logger } from '../../../../lib/logger';
 import { logActivity } from '../../../../lib/activity';
 
@@ -107,7 +109,10 @@ async function ingestOneCsv(
     return { filename, error: `CSV exceeds ${MAX_ROWS_PER_FILE} row maximum (${lineCount} rows submitted)` };
   }
   try {
-    const result = await ingestWithRetry(() => ingestCSV(raw, clientId, month, filename, userId, siteId));
+    // deferCoverage=true: skip the per-file coverage recompute. The POST handler
+    // recomputes each touched category ONCE after the whole batch (see below) —
+    // identical result, without re-scanning the client's data on every file.
+    const result = await ingestWithRetry(() => ingestCSV(raw, clientId, month, filename, userId, siteId, true));
     await logActivity({
       clientId,
       userId,
@@ -303,6 +308,31 @@ export const POST: APIRoute = async ({ locals, request }) => {
           filename: files[i].name,
           error: s.reason?.message || 'processing failed',
         });
+      }
+    }
+
+    // Coverage recompute, hoisted out of the per-file ingest path (ingestCSV was
+    // called with deferCoverage=true). recomputeCategoryCoverage aggregates the
+    // FULL (client, month, category) table state and upserts on that key, so
+    // running it ONCE per touched category here is byte-identical to the old
+    // once-per-file behavior — but a 30-file SF batch no longer fires 30 separate
+    // client-wide COUNT scans. (Combined with migration 074's (client_id, month)
+    // indexes, this is the fix for the data-heavy-client 524 timeouts: before,
+    // every file re-scanned the client's entire link_graph/crawl_urls history.)
+    // One representative upload_id per category is recorded for provenance.
+    const touchedCategories = new Map<string, string>();
+    for (const r of results) {
+      if (r.error || !r.format || !r.upload_id) continue;
+      const cat = FORMAT_TO_CATEGORY[r.format];
+      if (cat && !touchedCategories.has(cat)) touchedCategories.set(cat, r.upload_id);
+    }
+    for (const [category, repUploadId] of touchedCategories) {
+      try {
+        await recomputeCategoryCoverage(turso, clientId, month, category, 'csv_upload', repUploadId);
+      } catch (coverageErr: any) {
+        // Never fail the upload on a coverage-recompute error — the file data is
+        // already committed (same guard the per-file path used).
+        logger.error(`[csv-upload] coverage recompute failed for ${category} (data committed OK)`, coverageErr);
       }
     }
 

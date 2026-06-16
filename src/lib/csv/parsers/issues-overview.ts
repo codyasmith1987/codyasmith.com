@@ -2,8 +2,8 @@ import Papa from 'papaparse';
 import { nanoid } from 'nanoid';
 import turso from '../../turso';
 
-export async function parse(raw: string, clientId: string, month: string, uploadId: string): Promise<number> {
-  return parseIssuesOverviewWithDb(raw, clientId, month, uploadId, turso);
+export async function parse(raw: string, clientId: string, month: string, uploadId: string, siteId: string | null = null): Promise<number> {
+  return parseIssuesOverviewWithDb(raw, clientId, month, uploadId, turso, siteId);
 }
 
 // Test-injectable variant. The db param defaults to the prod singleton in
@@ -14,6 +14,7 @@ export async function parseIssuesOverviewWithDb(
   month: string,
   uploadId: string,
   db: typeof turso,
+  siteId: string | null = null,
 ): Promise<number> {
   const result = Papa.parse(raw, { header: true, skipEmptyLines: true });
   let count = 0;
@@ -33,9 +34,9 @@ export async function parseIssuesOverviewWithDb(
     // identical issue_names. Overwriting (last-writer-wins) lets a
     // duplicate file, or a re-run, refresh the row instead of erroring.
     await db.execute({
-      sql: `INSERT INTO site_issues (id, client_id, month, issue_name, issue_type, priority, affected_urls, pct_of_total, description, how_to_fix, csv_upload_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(client_id, month, issue_name)
+      sql: `INSERT INTO site_issues (id, client_id, month, issue_name, issue_type, priority, affected_urls, pct_of_total, description, how_to_fix, csv_upload_id, site_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(client_id, month, issue_name, COALESCE(site_id, ''))
             DO UPDATE SET
               issue_type = excluded.issue_type,
               priority = excluded.priority,
@@ -56,6 +57,7 @@ export async function parseIssuesOverviewWithDb(
         row['Description']?.toString().trim() || null,
         row['How To Fix']?.toString().trim() || null,
         uploadId,
+        siteId,
       ],
     });
     count++;
@@ -66,19 +68,19 @@ export async function parseIssuesOverviewWithDb(
   const totalAffected = (result.data as any[]).reduce((sum, r) => sum + (parseInt(r['URLs']) || 0), 0);
 
   await db.execute({
-    sql: `INSERT OR REPLACE INTO metrics (id, client_id, month, category, metric_key, metric_value, source, csv_upload_id)
-          VALUES (?, ?, ?, 'health', 'total_issues', ?, 'csv_upload', ?)
-          ON CONFLICT(client_id, month, category, metric_key)
+    sql: `INSERT OR REPLACE INTO metrics (id, client_id, month, category, metric_key, metric_value, source, csv_upload_id, site_id)
+          VALUES (?, ?, ?, 'health', 'total_issues', ?, 'csv_upload', ?, ?)
+          ON CONFLICT(client_id, month, category, metric_key, COALESCE(site_id, ''))
           DO UPDATE SET metric_value = excluded.metric_value, csv_upload_id = excluded.csv_upload_id`,
-    args: [nanoid(), clientId, month, totalIssues, uploadId],
+    args: [nanoid(), clientId, month, totalIssues, uploadId, siteId],
   });
 
   await db.execute({
-    sql: `INSERT OR REPLACE INTO metrics (id, client_id, month, category, metric_key, metric_value, source, csv_upload_id)
-          VALUES (?, ?, ?, 'health', 'total_affected_urls', ?, 'csv_upload', ?)
-          ON CONFLICT(client_id, month, category, metric_key)
+    sql: `INSERT OR REPLACE INTO metrics (id, client_id, month, category, metric_key, metric_value, source, csv_upload_id, site_id)
+          VALUES (?, ?, ?, 'health', 'total_affected_urls', ?, 'csv_upload', ?, ?)
+          ON CONFLICT(client_id, month, category, metric_key, COALESCE(site_id, ''))
           DO UPDATE SET metric_value = excluded.metric_value, csv_upload_id = excluded.csv_upload_id`,
-    args: [nanoid(), clientId, month, totalAffected, uploadId],
+    args: [nanoid(), clientId, month, totalAffected, uploadId, siteId],
   });
 
   return count;

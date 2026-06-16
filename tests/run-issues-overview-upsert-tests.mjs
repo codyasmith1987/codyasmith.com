@@ -62,12 +62,13 @@ async function createSiteIssues(db) {
     description TEXT,
     how_to_fix TEXT,
     csv_upload_id TEXT,
+    site_id TEXT,
     created_at TEXT DEFAULT (datetime('now'))
   )`);
   // migration 002: NON-unique.
   await db.execute(`CREATE INDEX idx_issues_client_month ON site_issues(client_id, month)`);
-  // metrics carries its own upsert key so the parser's aggregate writes don't
-  // throw on the second pass (matches migration 001 metrics UNIQUE).
+  // metrics carries its own per-site upsert key (migration 075) so the parser's
+  // aggregate writes don't throw on the second pass.
   await db.execute(`CREATE TABLE metrics (
     id TEXT PRIMARY KEY,
     client_id TEXT NOT NULL,
@@ -77,8 +78,9 @@ async function createSiteIssues(db) {
     metric_value REAL,
     source TEXT,
     csv_upload_id TEXT,
-    UNIQUE(client_id, month, category, metric_key)
+    site_id TEXT
   )`);
+  await db.execute(`CREATE UNIQUE INDEX ux_metrics_site ON metrics(client_id, month, category, metric_key, COALESCE(site_id, ''))`);
 }
 
 // Pre-fix prod schema: 001 + 002, no unique on issue_name.
@@ -106,8 +108,8 @@ async function applyMigration058(db) {
      )
   `);
   await db.execute(`
-    CREATE UNIQUE INDEX IF NOT EXISTS ux_site_issues_name
-    ON site_issues (client_id, month, issue_name)
+    CREATE UNIQUE INDEX IF NOT EXISTS ux_site_issues_name_site
+    ON site_issues (client_id, month, issue_name, COALESCE(site_id, ''))
   `);
 }
 

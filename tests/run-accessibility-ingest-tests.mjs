@@ -55,8 +55,10 @@ async function freshDb() {
     metric_value REAL,
     source TEXT,
     csv_upload_id TEXT REFERENCES csv_uploads(id),
-    UNIQUE(client_id, month, category, metric_key)
+    site_id TEXT
   )`);
+  // migration 075: per-site unique (COALESCE so two primary/NULL rows collide).
+  await db.execute(`CREATE UNIQUE INDEX ux_metrics_site ON metrics(client_id, month, category, metric_key, COALESCE(site_id, ''))`);
   // Partial unique index matching migration 055 (guards one live upload per key).
   await db.execute(`CREATE UNIQUE INDEX ux_csv_uploads_live
     ON csv_uploads (client_id, month, detected_format, original_name)
@@ -93,11 +95,11 @@ async function writeMetrics(db, uploadId) {
   ];
   for (const key of keys) {
     await db.execute({
-      sql: `INSERT OR REPLACE INTO metrics (id, client_id, month, category, metric_key, metric_value, source, csv_upload_id)
-            VALUES (?, ?, ?, 'accessibility', ?, ?, 'csv_upload', ?)
-            ON CONFLICT(client_id, month, category, metric_key)
+      sql: `INSERT OR REPLACE INTO metrics (id, client_id, month, category, metric_key, metric_value, source, csv_upload_id, site_id)
+            VALUES (?, ?, ?, 'accessibility', ?, ?, 'csv_upload', ?, ?)
+            ON CONFLICT(client_id, month, category, metric_key, COALESCE(site_id, ''))
             DO UPDATE SET metric_value = excluded.metric_value, csv_upload_id = excluded.csv_upload_id`,
-      args: [nanoid(), CLIENT, MONTH, key, 0, uploadId],
+      args: [nanoid(), CLIENT, MONTH, key, 0, uploadId, null],
     });
   }
 }

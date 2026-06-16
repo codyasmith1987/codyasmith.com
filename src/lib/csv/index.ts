@@ -431,7 +431,7 @@ export async function ingestCSV(
     // per-URL data (accessibility_urls) is already committed.
     if (format === 'accessibility') {
       try {
-        await parseAccessibility(raw, clientId, month, uploadId);
+        await parseAccessibility(raw, clientId, month, uploadId, siteId);
       } catch (metricsErr: any) {
         console.error('[ingestCSV] accessibility aggregate metrics write failed (per-URL data committed OK)', metricsErr?.message);
       }
@@ -504,16 +504,16 @@ export async function ingestCSV(
         rowCount = await parsePositionTracking(raw, clientId, month, uploadId);
         break;
       case 'issues_overview':
-        rowCount = await parseIssuesOverview(raw, clientId, month, uploadId);
+        rowCount = await parseIssuesOverview(raw, clientId, month, uploadId, siteId);
         break;
       case 'crawl_overview':
-        rowCount = await parseCrawlOverview(raw, clientId, month, uploadId);
+        rowCount = await parseCrawlOverview(raw, clientId, month, uploadId, siteId);
         break;
       // NOTE: crawl_internal, redirects, images, content_urls, security_urls,
       // structured_data_urls, and accessibility are Class-A and handled by the
       // atomic-batch branch above (CLASS_A_BUILDERS); they never reach here.
       case 'image_optimization':
-        rowCount = await parseImageOptimization(raw, clientId, month, uploadId);
+        rowCount = await parseImageOptimization(raw, clientId, month, uploadId, siteId);
         break;
       case 'keyword_research':
         rowCount = await parseKeywordResearch(raw, clientId, month, uploadId);
@@ -522,7 +522,7 @@ export async function ingestCSV(
         rowCount = await parseKeywordSuggestions(raw, clientId, month, uploadId);
         break;
       case 'site_audit':
-        rowCount = await parseSiteAudit(raw, clientId, month, uploadId, filename);
+        rowCount = await parseSiteAudit(raw, clientId, month, uploadId, filename, siteId);
         break;
       case 'issue_urls':
         rowCount = await parseIssueUrls(raw, clientId, month, uploadId, filename);

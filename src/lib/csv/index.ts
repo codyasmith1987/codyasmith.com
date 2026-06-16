@@ -286,6 +286,15 @@ export async function ingestCSV(
   // cannot (GA4, GSC, keywords, metrics) so two sites' same-named exports
   // never supersede each other.
   siteId: string | null = null,
+  // When true, SKIP the per-file coverage recompute. The batch upload path
+  // (upload.ts) sets this and instead recomputes each touched category ONCE
+  // after the whole batch finishes. recomputeCategoryCoverage aggregates the
+  // FULL (client, month, category) table state and upserts on that key, so it
+  // is order- and file-count-independent by design (the PR #256 property):
+  // collapsing N per-file recomputes into one yields a byte-identical
+  // data_coverage row while removing N-1 round-trips per category. Other
+  // callers (F3 bundle ingest) keep the default per-file recompute.
+  deferCoverage = false,
 ): Promise<IngestResult> {
   const { format, headers } = detectFormat(raw, filename);
   const uploadId = nanoid();
@@ -439,8 +448,10 @@ export async function ingestCSV(
     // Now the result reflects every row regardless of file count or order.
     // Wrapped in try/catch so a coverage-recompute failure never fails the
     // upload — the per-URL data is already committed (same guard as metrics).
+    // Skipped when the batch path defers it to one recompute-per-category after
+    // the whole upload (deferCoverage); the aggregate is identical either way.
     const coverageCategory = FORMAT_TO_CATEGORY[format];
-    if (coverageCategory) {
+    if (coverageCategory && !deferCoverage) {
       try {
         await recomputeCategoryCoverage(turso, clientId, month, coverageCategory, 'csv_upload', uploadId);
       } catch (coverageErr: any) {
@@ -562,9 +573,10 @@ export async function ingestCSV(
     // (e.g. several GSC dimension exports into gsc_dimensions) no longer wipe
     // each other's coverage. Wrapped in its own try/catch so a coverage failure
     // never fails the upload — the data is already committed (mirrors the
-    // accessibility metrics guard).
+    // accessibility metrics guard). Skipped when the batch path defers it to
+    // one recompute-per-category after the whole upload (deferCoverage).
     const coverageCategory = FORMAT_TO_CATEGORY[format];
-    if (coverageCategory) {
+    if (coverageCategory && !deferCoverage) {
       try {
         await recomputeCategoryCoverage(turso, clientId, month, coverageCategory, 'csv_upload', uploadId);
       } catch (coverageErr: any) {

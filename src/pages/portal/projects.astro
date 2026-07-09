@@ -29,7 +29,7 @@ const statusLabels: Record<string, string> = {
 const statusColors: Record<string, string> = {
   not_started: 'bg-neutral-700/30 text-neutral-400',
   in_progress: 'bg-blue-500/10 text-blue-400',
-  on_hold: 'bg-amber-500/10 text-amber-400',
+  on_hold: 'bg-amber-500/10 text-amber-600',
   completed: 'bg-emerald-500/10 text-emerald-400',
   cancelled: 'bg-neutral-700/30 text-neutral-500',
   todo: 'bg-neutral-700/30 text-neutral-400',
@@ -69,7 +69,7 @@ const statusColors: Record<string, string> = {
               {project.milestones.length > 0 && (
                 <div class="mb-6">
                   <div class="flex items-center justify-between mb-2">
-                    <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-wide">Progress</p>
+                    <p class="text-[10px] font-mono text-neutral-400 uppercase tracking-wide">Progress</p>
                     <p class="text-[10px] font-mono text-neutral-500">{completedMilestones.length} of {project.milestones.length} milestones</p>
                   </div>
                   <div class="h-1.5 bg-neutral-800 rounded-full overflow-hidden">
@@ -86,7 +86,7 @@ const statusColors: Record<string, string> = {
                     <div class="border border-white/5 rounded-xl p-5 mb-3 last:mb-0">
                       <div class="flex items-start justify-between mb-2">
                         <h3 class="text-sm font-medium text-neutral-200">{ms.title}</h3>
-                        {ms.due_date && <span class="text-[10px] text-neutral-600 font-mono">Due: {ms.due_date}</span>}
+                        {ms.due_date && <span class="text-[10px] text-neutral-400 font-mono">Due: {ms.due_date}</span>}
                       </div>
                       {ms.client_update_text && (
                         <p class="text-sm text-neutral-400 leading-relaxed mb-3">{ms.client_update_text}</p>
@@ -96,7 +96,7 @@ const statusColors: Record<string, string> = {
                           {ms.tasks.map(t => (
                             <div class="flex items-center gap-3">
                               <span class={`w-1.5 h-1.5 rounded-full shrink-0 ${t.status === 'done' ? 'bg-emerald-400' : t.status === 'in_progress' ? 'bg-blue-400' : 'bg-neutral-700'}`}></span>
-                              <span class={`text-xs ${t.status === 'done' ? 'text-neutral-600 line-through' : 'text-neutral-300'}`}>{t.title}</span>
+                              <span class={`text-xs ${t.status === 'done' ? 'text-neutral-400 line-through' : 'text-neutral-300'}`}>{t.title}</span>
                               {t.client_update_text && <span class="text-[10px] text-neutral-500 ml-auto">{t.client_update_text}</span>}
                             </div>
                           ))}
@@ -110,11 +110,11 @@ const statusColors: Record<string, string> = {
               {/* Upcoming milestones */}
               {upcomingMilestones.length > 0 && (
                 <div class="mb-6">
-                  <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-wide mb-3">Coming up</p>
+                  <p class="text-[10px] font-mono text-neutral-400 uppercase tracking-wide mb-3">Coming up</p>
                   {upcomingMilestones.map(ms => (
                     <div class="flex items-center justify-between py-2.5 border-b border-white/5 last:border-0">
                       <span class="text-sm text-neutral-400">{ms.title}</span>
-                      {ms.due_date && <span class="text-[10px] text-neutral-700 font-mono">{ms.due_date}</span>}
+                      {ms.due_date && <span class="text-[10px] text-neutral-500 font-mono">{ms.due_date}</span>}
                     </div>
                   ))}
                 </div>
@@ -127,14 +127,14 @@ const statusColors: Record<string, string> = {
                   {completedMilestones.map(ms => (
                     <div class="flex items-center justify-between py-2 opacity-60">
                       <span class="text-sm text-neutral-500">{ms.title}</span>
-                      {ms.completed_at && <span class="text-[10px] text-neutral-700 font-mono">{ms.completed_at.split('T')[0]}</span>}
+                      {ms.completed_at && <span class="text-[10px] text-neutral-500 font-mono">{ms.completed_at.split('T')[0]}</span>}
                     </div>
                   ))}
                 </div>
               )}
 
               {project.milestones.length === 0 && (
-                <p class="text-sm text-neutral-600">Work plan is being prepared. You'll see milestones here once we get started.</p>
+                <p class="text-sm text-neutral-400">Work plan is being prepared. You'll see milestones here once we get started.</p>
               )}
             </div>
           );

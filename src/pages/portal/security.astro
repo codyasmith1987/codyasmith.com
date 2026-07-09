@@ -1,0 +1,235 @@
+---
+import Portal from '../../layouts/Portal.astro';
+import ClientSelector from '../../components/portal/ClientSelector.astro';
+import StateLoading from '../../components/portal/StateLoading.astro';
+import StateError from '../../components/portal/StateError.astro';
+import StateEmpty from '../../components/portal/StateEmpty.astro';
+import { getAllClients } from '../../lib/auth';
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const isAdmin = user.role === 'admin';
+const clients = isAdmin ? await getAllClients() : [];
+---
+
+<Portal title="Security">
+
+  <div class="max-w-4xl mx-auto">
+    <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
+      <div>
+        <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Edge protection</p>
+        <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Security</h1>
+        <p class="text-sm text-neutral-400 mt-2">From Cloudflare. Edge traffic, cache, and firewall activity.</p>
+      </div>
+      {isAdmin && <ClientSelector clients={clients} />}
+    </div>
+
+    <StateLoading id="cf-loading" message="Loading security data..." />
+    <StateError id="cf-error" detailId="cf-error-detail" retryFn="loadSecurity" />
+
+    <div id="cf-sites" class="space-y-12 mb-8"></div>
+
+    <StateEmpty
+      id="cf-empty"
+      title="No Cloudflare data yet"
+      message={isAdmin
+        ? 'Configure a Cloudflare zone ID and API token for this client’s sites on /portal/admin/clients, then sync.'
+        : 'Your security report will appear here once data is available.'}
+    />
+  </div>
+
+  <script define:vars={{ clientId: user.client_id, isAdmin, firstClientId: clients[0]?.id || '' }}>
+    function escapeHtml(s) {
+      if (s == null) return '';
+      return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    let activeClientId = isAdmin ? firstClientId : clientId;
+
+    const selector = document.getElementById('client-selector');
+    if (selector) {
+      selector.addEventListener('change', (e) => {
+        activeClientId = e.target.value;
+        loadSecurity();
+      });
+    }
+
+    function fmtInt(n) {
+      if (n === null || n === undefined) return '-';
+      return Number(n).toLocaleString();
+    }
+    function fmtBytes(b) {
+      if (!b) return '-';
+      const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+      let i = 0; let n = Number(b);
+      while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+      return `${n.toFixed(n < 10 ? 2 : n < 100 ? 1 : 0)} ${units[i]}`;
+    }
+    function fmtPercent(n) {
+      if (n === null || n === undefined) return '-';
+      return `${(Number(n) * 100).toFixed(1)}%`;
+    }
+    function fmtDateUS(d) {
+      if (!d) return null;
+      const [y, m, da] = d.split('-');
+      const date = new Date(Number(y), Number(m) - 1, Number(da));
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    // Stacked-line SVG sparkline. Two series (cached + uncached
+    // requests) summed visually but separable by color.
+    function renderTrafficChart(series) {
+      if (!series || series.length === 0) return '';
+      const w = 800, h = 160, pad = 8;
+      const xs = (i) => pad + (i / Math.max(1, series.length - 1)) * (w - pad * 2);
+      const max = Math.max(1, ...series.map(s => Number(s.requests) || 0));
+      const yReq = (v) => h - pad - (v / max) * (h - pad * 2);
+      const pathReq = series.map((s, i) => `${i === 0 ? 'M' : 'L'} ${xs(i).toFixed(1)} ${yReq(Number(s.requests) || 0).toFixed(1)}`).join(' ');
+      const pathCached = series.map((s, i) => `${i === 0 ? 'M' : 'L'} ${xs(i).toFixed(1)} ${yReq(Number(s.cached_requests) || 0).toFixed(1)}`).join(' ');
+      return `
+        <svg class="w-full h-32" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+          <path d="${pathReq}" stroke="currentColor" class="text-amber-600" stroke-width="2" fill="none" />
+          <path d="${pathCached}" stroke="currentColor" class="text-neutral-500/60" stroke-width="1.5" fill="none" />
+        </svg>
+      `;
+    }
+
+    function renderSecurityChart(series) {
+      if (!series || series.length === 0) return '';
+      const w = 800, h = 160, pad = 8;
+      const xs = (i) => pad + (i / Math.max(1, series.length - 1)) * (w - pad * 2);
+      const max = Math.max(1, ...series.map(s => Number(s.total_events) || 0));
+      const yEv = (v) => h - pad - (v / max) * (h - pad * 2);
+      const path = series.map((s, i) => `${i === 0 ? 'M' : 'L'} ${xs(i).toFixed(1)} ${yEv(Number(s.total_events) || 0).toFixed(1)}`).join(' ');
+      return `
+        <svg class="w-full h-32" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+          <path d="${path}" stroke="currentColor" class="text-red-400/70" stroke-width="2" fill="none" />
+        </svg>
+      `;
+    }
+
+    function renderSite(site) {
+      const safeDomain = escapeHtml(site.domain || 'Site');
+      // No-data path: site has CF zone configured but never synced,
+      // OR the sync ran but window is empty.
+      if (!site.has_data) {
+        const reason = site.zone_configured
+          ? site.last_synced_at
+            ? `Synced ${site.last_synced_at}, but no daily rows in the last 30 days. Cloudflare may not have any traffic for this zone yet.`
+            : `Zone configured but never synced. ${isAdmin ? 'Trigger a sync from /portal/admin/clients.' : 'Ask your admin to sync the Cloudflare data.'}`
+          : `Cloudflare not connected for this site.`;
+        return `
+          <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
+            <h2 class="font-serif text-xl text-neutral-100">${safeDomain}</h2>
+            <p class="text-sm text-neutral-500 mt-2">${reason}</p>
+          </section>
+        `;
+      }
+
+      const t = site.traffic;
+      const s = site.security;
+      const fromDate = fmtDateUS(site.window?.since);
+      const toDate = fmtDateUS(site.window?.until);
+      const period = fromDate && toDate ? `${fromDate} to ${toDate}` : '';
+
+      return `
+        <section class="space-y-6">
+          <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
+            <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-3 mb-4">
+              <h2 class="font-serif text-xl text-neutral-100">${safeDomain}</h2>
+              <p class="text-[10px] font-mono text-amber-600 tracking-[0.15em] uppercase">${escapeHtml(period)}</p>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-6">
+              <div>
+                <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Requests</p>
+                <p class="font-serif text-2xl text-neutral-100">${fmtInt(t.total_requests)}</p>
+              </div>
+              <div>
+                <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Cached</p>
+                <p class="font-serif text-2xl text-neutral-100">${fmtPercent(t.cache_hit_rate)}</p>
+              </div>
+              <div>
+                <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Bandwidth</p>
+                <p class="font-serif text-2xl text-neutral-100">${fmtBytes(t.total_bytes)}</p>
+              </div>
+              <div>
+                <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Threats blocked</p>
+                <p class="font-serif text-2xl text-neutral-100">${fmtInt(t.total_threats)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-6">
+            <h3 class="font-serif text-lg text-neutral-100 mb-1">Daily traffic</h3>
+            <p class="text-xs text-neutral-500 mb-4">Total requests (amber) and cached requests (gray) per day.</p>
+            ${renderTrafficChart(t.series)}
+          </div>
+
+          <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-6">
+            <h3 class="font-serif text-lg text-neutral-100 mb-1">Firewall activity</h3>
+            <p class="text-xs text-neutral-500 mb-4">Daily total firewall events (blocks, challenges, rate limits).</p>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+              <div>
+                <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">Total events</p>
+                <p class="text-xl font-mono text-neutral-100">${fmtInt(s.total_events)}</p>
+              </div>
+              <div>
+                <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">Blocked</p>
+                <p class="text-xl font-mono text-red-400">${fmtInt(s.block_events)}</p>
+              </div>
+              <div>
+                <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">Challenged</p>
+                <p class="text-xl font-mono text-amber-600">${fmtInt((s.challenge_events || 0) + (s.managed_challenge_events || 0) + (s.js_challenge_events || 0))}</p>
+              </div>
+              <div>
+                <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">Rate-limited</p>
+                <p class="text-xl font-mono text-amber-600">${fmtInt(s.rate_limit_events)}</p>
+              </div>
+            </div>
+            ${renderSecurityChart(s.series)}
+          </div>
+        </section>
+      `;
+    }
+
+    async function loadSecurity() {
+      const loadingEl = document.getElementById('cf-loading');
+      const errorEl = document.getElementById('cf-error');
+      const sitesEl = document.getElementById('cf-sites');
+      const emptyEl = document.getElementById('cf-empty');
+
+      loadingEl.classList.remove('hidden');
+      errorEl.classList.add('hidden');
+      emptyEl.classList.add('hidden');
+      sitesEl.innerHTML = '';
+
+      if (!activeClientId) {
+        loadingEl.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        return;
+      }
+
+      try {
+        const res = await fetch(`/portal/api/dashboard/cloudflare?client_id=${activeClientId}`);
+        if (!res.ok) throw new Error('Failed to load security data');
+        const data = await res.json();
+        loadingEl.classList.add('hidden');
+
+        if (!data.sites || data.sites.length === 0) {
+          emptyEl.classList.remove('hidden');
+          return;
+        }
+
+        sitesEl.innerHTML = data.sites.map(renderSite).join('');
+      } catch (err) {
+        loadingEl.classList.add('hidden');
+        document.getElementById('cf-error-detail').textContent = err.message || 'Could not connect to the server.';
+        errorEl.classList.remove('hidden');
+      }
+    }
+
+    loadSecurity();
+  </script>
+</Portal>

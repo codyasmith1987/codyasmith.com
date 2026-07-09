@@ -1,8 +1,9 @@
 ---
 import Portal from '../../../../layouts/Portal.astro';
-import { getInvoice, getInvoiceItems, getPaymentsByInvoice } from '../../../../lib/invoices';
+import { getInvoice, getInvoiceItems, getPaymentsByInvoice, splitSubtotals } from '../../../../lib/invoices';
 import { getContract } from '../../../../lib/contracts';
 import { getAllClients } from '../../../../lib/auth';
+import { reminderEligibleStatus, sendEligibleStatus, variantForStatus } from '../../../../lib/invoice-email-templates';
 export const prerender = false;
 
 const { id } = Astro.params;
@@ -13,66 +14,133 @@ const contract = await getContract(invoice.contract_id);
 const clients = await getAllClients();
 const client = clients.find(c => c.id === invoice.client_id);
 const items = await getInvoiceItems(id!);
+const subtotals = splitSubtotals(items);
 const payments = await getPaymentsByInvoice(id!);
 
 const statusColors: Record<string, string> = {
   draft: 'bg-neutral-700/30 text-neutral-400',
   sent: 'bg-blue-500/10 text-blue-400',
   paid: 'bg-emerald-500/10 text-emerald-400',
-  partial: 'bg-amber-500/10 text-amber-400',
+  partial: 'bg-amber-500/10 text-amber-600',
   overdue: 'bg-red-500/10 text-red-400',
+  payment_pending: 'bg-violet-500/10 text-violet-400',
   cancelled: 'bg-red-500/10 text-red-400',
+  carried_forward: 'bg-neutral-700/30 text-neutral-500',
+};
+const statusLabels: Record<string, string> = {
+  payment_pending: 'Payment pending',
+  carried_forward: 'Carried forward',
 };
 ---
 
 <Portal title={invoice.invoice_number}>
   <div class="max-w-4xl mx-auto">
     <div class="mb-6">
-      <a href={`/portal/admin/contracts/${invoice.contract_id}`} class="text-xs text-neutral-600 hover:text-amber-400 transition-colors">&larr; {contract?.title || 'Contract'}</a>
+      <a href={`/portal/admin/contracts/${invoice.contract_id}`} class="text-xs text-neutral-400 hover:text-amber-600 transition-colors">&larr; {contract?.title || 'Contract'}</a>
     </div>
 
     <div class="flex items-start justify-between mb-8">
       <div>
-        <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-2">{client?.name}</p>
+        <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-2">{client?.name}</p>
         <h1 class="font-serif text-3xl text-neutral-100 font-mono">{invoice.invoice_number}</h1>
       </div>
       <div class="flex items-center gap-3">
-        <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[invoice.status] || ''}`}>{invoice.status}</span>
-        {invoice.last_reminder_sent && <span class="text-[10px] text-neutral-600">Reminder sent {invoice.last_reminder_sent.split('T')[0]}</span>}
-        <a href={`/portal/api/admin/invoices/${id}/pdf`} class="text-xs text-amber-400 hover:text-amber-300 transition-colors">Download PDF</a>
-        <button id="delete-invoice" class="text-xs text-neutral-600 hover:text-red-400 transition-colors">Delete</button>
+        <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[invoice.status] || ''}`}>{statusLabels[invoice.status] || invoice.status}</span>
+        {invoice.last_reminder_sent && <span class="text-[10px] text-neutral-400">Reminder sent {invoice.last_reminder_sent.split('T')[0]}</span>}
+        {sendEligibleStatus(invoice.status) && <button id="send-invoice" class="text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-colors">Send to client</button>}
+        {reminderEligibleStatus(invoice.status) && <button id="send-reminder" class="text-xs text-amber-600 hover:text-amber-500 transition-colors">Send reminder</button>}
+        {reminderEligibleStatus(invoice.status) && <button id="send-overdue" class="text-xs text-red-400 hover:text-red-300 transition-colors">Send overdue notice</button>}
+        <button id="duplicate-invoice" class="text-xs text-amber-600 hover:text-amber-600 transition-colors">Duplicate</button>
+        {/* Preview opens on the variant Send would actually use, so what you
+            preview is what ships (an overdue invoice previews overdue copy). */}
+        <a href={`/portal/api/admin/invoices/${id}/email-preview?variant=${variantForStatus(invoice.status)}`} target="_blank" rel="noopener" class="text-xs text-amber-600 hover:text-amber-600 transition-colors">Preview email</a>
+        <a href={`/portal/api/admin/invoices/${id}/pdf`} class="text-xs text-amber-600 hover:text-amber-600 transition-colors">Download PDF</a>
+        <button id="delete-invoice" class="text-xs text-neutral-400 hover:text-red-400 transition-colors">Delete</button>
       </div>
     </div>
 
     <!-- Invoice fields -->
     <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-8">
-      <div class="grid grid-cols-1 sm:grid-cols-4 gap-5">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
         <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Status</label>
-          <select id="f-status" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
-            {['draft', 'sent', 'paid', 'partial', 'overdue', 'cancelled'].map(s => (
-              <option value={s} selected={s === invoice.status}>{s}</option>
-            ))}
-          </select>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Invoice number</label>
+          <input type="text" id="f-number" required value={invoice.invoice_number} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Issued date</label>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Title (optional)</label>
+          <input type="text" id="f-title" value={invoice.title || ''} placeholder="May 2026 Web Management" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-5">
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" title="draft: not yet sent | sent: emailed to client, awaiting payment | paid: full balance received | partial: payment received but balance remains | overdue: past due date, not paid | payment pending: payment promised/in transit (e.g. check mailed), no automatic reminders and no receipt until you record it | cancelled: voided, no payment expected">Status</label>
+          <select id="f-status" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+            {/* Always include the invoice's own status as an option so a terminal
+                status (carried_forward) renders + selects correctly; otherwise the
+                browser would show the first option (draft) and a plain Save would
+                silently flip it. carried_forward is shown disabled (terminal); the
+                PUT endpoint also guards against moving out of a terminal status. */}
+            {(['draft', 'sent', 'paid', 'partial', 'overdue', 'payment_pending', 'cancelled'].includes(invoice.status)
+              ? ['draft', 'sent', 'paid', 'partial', 'overdue', 'payment_pending', 'cancelled']
+              : [invoice.status, 'draft', 'sent', 'paid', 'partial', 'overdue', 'payment_pending', 'cancelled']
+            ).map(s => (
+              <option value={s} selected={s === invoice.status} disabled={s === 'carried_forward'}>{s === 'carried_forward' ? 'carried forward' : s === 'payment_pending' ? 'payment pending' : s}</option>
+            ))}
+          </select>
+          <details class="mt-2 group">
+            <summary class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase cursor-pointer hover:text-amber-600 transition-colors select-none">What each status means</summary>
+            <div class="mt-2 text-[11px] text-neutral-400 space-y-1">
+              <p><strong class="text-neutral-200">draft:</strong> Not yet sent to client.</p>
+              <p><strong class="text-neutral-200">sent:</strong> Emailed to client, awaiting payment.</p>
+              <p><strong class="text-neutral-200">paid:</strong> Full balance received.</p>
+              <p><strong class="text-neutral-200">partial:</strong> Some payment received, balance remains.</p>
+              <p><strong class="text-neutral-200">overdue:</strong> Past due date, no payment received.</p>
+              <p><strong class="text-neutral-200">payment pending:</strong> Payment promised or in transit (e.g. a check is in the mail). Still counts as owed, but gets no automatic reminders and sends no receipt until you record the payment. (The Send reminder buttons above still work if the promised payment never arrives.)</p>
+              <p><strong class="text-neutral-200">cancelled:</strong> Voided. No payment expected.</p>
+            </div>
+          </details>
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Issued date</label>
           <input type="date" id="f-issued" value={invoice.issued_date || ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Due date</label>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Due date</label>
           <input type="date" id="f-due" value={invoice.due_date || ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Client visible</label>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Client visible</label>
           <select id="f-visible" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
             <option value="1" selected={invoice.client_visible === 1}>Yes</option>
             <option value="0" selected={invoice.client_visible === 0}>No</option>
           </select>
         </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Payment terms</label>
+          <input type="text" id="f-terms" value={invoice.terms_label || ''} placeholder="Upon Receipt" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" title="The service period this invoice covers. Drives the period label on the PDF and stops the automatic biller from invoicing the same cycle twice. Blank = a one-off/at-signing invoice.">Service period start</label>
+          <input type="date" id="f-period-start" value={invoice.billing_period_start || ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" title="The service period this invoice covers. Drives the period label on the PDF and stops the automatic biller from invoicing the same cycle twice. Blank = a one-off/at-signing invoice.">Service period end</label>
+          <input type="date" id="f-period-end" value={invoice.billing_period_end || ''} class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" title="Active: due and overdue reminder emails send on schedule. Paused: this invoice is skipped.">Reminders</label>
+          <select id="f-reminders" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+            <option value="0" selected={invoice.reminders_paused === 0}>Active</option>
+            <option value="1" selected={invoice.reminders_paused === 1}>Paused</option>
+          </select>
+        </div>
       </div>
       <div class="mt-5">
-        <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Notes</label>
+        <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" title="A one-off CC for this invoice only (in addition to the client's primary contact and accountant CC). Set the client's standing recipients on the Invoices page.">Extra recipient, this invoice only (optional)</label>
+        <input type="email" id="f-extra" value={invoice.extra_recipient_email || ''} placeholder="someone@example.com" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+      </div>
+      <div class="mt-5">
+        <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Notes</label>
         <textarea id="f-notes" rows="2" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">{invoice.notes || ''}</textarea>
       </div>
       <button id="save-invoice" class="mt-6 px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300">Save changes</button>
@@ -81,13 +149,29 @@ const statusColors: Record<string, string> = {
     <!-- Line items -->
     <div class="mb-8">
       <div class="flex items-center justify-between mb-4">
-        <p class="text-[10px] font-mono text-neutral-700 tracking-[0.15em] uppercase">Line items</p>
-        <button id="show-add-item" class="text-xs text-amber-400 hover:text-amber-300 transition-colors">+ Add item</button>
+        <p class="text-[10px] font-mono text-neutral-500 tracking-[0.15em] uppercase">Line items</p>
+        <div class="flex items-center gap-4">
+          {items.length === 0 && invoice.contract_id && <button id="build-from-contract" class="text-xs text-emerald-400 hover:text-emerald-300 transition-colors">Build from contract</button>}
+          <button id="show-add-item" class="text-xs text-amber-600 hover:text-amber-600 transition-colors">+ Add item</button>
+        </div>
       </div>
 
       <form id="add-item-form" class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 mb-4 hidden">
         <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
-          <input type="text" id="ai-desc" required placeholder="Description" class="sm:col-span-2 px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          <input type="text" id="ai-name" required placeholder="Name (e.g. Web Management - ZipKit Homes)" class="sm:col-span-2 px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          <select id="ai-category" class="px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+            <option value="services">Services</option>
+            <option value="reimbursements">Reimbursement</option>
+          </select>
+          <select id="ai-frequency" class="px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+            <option value="">No tag</option>
+            <option value="monthly">Monthly</option>
+            <option value="annual">Annual</option>
+            <option value="one_time">One-time</option>
+          </select>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mt-4">
+          <input type="text" id="ai-sub" placeholder="Sub-description (e.g. zipkithomes.com service)" class="sm:col-span-2 px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
           <input type="number" id="ai-qty" value="1" min="1" step="1" placeholder="Qty" class="px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
           <input type="number" id="ai-price" required step="0.01" placeholder="Unit price" class="px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
         </div>
@@ -102,57 +186,87 @@ const statusColors: Record<string, string> = {
           <table class="w-full text-sm">
             <thead>
               <tr class="border-b border-white/5">
-                <th class="text-left px-5 py-3 text-[10px] font-mono text-neutral-600 uppercase tracking-wide">Description</th>
-                <th class="text-right px-5 py-3 text-[10px] font-mono text-neutral-600 uppercase tracking-wide">Qty</th>
-                <th class="text-right px-5 py-3 text-[10px] font-mono text-neutral-600 uppercase tracking-wide">Price</th>
-                <th class="text-right px-5 py-3 text-[10px] font-mono text-neutral-600 uppercase tracking-wide">Amount</th>
+                <th class="text-left px-5 py-3 text-[10px] font-mono text-neutral-400 uppercase tracking-wide">Description</th>
+                <th class="text-right px-5 py-3 text-[10px] font-mono text-neutral-400 uppercase tracking-wide">Qty</th>
+                <th class="text-right px-5 py-3 text-[10px] font-mono text-neutral-400 uppercase tracking-wide">Price</th>
+                <th class="text-right px-5 py-3 text-[10px] font-mono text-neutral-400 uppercase tracking-wide">Amount</th>
                 <th class="w-10"></th>
               </tr>
             </thead>
             <tbody>
               {items.map(item => (
                 <tr class="border-b border-white/5 last:border-0 group">
-                  <td class="px-5 py-3 text-neutral-300">{item.description}</td>
+                  <td class="px-5 py-3">
+                    <div class="text-neutral-300">
+                      {item.name || item.description}
+                      {item.frequency && <span class="ml-2 text-[10px] font-mono text-amber-600/80 uppercase">{item.frequency.replace('_', '-')}</span>}
+                    </div>
+                    {item.sub_description && <div class="text-xs text-neutral-500 mt-0.5">{item.sub_description}</div>}
+                    {item.category === 'reimbursements' && <div class="text-[10px] font-mono text-neutral-500 uppercase mt-1">Reimbursement</div>}
+                    {item.category === 'past_due' && <div class="text-[10px] font-mono text-neutral-500 uppercase mt-1">Past due (carried forward)</div>}
+                    {item.category === 'late_interest' && <div class="text-[10px] font-mono text-neutral-500 uppercase mt-1">Late interest</div>}
+                  </td>
                   <td class="px-5 py-3 text-right text-neutral-400 font-mono">{item.quantity}</td>
                   <td class="px-5 py-3 text-right text-neutral-400 font-mono">${item.unit_price.toFixed(2)}</td>
                   <td class="px-5 py-3 text-right text-neutral-200 font-mono">${item.amount.toFixed(2)}</td>
                   <td class="px-3 py-3">
-                    <button data-delete-item={item.id} class="text-neutral-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 text-xs">&times;</button>
+                    <button data-delete-item={item.id} class="text-neutral-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 text-xs">&times;</button>
                   </td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
+              {(subtotals.reimbursements > 0 || subtotals.pastDue > 0) && (
+                <tr class="border-t border-white/10">
+                  <td colspan="3" class="px-5 py-2 text-right text-[10px] font-mono text-neutral-400 uppercase">Services subtotal</td>
+                  <td class="px-5 py-2 text-right text-neutral-300 font-mono">${subtotals.services.toFixed(2)}</td>
+                  <td></td>
+                </tr>
+              )}
+              {subtotals.reimbursements > 0 && (
+                <tr>
+                  <td colspan="3" class="px-5 py-2 text-right text-[10px] font-mono text-neutral-400 uppercase">Reimbursements subtotal</td>
+                  <td class="px-5 py-2 text-right text-neutral-300 font-mono">${subtotals.reimbursements.toFixed(2)}</td>
+                  <td></td>
+                </tr>
+              )}
+              {subtotals.pastDue > 0 && (
+                <tr>
+                  <td colspan="3" class="px-5 py-2 text-right text-[10px] font-mono text-neutral-400 uppercase">Past due subtotal</td>
+                  <td class="px-5 py-2 text-right text-neutral-300 font-mono">${subtotals.pastDue.toFixed(2)}</td>
+                  <td></td>
+                </tr>
+              )}
               <tr class="border-t border-white/10">
-                <td colspan="3" class="px-5 py-3 text-right text-[10px] font-mono text-neutral-600 uppercase">Subtotal</td>
+                <td colspan="3" class="px-5 py-3 text-right text-[10px] font-mono text-neutral-400 uppercase">Subtotal</td>
                 <td class="px-5 py-3 text-right text-neutral-200 font-mono font-medium">${invoice.subtotal.toFixed(2)}</td>
                 <td></td>
               </tr>
               {invoice.tax > 0 && (
                 <tr>
-                  <td colspan="3" class="px-5 py-2 text-right text-[10px] font-mono text-neutral-600 uppercase">Tax</td>
+                  <td colspan="3" class="px-5 py-2 text-right text-[10px] font-mono text-neutral-400 uppercase">Tax</td>
                   <td class="px-5 py-2 text-right text-neutral-400 font-mono">${invoice.tax.toFixed(2)}</td>
                   <td></td>
                 </tr>
               )}
               <tr>
                 <td colspan="3" class="px-5 py-3 text-right text-[10px] font-mono text-neutral-500 uppercase font-semibold">Total</td>
-                <td class="px-5 py-3 text-right text-amber-400 font-mono font-semibold">${invoice.total.toFixed(2)}</td>
+                <td class="px-5 py-3 text-right text-amber-600 font-mono font-semibold">${invoice.total.toFixed(2)}</td>
                 <td></td>
               </tr>
             </tfoot>
           </table>
         </div>
       ) : (
-        <p class="text-sm text-neutral-600 py-4">No line items. Add items to calculate the invoice total.</p>
+        <p class="text-sm text-neutral-400 py-4">No line items yet. Use <span class="text-emerald-400">Build from contract</span> to pull the service lines from the signed Schedule A, or <span class="text-amber-600">+ Add item</span> to enter them by hand. An invoice with no charges cannot be sent.</p>
       )}
     </div>
 
     <!-- Payments -->
     <div class="mb-8">
       <div class="flex items-center justify-between mb-4">
-        <p class="text-[10px] font-mono text-neutral-700 tracking-[0.15em] uppercase">Payments (${invoice.amount_paid.toFixed(2)} of ${invoice.total.toFixed(2)})</p>
-        <button id="show-add-payment" class="text-xs text-amber-400 hover:text-amber-300 transition-colors">+ Record payment</button>
+        <p class="text-[10px] font-mono text-neutral-500 tracking-[0.15em] uppercase">Payments (${invoice.amount_paid.toFixed(2)} of ${invoice.total.toFixed(2)})</p>
+        <button id="show-add-payment" class="text-xs text-amber-600 hover:text-amber-600 transition-colors">+ Record payment</button>
       </div>
 
       <form id="add-payment-form" class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 mb-4 hidden">
@@ -181,51 +295,154 @@ const statusColors: Record<string, string> = {
             <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-4 flex items-center justify-between">
               <div>
                 <p class="text-sm font-mono text-emerald-400">${p.amount.toFixed(2)}</p>
-                <p class="text-xs text-neutral-600 mt-0.5">{p.paid_at.split('T')[0]} {p.payment_method ? `via ${p.payment_method}` : ''} {p.reference ? `(${p.reference})` : ''}</p>
+                <p class="text-xs text-neutral-400 mt-0.5">{p.paid_at.split('T')[0]} {p.payment_method ? `via ${p.payment_method}` : ''} {p.reference ? `(${p.reference})` : ''}</p>
               </div>
             </div>
           ))}
         </div>
       ) : (
-        <p class="text-sm text-neutral-600 py-4">No payments recorded.</p>
+        <p class="text-sm text-neutral-400 py-4">No payments recorded.</p>
       )}
     </div>
   </div>
 
-  <script define:vars={{ invoiceId: id, contractId: invoice.contract_id }}>
+  <script define:vars={{ invoiceId: id, contractId: invoice.contract_id, clientId: invoice.client_id }}>
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
     // Save invoice
-    document.getElementById('save-invoice')?.addEventListener('click', async () => {
-      const res = await fetch(`/portal/api/admin/invoices/${invoiceId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify({
-          status: document.getElementById('f-status').value,
-          issued_date: document.getElementById('f-issued').value || null,
-          due_date: document.getElementById('f-due').value || null,
-          client_visible: Number(document.getElementById('f-visible').value),
-          notes: document.getElementById('f-notes').value.trim() || null,
-        }),
+    document.getElementById('save-invoice')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      await window.__withButtonLoading(btn, 'Saving…', async () => {
+        const res = await fetch(`/portal/api/admin/invoices/${invoiceId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({
+            invoice_number: document.getElementById('f-number').value.trim(),
+            status: document.getElementById('f-status').value,
+            issued_date: document.getElementById('f-issued').value || null,
+            due_date: document.getElementById('f-due').value || null,
+            billing_period_start: document.getElementById('f-period-start').value || null,
+            billing_period_end: document.getElementById('f-period-end').value || null,
+            client_visible: Number(document.getElementById('f-visible').value),
+            notes: document.getElementById('f-notes').value.trim() || null,
+            title: document.getElementById('f-title').value.trim() || null,
+            terms_label: document.getElementById('f-terms').value.trim() || null,
+            reminders_paused: Number(document.getElementById('f-reminders').value),
+            extra_recipient_email: document.getElementById('f-extra').value.trim() || null,
+          }),
+        });
+        if (res.ok) window.__toast('Invoice saved.', 'success');
+        else { const e = await res.json().catch(() => ({})); window.__toast(e.error || 'Failed to save invoice.', 'error'); }
       });
-      if (res.ok) window.__toast({ type: 'success', message: 'Invoice updated' });
-      else window.__toast({ type: 'error', message: 'Failed to save' });
     });
 
     // Delete invoice
-    document.getElementById('delete-invoice')?.addEventListener('click', async () => {
+    document.getElementById('delete-invoice')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
       const confirmed = await window.__confirm({
         title: 'Delete invoice', message: 'This will permanently delete this invoice, all line items, and payment records.',
         confirmLabel: 'Delete', danger: true,
       });
       if (!confirmed) return;
-      const res = await fetch(`/portal/api/admin/invoices/${invoiceId}`, {
-        method: 'DELETE', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+      await window.__withButtonLoading(btn, 'Deleting…', async () => {
+        const res = await fetch(`/portal/api/admin/invoices/${invoiceId}`, {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        });
+        if (res.ok) {
+          window.__toast('Invoice deleted.', 'success');
+          setTimeout(() => window.location.href = `/portal/admin/contracts/${contractId}`, 600);
+        } else window.__toast('Failed to delete invoice.', 'error');
       });
-      if (res.ok) {
-        window.__toast({ type: 'success', message: 'Invoice deleted' });
-        setTimeout(() => window.location.href = `/portal/admin/contracts/${contractId}`, 600);
-      } else window.__toast({ type: 'error', message: 'Failed to delete' });
+    });
+
+    // Send invoice to client (emails the PDF). Shows the resolved recipients in
+    // the confirm so there is no surprise about who it reaches.
+    document.getElementById('send-invoice')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      // Look up the client's standing recipients; combine with the per-invoice
+      // extra typed into the field (saved or not) for an accurate preview.
+      let primary = '', cc = '';
+      try {
+        const r = await fetch(`/portal/api/admin/clients/billing-contacts?client=${encodeURIComponent(clientId)}`);
+        if (r.ok) { const d = await r.json(); primary = d.primary_contact_email || ''; cc = d.billing_cc_email || ''; }
+      } catch {}
+      const extra = document.getElementById('f-extra').value.trim();
+      const ccList = [cc, extra].filter(Boolean);
+      const toLine = primary || '(the client\'s portal login, since no primary contact is set)';
+      const ccLine = ccList.length ? `\nCC: ${ccList.join(', ')}` : '';
+      const confirmed = await window.__confirm({
+        title: 'Send invoice to client',
+        message: `This emails the invoice PDF now.\n\nTo: ${toLine}${ccLine}\n\nUnsaved changes to the extra recipient or other fields are not included unless you saved first.`,
+        confirmLabel: 'Send invoice',
+      });
+      if (!confirmed) return;
+      await window.__withButtonLoading(btn, 'Sending…', async () => {
+        const res = await fetch(`/portal/api/admin/invoices/${invoiceId}/send`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        });
+        if (res.ok) {
+          const d = await res.json();
+          const ccPart = d.cc && d.cc.length ? ` (cc ${d.cc.join(', ')})` : '';
+          window.__toast(`Invoice sent to ${d.to.join(', ')}${ccPart}.`, 'success');
+          setTimeout(() => location.reload(), 900);
+        } else {
+          const d = await res.json().catch(() => ({}));
+          window.__toast(d.error || 'Failed to send invoice.', 'error');
+        }
+      });
+    });
+
+    // Send a per-invoice reminder or overdue notice. Explicit admin action, so it
+    // is allowed even for hand-billed (manual_billing) clients. Shows the resolved
+    // recipients in the confirm first, like "Send to client".
+    async function sendNotice(variant, btn, label) {
+      let primary = '', cc = '';
+      try {
+        const r = await fetch(`/portal/api/admin/clients/billing-contacts?client=${encodeURIComponent(clientId)}`);
+        if (r.ok) { const d = await r.json(); primary = d.primary_contact_email || ''; cc = d.billing_cc_email || ''; }
+      } catch {}
+      const extra = document.getElementById('f-extra').value.trim();
+      const ccList = [cc, extra].filter(Boolean);
+      const toLine = primary || "(the client's portal login, since no primary contact is set)";
+      const ccLine = ccList.length ? `\nCC: ${ccList.join(', ')}` : '';
+      const confirmed = await window.__confirm({
+        title: label,
+        message: `This emails a ${label.toLowerCase()} to the client now.\n\nTo: ${toLine}${ccLine}\n\nTip: use "Preview email" first to see exactly what they get.`,
+        confirmLabel: label,
+      });
+      if (!confirmed) return;
+      await window.__withButtonLoading(btn, 'Sending…', async () => {
+        const res = await fetch(`/portal/api/admin/invoices/${invoiceId}/reminder`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ variant }),
+        });
+        if (res.ok) {
+          const d = await res.json();
+          const ccPart = d.cc && d.cc.length ? ` (cc ${d.cc.join(', ')})` : '';
+          window.__toast(`Sent to ${d.to.join(', ')}${ccPart}.`, 'success');
+          setTimeout(() => location.reload(), 900);
+        } else {
+          const d = await res.json().catch(() => ({}));
+          window.__toast(d.error || 'Failed to send.', 'error');
+        }
+      });
+    }
+    document.getElementById('send-reminder')?.addEventListener('click', (e) => sendNotice('reminder', e.currentTarget, 'Send reminder'));
+    document.getElementById('send-overdue')?.addEventListener('click', (e) => sendNotice('overdue', e.currentTarget, 'Send overdue notice'));
+
+    // Duplicate invoice -> new draft, then open it
+    document.getElementById('duplicate-invoice')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      await window.__withButtonLoading(btn, 'Duplicating…', async () => {
+        const res = await fetch(`/portal/api/admin/invoices/${invoiceId}/duplicate`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          window.__toast('Invoice duplicated. Opening the new draft.', 'success');
+          setTimeout(() => window.location.href = `/portal/admin/invoices/${data.id}`, 600);
+        } else window.__toast('Failed to duplicate invoice.', 'error');
+      });
     });
 
     // Add line item
@@ -233,37 +450,67 @@ const statusColors: Record<string, string> = {
     document.getElementById('show-add-item')?.addEventListener('click', () => itemForm.classList.remove('hidden'));
     document.getElementById('cancel-add-item')?.addEventListener('click', () => itemForm.classList.add('hidden'));
 
+    // Build line items from the contract's signed Schedule A (fills an empty
+    // invoice with its real service lines instead of leaving a $0 shell).
+    document.getElementById('build-from-contract')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      await window.__withButtonLoading(btn, 'Building…', async () => {
+        const res = await fetch(`/portal/api/admin/invoices/${invoiceId}/build-lines`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        });
+        if (res.ok) {
+          const d = await res.json();
+          const periodNote = d.period ? ` Service period ${d.period.start} to ${d.period.end}.` : '';
+          window.__toast(`Added ${d.count} line item${d.count === 1 ? '' : 's'} from the contract.${periodNote}`, 'success');
+          if (d.warning) window.__toast(d.warning, 'error');
+          setTimeout(() => location.reload(), d.warning ? 2200 : 900);
+        } else {
+          const d = await res.json().catch(() => ({}));
+          window.__toast(d.error || 'Failed to build line items.', 'error');
+        }
+      });
+    });
+
     itemForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const res = await fetch(`/portal/api/admin/invoices/${invoiceId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify({
-          action: 'add_item',
-          description: document.getElementById('ai-desc').value.trim(),
-          quantity: Number(document.getElementById('ai-qty').value),
-          unit_price: Number(document.getElementById('ai-price').value),
-        }),
+      const btn = itemForm.querySelector('button[type="submit"]');
+      await window.__withButtonLoading(btn, 'Adding…', async () => {
+        const res = await fetch(`/portal/api/admin/invoices/${invoiceId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({
+            action: 'add_item',
+            name: document.getElementById('ai-name').value.trim(),
+            description: document.getElementById('ai-name').value.trim(),
+            sub_description: document.getElementById('ai-sub').value.trim() || null,
+            category: document.getElementById('ai-category').value,
+            frequency: document.getElementById('ai-frequency').value || null,
+            quantity: Number(document.getElementById('ai-qty').value),
+            unit_price: Number(document.getElementById('ai-price').value),
+          }),
+        });
+        if (res.ok) {
+          window.__toast('Line item added. Totals recalculated.', 'success');
+          setTimeout(() => location.reload(), 600);
+        } else window.__toast('Failed to add line item.', 'error');
       });
-      if (res.ok) {
-        window.__toast({ type: 'success', message: 'Item added' });
-        setTimeout(() => location.reload(), 600);
-      } else window.__toast({ type: 'error', message: 'Failed to add item' });
     });
 
     // Delete line items
     document.querySelectorAll('[data-delete-item]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const itemId = btn.dataset.deleteItem;
-        const res = await fetch(`/portal/api/admin/invoices/${invoiceId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify({ action: 'delete_item', item_id: itemId }),
+        await window.__withButtonLoading(btn, '…', async () => {
+          const res = await fetch(`/portal/api/admin/invoices/${invoiceId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ action: 'delete_item', item_id: itemId }),
+          });
+          if (res.ok) {
+            window.__toast('Line item removed. Totals recalculated.', 'success');
+            setTimeout(() => location.reload(), 600);
+          } else window.__toast('Failed to remove line item.', 'error');
         });
-        if (res.ok) {
-          window.__toast({ type: 'success', message: 'Item removed' });
-          setTimeout(() => location.reload(), 600);
-        } else window.__toast({ type: 'error', message: 'Failed to remove item' });
       });
     });
 
@@ -274,21 +521,24 @@ const statusColors: Record<string, string> = {
 
     payForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const res = await fetch('/portal/api/admin/payments/record', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify({
-          invoice_id: invoiceId,
-          amount: Number(document.getElementById('ap-amount').value),
-          payment_method: document.getElementById('ap-method').value || undefined,
-          paid_at: document.getElementById('ap-date').value + 'T12:00:00Z',
-          reference: document.getElementById('ap-ref').value.trim() || undefined,
-        }),
+      const btn = payForm.querySelector('button[type="submit"]');
+      await window.__withButtonLoading(btn, 'Recording…', async () => {
+        const res = await fetch('/portal/api/admin/payments/record', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({
+            invoice_id: invoiceId,
+            amount: Number(document.getElementById('ap-amount').value),
+            payment_method: document.getElementById('ap-method').value || undefined,
+            paid_at: document.getElementById('ap-date').value + 'T12:00:00Z',
+            reference: document.getElementById('ap-ref').value.trim() || undefined,
+          }),
+        });
+        if (res.ok) {
+          window.__toast('Payment recorded. Invoice totals updated.', 'success');
+          setTimeout(() => location.reload(), 600);
+        } else window.__toast('Failed to record payment.', 'error');
       });
-      if (res.ok) {
-        window.__toast({ type: 'success', message: 'Payment recorded' });
-        setTimeout(() => location.reload(), 600);
-      } else window.__toast({ type: 'error', message: 'Failed to record payment' });
     });
   </script>
 </Portal>

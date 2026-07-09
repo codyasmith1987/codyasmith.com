@@ -1,9 +1,68 @@
 ---
 import Base from '../../layouts/Base.astro';
+
+const faqSchema = JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Do you actually do the work, or just consult?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "I consult. I research, recommend, and help you think through the decision. If the recommendation needs execution, that work gets scoped separately through Web Management, Implementation, or another written scope."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What do I have to commit to?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "The first step is a fixed diagnostic. After that, ongoing consulting only continues if the shape makes sense. I do not want advisory work floating around without a clear question to answer."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How do you measure success?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "We measure the thing the decision is about. Sometimes that is search visibility. Sometimes it is positioning clarity, vendor fit, internal capacity, or whether the next move is now obvious enough to act on."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Can you work with my existing vendors?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. That is often the point. I can help you decide what to ask from an SEO vendor, content person, developer, designer, ad vendor, or internal hire. If the vendor is not the problem, I will not make them the problem."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How is this different from hiring a marketing agency?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Agencies usually sell execution. Strategy Consulting sells judgment. You are paying for an outside read on what to do, what to stop doing, and what should be built, hired, delegated, or ignored."
+      }
+    }
+  ]
+});
 ---
 
-<Base title="Marketing Strategy | SEO, Competitive Analysis & Content Direction" description="SEO, competitive analysis, content direction, and keyword strategy. I direct the marketing. You execute it.">
-  <script type="application/ld+json" set:html={JSON.stringify({"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Services","item":"https://codyasmith.com/services"},{"@type":"ListItem","position":2,"name":"Marketing Strategy","item":"https://codyasmith.com/services/marketing-strategy"}]})} />
+<Base title="Strategy Consulting | Marketing-Fluent Advisory" description="Marketing-fluent advisory for visibility, positioning, search, operations, vendors, hiring, and growth decisions." ogImage="/og/services/marketing-strategy.png" ogImageAlt="Strategy Consulting: marketing-fluent advisory.">
+  <script type="application/ld+json" set:html={faqSchema} />
+  <script type="application/ld+json" set:html={JSON.stringify({"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://codyasmith.com/"},{"@type":"ListItem","position":2,"name":"Services","item":"https://codyasmith.com/services"},{"@type":"ListItem","position":3,"name":"Strategy Consulting","item":"https://codyasmith.com/services/marketing-strategy"}]})} />
+  <script type="application/ld+json" set:html={JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "Service",
+    "name": "Strategy Consulting",
+    "url": "https://codyasmith.com/services/marketing-strategy",
+    "provider": { "@id": "https://codyasmith.com/#organization" },
+    "serviceType": "Strategy Consulting",
+    "areaServed": { "@type": "Country", "name": "United States" },
+    "description": "Marketing-fluent advisory for visibility, positioning, search, operations, vendors, hiring, and growth decisions. Advice only; execution is scoped separately.",
+    "termsOfService": "Advice and recommendations only. Execution is scoped separately before work begins."
+  })} />
   <!-- Hero -->
   <section class="relative pt-40 pb-24 px-6 overflow-hidden">
     <div class="absolute top-0 right-1/4 w-[600px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
@@ -19,17 +78,17 @@ import Base from '../../layouts/Base.astro';
         <div class="reveal gradient-divider flex-1"></div>
       </div>
       <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-6">
-        Marketing Strategy
+        Strategy Consulting
       </h1>
-      <p class="reveal text-neutral-500 italic text-sm tracking-wide mb-10">I direct it. You execute it.</p>
+      <p class="reveal text-neutral-500 italic text-sm tracking-wide mb-10">Marketing-fluent advisory for decisions that need an outside read.</p>
       <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" data-frame="default">
-        Somebody told you to "do SEO." Somebody else said content marketing. Your brother-in-law thinks you need TikTok. You've been paying for Google Ads but you can't tell if they're working because the analytics were set up wrong in 2019 and nobody's touched them since. Meanwhile your competitor just showed up on page one for the keyword you thought was yours.
+        Sometimes the problem is marketing. Sometimes it only looks like marketing from the outside. Visibility, positioning, search, operations, vendors, hiring, and growth all touch each other. I help you read the whole shape before you commit the business to the next move.
       </p>
       <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="sun">
-        Your business has momentum. The question isn't whether to invest in marketing. It's where. SEO, content, ads, social: there's opportunity in all of it, but you can't do everything at once. I look at where you are, where the market is moving, and build the roadmap to get there first.
+        Your business has momentum. The question is where to put attention next. Search, content, brand, operations, vendors, hiring, systems: there may be opportunity in all of it, but you cannot do everything at once. I help you choose the next right move.
       </p>
       <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-frame="moon">
-        Somebody told you to "do SEO." Somebody else said content marketing. Your brother-in-law thinks you need TikTok. The analytics were set up wrong in 2019, your competitor just showed up on page one, and you can't tell if your ad spend is working. I sort through all of it and tell you what to do first.
+        You have conflicting advice, old analytics, vendor opinions, internal pressure, and a list of things someone said you "should" do. I sort through it, name the real decision, and tell you what I would do first.
       </p>
     </div>
   </section>
@@ -48,23 +107,23 @@ import Base from '../../layouts/Base.astro';
           <ul class="space-y-4 text-neutral-300 text-sm leading-relaxed">
             <li class="flex items-start gap-3">
               <span class="text-amber-400 mt-0.5">&#10003;</span>
-              An SEO roadmap built on real keyword data
+              A clear read on the decision in front of you
             </li>
             <li class="flex items-start gap-3">
               <span class="text-amber-400 mt-0.5">&#10003;</span>
-              Competitive analysis that names names
+              Market, search, and competitor context
             </li>
             <li class="flex items-start gap-3">
               <span class="text-amber-400 mt-0.5">&#10003;</span>
-              Content briefs your writer can actually use
+              Recommendations your team can actually act on
             </li>
             <li class="flex items-start gap-3">
               <span class="text-amber-400 mt-0.5">&#10003;</span>
-              Monthly calls to review priorities
+              Calls or memos tied to the question at hand
             </li>
             <li class="flex items-start gap-3">
               <span class="text-amber-400 mt-0.5">&#10003;</span>
-              Quarterly reporting with real numbers
+              Plain-language reads on the numbers that matter
             </li>
             <li class="flex items-start gap-3">
               <span class="text-amber-400 mt-0.5">&#10003;</span>
@@ -85,11 +144,11 @@ import Base from '../../layouts/Base.astro';
             </li>
             <li class="flex items-start gap-3">
               <span class="text-neutral-500 mt-0.5">&#10005;</span>
-              Write your blog posts for you
+              Produce your content at scale
             </li>
             <li class="flex items-start gap-3">
               <span class="text-neutral-500 mt-0.5">&#10005;</span>
-              Hand you a one-time audit and disappear
+              Pretend advice is execution
             </li>
             <li class="flex items-start gap-3">
               <span class="text-neutral-500 mt-0.5">&#10005;</span>
@@ -97,7 +156,7 @@ import Base from '../../layouts/Base.astro';
             </li>
             <li class="flex items-start gap-3">
               <span class="text-neutral-500 mt-0.5">&#10005;</span>
-              Bill a retainer for retainer's sake
+              Quietly absorb scope until nobody knows what was bought
             </li>
           </ul>
         </div>
@@ -112,13 +171,13 @@ import Base from '../../layouts/Base.astro';
         <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Process</p>
         <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Here's how it works.</h2>
         <p class="text-neutral-400 mt-4 max-w-2xl" data-vibe="default">
-          I start with the data, build the plan, and stay in the loop to adjust it as the market moves.
+          I start with the actual question, read the context around it, and turn the mess into a recommendation you can act on.
         </p>
         <p class="text-neutral-400 mt-4 max-w-2xl" style="display:none" data-vibe="beach">
-          First I show you where you rank against the competition: who's outranking you, what they're doing, and where the openings are. Then we build the plan to take those positions.
+          First I name the gap: visibility, positioning, internal capacity, vendor confusion, or a decision that has been sitting too long. Then I show you what I would do next.
         </p>
         <p class="text-neutral-400 mt-4 max-w-2xl" style="display:none" data-vibe="mountain">
-          I build the foundation that makes everything else work. Keyword research, site structure, content architecture, the systems-level decisions that compound over time.
+          I read the system before recommending changes to it: search, site, brand, team, vendors, operations, and whatever else is creating drag around the decision.
         </p>
       </div>
 
@@ -132,13 +191,13 @@ import Base from '../../layouts/Base.astro';
             </div>
             <h3 class="text-neutral-100 text-xl font-medium mb-3">I read everything.</h3>
             <p class="text-neutral-400 leading-relaxed" data-processing="default">
-              Your site, your competitors' sites, the keywords you think you own and the ones you actually rank for. I pull the data, name the gaps, and write it all down. Nothing I recommend later will come from a hunch. It comes from this.
+              Your site, your competitors, your search results, your current tools, your team shape, and the story your market is already hearing. I pull the evidence, name the gaps, and write down what I see.
             </p>
             <p class="text-neutral-400 leading-relaxed" style="display:none" data-processing="stars">
-              Site crawl, content audit, competitive analysis, keyword universe with intent classification. Every finding ties to source data, so any recommendation that comes later traces back here.
+              Site read, content read, competitive read, search landscape, vendor context, and internal capacity. Every recommendation traces back to the evidence behind it.
             </p>
             <p class="text-neutral-400 leading-relaxed" style="display:none" data-processing="clouds">
-              I get smart on your space, your competitors, and your keyword landscape before recommending anything. The audit document grounds every move that comes after.
+              I get smart on your space before recommending anything. The diagnostic grounds every move that comes after.
             </p>
           </div>
 
@@ -146,15 +205,15 @@ import Base from '../../layouts/Base.astro';
             <div class="absolute left-3 md:left-5 top-1 w-6 h-6 rounded-full border-2 border-amber-500/60 bg-neutral-950 flex items-center justify-center">
               <span class="text-amber-400/60 text-[10px] font-mono font-bold">2</span>
             </div>
-            <h3 class="text-neutral-100 text-xl font-medium mb-3">The audit becomes a plan with an order.</h3>
+            <h3 class="text-neutral-100 text-xl font-medium mb-3">The read becomes a recommendation.</h3>
             <p class="text-neutral-400 leading-relaxed" data-phase="default">
-              Not everything matters equally, and some of the things you've been doing don't matter at all. I'll tell you what to do this month, what to do next quarter, and what to stop wasting money on immediately.
+              Not everything matters equally, and some of the things you have been doing may not matter at all. I name the next move, the reason behind it, and the things I would stop doing for now.
             </p>
             <p class="text-neutral-400 leading-relaxed" style="display:none" data-phase="spring">
-              A direction document. Where the marketing is heading, what it's heading toward, what to focus on first.
+              A direction document. What the business is deciding, what context matters, and what to focus on first.
             </p>
             <p class="text-neutral-400 leading-relaxed" style="display:none" data-phase="fall">
-              A sequenced priority list. Each item dated and ranked, with the rationale written next to it. Hand it to anyone and they know what to do first.
+              A sequenced priority list. Each item has a reason written next to it. Hand it to anyone and they know what decision comes first.
             </p>
           </div>
 
@@ -162,15 +221,15 @@ import Base from '../../layouts/Base.astro';
             <div class="absolute left-3 md:left-5 top-1 w-6 h-6 rounded-full border-2 border-amber-500/40 bg-neutral-950 flex items-center justify-center">
               <span class="text-amber-400/40 text-[10px] font-mono font-bold">3</span>
             </div>
-            <h3 class="text-neutral-100 text-xl font-medium mb-3">Then we talk once a month.</h3>
+            <h3 class="text-neutral-100 text-xl font-medium mb-3">Then we keep the question alive.</h3>
             <p class="text-neutral-400 leading-relaxed" data-processing="default">
-              I show up with content briefs your writer can use, keyword targets worth chasing, and a clear answer to "what should we be doing right now?" You execute. I steer. When the data says the plan needs to change, I change it and tell you why.
+              I show up with the outside read: what changed, what still matters, what to ignore, and what should be decided next. You own the decision. I keep the thinking sharp.
             </p>
             <p class="text-neutral-400 leading-relaxed" style="display:none" data-processing="stars">
-              Each monthly call ends with named decisions: which content brief gets picked up next, which keyword target moves up the priority stack, which priority falls off the list. The "why" is written down so the next call has a starting point.
+              Each call or memo ends with named decisions: what moves up, what waits, what falls off, and why. The reasoning is written down so the next conversation has a starting point.
             </p>
             <p class="text-neutral-400 leading-relaxed" style="display:none" data-processing="clouds">
-              We talk once a month. You leave knowing what to focus on next and why. The plan stays current because the data does.
+              We talk on a clear cadence. You leave knowing what to focus on next and why. The plan stays current because the context does.
             </p>
           </div>
 
@@ -178,15 +237,15 @@ import Base from '../../layouts/Base.astro';
             <div class="absolute left-3 md:left-5 top-1 w-6 h-6 rounded-full border-2 border-amber-500/20 bg-neutral-950 flex items-center justify-center">
               <span class="text-amber-400/20 text-[10px] font-mono font-bold">4</span>
             </div>
-            <h3 class="text-neutral-100 text-xl font-medium mb-3">Every three months, the numbers go on the table.</h3>
+            <h3 class="text-neutral-100 text-xl font-medium mb-3">The numbers stay in the room.</h3>
             <p class="text-neutral-400 leading-relaxed" data-frame="default">
-              Rankings, traffic, conversions, and what it all means. If something isn't working, I say so. You won't get a report that makes bad news sound like progress.
+              Search visibility, site data, reputation signal, and whatever numbers relate to the decision. If something does not support the recommendation, I say so plainly.
             </p>
             <p class="text-neutral-400 leading-relaxed" style="display:none" data-frame="sun">
-              Every three months, the numbers go on the table. Where you gained ground, what's compounding, where the next bets are. The pages and priorities worth doubling down on.
+              The useful numbers go on the table. What changed, what stayed stuck, what is getting clearer, and where the next bet belongs.
             </p>
             <p class="text-neutral-400 leading-relaxed" style="display:none" data-frame="moon">
-              Quarterly: what didn't move. The pages that flatlined, the keywords that lost position, the channels not earning their cost. The list of things to drop or rework.
+              What did not move. What got noisier. What got clearer. The list of things to drop, rework, or leave alone.
             </p>
           </div>
         </div>
@@ -204,38 +263,38 @@ import Base from '../../layouts/Base.astro';
 
       <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 reveal-stagger">
         <div class="reveal glow-card p-6" style="--i:0">
-          <h3 class="text-neutral-100 font-medium mb-2">Keyword research</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">Real search volume, real difficulty scores, grouped by intent. Not a spreadsheet dump. A prioritized list of opportunities.</p>
-          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">The keywords that define where your business shows up, and where it should. Prioritized by the opportunities that move the needle most.</p>
-          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">Search volume, keyword difficulty, intent mapping, and SERP feature analysis. Grouped by topic cluster with monthly search estimates and ranking probability.</p>
+          <h3 class="text-neutral-100 font-medium mb-2">Decision map</h3>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">The question, the constraints, the evidence, the tradeoffs, and the next move written in one place.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">A clear map of what the business is actually deciding and what should happen first.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">Decision, evidence, options, risks, exclusions, next action. Written so the team can use it.</p>
         </div>
         <div class="reveal glow-card p-6" style="--i:1">
-          <h3 class="text-neutral-100 font-medium mb-2">Competitive analysis</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">Who's ranking for what you want, what they're doing differently, and where the gaps are you can exploit.</p>
-          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">A clear picture of who owns the search results you want and what it takes to overtake them.</p>
-          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">Domain authority comparisons, backlink gap analysis, content overlap mapping, and ranked list of exploitable keyword gaps with difficulty scores.</p>
+          <h3 class="text-neutral-100 font-medium mb-2">Competitive read</h3>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-phase="default">Who your market is comparing you against, what they are saying, and where your position is unclear.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="spring">A clear picture of the market around you and where your business can sound more like itself.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-phase="fall">Named competitors, visible claims, search posture, message gaps, and the strategic implication.</p>
         </div>
         <div class="reveal glow-card p-6" style="--i:2">
-          <h3 class="text-neutral-100 font-medium mb-2">Content briefs</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed" data-processing="default">Page-level briefs with target keywords, structure recommendations, and competitive context. Hand these to your writer.</p>
-          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="stars">Briefs your writer can use. Keyword cluster sized, intent layered, content outline built around the SERP that's actually showing up. The questions that delay a draft, pre-answered.</p>
-          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="clouds">Briefs your writer can hand off and execute. They get a doc; you get a piece of content.</p>
+          <h3 class="text-neutral-100 font-medium mb-2">Search and content direction</h3>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-processing="default">What the website should explain, what content is missing, and what questions your market is already asking.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="stars">Search themes, intent, page gaps, structural recommendations, and the questions a writer or builder needs answered before execution.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="clouds">The content direction without pretending consulting is content production.</p>
         </div>
         <div class="reveal glow-card p-6" style="--i:3">
-          <h3 class="text-neutral-100 font-medium mb-2">SEO roadmap</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed" data-processing="default">Technical fixes, content priorities, and link opportunities, sequenced by impact and effort. Updated quarterly.</p>
-          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="stars">Roadmap sequenced by impact-vs-effort scoring: each item ranked, each ranking traceable to the data behind it. Refreshed quarterly when the data shifts.</p>
-          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="clouds">Priorities ranked by impact and effort. Updated every quarter.</p>
+          <h3 class="text-neutral-100 font-medium mb-2">Positioning notes</h3>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-processing="default">Where the business sounds clear, where it sounds generic, and what language should carry more weight.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="stars">Message hierarchy, audience assumptions, claim strength, and the places the site or sales story needs sharper language.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="clouds">The language that makes the business easier to understand.</p>
         </div>
         <div class="reveal glow-card p-6" style="--i:4">
           <h3 class="text-neutral-100 font-medium mb-2">Strategy memos</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed" data-processing="default">When something needs your attention, a competitor move or an algorithm update, you get a clear memo with what to do about it.</p>
-          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="stars">Memos function as strategic pulses between calls. Algorithm updates flagged with the strategic implication. Competitor moves flagged with the recommended response. Ranking shifts past significance flagged with what to investigate.</p>
-          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="clouds">Strategic pulses between calls. When something matters, you hear about it before you'd notice it yourself.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" data-processing="default">When something needs your attention, you get a clear memo with the read, the implication, and the recommendation.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="stars">Memos function as strategic pulses between calls. The trigger is named, the context is summarized, and the recommended response is clear.</p>
+          <p class="text-neutral-500 text-sm leading-relaxed" style="display:none" data-processing="clouds">When something matters, you hear about it before it turns into background noise.</p>
         </div>
         <div class="reveal glow-card p-6" style="--i:5">
-          <h3 class="text-neutral-100 font-medium mb-2">Quarterly reports</h3>
-          <p class="text-neutral-500 text-sm leading-relaxed">Rankings, traffic, conversions, and what it means. Written for decision-makers, not analysts. Executive brief up front, data behind it.</p>
+          <h3 class="text-neutral-100 font-medium mb-2">Readouts</h3>
+          <p class="text-neutral-500 text-sm leading-relaxed">Plain-language readouts on the numbers and context tied to the decision. Written for decision-makers, not analysts.</p>
         </div>
       </div>
     </div>
@@ -259,7 +318,7 @@ import Base from '../../layouts/Base.astro';
           The portal is the audit trail of the strategic engagement. Every recommendation logged, every decision dated, every brief tied to the call it came out of. Nothing the strategy work produces gets forgotten or argued about.
         </p>
         <p class="text-neutral-300 leading-relaxed text-lg mt-6 pt-6 border-t border-white/5" style="display:none" data-vibe="mountain">
-          Magic-link sign-in (no passwords to leak). Sessions hashed. Files in encrypted storage. Activity log behind every action. Your data stays yours, end to end.
+          Password sign-in with bcrypt hashing. Sessions stored as SHA-256 hashes. Files in encrypted storage with signed time-bound download links. Activity log behind every action. Your data stays yours, end to end.
         </p>
       </div>
     </div>
@@ -268,23 +327,85 @@ import Base from '../../layouts/Base.astro';
   <!-- Mid-page CTA -->
   <section class="py-16 px-6">
     <div class="max-w-4xl mx-auto text-center reveal">
-      <p class="text-neutral-500 text-sm mb-4">Ready to get found?</p>
-      <a href="/contact?interest=marketing-strategy" class="inline-flex items-center justify-center px-8 py-4 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/25 hover:text-amber-400 transition-all duration-300">
+      <p class="text-neutral-500 text-sm mb-4">Need an outside read?</p>
+      <a href="/contact?interest=strategy-consulting" class="inline-flex items-center justify-center px-8 py-4 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/25 hover:text-amber-400 transition-all duration-300">
         Let's talk strategy
       </a>
     </div>
   </section>
 
-  <!-- Pricing (calibrated, no public tier ladder until ecosystem routing exists) -->
+  <!-- FAQ -->
+  <section class="py-28 px-6">
+    <div class="max-w-3xl mx-auto">
+      <div class="reveal mb-16">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Questions</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Things people ask.</h2>
+      </div>
+
+      <div class="space-y-4 reveal-stagger">
+        <details class="reveal group glow-card" style="--i:0">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            Do you actually do the work, or just consult?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            I consult. I research, recommend, and help you think through the decision. If the recommendation needs execution, that work gets scoped separately through Web Management, Implementation, or another written scope.
+          </div>
+        </details>
+
+        <details class="reveal group glow-card" style="--i:1">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            What do I have to commit to?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            The first step is a fixed diagnostic. After that, ongoing consulting only continues if the shape makes sense. I do not want advisory work floating around without a clear question to answer.
+          </div>
+        </details>
+
+        <details class="reveal group glow-card" style="--i:2">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            How do you measure success?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            We measure the thing the decision is about. Sometimes that is search visibility. Sometimes it is positioning clarity, vendor fit, internal capacity, or whether the next move is now obvious enough to act on.
+          </div>
+        </details>
+
+        <details class="reveal group glow-card" style="--i:3">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            Can you work with my existing vendors?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            Yes. That is often the point. I can help you decide what to ask from an SEO vendor, content person, developer, designer, ad vendor, or internal hire. If the vendor is not the problem, I will not make them the problem.
+          </div>
+        </details>
+
+        <details class="reveal group glow-card" style="--i:4">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            How is this different from hiring a marketing agency?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            Agencies usually sell execution. Strategy Consulting sells judgment. You are paying for an outside read on what to do, what to stop doing, and what should be built, hired, delegated, or ignored.
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- Scope -->
   <section class="py-28 px-6">
     <div class="max-w-3xl mx-auto text-center">
       <div class="reveal">
-        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Pricing</p>
-        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100 mb-8">Calibrated, not off the rack.</h2>
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Scope</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100 mb-8">Priced after the question is clear.</h2>
         <p class="text-neutral-400 text-lg leading-relaxed mb-10">
-          What you pay depends on how much strategic depth your business actually uses. Some clients want one focused audit and a clear roadmap; others want ongoing partnership at the marketing-director level. The engagement gets calibrated to that. Tell me where you're at and we'll figure out where you land.
+          Strategy work starts by naming the question. Once I understand what decision needs an outside read, I can tell you whether this should be a focused diagnostic, ongoing advisory, Implementation, Training, or none of the above.
         </p>
-        <a href="/contact?interest=marketing-strategy" class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
+        <a href="/contact?interest=strategy-consulting" class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
           Tell me where you're at
         </a>
       </div>
@@ -297,10 +418,10 @@ import Base from '../../layouts/Base.astro';
     <div class="relative max-w-3xl mx-auto text-center">
       <h2 class="reveal font-serif text-3xl md:text-5xl text-neutral-100 mb-6">Know what you need to do next?</h2>
       <p class="reveal text-neutral-400 text-lg mb-10" data-processing="default">If the answer is "not really," that's exactly what this solves.</p>
-      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-processing="stars">Here's what the data says about your visibility: most businesses leave winnable organic positions uncontested. I'll show you yours, named and prioritized.</p>
-      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-processing="clouds">Let's figure out where people should find you, and make sure they actually do. No jargon, no dashboards you'll never check. Just clear direction.</p>
-      <a href="/contact?interest=marketing-strategy" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
-        Build your roadmap
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-processing="stars">If the data, vendor opinions, and internal pressure do not point in the same direction, this is where we sort the signal from the noise.</p>
+      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-processing="clouds">Let's figure out what the business is really deciding. No jargon, no dashboard theater. Just clear direction.</p>
+      <a href="/contact?interest=strategy-consulting" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
+        Get the outside read
       </a>
     </div>
   </section>

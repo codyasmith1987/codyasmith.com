@@ -2,12 +2,25 @@
 import Portal from '../../../layouts/Portal.astro';
 import { getAllClients } from '../../../lib/auth';
 import { getRecentUploads } from '../../../lib/csv/index';
+import { listManagedSites } from '../../../lib/client-sites';
 export const prerender = false;
 
 const clients = await getAllClients();
 const uploads = await getRecentUploads(undefined, 30);
 
+// Sites per client, for the per-site attribution picker (multi-site Phase 1).
+// Only clients with 2+ managed sites get a picker; everyone else uploads
+// exactly as before. Serialized into the page script below.
+const sitesByClient: Record<string, Array<{ id: string; domain: string; is_primary: boolean }>> = {};
+for (const c of clients) {
+  const sites = await listManagedSites(c.id);
+  if (sites.length > 1) {
+    sitesByClient[c.id] = sites.map(s => ({ id: s.id, domain: s.domain, is_primary: !!s.is_primary }));
+  }
+}
+
 function formatLabel(format: string): string {
+  if (format === 'sf_generic') return 'Captured (queryable)';
   return format.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 ---
@@ -15,38 +28,76 @@ function formatLabel(format: string): string {
 <Portal title="CSV Upload">
   <div class="max-w-4xl mx-auto">
     <div class="mb-10">
-      <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin</p>
+      <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin</p>
       <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">CSV Upload</h1>
-      <p class="text-sm text-neutral-500 mt-3 leading-relaxed">Drop CSVs from Ubersuggest, Screaming Frog, and other tools. Format is auto-detected.</p>
+      <p class="text-sm text-neutral-500 mt-3 leading-relaxed">Drop CSVs from Ubersuggest, Screaming Frog, and other tools. Format is auto-detected. Drag many at once, or pick an entire export folder.</p>
     </div>
+
+    <!-- What we ingest -->
+    <details class="mb-8 bg-neutral-900/20 border border-white/5 rounded-xl">
+      <summary class="cursor-pointer px-5 py-3 text-[10px] font-mono text-neutral-500 tracking-[0.15em] uppercase hover:text-amber-600 transition-colors">
+        Which files feed which portal surfaces
+      </summary>
+      <div class="px-5 pb-5 pt-2 text-xs text-neutral-400 leading-relaxed space-y-3">
+        <div>
+          <p class="text-neutral-300 font-medium mb-1">Screaming Frog (drop the whole export folder)</p>
+          <ul class="space-y-1 list-disc list-inside text-[11px] text-neutral-500">
+            <li><code class="text-amber-600">internal_html.csv</code> or <code class="text-amber-600">internal_all.csv</code> — per-URL master (titles, meta, H1, word count, depth, response time). Powers per-URL insights and domain auto-detect.</li>
+            <li><code class="text-amber-600">crawl_overview.csv</code> — site-wide aggregates by section (Internal, External, Security, Response Codes, Page Titles, etc.). Powers summary widgets.</li>
+            <li><code class="text-amber-600">issues_overview_report.csv</code> — health page issues with priority and fix guidance.</li>
+            <li><code class="text-amber-600">redirects.csv</code> — redirect chain analysis with hop count and loop detection.</li>
+            <li><code class="text-amber-600">images_all.csv</code> — image audit (file size, dimensions, inlink count).</li>
+            <li><code class="text-amber-600">accessibility_all.csv</code> — WCAG violation counts (currently aggregated).</li>
+          </ul>
+        </div>
+        <div>
+          <p class="text-neutral-300 font-medium mb-1">Rank trackers</p>
+          <ul class="space-y-1 list-disc list-inside text-[11px] text-neutral-500">
+            <li>Position tracking exports (Ahrefs / SEMrush / SE Ranking) — powers the keywords page.</li>
+            <li>Keyword research exports (Ubersuggest style) — alternate keywords source.</li>
+            <li>Keyword suggestions / opportunities — third keywords source.</li>
+          </ul>
+        </div>
+        <p class="text-[11px] text-neutral-400">Other CSVs (Page Titles All, Meta Description All, H1 All, etc.) are derivable from <code>internal_html.csv</code> and don't need separate upload.</p>
+      </div>
+    </details>
 
     <!-- Upload form -->
     <form id="csv-form" class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-10">
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
         <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Client</label>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Client</label>
           <select id="csv-client" required class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-300 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300">
             <option value="">Select...</option>
             {clients.map(c => <option value={c.id}>{c.name}</option>)}
           </select>
+          <div id="csv-site-wrap" class="hidden mt-3">
+            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" title="Which of this client's sites these files belong to. Crawl exports identify their site by URL automatically; the picker matters for exports that cannot (GA4, Search Console, keywords).">Site</label>
+            <select id="csv-site" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-300 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300"></select>
+          </div>
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Month</label>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Month</label>
           <input type="month" id="csv-month" required
             value={new Date().toISOString().slice(0, 7)}
             class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-300 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300" />
         </div>
         <div>
-          <label class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">CSV files</label>
-          <input type="file" id="csv-files" accept=".csv" multiple required
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">CSV or ZIP files</label>
+          <input type="file" id="csv-files" accept=".csv,.zip" multiple required
             class="w-full text-sm text-neutral-500 file:mr-3 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-amber-500 file:text-neutral-950 hover:file:bg-amber-400 file:cursor-pointer file:transition-colors file:duration-300" />
+          <p class="text-[10px] text-neutral-400 mt-1.5">Or <button type="button" id="pick-folder-btn" class="text-amber-600 hover:text-amber-600 underline">pick a folder</button> to upload every CSV in it. ZIPs (GSC Performance exports, Ubersuggest site audits) get unpacked server-side. Any CSV without a dedicated parser is still captured row-by-row into queryable storage ("Captured (queryable)") so its data is available for scoring and analysis.</p>
+          <input type="file" id="csv-folder" webkitdirectory="" multiple class="hidden" />
         </div>
       </div>
       <div class="mt-6 flex items-center gap-5">
         <button type="submit" id="csv-btn" class="px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.2)] disabled:opacity-50 disabled:hover:shadow-none">
           Upload & Process
         </button>
-        <span id="csv-progress" class="text-sm text-neutral-600 hidden"></span>
+        <button type="button" id="csv-cancel" class="hidden px-5 py-3 border border-red-400/30 text-red-300 font-semibold text-sm rounded-lg hover:bg-red-500/10 transition-all duration-300 disabled:opacity-50">
+          Cancel
+        </button>
+        <span id="csv-progress" class="text-sm text-neutral-400 hidden"></span>
       </div>
     </form>
 
@@ -55,7 +106,7 @@ function formatLabel(format: string): string {
 
     <!-- Manual metric entry -->
     <details class="mb-10 group">
-      <summary class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase cursor-pointer hover:text-amber-400 transition-colors duration-300">Manual metric entry</summary>
+      <summary class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase cursor-pointer hover:text-amber-600 transition-colors duration-300">Manual metric entry</summary>
       <form id="manual-form" class="bg-neutral-900/30 border border-white/5 rounded-2xl p-6 mt-4">
         <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
           <select id="m-client" required class="px-3 py-2.5 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-300 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300">
@@ -81,24 +132,60 @@ function formatLabel(format: string): string {
     <!-- Recent uploads -->
     {uploads.length > 0 && (
       <div>
-        <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-4">Recent uploads</p>
-        <div class="space-y-2">
+        <div class="flex items-center justify-between mb-4">
+          <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase">Recent uploads</p>
+          <div class="flex items-center gap-4">
+            <button type="button" id="refresh-uploads-btn" class="text-[11px] text-neutral-400 hover:text-neutral-200 transition-colors">
+              Refresh
+            </button>
+            <button type="button" id="reparse-stored-btn" class="text-[11px] text-emerald-400/90 hover:text-emerald-300 transition-colors">
+              Reparse stored files
+            </button>
+            <button type="button" id="clear-superseded-btn" class="text-[11px] text-amber-600 hover:text-amber-600 transition-colors">
+              Clear superseded duplicates
+            </button>
+            <button type="button" id="clear-garbage-issues-btn" class="text-[11px] text-amber-600 hover:text-amber-600 transition-colors">
+              Clear garbage issue rows
+            </button>
+            <button type="button" id="clear-failed-btn" class="text-[11px] text-red-400/80 hover:text-red-300 transition-colors">
+              Clear failed (0-row) uploads
+            </button>
+            <button type="button" id="wipe-client-btn" class="text-[11px] text-red-400/80 hover:text-red-300 transition-colors">
+              Wipe ALL uploads for picked client
+            </button>
+          </div>
+        </div>
+        <p id="reparse-progress" class="text-[11px] text-neutral-400 mb-3 hidden"></p>
+        <div class="space-y-2" id="uploads-list">
           {uploads.map(u => (
-            <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 flex items-center justify-between hover:border-white/10 transition-all duration-300">
+            <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 flex items-center justify-between hover:border-white/10 transition-all duration-300" data-upload-row data-upload-id={u.id}>
               <div>
                 <p class="text-sm font-medium text-neutral-200">{u.original_name}</p>
                 <div class="flex items-center gap-3 mt-1">
-                  <span class="text-xs text-neutral-600">{u.client_name}</span>
-                  <span class="text-xs font-mono text-neutral-700">{u.month}</span>
+                  <span class="text-xs text-neutral-400">{u.client_name}</span>
+                  <span class="text-xs font-mono text-neutral-500">{u.month}</span>
                   <span class:list={[
                     'text-[10px] font-mono tracking-wide px-2.5 py-0.5 rounded-full',
-                    u.error ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400',
+                    u.error
+                      ? 'bg-red-500/10 text-red-400'
+                      : u.detected_format === 'unknown_stored'
+                        ? 'bg-amber-500/15 text-amber-600'
+                        : 'bg-emerald-500/10 text-emerald-400',
                   ]}>
-                    {u.error ? 'Error' : formatLabel(u.detected_format)}
+                    {u.error
+                      ? 'Error'
+                      : u.detected_format === 'unknown_stored'
+                        ? 'Stored, not yet visualized'
+                        : formatLabel(u.detected_format)}
                   </span>
                 </div>
               </div>
-              <span class="text-xs font-mono text-neutral-700">{u.row_count} rows</span>
+              <div class="flex items-center gap-4">
+                <span class="text-xs font-mono text-neutral-500">{u.row_count} rows</span>
+                <button type="button" data-delete-upload={u.id} class="text-[11px] text-neutral-400 hover:text-red-400 transition-colors">
+                  Delete
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -106,65 +193,571 @@ function formatLabel(format: string): string {
     )}
   </div>
 
+  <script type="application/json" id="sites-by-client" set:html={JSON.stringify(sitesByClient)}></script>
   <script>
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const form = document.getElementById('csv-form') as HTMLFormElement;
     const btn = document.getElementById('csv-btn') as HTMLButtonElement;
+    const cancelBtn = document.getElementById('csv-cancel') as HTMLButtonElement;
     const progress = document.getElementById('csv-progress')!;
     const resultsDiv = document.getElementById('csv-results')!;
 
+    // Cancel support: an in-flight batch upload had no stop button, so the
+    // only way to halt a wrong-site/wrong-folder upload was to refresh the
+    // page (which leaves the server mid-write). uploadCancelled breaks the
+    // batch loop before the next request; uploadController aborts the one
+    // in flight.
+    let uploadCancelled = false;
+    let uploadController: AbortController | null = null;
+    cancelBtn?.addEventListener('click', () => {
+      uploadCancelled = true;
+      uploadController?.abort();
+      cancelBtn.disabled = true;
+      cancelBtn.textContent = 'Cancelling…';
+      progress.textContent = 'Cancelling… no new files will start.';
+    });
+
+    // Per-site attribution (multi-site Phase 1): clients with 2+ managed sites
+    // get a Site picker (default: primary). Everyone else sees nothing new.
+    const sitesByClient: Record<string, Array<{ id: string; domain: string; is_primary: boolean }>> =
+      JSON.parse(document.getElementById('sites-by-client')?.textContent || '{}');
+    const siteWrap = document.getElementById('csv-site-wrap')!;
+    const siteSelect = document.getElementById('csv-site') as HTMLSelectElement;
+    document.getElementById('csv-client')?.addEventListener('change', (e) => {
+      const cid = (e.target as HTMLSelectElement).value;
+      const sites = sitesByClient[cid];
+      if (!sites) {
+        siteWrap.classList.add('hidden');
+        siteSelect.innerHTML = '';
+        siteSelect.required = false;
+        return;
+      }
+      // Multi-site client: force a conscious choice. We do NOT auto-select the
+      // primary — a silent default is exactly how a secondary site's export
+      // (e.g. mountainvalleyprefab.com) lands on the primary (zipkithomes.com)
+      // by accident. The disabled placeholder + `required` makes the browser
+      // block submit until a real site is picked.
+      siteSelect.innerHTML = '<option value="" disabled selected>Select a site…</option>' + sites
+        .slice()
+        .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
+        .map(s => `<option value="${escAll(s.id)}">${escAll(s.domain)}${s.is_primary ? ' (primary)' : ''}</option>`)
+        .join('');
+      siteSelect.required = true;
+      siteWrap.classList.remove('hidden');
+    });
+
+    // Folder-pick button forwards to the hidden webkitdirectory input.
+    // When the folder picker resolves, copy its files onto the main
+    // csv-files input via DataTransfer so the submit handler sees them.
+    const folderInput = document.getElementById('csv-folder') as HTMLInputElement;
+    const filesInput = document.getElementById('csv-files') as HTMLInputElement;
+    document.getElementById('pick-folder-btn')?.addEventListener('click', () => folderInput.click());
+    folderInput.addEventListener('change', () => {
+      const dt = new DataTransfer();
+      for (const f of Array.from(folderInput.files || [])) {
+        const n = f.name.toLowerCase();
+        if (n.endsWith('.csv') || n.endsWith('.zip')) dt.items.add(f);
+      }
+      filesInput.files = dt.files;
+      // Visual cue: show the count next to the picker. Prefix "Queued:"
+      // so the distinction between queue status and active upload
+      // progress is unambiguous later.
+      progress.textContent = `Queued: ${dt.files.length} CSV file(s) from folder pick. Click Upload to process.`;
+      progress.classList.remove('hidden');
+    });
+
+    // Defensive HTML escape for any value that flows into innerHTML
+    // (filenames, parser error strings, format names).
+    const escAll = (s: any) => String(s ?? '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+    function renderResultCard(filename: string, data: any, idx: number) {
+      const card = document.createElement('div');
+      const borderClass = data.error
+        ? 'border-red-500/15'
+        : data.format === 'unknown_stored'
+          ? 'border-amber-500/20'
+          : 'border-emerald-500/15';
+      card.className = `csv-result bg-neutral-900/30 border rounded-xl p-5 ${borderClass}`;
+      card.style.animationDelay = `${idx * 0.05}s`;
+      const stored = data.format === 'unknown_stored';
+      const generic = data.format === 'sf_generic';
+      const formatLine = stored
+        ? `Stored, not yet visualized. <span class="text-amber-600">${escAll(filename)}</span> kept in raw_csv_data so a typed parser can pick it up later.`
+        : generic
+          ? `Captured (queryable)${data.row_count ? `, ${escAll(data.row_count)} rows` : ''} — stored in sf_export_rows for scoring and analysis.`
+          : (data.format && data.format !== 'unknown')
+            ? `Detected: <span class="text-emerald-400">${escAll(String(data.format).replace(/_/g, ' '))}</span>${data.row_count ? `, ${escAll(data.row_count)} rows processed` : ''}`
+            : '';
+      const statusChip = data.error
+        ? `<span class="text-xs text-red-400">${escAll(data.error)}</span>`
+        : stored
+          ? '<span class="text-[10px] font-mono text-amber-600 tracking-wide uppercase">Stored</span>'
+          : '<span class="text-[10px] font-mono text-emerald-400 tracking-wide uppercase">Done</span>';
+      card.innerHTML = `
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-neutral-200">${escAll(filename)}</p>
+            <p class="text-xs text-neutral-400 mt-1">${formatLine}</p>
+          </div>
+          ${statusChip}
+        </div>
+      `;
+      resultsDiv.appendChild(card);
+    }
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
+
+      // Multi-site safety net: never let a batch proceed without an explicit
+      // site choice. The select is also `required` (native validation blocks
+      // submit first); this covers any path that reaches the handler anyway.
+      if (!siteWrap.classList.contains('hidden') && !siteSelect.value) {
+        (window as any).__toast('Pick which site these files belong to before uploading.', 'error');
+        siteSelect.focus();
+        return;
+      }
+
+      const originalBtnText = btn.textContent;
+      uploadCancelled = false;
       btn.disabled = true;
+      btn.textContent = 'Uploading…';
+      cancelBtn.classList.remove('hidden');
+      cancelBtn.disabled = false;
+      cancelBtn.textContent = 'Cancel';
       resultsDiv.innerHTML = '';
       resultsDiv.classList.remove('hidden');
 
-      const files = (document.getElementById('csv-files') as HTMLInputElement).files!;
+      const files = Array.from(filesInput.files || []);
       const clientId = (document.getElementById('csv-client') as HTMLSelectElement).value;
       const month = (document.getElementById('csv-month') as HTMLInputElement).value;
 
       progress.classList.remove('hidden');
 
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        progress.textContent = `Processing ${i + 1}/${files.length}: ${file.name}...`;
+      // Batch into small groups per request. Smaller batches keep
+      // each request fast (server timeout headroom — the GSC/GA4
+      // parsers are bulk-insert now but a slow Turso writer or a
+      // 500-row CSV can still chew through the 100s Cloudflare edge
+      // timeout if too many are bundled together). Also keeps peak
+      // memory low while parsing 10MB-max files, and keeps the
+      // multipart body well under DO/CF size limits. The legacy
+      // single-file path on the endpoint still works for direct
+      // API callers.
+      // Pack files into batches that stay under BOTH a byte cap AND a
+      // file-count cap. SF export folders are 150+ mostly-tiny CSVs;
+      // without the count cap, a single batch could carry 100+ files
+      // (fitting in 8MB) and then take 100+ seconds server-side to
+      // ingest sequentially, tripping Cloudflare's 100s 524 timeout.
+      // The server caps at 50 files per request; we cap client-side
+      // at MAX_BATCH_FILES so each batch finishes well under CF's
+      // origin response window.
+      const MAX_BATCH_BYTES = 8 * 1024 * 1024;
+      // Server processes batches in parallel now (Promise.allSettled),
+      // so per-batch wall time is roughly the slowest file, not the
+      // sum. Keep batches small enough that ~10 files of mixed sizes
+      // still finish well under Cloudflare's 100s origin response
+      // window even when the slowest file is a 7000-row SF link
+      // export. The server's hard cap is 50.
+      const MAX_BATCH_FILES = 10;
+      // Third cap: estimated DB ROWS per batch. A folder of byte-small
+      // but row-DENSE link files (success_(2xx)_inlinks 6799 rows,
+      // https_urls_inlinks 6367, *_inlinks 3138 each) would pack 10 deep
+      // under the byte + count caps and become tens of thousands of rows
+      // in one request — hundreds of sequential turso.batch round-trips
+      // that blow Cloudflare's 100s origin window (the 524 we hit on the
+      // 155-file ZKH reupload). We can't read row counts client-side, so
+      // estimate from byte size with a conservative ~120-bytes-per-row
+      // floor: /120 OVER-estimates rows, making batches smaller/safer.
+      // DRIFT-LOCK: this mirrors planUploadBatches() in
+      // src/lib/csv/upload-batching.ts (the inline browser script can't
+      // import the TS module). run-upload-batching-tests.mjs asserts both
+      // copies stay in lockstep. Change one, change the other.
+      const MAX_BATCH_ROWS = 2500;
+      const estimateRows = (size: number) => Math.ceil((size || 0) / 120);
+      const batches: File[][] = [];
+      let currentBatch: File[] = [];
+      let currentBatchBytes = 0;
+      let currentBatchRows = 0;
+      for (const f of files) {
+        const fileBytes = f.size || 0;
+        const fileRows = estimateRows(fileBytes);
+        // Single file that busts a cap on its own gets its own batch.
+        if (fileBytes > MAX_BATCH_BYTES || fileRows > MAX_BATCH_ROWS) {
+          if (currentBatch.length > 0) {
+            batches.push(currentBatch);
+            currentBatch = [];
+            currentBatchBytes = 0;
+            currentBatchRows = 0;
+          }
+          batches.push([f]);
+          continue;
+        }
+        const wouldExceedBytes = currentBatchBytes + fileBytes > MAX_BATCH_BYTES;
+        const wouldExceedCount = currentBatch.length >= MAX_BATCH_FILES;
+        const wouldExceedRows = currentBatchRows + fileRows > MAX_BATCH_ROWS;
+        if ((wouldExceedBytes || wouldExceedCount || wouldExceedRows) && currentBatch.length > 0) {
+          batches.push(currentBatch);
+          currentBatch = [];
+          currentBatchBytes = 0;
+          currentBatchRows = 0;
+        }
+        currentBatch.push(f);
+        currentBatchBytes += fileBytes;
+        currentBatchRows += fileRows;
+      }
+      if (currentBatch.length > 0) batches.push(currentBatch);
+
+      const totalFiles = files.length;
+      let completedFiles = 0;
+      let cardIdx = 0;
+      for (let bi = 0; bi < batches.length; bi++) {
+        if (uploadCancelled) break;
+        const batch = batches[bi];
+        // Show which files are in flight right now so the user can
+        // tell something is happening rather than seeing a generic
+        // "batch N of M" tick by.
+        const namesLine = batch.map(f => f.name).join(', ');
+        progress.textContent = `Uploading (${completedFiles}/${totalFiles}): ${namesLine}`;
 
         const formData = new FormData();
-        formData.append('file', file);
         formData.append('client_id', clientId);
         formData.append('month', month);
+        // Site attribution: only sent when the multi-site picker is visible.
+        if (!siteWrap.classList.contains('hidden') && siteSelect.value) {
+          formData.append('site_id', siteSelect.value);
+        }
+        for (const f of batch) formData.append('files', f);
 
+        // Two-stage error parsing: surface real HTTP status + body
+        // snippet when the body is HTML (CF block, 5xx error page)
+        // instead of collapsing to a generic JSON-parse error.
+        let res;
+        uploadController = new AbortController();
         try {
-          const res = await fetch('/portal/api/csv/upload', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken }, body: formData });
-          const data = await res.json();
-
-          const card = document.createElement('div');
-          card.className = `csv-result bg-neutral-900/30 border rounded-xl p-5 ${data.error ? 'border-red-500/15' : 'border-emerald-500/15'}`;
-          card.style.animationDelay = `${i * 0.1}s`;
-          card.innerHTML = `
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-sm font-medium text-neutral-200">${file.name}</p>
-                <p class="text-xs text-neutral-600 mt-1">
-                  ${data.format !== 'unknown' ? `Detected: <span class="text-emerald-400">${data.format.replace(/_/g, ' ')}</span>` : ''}
-                  ${data.row_count ? `, ${data.row_count} rows processed` : ''}
-                </p>
-              </div>
-              ${data.error ? `<span class="text-xs text-red-400">${data.error}</span>` : '<span class="text-[10px] font-mono text-emerald-400 tracking-wide uppercase">Done</span>'}
-            </div>
-          `;
-          resultsDiv.appendChild(card);
+          res = await fetch('/portal/api/csv/upload', {
+            method: 'POST',
+            headers: { 'X-CSRF-Token': csrfToken },
+            body: formData,
+            signal: uploadController.signal,
+          });
         } catch (err: any) {
-          const card = document.createElement('div');
-          card.className = 'csv-result bg-neutral-900/30 border border-red-500/15 rounded-xl p-5';
-          card.style.animationDelay = `${i * 0.1}s`;
-          card.innerHTML = `<p class="text-sm text-red-400">${file.name}: ${err.message}</p>`;
-          resultsDiv.appendChild(card);
+          // A cancel aborts the in-flight fetch; don't render that as a scary
+          // network error, just stop the loop.
+          if (uploadCancelled || err?.name === 'AbortError') break;
+          for (const f of batch) {
+            renderResultCard(f.name, { error: `Network error: ${err?.message || 'fetch failed'}` }, cardIdx++);
+          }
+          continue;
+        }
+        const rawText = await res.text();
+        let payload: any = null;
+        try { payload = rawText ? JSON.parse(rawText) : null; } catch { /* leave null */ }
+
+        if (!res.ok || !payload) {
+          // CF 524 means the origin took longer than 100s to respond,
+          // but our server keeps processing and the data usually does
+          // land in the DB. Tell the admin that explicitly so they
+          // don't retry blindly and create supersede churn.
+          let errMsg;
+          if (res.status === 524) {
+            errMsg = 'Server response timed out at Cloudflare (524). Data likely landed — check Recent uploads below in 10-20 seconds before retrying.';
+          } else if (payload && payload.error) {
+            errMsg = payload.error;
+          } else {
+            errMsg = `HTTP ${res.status}${rawText ? ': ' + rawText.slice(0, 140) : ''}`;
+          }
+          for (const f of batch) {
+            renderResultCard(f.name, { error: errMsg }, cardIdx++);
+          }
+          continue;
+        }
+
+        // Server may return either { results: [...] } (batch) or the
+        // legacy single-result shape. Normalize.
+        const results = Array.isArray(payload.results) ? payload.results
+          : [{ filename: batch[0]?.name, ...payload }];
+
+        for (const r of results) {
+          renderResultCard(r.filename || '(file)', r, cardIdx++);
+        }
+        completedFiles += batch.length;
+        // Refresh the progress line so the visible "X/N" actually
+        // moves between batches — otherwise the only signal was new
+        // result cards appearing, easy to miss while scrolling.
+        if (bi < batches.length - 1) {
+          progress.textContent = `Uploaded ${completedFiles}/${totalFiles}, continuing...`;
         }
       }
 
-      progress.textContent = `Done. ${files.length} file(s) processed.`;
+      if (uploadCancelled) {
+        progress.textContent = `Cancelled. ${completedFiles}/${totalFiles} file(s) processed before stopping. Hit Refresh below to review and delete anything that landed.`;
+        (window as any).__toast(`Upload cancelled — ${completedFiles} of ${totalFiles} file(s) had already processed.`, 'error');
+      } else {
+        progress.textContent = `Done. ${files.length} file(s) processed across ${batches.length} batch(es).`;
+        // Toast confirms upload completion regardless of scroll position;
+        // results cards still render below, but the admin doesn't have to
+        // scroll to see that something happened.
+        (window as any).__toast(`Processed ${files.length} CSV file${files.length === 1 ? '' : 's'}. Updates feed dashboard, health, and metrics.`, 'success');
+      }
+      btn.textContent = originalBtnText;
       btn.disabled = false;
+      cancelBtn.classList.add('hidden');
+      cancelBtn.disabled = false;
+      cancelBtn.textContent = 'Cancel';
+      uploadController = null;
+
+      // Bind detected sites + page counts ONCE now the whole upload is done.
+      // This used to run once PER BATCH inside the upload endpoint (scanning the
+      // client's whole crawl set each time), which piled overhead onto every
+      // batch and tripped Cloudflare's ~100s window on large uploads. Running it
+      // once here keeps the batches lean. Best-effort: the data is already
+      // saved, and the sync also runs when the wizard/dashboard next touches it.
+      if (clientId && completedFiles > 0) {
+        try {
+          await fetch('/portal/api/admin/csv/post-upload-sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ client_id: clientId }),
+          });
+        } catch { /* non-fatal */ }
+      }
+
+      // Auto-scroll to the results so admin sees the cards.
+      resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+
+    // ---- Per-row delete + bulk clear-failed ----
+    async function deleteUpload(uploadId: string, row: HTMLElement, btnEl: HTMLElement | null) {
+      if (!confirm('Delete this upload and any data tied to it?')) return;
+      // Immediate feedback: the delete clears many child tables, so it is not
+      // instant. Show it is working the moment it starts (disabled + "Deleting…"
+      // + dim the row) so it never looks frozen/broken.
+      const origText = btnEl ? btnEl.textContent : '';
+      if (btnEl) { (btnEl as HTMLButtonElement).disabled = true; btnEl.textContent = 'Deleting…'; }
+      row.style.opacity = '0.5';
+      const restore = () => {
+        row.style.opacity = '';
+        if (btnEl) { (btnEl as HTMLButtonElement).disabled = false; btnEl.textContent = origText; }
+      };
+      try {
+        const res = await fetch('/portal/api/admin/csv/delete-upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ upload_id: uploadId }),
+        });
+        const text = await res.text();
+        let data: any = null;
+        try { data = text ? JSON.parse(text) : null; } catch {}
+        if (res.ok && data && data.ok) {
+          row.remove();
+          (window as any).__toast?.('Upload deleted.', 'success');
+        } else {
+          const msg = (data && data.error) ? data.error : `HTTP ${res.status}${text ? ': ' + text.slice(0, 140) : ''}`;
+          alert(`Delete failed: ${msg}`);
+          restore();
+        }
+      } catch (err: any) {
+        alert(`Delete failed: ${err?.message || 'network error'}`);
+        restore();
+      }
+    }
+
+    // Event delegation on the list container so Delete works for every row,
+    // including any added/re-rendered after the initial server render.
+    // (Per-element listeners bound once at load missed dynamically present
+    // rows — the likely cause of "delete did nothing" after a mid-upload
+    // page reload.)
+    document.getElementById('uploads-list')?.addEventListener('click', (ev) => {
+      const trigger = (ev.target as HTMLElement)?.closest('[data-delete-upload]') as HTMLElement | null;
+      if (!trigger) return;
+      const uploadId = trigger.getAttribute('data-delete-upload') || '';
+      const row = trigger.closest('[data-upload-row]') as HTMLElement | null;
+      if (uploadId && row) deleteUpload(uploadId, row, trigger);
+    });
+
+    // Refresh re-renders the Recent uploads list (it is server-rendered at
+    // page load, so files uploaded since then are not in it until reload).
+    document.getElementById('refresh-uploads-btn')?.addEventListener('click', () => window.location.reload());
+
+    document.getElementById('wipe-client-btn')?.addEventListener('click', async (ev) => {
+      const wipeBtn = ev.currentTarget as HTMLButtonElement;
+      const clientSelect = document.getElementById('csv-client') as HTMLSelectElement;
+      const clientId = clientSelect?.value;
+      const clientLabel = clientSelect?.selectedOptions[0]?.text || '(picked client)';
+      if (!clientId) {
+        alert('Pick a client at the top first.');
+        return;
+      }
+      const typed = prompt(
+        `Type WIPE to delete EVERY upload + all derived data (metrics, crawl_urls, site_issues, etc.) for "${clientLabel}". This is not reversible.`
+      );
+      if (typed !== 'WIPE') return;
+      await (window as any).__withButtonLoading(wipeBtn, 'Wiping…', async () => {
+        try {
+          const res = await fetch('/portal/api/admin/csv/clear-all-for-client', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ client_id: clientId, confirm: 'WIPE' }),
+          });
+          const text = await res.text();
+          let data: any = null;
+          try { data = text ? JSON.parse(text) : null; } catch {}
+          if (res.ok && data && data.ok) {
+            alert(`Wiped ${data.uploads_removed} upload(s) and ${data.child_rows_removed} child row(s) for ${clientLabel}. Reloading...`);
+            window.location.reload();
+          } else {
+            const msg = (data && data.error) ? data.error : `HTTP ${res.status}${text ? ': ' + text.slice(0, 140) : ''}`;
+            alert(`Wipe failed: ${msg}`);
+          }
+        } catch (err: any) {
+          alert(`Wipe failed: ${err?.message || 'network error'}`);
+        }
+      });
+    });
+
+    document.getElementById('clear-garbage-issues-btn')?.addEventListener('click', async (ev) => {
+      const garbageBtn = ev.currentTarget as HTMLButtonElement;
+      if (!confirm('Delete site_issues rows whose issue_name looks like a filename (contains "/", says "inlinks/outlinks/anchor text", or starts with an SF timestamp folder)? Caused by historical regression now fixed. Not reversible.')) return;
+      await (window as any).__withButtonLoading(garbageBtn, 'Clearing…', async () => {
+        try {
+          const res = await fetch('/portal/api/admin/csv/clear-garbage-issues', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({}),
+          });
+          const text = await res.text();
+          let data: any = null;
+          try { data = text ? JSON.parse(text) : null; } catch { /* noop */ }
+          if (res.ok && data?.ok) {
+            const sampleLine = data.sample && data.sample.length > 0
+              ? ` Examples: ${data.sample.slice(0, 3).map((s: string) => `"${s.slice(0, 50)}"`).join(', ')}.`
+              : '';
+            (window as any).__toast(`Removed ${data.deleted} garbage issue row(s).${sampleLine}`, 'success');
+            window.location.reload();
+          } else {
+            const msg = (data && data.error) ? data.error : `HTTP ${res.status}${text ? ': ' + text.slice(0, 140) : ''}`;
+            alert(`Clear garbage failed: ${msg}`);
+          }
+        } catch (err: any) {
+          alert(`Clear garbage failed: ${err?.message || 'network error'}`);
+        }
+      });
+    });
+
+    document.getElementById('clear-superseded-btn')?.addEventListener('click', async (ev) => {
+      const supersededBtn = ev.currentTarget as HTMLButtonElement;
+      if (!confirm('Delete every csv_uploads row marked "Superseded by newer upload" across all clients? Data rows are already swept; this just clears the audit trail.')) return;
+      await (window as any).__withButtonLoading(supersededBtn, 'Clearing…', async () => {
+        try {
+          const res = await fetch('/portal/api/admin/csv/clear-superseded', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({}),
+          });
+          const text = await res.text();
+          let data: any = null;
+          try { data = text ? JSON.parse(text) : null; } catch { /* noop */ }
+          if (res.ok && data?.ok) {
+            (window as any).__toast(`Cleared ${data.deleted} superseded upload row(s). ${data.child_rows_removed} orphan child row(s) wiped too.`, 'success');
+            window.location.reload();
+          } else {
+            const msg = (data && data.error) ? data.error : `HTTP ${res.status}${text ? ': ' + text.slice(0, 140) : ''}`;
+            alert(`Clear superseded failed: ${msg}`);
+          }
+        } catch (err: any) {
+          alert(`Clear superseded failed: ${err?.message || 'network error'}`);
+        }
+      });
+    });
+
+    // ---- Reparse stored files (chunked loop) ----
+    // Walks raw_csv_data in pages, re-detecting + re-ingesting each stored
+    // file through the current parsers. Loops like the upload path so each
+    // request stays well under Cloudflare's 100s origin window. Accumulates
+    // a tally and shows progress + a final summary.
+    document.getElementById('reparse-stored-btn')?.addEventListener('click', async () => {
+      if (!confirm('Reparse every stored ("not yet visualized") file across all clients through the current parsers? Files that now have a parser move into their typed tables; the rest stay stored. Non-destructive (raw copies are kept).')) return;
+      const reBtn = document.getElementById('reparse-stored-btn') as HTMLButtonElement;
+      const reProgress = document.getElementById('reparse-progress')!;
+      const LIMIT = 25;
+      let offset = 0;
+      let total = 0;
+      let processed = 0;
+      let retyped = 0;
+      let skipped = 0;
+      const errors: Array<{ filename: string; error: string }> = [];
+      const origText = reBtn.textContent;
+      reBtn.disabled = true;
+      reBtn.textContent = 'Reparsing…';
+      reProgress.classList.remove('hidden');
+      reProgress.textContent = 'Starting reparse…';
+      try {
+        // Guard against an unbounded loop if total never advances: cap
+        // iterations at total/LIMIT + slack.
+        let guard = 0;
+        do {
+          const res = await fetch('/portal/api/admin/csv/reparse-stored', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ offset, limit: LIMIT }),
+          });
+          const text = await res.text();
+          let data: any = null;
+          try { data = text ? JSON.parse(text) : null; } catch { /* noop */ }
+          if (!res.ok || !data || !data.ok) {
+            const msg = (data && data.error) ? data.error : `HTTP ${res.status}${text ? ': ' + text.slice(0, 140) : ''}`;
+            throw new Error(msg);
+          }
+          total = data.total || 0;
+          processed += data.processed || 0;
+          retyped += Array.isArray(data.retyped) ? data.retyped.length : 0;
+          skipped += data.skippedUnknown || 0;
+          if (Array.isArray(data.errors)) for (const e of data.errors) errors.push(e);
+          offset += LIMIT;
+          guard++;
+          reProgress.textContent = `Reparsing ${Math.min(offset, total)}/${total}: ${retyped} retyped, ${skipped} still unknown${errors.length ? `, ${errors.length} error(s)` : ''}…`;
+        } while (offset < total && guard < (Math.ceil(total / LIMIT) + 5));
+
+        const tally = `Done. ${processed} stored file(s) checked: ${retyped} moved into typed tables, ${skipped} still unknown${errors.length ? `, ${errors.length} error(s)` : ''}.`;
+        reProgress.textContent = tally;
+        (window as any).__toast(tally, errors.length ? 'error' : 'success');
+        // Reload so the Recent uploads chips reflect the superseded
+        // unknown_stored rows and any new typed uploads.
+        setTimeout(() => window.location.reload(), 1200);
+      } catch (err: any) {
+        reProgress.textContent = `Reparse failed: ${err?.message || 'network error'}`;
+        (window as any).__toast(`Reparse failed: ${err?.message || 'network error'}`, 'error');
+      } finally {
+        reBtn.disabled = false;
+        reBtn.textContent = origText;
+      }
+    });
+
+    document.getElementById('clear-failed-btn')?.addEventListener('click', async (ev) => {
+      const failedBtn = ev.currentTarget as HTMLButtonElement;
+      if (!confirm('Clear ALL failed (0-row or error) uploads across every client? This is not reversible.')) return;
+      await (window as any).__withButtonLoading(failedBtn, 'Clearing…', async () => {
+        try {
+          const res = await fetch('/portal/api/admin/csv/clear-failed', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({}),
+          });
+          const text = await res.text();
+          let data: any = null;
+          try { data = text ? JSON.parse(text) : null; } catch {}
+          if (res.ok && data && data.ok) {
+            alert(`Cleared ${data.deleted} failed upload(s). Reloading...`);
+            window.location.reload();
+          } else {
+            const msg = (data && data.error) ? data.error : `HTTP ${res.status}${text ? ': ' + text.slice(0, 140) : ''}`;
+            alert(`Clear failed: ${msg}`);
+          }
+        } catch (err: any) {
+          alert(`Clear failed: ${err?.message || 'network error'}`);
+        }
+      });
     });
 
     // Manual metric form
@@ -197,5 +790,16 @@ function formatLabel(format: string): string {
       }
       mMsg.classList.remove('hidden');
     });
+
+    // If the client select already holds a value on load (back/forward cache
+    // restore, autofill, or a browser remembering the prior pick), the change
+    // event never fires on its own — so the multi-site Site picker and its
+    // `required` guard would stay hidden and an upload could proceed with no
+    // site. Synthesize the change once at init to wire the picker up. Placed
+    // at the end of the script so escAll (used by the handler) is defined.
+    {
+      const clientSel = document.getElementById('csv-client') as HTMLSelectElement | null;
+      if (clientSel && clientSel.value) clientSel.dispatchEvent(new Event('change'));
+    }
   </script>
 </Portal>

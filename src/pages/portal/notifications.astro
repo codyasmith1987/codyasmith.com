@@ -12,11 +12,11 @@ const user = Astro.locals.user!;
         <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Notifications</h1>
         <p class="text-sm text-neutral-500 mt-2">Updates about your projects and invoices.</p>
       </div>
-      <button id="mark-all-read" class="text-xs text-neutral-500 hover:text-amber-400 transition-colors hidden">Mark all read</button>
+      <button id="mark-all-read" class="text-xs text-neutral-500 hover:text-amber-600 transition-colors hidden">Mark all read</button>
     </div>
 
     <div id="notif-loading" class="text-center py-16">
-      <p class="text-sm text-neutral-600">Loading...</p>
+      <p class="text-sm text-neutral-400">Loading...</p>
     </div>
 
     <div id="notif-empty" class="text-center py-16 hidden">
@@ -28,6 +28,16 @@ const user = Astro.locals.user!;
   </div>
 
   <script>
+    function escapeHtml(s: any): string {
+      if (s == null) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const list = document.getElementById('notif-list')!;
     const loading = document.getElementById('notif-loading')!;
@@ -45,18 +55,36 @@ const user = Astro.locals.user!;
           return;
         }
 
+        // Notification type icons. Mirrors admin/notifications.astro
+        // so client + admin notification surfaces render consistently.
+        // Audit N1.
+        const typeIcons: Record<string, string> = {
+          approval_requested: '\u{1F4CB}',
+          approval_responded: '✅',
+          milestone_completed: '\u{1F3C1}',
+          invoice_sent: '\u{1F4E8}',
+          payment_received: '\u{1F4B0}',
+          change_order_submitted: '\u{1F4DD}',
+          change_order_approved: '✅',
+          task_completed: '✔',
+          data_update_requested: '\u{1F504}',
+          document_issued: '\u{1F4C4}',
+          general: '\u{1F514}',
+        };
+
         const hasUnread = notifications.some((n: any) => !n.read);
         if (hasUnread) markAllBtn.classList.remove('hidden');
 
         list.innerHTML = notifications.map((n: any) => `
-          <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 flex items-start gap-4 ${n.read ? 'opacity-50' : ''}" data-notif-id="${n.id}">
+          <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 flex items-start gap-4 ${n.read ? 'opacity-50' : ''}" data-notif-id="${escapeHtml(n.id)}">
+            <span class="text-lg shrink-0">${escapeHtml(typeIcons[n.type] || typeIcons.general)}</span>
             <div class="flex-1 min-w-0">
               <div class="flex items-start justify-between gap-3">
-                <p class="text-sm font-medium text-neutral-200">${n.title}</p>
-                ${!n.read ? `<button data-mark-read="${n.id}" class="text-[10px] text-neutral-600 hover:text-amber-400 transition-colors shrink-0">Mark read</button>` : ''}
+                <p class="text-sm font-medium text-neutral-200 line-clamp-2">${escapeHtml(n.title)}</p>
+                ${!n.read ? `<button data-mark-read="${escapeHtml(n.id)}" class="text-[10px] text-neutral-400 hover:text-amber-600 transition-colors shrink-0">Mark read</button>` : ''}
               </div>
-              ${n.body ? `<p class="text-xs text-neutral-500 mt-1">${n.body}</p>` : ''}
-              <p class="text-[10px] text-neutral-700 mt-2">${new Date(n.created_at).toLocaleString()}</p>
+              ${n.body ? `<p class="text-xs text-neutral-500 mt-1">${escapeHtml(n.body)}</p>` : ''}
+              <p class="text-[10px] text-neutral-500 mt-2">${escapeHtml(new Date(n.created_at).toLocaleString())}</p>
             </div>
           </div>
         `).join('');
@@ -65,15 +93,23 @@ const user = Astro.locals.user!;
 
         list.querySelectorAll('[data-mark-read]').forEach(btn => {
           btn.addEventListener('click', async () => {
-            const id = (btn as HTMLElement).dataset.markRead;
-            await fetch('/portal/api/notifications/', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-              body: JSON.stringify({ id }),
+            await (window as any).__withButtonLoading(btn as HTMLButtonElement, 'Marking...', async () => {
+              const id = (btn as HTMLElement).dataset.markRead;
+              try {
+                const markRes = await fetch('/portal/api/notifications/', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                  body: JSON.stringify({ id }),
+                });
+                if (!markRes.ok) throw new Error('Request failed');
+                const row = document.querySelector(`[data-notif-id="${id}"]`);
+                if (row) row.classList.add('opacity-50');
+                btn.remove();
+                (window as any).__toast({ type: 'success', message: 'Marked as read' });
+              } catch {
+                (window as any).__toast({ type: 'error', message: 'Could not mark as read' });
+              }
             });
-            const row = document.querySelector(`[data-notif-id="${id}"]`);
-            if (row) row.classList.add('opacity-50');
-            btn.remove();
           });
         });
       } catch {
@@ -82,13 +118,20 @@ const user = Astro.locals.user!;
     }
 
     markAllBtn.addEventListener('click', async () => {
-      await fetch('/portal/api/notifications/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-        body: JSON.stringify({ all: true }),
+      await (window as any).__withButtonLoading(markAllBtn as HTMLButtonElement, 'Marking...', async () => {
+        try {
+          const allRes = await fetch('/portal/api/notifications/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ all: true }),
+          });
+          if (!allRes.ok) throw new Error('Request failed');
+          (window as any).__toast({ type: 'success', message: 'All marked as read' });
+          setTimeout(() => location.reload(), 600);
+        } catch {
+          (window as any).__toast({ type: 'error', message: 'Could not mark all as read' });
+        }
       });
-      (window as any).__toast({ type: 'success', message: 'All marked as read' });
-      setTimeout(() => location.reload(), 600);
     });
 
     loadNotifications();

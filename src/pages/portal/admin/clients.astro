@@ -1,24 +1,50 @@
 ---
 import Portal from '../../../layouts/Portal.astro';
 import { getAllClients } from '../../../lib/auth';
+import { listManagedSites } from '../../../lib/client-sites';
 export const prerender = false;
 
 const clients = await getAllClients();
+
+// Load managed sites per client so the row's "Sites" disclosure can
+// render per-site page-count inputs. Each row drives the per-site
+// ecosystem routing in the multi-site pricing pipeline (audit
+// finding 1, locked 2026-05-24). Fails soft per client so a single
+// query hiccup does not break the list.
+const sitesByClient: Record<string, Awaited<ReturnType<typeof listManagedSites>>> = {};
+for (const c of clients) {
+  try {
+    sitesByClient[c.id] = await listManagedSites(c.id);
+  } catch {
+    sitesByClient[c.id] = [];
+  }
+}
+
+// Compute the eco chip text outside the JSX expression. Astro's JSX
+// parser interprets bare < inside braces as JSX tag opens, which
+// breaks inline numeric comparisons like `page_count < 30`. A helper
+// function avoids the ambiguity.
+function ecoChipLabel(pageCount: number | null): string {
+  if (pageCount == null) return '→ primary eco';
+  if (pageCount < 30) return '→ Eco A';
+  if (pageCount <= 150) return '→ Eco B';
+  return '→ Eco C';
+}
 ---
 
 <Portal title="Manage Clients">
   <div class="max-w-3xl mx-auto">
     <div class="mb-10">
-      <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin</p>
+      <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin</p>
       <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Clients</h1>
     </div>
 
     <!-- Create client form -->
     <form id="create-client-form" class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-10">
-      <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">Add new client</p>
+      <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-5">Add new client</p>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div>
-          <label for="client-name" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Business name</label>
+          <label for="client-name" class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Business name</label>
           <input
             type="text"
             id="client-name"
@@ -29,7 +55,7 @@ const clients = await getAllClients();
           />
         </div>
         <div>
-          <label for="client-slug" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Slug (URL-safe)</label>
+          <label for="client-slug" class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Slug (URL-safe)</label>
           <input
             type="text"
             id="client-slug"
@@ -47,32 +73,339 @@ const clients = await getAllClients();
       <p id="client-msg" class="mt-4 text-sm hidden"></p>
     </form>
 
+    {/* Cloudflare account token. One token scoped to "All zones in
+        account, Analytics: Read" lets the portal auto-resolve a
+        zone ID for any client site whose hostname matches a zone in
+        the account. Per-site tokens on client_sites stay as
+        overrides for cross-account scenarios. */}
+    <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-10" id="cf-account-banner">
+      <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-3">Cloudflare account token</p>
+      <p class="text-xs text-neutral-400 leading-relaxed mb-5">
+        One token scoped to <span class="font-mono">Zone Analytics: Read</span> across all zones in your CF account.
+        Any client site whose hostname matches a zone in this account gets analytics automatically once you click
+        Auto-link below the client. Per-site tokens override the account token when set.
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+        <div class="sm:col-span-4">
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Label</label>
+          <input type="text" id="cf-account-label" placeholder="Cody A Smith LLC"
+            class="w-full px-3 py-2 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+        </div>
+        <div class="sm:col-span-8">
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">API token</label>
+          <input type="password" id="cf-account-token" placeholder="(unset — paste account-scoped token)" autocomplete="new-password"
+            class="w-full px-3 py-2 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
+        </div>
+      </div>
+      <div class="mt-4 flex flex-wrap items-center gap-3">
+        <button type="button" id="cf-account-save"
+          class="px-4 py-2 bg-amber-500 text-neutral-950 text-xs font-medium rounded hover:bg-amber-400 transition-colors">
+          Save and validate
+        </button>
+        <button type="button" id="cf-account-clear"
+          class="px-4 py-2 border border-white/10 text-neutral-300 text-xs rounded hover:border-red-500/30 hover:text-red-400 transition-colors">
+          Clear token
+        </button>
+        <button type="button" id="cf-sync-all"
+          class="px-4 py-2 border border-white/10 text-neutral-300 text-xs rounded hover:border-amber-500/30 hover:text-amber-600 transition-colors">
+          Sync all CF sites now
+        </button>
+        <span id="cf-account-status" class="text-[11px] font-mono text-neutral-400"></span>
+      </div>
+
+      {/* Zone browser. Lists every zone the account token can see
+          plus its current assignment. The dropdown next to each zone
+          assigns it to a client — creates the client_sites row if
+          needed. Useful for multi-site clients and for the "which
+          zones don't have a client yet" check. */}
+      <details class="mt-6 group" id="cf-zone-browser-details">
+        <summary class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase cursor-pointer hover:text-amber-600 transition-colors select-none">
+          Browse all account zones
+        </summary>
+        <div class="mt-3 p-3 bg-neutral-900/40 border border-white/5 rounded-md">
+          <p class="text-[11px] text-neutral-400 leading-relaxed mb-3">
+            Every zone in your CF account. Pick a client for each unassigned zone and click Assign — the portal creates a managed site (or links to the existing one matching the hostname) and sets the zone ID in one step.
+          </p>
+          <div id="cf-zone-browser-status" class="text-[11px] font-mono text-neutral-400 mb-3"></div>
+          <div id="cf-zone-browser-list" class="space-y-2"></div>
+        </div>
+      </details>
+    </div>
+
     <!-- Client list -->
     {clients.length > 0 ? (
       <div class="space-y-3">
         {clients.map(client => (
-          <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 flex items-center justify-between group hover:border-white/10 transition-all duration-300" data-client-row={client.id}>
-            <div>
-              <p class="text-sm font-medium text-neutral-200">{client.name}</p>
-              <p class="text-xs font-mono text-neutral-600 mt-0.5">{client.slug}</p>
+          <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 group hover:border-white/10 transition-all duration-300" data-client-row={client.id}>
+            <div class="flex items-center justify-between">
+              <div class="flex-1">
+                <p class="text-sm font-medium text-neutral-200" data-client-name-display={client.id}>{client.name}</p>
+                <p class="text-xs font-mono text-neutral-400 mt-0.5">
+                  <span>{client.slug}</span>
+                  {client.domain && <span class="ml-2 text-neutral-500">| {client.domain}</span>}
+                  {client.discount_rate > 0 && (
+                    <span class="ml-2 text-amber-600" data-client-discount-display={client.id}>
+                      | {(client.discount_rate * 100).toFixed(client.discount_rate * 100 % 1 === 0 ? 0 : 1)}% off
+                    </span>
+                  )}
+                  {client.discount_rate === 0 && (
+                    <span class="ml-2 text-neutral-400 hidden" data-client-discount-display={client.id}></span>
+                  )}
+                </p>
+              </div>
+              <div class="flex items-center gap-3">
+                <span
+                  data-client-badge={client.id}
+                  class:list={[
+                    'text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full',
+                    client.active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-neutral-800 text-neutral-500',
+                  ]}
+                >
+                  {client.active ? 'Active' : 'Inactive'}
+                </span>
+                <button
+                  data-edit-client={client.id}
+                  class="text-xs text-neutral-400 hover:text-amber-600 transition-colors duration-300 opacity-0 group-hover:opacity-100"
+                >
+                  Edit
+                </button>
+                <button
+                  data-toggle-client={client.id}
+                  data-client-active={client.active ? '1' : '0'}
+                  class="text-xs text-neutral-400 hover:text-amber-600 transition-colors duration-300 opacity-0 group-hover:opacity-100"
+                >
+                  {client.active ? 'Deactivate' : 'Activate'}
+                </button>
+              </div>
             </div>
-            <div class="flex items-center gap-3">
-              <span
-                data-client-badge={client.id}
-                class:list={[
-                  'text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full',
-                  client.active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-neutral-800 text-neutral-500',
-                ]}
-              >
-                {client.active ? 'Active' : 'Inactive'}
-              </span>
+
+            <!-- Managed sites editor: per-site page count, go-live
+                 date, and monthly + onboarding overrides. Renders
+                 for any client with 1+ managed sites so single-site
+                 clients can use overrides (pro-bono, grandfathered)
+                 even without multi-site routing. -->
+            <!-- Add managed site. Renders for every client so admin
+                 can create a site row without detouring through the
+                 wizard. New site is is_managed=1 by default; first
+                 site becomes the primary if the client has none yet. -->
+            <div class="mt-3 flex items-center gap-2 flex-wrap">
+              <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-wide">Add managed site:</span>
+              <input
+                type="text"
+                data-add-site-input={client.id}
+                placeholder="example.com (no protocol)"
+                class="flex-1 min-w-[200px] px-2 py-1 bg-neutral-900/50 border border-white/10 rounded text-neutral-200 text-xs font-mono focus:outline-none focus:border-amber-500/30"
+              />
               <button
-                data-toggle-client={client.id}
-                data-client-active={client.active ? '1' : '0'}
-                class="text-xs text-neutral-600 hover:text-amber-400 transition-colors duration-300 opacity-0 group-hover:opacity-100"
+                type="button"
+                data-add-site-btn={client.id}
+                class="px-3 py-1 bg-amber-500/10 border border-amber-500/40 text-amber-700 text-xs font-medium rounded hover:bg-amber-500/20 transition-colors"
               >
-                {client.active ? 'Deactivate' : 'Activate'}
+                Add
               </button>
+            </div>
+
+            {sitesByClient[client.id] && sitesByClient[client.id].length >= 1 && (
+              <details class="mt-3 group" data-sites-slot={client.id}>
+                <summary class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase cursor-pointer hover:text-amber-600 transition-colors select-none">
+                  Per-site settings ({sitesByClient[client.id].length} managed {sitesByClient[client.id].length === 1 ? 'site' : 'sites'})
+                </summary>
+                <div class="mt-3 p-3 bg-neutral-900/40 border border-white/5 rounded-md space-y-2">
+                  <p class="text-[11px] text-neutral-400 leading-relaxed">Per-site page count routes each managed site to its own ecosystem (primary pays full base, additional sites pay 0.90x). Live date drives first-period proration. Monthly and onboarding overrides bypass the formula for grandfathered or pro-bono ($0) carve-outs.</p>
+                  {sitesByClient[client.id].map(site => (
+                    <>
+                      <div class="grid grid-cols-12 gap-2 items-center" data-site-row={site.id}>
+                        <span class:list={[
+                          'col-span-2 text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded text-center',
+                          site.is_primary
+                            ? 'bg-amber-500/10 border border-amber-500/40 text-amber-700'
+                            : 'bg-neutral-900 border border-white/10 text-neutral-400',
+                        ]}>{site.is_primary ? 'primary' : 'site'}</span>
+                        <span class="col-span-5 text-sm text-neutral-100 truncate font-mono">{site.domain}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          data-site-page-count={site.id}
+                          data-client-id={client.id}
+                          value={site.page_count != null ? String(site.page_count) : ''}
+                          placeholder="pages"
+                          class="col-span-3 px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30"
+                        />
+                        <span
+                          class="col-span-2 text-[10px] font-mono text-amber-700 text-right"
+                          data-site-eco-chip={site.id}
+                        >{ecoChipLabel(site.page_count)}</span>
+                      </div>
+                      <div class="mt-1 ml-[16.67%] flex items-center gap-2 flex-wrap">
+                        <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-wide">Filename aliases:</span>
+                        <input
+                          type="text"
+                          data-site-aliases={site.id}
+                          data-client-id={client.id}
+                          value={site.aliases || ''}
+                          placeholder="e.g. ZKH, ZipKit"
+                          class="flex-1 min-w-[140px] px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono focus:outline-none focus:border-amber-500/30"
+                        />
+                        <span class="text-[10px] text-neutral-500" title="Comma-separated short codes used to auto-detect this site from an uploaded document's filename (e.g. a file named MVP-Site-Health-Report tags to this site). The domain and label are matched automatically; add the shorthand your filenames use.">auto-tags uploads by filename</span>
+                      </div>
+                      {site.is_managed && (
+                        <div class="mt-1 ml-[16.67%] flex items-center gap-2 flex-wrap">
+                          <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-wide">Live since:</span>
+                          <input
+                            type="date"
+                            data-site-went-live={site.id}
+                            data-client-id={client.id}
+                            value={site.went_live_at ? site.went_live_at.slice(0, 10) : ''}
+                            class="px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono focus:outline-none focus:border-amber-500/30"
+                          />
+                          <span class="text-[10px] text-neutral-500" title="When this date is set, first-period proration kicks in for the next invoice. All sites under one agreement converge to the same monthly cadence.">drives first-period proration</span>
+                        </div>
+                      )}
+                      {site.is_managed && (
+                        <div class="mt-1 ml-[16.67%] flex items-center gap-2 flex-wrap">
+                          <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-wide">Monthly override $:</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            data-site-monthly-override={site.id}
+                            data-client-id={client.id}
+                            value={site.monthly_override != null ? String(site.monthly_override) : ''}
+                            placeholder="formula"
+                            class="w-24 px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono focus:outline-none focus:border-amber-500/30"
+                          />
+                          <span class="text-[10px] font-mono text-neutral-500 uppercase tracking-wide">Onboarding override $:</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            data-site-onboarding-override={site.id}
+                            data-client-id={client.id}
+                            value={site.onboarding_override != null ? String(site.onboarding_override) : ''}
+                            placeholder="formula"
+                            class="w-24 px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono focus:outline-none focus:border-amber-500/30"
+                          />
+                          <span class="text-[10px] text-neutral-500" title="Set an exact dollar amount to bypass the formula for this site. 0 = pro-bono. Use for grandfathered legacy rates. Empty = use formula.">$0 pro-bono, fixed = grandfathered</span>
+                        </div>
+                      )}
+                    </>
+                  ))}
+                </div>
+              </details>
+            )}
+
+            {/* Cloudflare config. Always renders so admin can run
+                Auto-link on a client without any client_sites rows yet
+                (the endpoint bootstraps from clients.domain when no
+                sites exist). The token field is write-only — the UI
+                shows whether a token is currently set but never
+                displays the value. */}
+            {(
+              <details class="mt-3 group" data-cf-slot={client.id}>
+                <summary class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase cursor-pointer hover:text-amber-600 transition-colors select-none">
+                  {sitesByClient[client.id] && sitesByClient[client.id].length >= 1
+                    ? `Cloudflare integration (${sitesByClient[client.id].filter(s => s.cloudflare_zone_id).length}/${sitesByClient[client.id].length} configured)`
+                    : `Cloudflare integration (no sites tracked yet)`}
+                </summary>
+                <div class="mt-3 p-3 bg-neutral-900/40 border border-white/5 rounded-md space-y-4">
+                  <p class="text-[11px] text-neutral-400 leading-relaxed">
+                    Set the account token at the top of this page once, then click Auto-link to resolve every site's hostname to a zone in your CF account.
+                    Per-site zone ID and token fields below are overrides — useful when a site lives in a different CF account from the one your account token can see.
+                    Data appears on <span class="font-mono">/portal/security</span> after Sync.
+                  </p>
+                  <div class="flex flex-wrap items-center gap-3 pb-2 border-b border-white/5">
+                    <button type="button" data-cf-auto-link={client.id}
+                      class="px-3 py-1.5 bg-amber-500 text-neutral-950 text-[11px] font-medium rounded hover:bg-amber-400 transition-colors">
+                      Auto-link this client's sites
+                    </button>
+                    <span data-cf-auto-link-status={client.id} class="text-[10px] font-mono text-neutral-400"></span>
+                  </div>
+                  {sitesByClient[client.id] && sitesByClient[client.id].length === 0 && (
+                    <p class="text-[11px] text-neutral-500 italic">
+                      No sites tracked yet for this client. Set the Domain field via Edit above, then click Auto-link — it will create a managed site and link it to the matching CF zone in one step. Or upload SF crawl data to auto-detect domains.
+                    </p>
+                  )}
+                  {sitesByClient[client.id] && sitesByClient[client.id].map(site => (
+                    <div class="space-y-2 p-3 bg-neutral-900/30 border border-white/5 rounded" data-cf-site-row={site.id}>
+                      <div class="flex items-center justify-between">
+                        <span class="text-sm text-neutral-100 font-mono truncate">{site.domain}</span>
+                        <span class="text-[10px] font-mono text-neutral-500">
+                          {site.cloudflare_last_synced_at ? `Synced ${site.cloudflare_last_synced_at}` : 'Never synced'}
+                        </span>
+                      </div>
+                      <div class="grid grid-cols-12 gap-2 items-center">
+                        <label class="col-span-2 text-[10px] font-mono text-neutral-400 tracking-wide uppercase">Zone ID</label>
+                        <input
+                          type="text"
+                          data-cf-zone-id={site.id}
+                          value={site.cloudflare_zone_id || ''}
+                          placeholder="32-char hex"
+                          class="col-span-10 px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono focus:outline-none focus:border-amber-500/30"
+                        />
+                      </div>
+                      <div class="grid grid-cols-12 gap-2 items-center">
+                        <label class="col-span-2 text-[10px] font-mono text-neutral-400 tracking-wide uppercase">Token</label>
+                        <input
+                          type="password"
+                          data-cf-token={site.id}
+                          placeholder={site.cloudflare_token_set ? '(currently set — paste new to replace)' : 'Bearer token'}
+                          autocomplete="new-password"
+                          class="col-span-10 px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono focus:outline-none focus:border-amber-500/30"
+                        />
+                      </div>
+                      <div class="flex items-center gap-3 pt-1">
+                        <button type="button" data-cf-save={site.id}
+                          class="px-3 py-1.5 bg-amber-500 text-neutral-950 text-[11px] font-medium rounded hover:bg-amber-400 transition-colors">
+                          Save
+                        </button>
+                        <button type="button" data-cf-test={site.id}
+                          class="px-3 py-1.5 border border-white/10 text-neutral-300 text-[11px] rounded hover:border-amber-500/30 hover:text-amber-600 transition-colors">
+                          Test credentials
+                        </button>
+                        <button type="button" data-cf-sync={site.id}
+                          class="px-3 py-1.5 border border-white/10 text-neutral-300 text-[11px] rounded hover:border-amber-500/30 hover:text-amber-600 transition-colors">
+                          Sync 30 days
+                        </button>
+                        <span data-cf-status={site.id} class="text-[10px] font-mono"></span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+
+            <!-- Edit form (hidden until Edit clicked) -->
+            <div data-edit-slot={client.id} class="hidden mt-4 pt-4 border-t border-white/5">
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Name</label>
+                  <input type="text" data-edit-name={client.id} value={client.name}
+                    class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+                </div>
+                <div>
+                  <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Domain</label>
+                  <input type="text" data-edit-domain={client.id} value={client.domain || ''} placeholder="example.com"
+                    class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
+                </div>
+                <div>
+                  <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Discount %</label>
+                  <input type="number" step="0.01" min="0" max="100" data-edit-discount={client.id}
+                    value={(client.discount_rate * 100).toString()}
+                    placeholder="0"
+                    class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
+                </div>
+              </div>
+              <div class="mt-3 flex items-center gap-3">
+                <button type="button" data-save-edit={client.id}
+                  class="px-4 py-2 bg-amber-500 text-neutral-950 text-xs font-medium rounded-md hover:bg-amber-400 transition-colors">
+                  Save
+                </button>
+                <button type="button" data-cancel-edit={client.id}
+                  class="text-xs text-neutral-500 hover:text-neutral-300 transition-colors">
+                  Cancel
+                </button>
+                <p data-edit-msg={client.id} class="text-[11px] hidden"></p>
+              </div>
             </div>
           </div>
         ))}
@@ -88,11 +421,586 @@ const clients = await getAllClients();
   <script>
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
+    // Add managed site inline. Posts action='add' to the existing
+    // sites endpoint; first site becomes primary automatically per
+    // syncDetectedDomains rules. Refreshes the page on success so
+    // the per-site settings section appears.
+    document.querySelectorAll('[data-add-site-btn]').forEach(btn => {
+      const btnEl = btn as HTMLButtonElement;
+      const clientId = btnEl.dataset.addSiteBtn!;
+      const input = document.querySelector(`[data-add-site-input="${clientId}"]`) as HTMLInputElement | null;
+      if (!input) return;
+      btnEl.addEventListener('click', async () => {
+        const domain = input.value.trim();
+        if (!domain) {
+          (window as any).__toast?.('Enter a domain.', 'error');
+          return;
+        }
+        btnEl.disabled = true;
+        try {
+          const res = await fetch('/portal/api/admin/clients/sites', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ client_id: clientId, action: 'add', domain }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.ok) {
+            (window as any).__toast?.(data.error || 'Failed to add site.', 'error');
+            btnEl.disabled = false;
+            return;
+          }
+          (window as any).__toast?.(`Added ${domain}.`, 'success');
+          window.location.reload();
+        } catch (err: any) {
+          (window as any).__toast?.(`Network error: ${err?.message || 'fetch failed'}`, 'error');
+          btnEl.disabled = false;
+        }
+      });
+    });
+
+    // Per-site go-live editors. Change posts to the client_sites
+    // endpoint (action=set_went_live). Drives first-period proration
+    // on the next invoice; per Cody's operating rule, every site
+    // under one agreement converges to the same monthly cadence.
+    document.querySelectorAll('[data-site-went-live]').forEach(input => {
+      const inputEl = input as HTMLInputElement;
+      const siteId = inputEl.dataset.siteWentLive!;
+      const clientId = inputEl.dataset.clientId!;
+      let priorValue = inputEl.value;
+      inputEl.addEventListener('change', async () => {
+        const raw = inputEl.value.trim();
+        const wentLiveAt = raw === '' ? null : raw;
+        try {
+          const res = await fetch('/portal/api/admin/clients/sites', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ client_id: clientId, action: 'set_went_live', site_id: siteId, went_live_at: wentLiveAt }),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            (window as any).__toast?.(data.error || 'Failed to save go-live date.', 'error');
+            inputEl.value = priorValue;
+            return;
+          }
+          (window as any).__toast?.(wentLiveAt ? `Marked live on ${wentLiveAt}.` : 'Cleared go-live date.', 'success');
+          priorValue = inputEl.value;
+        } catch {
+          (window as any).__toast?.('Network error saving go-live date.', 'error');
+          inputEl.value = priorValue;
+        }
+      });
+    });
+
+    // Per-site monthly + onboarding override editors. Blur posts
+    // to the client_sites endpoint (action=set_monthly_override or
+    // set_onboarding_override). Empty value = clear override (site
+    // falls back to formula). 0 = pro-bono. Any other amount =
+    // grandfathered legacy rate. Failure reverts and toasts.
+    function wireOverrideInput(selector: string, action: string, field: string, label: string) {
+      document.querySelectorAll(selector).forEach(input => {
+        const inputEl = input as HTMLInputElement;
+        const siteId = inputEl.dataset.siteMonthlyOverride || inputEl.dataset.siteOnboardingOverride;
+        if (!siteId) return;
+        const clientId = inputEl.dataset.clientId!;
+        let priorValue = inputEl.value;
+        inputEl.addEventListener('blur', async () => {
+          if (inputEl.value === priorValue) return;
+          const raw = inputEl.value.trim();
+          const amount = raw === '' ? null : Number(raw);
+          if (raw !== '' && (!Number.isFinite(amount) || (amount as number) < 0)) {
+            inputEl.value = priorValue;
+            (window as any).__toast?.(`${label} must be a non-negative number.`, 'error');
+            return;
+          }
+          try {
+            const res = await fetch('/portal/api/admin/clients/sites', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+              body: JSON.stringify({ client_id: clientId, action, site_id: siteId, [field]: amount }),
+            });
+            if (!res.ok) {
+              const data = await res.json().catch(() => ({}));
+              (window as any).__toast?.(data.error || `Failed to save ${label.toLowerCase()}.`, 'error');
+              inputEl.value = priorValue;
+              return;
+            }
+            (window as any).__toast?.(amount === null
+              ? `Cleared ${label.toLowerCase()} (using formula).`
+              : amount === 0
+                ? `Set ${label.toLowerCase()} to $0 (pro-bono).`
+                : `Set ${label.toLowerCase()} to $${(amount as number).toFixed(2)}.`,
+              'success');
+            priorValue = inputEl.value;
+          } catch {
+            (window as any).__toast?.(`Network error saving ${label.toLowerCase()}.`, 'error');
+            inputEl.value = priorValue;
+          }
+        });
+      });
+    }
+    wireOverrideInput('[data-site-monthly-override]', 'set_monthly_override', 'monthly_override', 'Monthly override');
+    wireOverrideInput('[data-site-onboarding-override]', 'set_onboarding_override', 'onboarding_override', 'Onboarding override');
+
+    // Per-site page-count editors. Blur posts to the existing
+    // client_sites endpoint (action=set_page_count). Optimistic UI
+    // updates the ecosystem chip immediately; failure reverts and
+    // toasts.
+    document.querySelectorAll('[data-site-page-count]').forEach(input => {
+      const inputEl = input as HTMLInputElement;
+      const siteId = inputEl.dataset.sitePageCount!;
+      const clientId = inputEl.dataset.clientId!;
+      const ecoChip = document.querySelector(`[data-site-eco-chip="${siteId}"]`);
+      let priorValue = inputEl.value;
+      inputEl.addEventListener('blur', async () => {
+        const raw = inputEl.value.trim();
+        const newPc = raw === '' ? null : Number(raw);
+        if (raw !== '' && (!Number.isFinite(newPc) || (newPc as number) < 0)) {
+          inputEl.value = priorValue;
+          (window as any).__toast?.('Page count must be a non-negative number.', 'error');
+          return;
+        }
+        // Optimistic chip update.
+        if (ecoChip) {
+          if (newPc === null) ecoChip.textContent = '→ primary eco';
+          else if (newPc < 30) ecoChip.textContent = '→ Eco A';
+          else if (newPc <= 150) ecoChip.textContent = '→ Eco B';
+          else ecoChip.textContent = '→ Eco C';
+        }
+        try {
+          const res = await fetch('/portal/api/admin/clients/sites', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ client_id: clientId, action: 'set_page_count', site_id: siteId, page_count: newPc }),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            (window as any).__toast?.(data.error || 'Failed to save page count.', 'error');
+            inputEl.value = priorValue;
+            return;
+          }
+          (window as any).__toast?.('Page count saved.', 'success');
+          priorValue = inputEl.value;
+        } catch {
+          (window as any).__toast?.('Network error saving page count.', 'error');
+          inputEl.value = priorValue;
+        }
+      });
+    });
+
+    // Per-site filename-alias editors. Blur posts to the client_sites endpoint
+    // (action=set_aliases). These short codes let the document uploader
+    // auto-detect which site a file belongs to from its filename.
+    document.querySelectorAll('[data-site-aliases]').forEach(input => {
+      const inputEl = input as HTMLInputElement;
+      const siteId = inputEl.dataset.siteAliases!;
+      const clientId = inputEl.dataset.clientId!;
+      let priorValue = inputEl.value;
+      inputEl.addEventListener('blur', async () => {
+        if (inputEl.value === priorValue) return;
+        try {
+          const res = await fetch('/portal/api/admin/clients/sites', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ client_id: clientId, action: 'set_aliases', site_id: siteId, aliases: inputEl.value.trim() }),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            (window as any).__toast?.(data.error || 'Failed to save aliases.', 'error');
+            inputEl.value = priorValue;
+            return;
+          }
+          (window as any).__toast?.('Aliases saved.', 'success');
+          priorValue = inputEl.value;
+        } catch {
+          (window as any).__toast?.('Network error saving aliases.', 'error');
+          inputEl.value = priorValue;
+        }
+      });
+    });
+
+    // Cloudflare config + sync handlers. Save persists zone + token,
+    // Test runs a smoke query against the GraphQL API, Sync pulls
+    // last 30 days into cloudflare_traffic_daily +
+    // cloudflare_security_daily.
+    function cfSetStatus(siteId: string, text: string, kind: 'ok' | 'error' | 'info' = 'info') {
+      const el = document.querySelector(`[data-cf-status="${siteId}"]`) as HTMLElement | null;
+      if (!el) return;
+      el.textContent = text;
+      el.className = 'text-[10px] font-mono ' + (
+        kind === 'ok' ? 'text-emerald-400' :
+        kind === 'error' ? 'text-red-400' :
+        'text-neutral-400'
+      );
+    }
+    document.querySelectorAll('[data-cf-save]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const button = btn as HTMLButtonElement;
+        const siteId = button.dataset.cfSave!;
+        const zoneEl = document.querySelector(`[data-cf-zone-id="${siteId}"]`) as HTMLInputElement;
+        const tokenEl = document.querySelector(`[data-cf-token="${siteId}"]`) as HTMLInputElement;
+        const zoneId = zoneEl?.value?.trim() || '';
+        // Empty token means "leave existing in place." Submit
+        // undefined for the field so the endpoint knows.
+        const tokenValue = tokenEl?.value || '';
+        const body: any = { site_id: siteId, zone_id: zoneId };
+        if (tokenValue !== '') body.api_token = tokenValue;
+        cfSetStatus(siteId, 'Saving…');
+        try {
+          const res = await fetch('/portal/api/admin/cloudflare/configure', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify(body),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data?.ok) {
+            cfSetStatus(siteId, 'Saved.', 'ok');
+            if (tokenEl) tokenEl.value = ''; // clear so it stays write-only
+          } else {
+            cfSetStatus(siteId, data?.error || `HTTP ${res.status}`, 'error');
+          }
+        } catch (err: any) {
+          cfSetStatus(siteId, err?.message || 'Network error', 'error');
+        }
+      });
+    });
+    document.querySelectorAll('[data-cf-test]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const siteId = (btn as HTMLButtonElement).dataset.cfTest!;
+        cfSetStatus(siteId, 'Testing…');
+        try {
+          const res = await fetch('/portal/api/admin/cloudflare/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ site_id: siteId }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (data?.ok) {
+            cfSetStatus(siteId, 'Credentials valid.', 'ok');
+          } else {
+            cfSetStatus(siteId, data?.error || `HTTP ${res.status}`, 'error');
+          }
+        } catch (err: any) {
+          cfSetStatus(siteId, err?.message || 'Network error', 'error');
+        }
+      });
+    });
+    // Account-level Cloudflare token UI. One row in
+    // cloudflare_account_config; the endpoint validates by hitting
+    // /zones before storing. After saving, the per-client Auto-link
+    // buttons (below) become useful.
+    function cfAccountStatus(text: string, kind: 'ok' | 'error' | 'info' = 'info') {
+      const el = document.getElementById('cf-account-status');
+      if (!el) return;
+      el.textContent = text;
+      el.className = 'text-[11px] font-mono ' + (
+        kind === 'ok' ? 'text-emerald-400' :
+        kind === 'error' ? 'text-red-400' :
+        'text-neutral-400'
+      );
+    }
+    async function loadCfAccountState() {
+      try {
+        const res = await fetch('/portal/api/admin/cloudflare/account');
+        if (!res.ok) return;
+        const data = await res.json();
+        const labelEl = document.getElementById('cf-account-label') as HTMLInputElement | null;
+        const tokenEl = document.getElementById('cf-account-token') as HTMLInputElement | null;
+        if (data?.configured) {
+          if (labelEl && data.label) labelEl.value = data.label;
+          if (tokenEl) tokenEl.placeholder = '(currently set — paste new to replace)';
+          const last = data.last_zone_list_synced_at ? ` (zones refreshed ${data.last_zone_list_synced_at})` : '';
+          cfAccountStatus('Connected' + last, 'ok');
+        } else {
+          cfAccountStatus('Not configured', 'info');
+        }
+      } catch {
+        // Silent — the banner just stays in its initial state.
+      }
+    }
+    loadCfAccountState();
+
+    document.getElementById('cf-account-save')?.addEventListener('click', async () => {
+      const labelEl = document.getElementById('cf-account-label') as HTMLInputElement;
+      const tokenEl = document.getElementById('cf-account-token') as HTMLInputElement;
+      const label = labelEl?.value?.trim() || '';
+      const apiToken = tokenEl?.value || '';
+      if (!apiToken) {
+        cfAccountStatus('Paste a token first.', 'error');
+        return;
+      }
+      cfAccountStatus('Validating with Cloudflare…');
+      try {
+        const res = await fetch('/portal/api/admin/cloudflare/account', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ api_token: apiToken, label }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data?.ok) {
+          const sample = (data.sample_zones || []).slice(0, 3).join(', ');
+          const more = (data.zone_count || 0) > 3 ? `, +${data.zone_count - 3} more` : '';
+          cfAccountStatus(`Saved. ${data.zone_count} zones visible (${sample}${more}).`, 'ok');
+          if (tokenEl) tokenEl.value = ''; // keep it write-only after save
+          tokenEl.placeholder = '(currently set — paste new to replace)';
+        } else {
+          cfAccountStatus(data?.error || `HTTP ${res.status}`, 'error');
+        }
+      } catch (err: any) {
+        cfAccountStatus(err?.message || 'Network error', 'error');
+      }
+    });
+
+    // Zone-browser: lazy-load when the disclosure opens, render
+    // rows with per-zone client-picker + Assign button. Each Assign
+    // POSTs to /assign-zone which creates the client_sites row
+    // (or updates an existing matching one) and sets the zone ID.
+    async function loadZoneBrowser() {
+      const listEl = document.getElementById('cf-zone-browser-list');
+      const statusEl = document.getElementById('cf-zone-browser-status');
+      if (!listEl || !statusEl) return;
+      statusEl.textContent = 'Loading zones…';
+      try {
+        const res = await fetch('/portal/api/admin/cloudflare/account-overview');
+        const text = await res.text();
+        let data: any = {};
+        try {
+          data = JSON.parse(text);
+        } catch {
+          // Server returned HTML or non-JSON. Surface the status +
+          // a tiny snippet so we can diagnose without DevTools.
+          const snippet = text.replace(/\s+/g, ' ').trim().slice(0, 120);
+          statusEl.textContent = `HTTP ${res.status} (non-JSON response): ${snippet}…`;
+          statusEl.className = 'text-[11px] font-mono text-red-400 mb-3';
+          return;
+        }
+        if (!res.ok) {
+          statusEl.textContent = data?.error || `HTTP ${res.status}`;
+          statusEl.className = 'text-[11px] font-mono text-red-400 mb-3';
+          return;
+        }
+        const zones = (data.zones || []) as any[];
+        const clients = (data.clients || []) as any[];
+        if (zones.length === 0) {
+          statusEl.textContent = 'No zones visible to this token.';
+          statusEl.className = 'text-[11px] font-mono text-neutral-400 mb-3';
+          listEl.innerHTML = '';
+          return;
+        }
+        const unassignedCount = zones.filter(z => !z.linked).length;
+        statusEl.textContent = `${zones.length} zones in account, ${unassignedCount} unassigned.`;
+        statusEl.className = 'text-[11px] font-mono text-neutral-400 mb-3';
+        const esc = (s: string) => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'} as any)[c]);
+        const clientOptions = clients.map((c: any) =>
+          `<option value="${esc(c.id)}">${esc(c.name)}</option>`
+        ).join('');
+        listEl.innerHTML = zones.map((z: any) => {
+          const status = z.linked
+            ? `<span class="text-emerald-400">→ ${esc(z.linked.client_name)} (${esc(z.linked.site_domain)})</span>`
+            : `<span class="text-amber-600">Unassigned</span>`;
+          return `
+            <div class="grid grid-cols-12 gap-2 items-center text-[11px] py-2 border-b border-white/5 last:border-b-0" data-zone-row="${esc(z.zone_id)}">
+              <div class="col-span-4 font-mono text-neutral-200 truncate">${esc(z.zone_name)}</div>
+              <div class="col-span-4 truncate">${status}</div>
+              <select class="col-span-3 px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-[11px] focus:outline-none focus:border-amber-500/30"
+                data-zone-client-picker="${esc(z.zone_id)}">
+                <option value="">— pick client —</option>
+                ${clientOptions}
+              </select>
+              <button type="button" data-zone-assign="${esc(z.zone_id)}" data-zone-name="${esc(z.zone_name)}"
+                class="col-span-1 px-2 py-1 bg-amber-500 text-neutral-950 text-[11px] font-medium rounded hover:bg-amber-400 transition-colors">
+                Assign
+              </button>
+            </div>
+          `;
+        }).join('');
+        listEl.querySelectorAll('[data-zone-assign]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const button = btn as HTMLButtonElement;
+            const zoneId = button.dataset.zoneAssign!;
+            const zoneName = button.dataset.zoneName!;
+            const picker = document.querySelector(`[data-zone-client-picker="${zoneId}"]`) as HTMLSelectElement;
+            const clientId = picker?.value || '';
+            if (!clientId) {
+              statusEl.textContent = `Pick a client for ${zoneName} first.`;
+              statusEl.className = 'text-[11px] font-mono text-amber-600 mb-3';
+              return;
+            }
+            button.disabled = true;
+            statusEl.textContent = `Assigning ${zoneName}…`;
+            statusEl.className = 'text-[11px] font-mono text-neutral-400 mb-3';
+            try {
+              const res2 = await fetch('/portal/api/admin/cloudflare/link-site', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                body: JSON.stringify({ zone_id: zoneId, zone_name: zoneName, client_id: clientId }),
+              });
+              const data2 = await res2.json().catch(() => ({}));
+              if (res2.ok && data2?.ok) {
+                const note = data2.site_created ? ' (created new site row)' : '';
+                statusEl.textContent = `Assigned ${zoneName}${note}. Re-loading list…`;
+                statusEl.className = 'text-[11px] font-mono text-emerald-400 mb-3';
+                await loadZoneBrowser();
+              } else {
+                statusEl.textContent = data2?.error || `HTTP ${res2.status}`;
+                statusEl.className = 'text-[11px] font-mono text-red-400 mb-3';
+                button.disabled = false;
+              }
+            } catch (err: any) {
+              statusEl.textContent = err?.message || 'Network error';
+              statusEl.className = 'text-[11px] font-mono text-red-400 mb-3';
+              button.disabled = false;
+            }
+          });
+        });
+      } catch (err: any) {
+        statusEl.textContent = err?.message || 'Network error';
+        statusEl.className = 'text-[11px] font-mono text-red-400 mb-3';
+      }
+    }
+    document.getElementById('cf-zone-browser-details')?.addEventListener('toggle', (e) => {
+      const det = e.target as HTMLDetailsElement;
+      if (det.open) loadZoneBrowser();
+    });
+
+    // Sync-all CF sites. Loops every site with a zone_id across all
+    // clients and pulls 30 days of CF data into local tables. Same
+    // endpoint a daily cron should hit if/when scheduled sync ships.
+    document.getElementById('cf-sync-all')?.addEventListener('click', async () => {
+      cfAccountStatus('Syncing all CF sites (30 days)…');
+      try {
+        const res = await fetch('/portal/api/admin/cloudflare/sync-all', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ days: 30 }),
+        });
+        const text = await res.text();
+        let data: any = {};
+        try { data = JSON.parse(text); }
+        catch {
+          cfAccountStatus(`HTTP ${res.status} non-JSON: ${text.slice(0, 100)}…`, 'error');
+          return;
+        }
+        if (res.ok && data?.ok) {
+          const errs = (data.results || []).filter((r: any) => r.error);
+          if (errs.length === 0) {
+            cfAccountStatus(`Synced ${data.synced} site(s).`, 'ok');
+          } else {
+            const errList = errs.map((e: any) => `${e.domain}: ${e.error}`).join('; ');
+            cfAccountStatus(`Synced ${data.synced}, ${data.failed} failed — ${errList}`, 'error');
+          }
+        } else {
+          cfAccountStatus(data?.error || `HTTP ${res.status}`, 'error');
+        }
+      } catch (err: any) {
+        cfAccountStatus(err?.message || 'Network error', 'error');
+      }
+    });
+
+    document.getElementById('cf-account-clear')?.addEventListener('click', async () => {
+      const confirmed = await (window as any).__confirm({
+        title: 'Clear Cloudflare account token',
+        message: 'The portal will stop being able to auto-link sites. Per-site tokens stay in place.',
+        confirmText: 'Clear',
+      });
+      if (!confirmed) return;
+      cfAccountStatus('Clearing…');
+      try {
+        const res = await fetch('/portal/api/admin/cloudflare/account', {
+          method: 'DELETE',
+          headers: { 'X-CSRF-Token': csrfToken },
+        });
+        if (res.ok) {
+          cfAccountStatus('Cleared.', 'ok');
+          const tokenEl = document.getElementById('cf-account-token') as HTMLInputElement;
+          if (tokenEl) tokenEl.placeholder = '(unset — paste account-scoped token)';
+        } else {
+          const data = await res.json().catch(() => ({}));
+          cfAccountStatus(data?.error || `HTTP ${res.status}`, 'error');
+        }
+      } catch (err: any) {
+        cfAccountStatus(err?.message || 'Network error', 'error');
+      }
+    });
+
+    // Per-client auto-link button. POSTs the client_id; the endpoint
+    // resolves each site's hostname against the zones the account
+    // token can see and writes cloudflare_zone_id on matches.
+    document.querySelectorAll('[data-cf-auto-link]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const clientId = (btn as HTMLButtonElement).dataset.cfAutoLink!;
+        const statusEl = document.querySelector(`[data-cf-auto-link-status="${clientId}"]`) as HTMLElement | null;
+        const setStatus = (text: string, kind: 'ok' | 'error' | 'info' = 'info') => {
+          if (!statusEl) return;
+          statusEl.textContent = text;
+          statusEl.className = 'text-[10px] font-mono ' + (
+            kind === 'ok' ? 'text-emerald-400' :
+            kind === 'error' ? 'text-red-400' :
+            'text-neutral-400'
+          );
+        };
+        setStatus('Resolving zones…');
+        try {
+          const res = await fetch('/portal/api/admin/cloudflare/auto-link', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ client_id: clientId }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data?.ok) {
+            const m = data.matched?.length || 0;
+            const u = data.unmatched?.length || 0;
+            const unmatchedList = u > 0 ? ` Unmatched: ${data.unmatched.map((x: any) => x.domain).join(', ')}` : '';
+            setStatus(`Linked ${m} of ${m + u} sites.${unmatchedList} Reload to see the new zone IDs.`, m > 0 ? 'ok' : 'info');
+          } else {
+            setStatus(data?.error || `HTTP ${res.status}`, 'error');
+          }
+        } catch (err: any) {
+          setStatus(err?.message || 'Network error', 'error');
+        }
+      });
+    });
+
+    document.querySelectorAll('[data-cf-sync]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const siteId = (btn as HTMLButtonElement).dataset.cfSync!;
+        // Sync needs client_id too; pull it from the parent's
+        // [data-cf-slot] which carries that.
+        const slot = (btn as HTMLElement).closest('[data-cf-slot]') as HTMLElement;
+        const clientId = slot?.dataset.cfSlot;
+        if (!clientId) {
+          cfSetStatus(siteId, 'Could not resolve client.', 'error');
+          return;
+        }
+        cfSetStatus(siteId, 'Syncing 30 days…');
+        try {
+          const res = await fetch('/portal/api/admin/cloudflare/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ client_id: clientId, site_id: siteId, days: 30 }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data?.ok) {
+            const r = data.results?.[0];
+            if (r?.error) {
+              cfSetStatus(siteId, r.error, 'error');
+            } else {
+              cfSetStatus(siteId, `Synced ${r?.traffic_days || 0} traffic days, ${r?.security_days || 0} security days.`, 'ok');
+            }
+          } else {
+            cfSetStatus(siteId, data?.error || `HTTP ${res.status}`, 'error');
+          }
+        } catch (err: any) {
+          cfSetStatus(siteId, err?.message || 'Network error', 'error');
+        }
+      });
+    });
+
     // Toggle active/inactive
     document.querySelectorAll('[data-toggle-client]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const clientId = (btn as HTMLElement).dataset.toggleClient!;
-        const isActive = (btn as HTMLElement).dataset.clientActive === '1';
+        const button = btn as HTMLButtonElement;
+        const clientId = button.dataset.toggleClient!;
+        const isActive = button.dataset.clientActive === '1';
 
         if (isActive) {
           const confirmed = await (window as any).__confirm({
@@ -104,20 +1012,24 @@ const clients = await getAllClients();
           if (!confirmed) return;
         }
 
-        const res = await fetch('/portal/api/admin/toggle-client', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify({ client_id: clientId }),
+        await (window as any).__withButtonLoading(button, isActive ? 'Deactivating…' : 'Activating…', async () => {
+          const res = await fetch('/portal/api/admin/toggle-client', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ client_id: clientId }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const badge = document.querySelector(`[data-client-badge="${clientId}"]`)!;
+            badge.textContent = data.active ? 'Active' : 'Inactive';
+            badge.className = `text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${data.active ? 'bg-emerald-500/15 text-emerald-700' : 'bg-neutral-800 text-neutral-500'}`;
+            button.textContent = data.active ? 'Deactivate' : 'Activate';
+            button.dataset.clientActive = data.active ? '1' : '0';
+            (window as any).__toast(`Client ${data.active ? 'activated' : 'deactivated'}.`, 'success');
+          } else {
+            (window as any).__toast('Failed to toggle client.', 'error');
+          }
         });
-
-        if (res.ok) {
-          const data = await res.json();
-          const badge = document.querySelector(`[data-client-badge="${clientId}"]`)!;
-          badge.textContent = data.active ? 'Active' : 'Inactive';
-          badge.className = `text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${data.active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-neutral-800 text-neutral-500'}`;
-          (btn as HTMLElement).textContent = data.active ? 'Deactivate' : 'Activate';
-          (btn as HTMLElement).dataset.clientActive = data.active ? '1' : '0';
-        }
       });
     });
 
@@ -133,6 +1045,80 @@ const clients = await getAllClients();
       }
     });
     slugInput.addEventListener('input', () => { slugInput.dataset.manual = '1'; });
+
+    // Edit per-client: name, domain, discount %.
+    document.querySelectorAll('[data-edit-client]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = (btn as HTMLElement).dataset.editClient!;
+        document.querySelector(`[data-edit-slot="${id}"]`)?.classList.remove('hidden');
+      });
+    });
+    document.querySelectorAll('[data-cancel-edit]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = (btn as HTMLElement).dataset.cancelEdit!;
+        document.querySelector(`[data-edit-slot="${id}"]`)?.classList.add('hidden');
+        const msgEl = document.querySelector(`[data-edit-msg="${id}"]`) as HTMLElement | null;
+        if (msgEl) msgEl.classList.add('hidden');
+      });
+    });
+    document.querySelectorAll('[data-save-edit]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const button = btn as HTMLButtonElement;
+        const id = button.dataset.saveEdit!;
+        const nameEl = document.querySelector(`[data-edit-name="${id}"]`) as HTMLInputElement;
+        const domainEl = document.querySelector(`[data-edit-domain="${id}"]`) as HTMLInputElement;
+        const discountEl = document.querySelector(`[data-edit-discount="${id}"]`) as HTMLInputElement;
+        const msgEl = document.querySelector(`[data-edit-msg="${id}"]`) as HTMLElement;
+
+        const name = nameEl.value.trim();
+        const domainRaw = domainEl.value.trim();
+        const discountPct = parseFloat(discountEl.value);
+        // Discount input is a percentage (0-100). Stored as a decimal
+        // (0-1.0). Clamping happens here so server gets a valid rate.
+        const discountRate = Number.isFinite(discountPct) ? Math.max(0, Math.min(100, discountPct)) / 100 : 0;
+
+        msgEl.textContent = 'Saving…';
+        msgEl.className = 'text-[11px] text-neutral-500';
+        msgEl.classList.remove('hidden');
+
+        await (window as any).__withButtonLoading(button, 'Saving…', async () => {
+          let res;
+          try {
+            res = await fetch('/portal/api/admin/clients/update', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+              body: JSON.stringify({
+                client_id: id,
+                name,
+                domain: domainRaw,
+                discount_rate: discountRate,
+              }),
+            });
+          } catch (err: any) {
+            msgEl.textContent = `Network error: ${err?.message || 'fetch failed'}`;
+            msgEl.className = 'text-[11px] text-red-700';
+            (window as any).__toast('Network error saving client.', 'error');
+            return;
+          }
+          const rawText = await res.text();
+          let data: any = null;
+          try { data = rawText ? JSON.parse(rawText) : null; } catch {}
+          if (res.ok && data && data.ok) {
+            msgEl.textContent = `Saved. Discount stored as ${(discountRate * 100).toFixed(discountRate * 100 % 1 === 0 ? 0 : 1)}%.`;
+            msgEl.className = 'text-[11px] text-emerald-700';
+            const nameDisplay = document.querySelector(`[data-client-name-display="${id}"]`);
+            if (nameDisplay) nameDisplay.textContent = name;
+            (window as any).__toast(`Client "${name}" saved.`, 'success');
+            setTimeout(() => location.reload(), 800);
+          } else {
+            const errMsg = (data && data.error) ? data.error : `HTTP ${res.status}${rawText ? ': ' + rawText.slice(0, 140) : ''}`;
+            msgEl.textContent = errMsg;
+            msgEl.className = 'text-[11px] text-red-700';
+            (window as any).__toast(errMsg, 'error');
+          }
+        });
+      });
+    });
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();

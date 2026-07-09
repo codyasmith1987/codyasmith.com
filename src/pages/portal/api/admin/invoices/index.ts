@@ -1,7 +1,9 @@
 import type { APIRoute } from 'astro';
 import {
-  createInvoice, generateInvoiceNumber, getInvoicesByClient, getInvoicesByContract,
+  createInvoiceWithGeneratedNumber, getInvoicesByClient, getInvoicesByContract,
 } from '../../../../../lib/invoices';
+import { getContract } from '../../../../../lib/contracts';
+import { manualBuildPeriod } from '../../../../../lib/billing';
 import { logActivity } from '../../../../../lib/activity';
 import { logger } from '../../../../../lib/logger';
 
@@ -36,15 +38,32 @@ export const POST: APIRoute = async ({ locals, request }) => {
       return json({ error: 'contract_id and client_id are required' }, 400);
     }
 
-    const invoiceNumber = await generateInvoiceNumber();
-    const id = await createInvoice({
+    // Stamp the service period for a monthly contract at creation (chat-wide
+    // audit 2026-06-11): a NULL-period hand-created invoice is invisible to the
+    // recurring engine's per-period dedupe, so the nightly generator would bill
+    // the same cycle again for an auto-billed client. manualBuildPeriod picks
+    // the cycle in progress (or the engine's upcoming cycle inside its 7-day
+    // issue window). The period is visible + editable on the invoice page, and
+    // clearing it there marks a genuine one-off.
+    let period: { start: string; end: string } | null = null;
+    try {
+      const contract = await getContract(contract_id.trim());
+      if (contract?.billing_cadence === 'monthly' && contract.billing_day) {
+        period = manualBuildPeriod(contract.billing_day);
+      }
+    } catch (err) {
+      logger.error('period stamp lookup failed (invoice still created)', err);
+    }
+
+    const { id, invoice_number: invoiceNumber } = await createInvoiceWithGeneratedNumber({
       contract_id: contract_id.trim(),
       client_id: client_id.trim(),
       milestone_id: milestone_id || undefined,
-      invoice_number: invoiceNumber,
       due_date: due_date || undefined,
       notes: notes?.trim() || undefined,
       created_by: locals.user!.id,
+      billing_period_start: period?.start,
+      billing_period_end: period?.end,
     });
 
     await logActivity({

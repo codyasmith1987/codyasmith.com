@@ -4,6 +4,18 @@
 const BASE = 'http://localhost:4322';
 const results = [];
 
+function route(path) {
+  return path.replace(/\/(\?|$)/, '$1');
+}
+
+async function clearLoginRateLimits() {
+  const { createClient } = await import('@libsql/client');
+  const db = createClient({ url: 'file:./data/dev2.db' });
+  await db.execute("DELETE FROM portal_rate_limits WHERE key LIKE 'login:%'").catch(err => {
+    if (!/no such table/i.test(String(err?.message || ''))) throw err;
+  });
+}
+
 function test(name, pass, detail) {
   results.push({ name, pass, detail: String(detail).slice(0, 300) });
   console.log(`[${pass ? 'PASS' : 'FAIL'}] ${name}`);
@@ -31,14 +43,14 @@ async function getCsrf(session) {
 }
 
 async function get(path, session) {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${BASE}${route(path)}`, {
     headers: { Cookie: `portal_session=${session}` }, redirect: 'manual',
   });
   return { status: res.status, html: await res.text(), headers: res.headers };
 }
 
 async function apiPost(path, body, session, csrf) {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${BASE}${route(path)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Cookie: `portal_session=${session}`, 'X-CSRF-Token': csrf },
     body: JSON.stringify(body), redirect: 'manual',
@@ -49,7 +61,7 @@ async function apiPost(path, body, session, csrf) {
 }
 
 async function apiPut(path, body, session, csrf) {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${BASE}${route(path)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', Cookie: `portal_session=${session}`, 'X-CSRF-Token': csrf },
     body: JSON.stringify(body), redirect: 'manual',
@@ -60,7 +72,7 @@ async function apiPut(path, body, session, csrf) {
 }
 
 async function apiDel(path, session, csrf) {
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${BASE}${route(path)}`, {
     method: 'DELETE',
     headers: { 'Content-Type': 'application/json', Cookie: `portal_session=${session}`, 'X-CSRF-Token': csrf },
     redirect: 'manual',
@@ -71,6 +83,7 @@ async function apiDel(path, session, csrf) {
 }
 
 async function run() {
+  await clearLoginRateLimits();
   console.log('Logging in...');
   const adminSession = await login('admin@dev2.test', 'testpass123');
   const adminCsrf = await getCsrf(adminSession);
@@ -143,9 +156,15 @@ async function run() {
   const { createClient: createDbClient } = await import('@libsql/client');
   const db = createDbClient({ url: 'file:./data/dev2.db' });
   const { nanoid } = await import('nanoid');
+  const userLookup = await db.execute({
+    sql: "SELECT id FROM users WHERE email = 'testuser@dev2.test' LIMIT 1",
+    args: [],
+  });
+  const clientUserId = userLookup.rows[0]?.[0];
+  if (!clientUserId) throw new Error('testuser@dev2.test fixture user missing');
   await db.execute({
-    sql: "INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, 'ukPCtjfLtebMs8xRHXij1', 'milestone_completed', 'Milestone completed', 'Design phase is done')",
-    args: [nanoid()],
+    sql: "INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, 'milestone_completed', 'Milestone completed', 'Design phase is done')",
+    args: [nanoid(), clientUserId],
   });
 
   console.log('Test data ready.\n');

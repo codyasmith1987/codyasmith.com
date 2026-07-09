@@ -1,0 +1,403 @@
+---
+// Snippet matrix editor (v1 — list + edit + save; AI-draft path
+// comes in a follow-up).
+//
+// Loads every snippet across the file registry + DB overrides via
+// GET /portal/api/admin/proposals/snippets/list, renders one card
+// per key with collapsed/expanded view, edit modal for textareas
+// per bucket, save via POST /portal/api/admin/proposals/snippets/save.
+//
+// Per the original Slice 4 plan:
+//   - DB-backed so saves are immediate (no redeploy)
+//   - Voice-lint runs on the save endpoint, surfaces violations inline
+//   - File registry stays as the version-controlled baseline
+//
+// "+ New snippet" form at the top accepts a key in the format
+// product_combo::ecosystem::urgency. Convention guide rendered in
+// the empty state of the form.
+
+import Portal from '../../../../layouts/Portal.astro';
+export const prerender = false;
+---
+
+<Portal title="Proposal snippet editor">
+  <div class="max-w-5xl mx-auto">
+    <div class="mb-10">
+      <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin</p>
+      <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Proposal snippets</h1>
+      <p class="text-sm text-neutral-400 mt-3 leading-relaxed">
+        The narrative snippet registry shapes the per-product paragraphs on the published proposal. Each entry is keyed by <span class="font-mono text-neutral-300">product_combo::ecosystem::urgency</span>; the composer picks the most-specific matching key for each engagement. DB entries (saved here) override the file-baked registry and take effect on the next compose without a redeploy.
+      </p>
+    </div>
+
+    {/* New snippet form */}
+    <details class="bg-neutral-900/30 border border-white/5 rounded-2xl p-6 mb-8" id="new-snippet-form-wrap">
+      <summary class="text-sm font-medium text-neutral-200 cursor-pointer hover:text-amber-600 transition-colors select-none">
+        + New snippet
+      </summary>
+      <div class="mt-6 space-y-4" id="new-snippet-form">
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Key</label>
+          <input type="text" id="new-key" placeholder="web-management::B::tactical"
+            class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
+          <p class="text-[11px] text-neutral-500 mt-2 leading-relaxed">
+            Format: <span class="font-mono">product_combo::ecosystem::urgency</span>. Product combo is alphabetized, joined with <span class="font-mono">+</span> (e.g., <span class="font-mono">marketing-consulting+web-management</span>). Ecosystem is A, B, C, or <span class="font-mono">*</span>. Urgency is tactical, growth, maintenance, or <span class="font-mono">*</span>.
+          </p>
+        </div>
+        <div>
+          <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Scope</label>
+          <input type="text" id="new-client-id" placeholder="leave empty for Global; or paste a client_id to scope this snippet to one client"
+            class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
+          <p class="text-[11px] text-neutral-500 mt-2 leading-relaxed">
+            Empty (or <span class="font-mono">*</span>) = Global. Any other value = scoped to that specific client only. Client-scoped overrides win over Global at the same key. Find client ids on the Clients admin page.
+          </p>
+        </div>
+        <button type="button" id="new-snippet-create"
+          class="px-4 py-2 bg-amber-500 text-neutral-950 text-xs font-medium rounded hover:bg-amber-400 transition-colors">
+          Create empty snippet
+        </button>
+        <span id="new-snippet-status" class="text-[11px] font-mono ml-3"></span>
+      </div>
+    </details>
+
+    {/* Listing area */}
+    <div id="snippet-list" class="space-y-3">
+      <p class="text-sm text-neutral-500">Loading…</p>
+    </div>
+
+    {/* Edit modal */}
+    <div id="edit-modal" class="fixed inset-0 bg-neutral-950/80 z-50 hidden items-center justify-center p-6">
+      <div class="bg-neutral-950 border border-white/10 rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-8" id="edit-modal-card">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-lg text-neutral-100 font-mono" id="edit-modal-title">Edit snippet</h2>
+          <button type="button" id="edit-modal-close"
+            class="text-neutral-400 hover:text-neutral-200 text-xl">×</button>
+        </div>
+        <div class="space-y-5">
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Intro lines (one per line)</label>
+            <textarea id="edit-intro" rows="3" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 leading-relaxed"></textarea>
+            <p class="text-[10px] text-neutral-500 mt-1">Short opening lines, one per row. Each line becomes its own paragraph above the what-i-see block.</p>
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">What I see (paragraphs separated by blank line)</label>
+            <textarea id="edit-see" rows="6" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 leading-relaxed"></textarea>
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">What I recommend (paragraphs separated by blank line)</label>
+            <textarea id="edit-recommend" rows="6" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 leading-relaxed"></textarea>
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Notes (optional, admin-only)</label>
+            <input type="text" id="edit-notes" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+          </div>
+          <div class="border-t border-white/5 pt-5 flex items-center gap-3 flex-wrap">
+            <button type="button" id="edit-save"
+              class="px-4 py-2 bg-amber-500 text-neutral-950 text-xs font-medium rounded hover:bg-amber-400 transition-colors">
+              Save snippet
+            </button>
+            <button type="button" id="edit-delete"
+              class="px-4 py-2 border border-white/10 text-neutral-300 text-xs rounded hover:border-red-500/30 hover:text-red-400 transition-colors hidden">
+              Delete (DB override only)
+            </button>
+            <span id="edit-status" class="text-[11px] font-mono"></span>
+          </div>
+          <div id="edit-violations" class="hidden bg-red-950/30 border border-red-900/50 rounded-md p-4 text-[11px] text-red-300 leading-relaxed"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script is:inline define:vars={{}}>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    const listEl = document.getElementById('snippet-list');
+    const modal = document.getElementById('edit-modal');
+    const titleEl = document.getElementById('edit-modal-title');
+    const introEl = document.getElementById('edit-intro');
+    const seeEl = document.getElementById('edit-see');
+    const recommendEl = document.getElementById('edit-recommend');
+    const notesEl = document.getElementById('edit-notes');
+    const statusEl = document.getElementById('edit-status');
+    const violationsEl = document.getElementById('edit-violations');
+    const deleteBtn = document.getElementById('edit-delete');
+
+    let currentKey = null;
+    let currentSnippet = null;
+    let currentClientId = '*';
+
+    function esc(s) {
+      return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+    }
+
+    function joinParagraphs(arr) {
+      return Array.isArray(arr) ? arr.join('\n\n') : '';
+    }
+    function splitParagraphs(s) {
+      return String(s || '').split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+    }
+    function joinLines(arr) {
+      return Array.isArray(arr) ? arr.join('\n') : '';
+    }
+    function splitLines(s) {
+      return String(s || '').split(/\n+/).map(p => p.trim()).filter(Boolean);
+    }
+
+    function setStatus(text, kind) {
+      statusEl.textContent = text || '';
+      statusEl.className = 'text-[11px] font-mono ' + (
+        kind === 'ok' ? 'text-emerald-400'
+        : kind === 'error' ? 'text-red-400'
+        : 'text-neutral-400'
+      );
+    }
+    function showViolations(violations) {
+      if (!violations || violations.length === 0) {
+        violationsEl.classList.add('hidden');
+        violationsEl.innerHTML = '';
+        return;
+      }
+      violationsEl.classList.remove('hidden');
+      violationsEl.innerHTML = '<p class="font-mono uppercase tracking-wide text-[10px] text-red-400 mb-2">Voice-lint violations</p>' +
+        violations.map(v => {
+          const violDetails = (v.violations || []).map(x => `<span class="font-mono">${esc(x.rule)}</span> matched <span class="font-mono">"${esc(x.matched)}"</span>`).join('; ');
+          return `<div class="mb-3 last:mb-0"><p class="text-neutral-300 mb-1">${esc(v.bucket)}[${v.index}]: ${esc(v.text)}…</p><p class="text-red-300 text-[10px]">${violDetails}</p></div>`;
+        }).join('');
+    }
+
+    async function load() {
+      try {
+        const res = await fetch('/portal/api/admin/proposals/snippets/list');
+        const data = await res.json();
+        if (!res.ok) {
+          listEl.innerHTML = `<p class="text-sm text-red-400">${esc(data?.error || 'Failed to load')}</p>`;
+          return;
+        }
+        const snippets = data.snippets || [];
+        if (snippets.length === 0) {
+          listEl.innerHTML = '<p class="text-sm text-neutral-500">No snippets yet. Use the form above to add one.</p>';
+          return;
+        }
+        listEl.innerHTML = snippets.map((s, idx) => {
+          const totalLines = (s.intro_lines?.length || 0) + (s.what_i_see_paragraphs?.length || 0) + (s.what_i_recommend_paragraphs?.length || 0);
+          const sourceBadge = s.source === 'db'
+            ? '<span class="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-600 uppercase tracking-wide">DB only</span>'
+            : s.source === 'both'
+              ? '<span class="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-600 uppercase tracking-wide">DB overrides file</span>'
+              : '<span class="text-[10px] font-mono px-2 py-0.5 rounded bg-neutral-900 border border-white/10 text-neutral-400 uppercase tracking-wide" title="No DB override. Composer reads this snippet from the version-controlled file registry.">File only</span>';
+          // Per audit move 7: scope badge shows whether this snippet
+          // is global or client-scoped. Client-scoped beats global at
+          // the same key during compose.
+          const cid = (s.client_id || '*');
+          const scopeBadge = cid === '*'
+            ? '<span class="text-[10px] font-mono px-2 py-0.5 rounded bg-neutral-900 border border-white/10 text-neutral-400 uppercase tracking-wide" title="Used for every client unless a client-scoped snippet exists for the same key.">Global</span>'
+            : `<span class="text-[10px] font-mono px-2 py-0.5 rounded bg-sepia-500/10 border border-amber-500/30 text-amber-700 uppercase tracking-wide" title="Used only for this specific client. Beats Global at the same key.">Client: ${esc(cid)}</span>`;
+          return `
+            <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5">
+              <div class="flex items-center justify-between gap-4 flex-wrap">
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-mono text-neutral-200 break-all">${esc(s.key)}</p>
+                  <p class="text-[11px] text-neutral-500 mt-1">${totalLines} lines/paragraphs · ${sourceBadge} · ${scopeBadge}${s.updated_at ? ` · saved ${esc(s.updated_at)}` : ''}</p>
+                </div>
+                <button type="button" data-edit-idx="${idx}"
+                  class="px-3 py-1.5 border border-white/10 text-neutral-300 text-xs rounded hover:border-amber-500/30 hover:text-amber-600 transition-colors">
+                  Edit
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+        listEl.querySelectorAll('[data-edit-idx]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const idx = parseInt(btn.getAttribute('data-edit-idx'), 10);
+            const snippet = snippets[idx];
+            if (snippet) openEditor(snippet);
+          });
+        });
+      } catch (err) {
+        listEl.innerHTML = `<p class="text-sm text-red-400">Network error: ${esc(err.message || err)}</p>`;
+      }
+    }
+
+    function openEditor(snippet) {
+      currentKey = snippet.key;
+      currentSnippet = snippet;
+      // Per audit move 7: keep client_id pinned per snippet so saves
+      // target the right (key, client_id) row.
+      currentClientId = snippet.client_id || '*';
+      titleEl.textContent = snippet.key + (currentClientId === '*' ? '' : ` · client: ${currentClientId}`);
+      introEl.value = joinLines(snippet.intro_lines);
+      seeEl.value = joinParagraphs(snippet.what_i_see_paragraphs);
+      recommendEl.value = joinParagraphs(snippet.what_i_recommend_paragraphs);
+      notesEl.value = snippet.notes || '';
+      setStatus('', null);
+      showViolations(null);
+      deleteBtn.classList.toggle('hidden', snippet.source === 'file');
+      // Capture which element was focused before the modal opened so
+      // we can restore focus to it on close. Improves keyboard nav
+      // and screen-reader continuity.
+      lastFocusBeforeModal = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      // Focus the first writable input in the modal so admin can
+      // start typing immediately.
+      requestAnimationFrame(() => {
+        const firstInput = modal.querySelector('input, textarea, select');
+        if (firstInput instanceof HTMLElement) firstInput.focus();
+      });
+    }
+
+    // Pattern template for cross-cutting E (UI/UX audit 2026-05-25):
+    // every modal in the portal should wire Esc, click-outside, and
+    // focus-trap. This is the inline version of a future shared
+    // wireModal() helper. Modals using this pattern: snippet editor
+    // (here). Next adopters: contracts new-contract form
+    // (currently has Esc but no focus trap), agreement-related
+    // dialogs when added.
+    let lastFocusBeforeModal = null;
+    function closeModal() {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      // Restore focus to whatever was focused before the modal opened.
+      if (lastFocusBeforeModal) {
+        try { lastFocusBeforeModal.focus(); } catch { /* ignore */ }
+      }
+      lastFocusBeforeModal = null;
+    }
+    document.getElementById('edit-modal-close').addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal();
+    });
+    // Esc key closes the modal when it's open.
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+    });
+    // Focus trap: when Tab/Shift+Tab would leave the modal, wrap to
+    // the other end. Keeps keyboard navigation inside the open modal
+    // so screen readers and keyboard-only users can't accidentally
+    // tab into the page behind.
+    modal.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab' || modal.classList.contains('hidden')) return;
+      const focusables = modal.querySelectorAll(
+        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    });
+
+    document.getElementById('edit-save').addEventListener('click', async () => {
+      if (!currentKey) return;
+      setStatus('Saving…');
+      showViolations(null);
+      try {
+        const res = await fetch('/portal/api/admin/proposals/snippets/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({
+            key: currentKey,
+            client_id: currentClientId || '*',
+            intro_lines: splitLines(introEl.value),
+            what_i_see_paragraphs: splitParagraphs(seeEl.value),
+            what_i_recommend_paragraphs: splitParagraphs(recommendEl.value),
+            notes: notesEl.value,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok) {
+          setStatus('Saved.', 'ok');
+          // Defer the list refresh until AFTER the modal closes so
+          // the list refresh doesn't visibly flicker behind the
+          // still-open modal. Audit SN4.
+          setTimeout(() => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            load();
+          }, 700);
+        } else {
+          setStatus(data?.error || `HTTP ${res.status}`, 'error');
+          if (data?.violations) showViolations(data.violations);
+        }
+      } catch (err) {
+        setStatus(err?.message || 'Network error', 'error');
+      }
+    });
+
+    deleteBtn.addEventListener('click', async () => {
+      if (!currentKey) return;
+      const scopeNote = (currentClientId === '*') ? 'Global' : `client ${currentClientId}`;
+      if (!confirm(`Delete DB override for ${currentKey} (${scopeNote})? File registry baseline (if any) stays.`)) return;
+      setStatus('Deleting…');
+      try {
+        const res = await fetch('/portal/api/admin/proposals/snippets/save', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ key: currentKey, client_id: currentClientId || '*' }),
+        });
+        if (res.ok) {
+          setStatus('Deleted.', 'ok');
+          load();
+          setTimeout(() => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+          }, 700);
+        } else {
+          const data = await res.json().catch(() => ({}));
+          setStatus(data?.error || `HTTP ${res.status}`, 'error');
+        }
+      } catch (err) {
+        setStatus(err?.message || 'Network error', 'error');
+      }
+    });
+
+    // Key format matches the server-side KEY_RE in save.ts: at least
+    // one product id (lowercase letters/digits/hyphens, '+' joined for
+    // combos), then ::ecosystem::urgency where ecosystem is A/B/C/*
+    // and urgency is tactical/growth/maintenance/*.
+    const CLIENT_KEY_RE = /^[a-z0-9+\-]+::([ABC]|\*)::(tactical|growth|maintenance|\*)$/;
+
+    document.getElementById('new-snippet-create').addEventListener('click', async () => {
+      const keyInput = document.getElementById('new-key');
+      const clientIdInput = document.getElementById('new-client-id');
+      const statusInput = document.getElementById('new-snippet-status');
+      const key = (keyInput.value || '').trim();
+      const rawClientId = (clientIdInput.value || '').trim();
+      const clientId = (rawClientId && rawClientId !== '*') ? rawClientId : '*';
+      if (!key) {
+        statusInput.textContent = 'Key required.';
+        statusInput.className = 'text-[11px] font-mono ml-3 text-red-400';
+        return;
+      }
+      if (!CLIENT_KEY_RE.test(key)) {
+        statusInput.textContent = 'Format: product_combo::ecosystem::urgency (e.g., "web-management::B::tactical"). Ecosystem A/B/C/*, urgency tactical/growth/maintenance/*.';
+        statusInput.className = 'text-[11px] font-mono ml-3 text-red-400';
+        return;
+      }
+      // Open the editor with the new key and empty buckets. Save
+      // upserts when the admin clicks Save inside the modal. Scope
+      // (client_id) is captured here and threaded through.
+      openEditor({
+        key,
+        client_id: clientId,
+        source: 'db',
+        intro_lines: [],
+        what_i_see_paragraphs: [],
+        what_i_recommend_paragraphs: [],
+        notes: null,
+        updated_at: null,
+      });
+      keyInput.value = '';
+      clientIdInput.value = '';
+      statusInput.textContent = '';
+    });
+
+    load();
+  </script>
+</Portal>

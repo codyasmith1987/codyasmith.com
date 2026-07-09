@@ -1,10 +1,28 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
-  --font-serif: "Instrument Serif", Georgia, serif;
-  --font-quote: "Lora", Georgia, serif;
-  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+  /* Editorial type stack. Fraunces variable font carries display weight with
+     softened wonky terminals. Newsreader is the reading face. Mono is held
+     back for marginalia and section markers. font-sans falls through to the
+     reading face on purpose so utility classes that grab "font-sans" still
+     compose. font-quote retained for blockquote callbacks on existing pages. */
+  --font-display: "Fraunces", "Times New Roman", serif;
+  --font-serif: "Newsreader", "Iowan Old Style", "Charter", Georgia, serif;
+  --font-sans: "Newsreader", "Iowan Old Style", "Charter", Georgia, serif;
+  --font-quote: "Newsreader", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Editorial spacing scale. Fibonacci-derived so vertical rhythm reads as
+     designed instead of as a Tailwind default (16/24/32/64/96/128 etc.). */
+  --spacing-ed-hair: 0.1875rem;  /* 3px */
+  --spacing-ed-1: 0.4375rem;     /* 7px */
+  --spacing-ed-2: 0.8125rem;     /* 13px */
+  --spacing-ed-3: 1.3125rem;     /* 21px */
+  --spacing-ed-4: 2.125rem;      /* 34px */
+  --spacing-ed-5: 3.4375rem;     /* 55px */
+  --spacing-ed-6: 5.5625rem;     /* 89px */
+  --spacing-ed-7: 9rem;          /* 144px */
+  --spacing-ed-8: 14.5625rem;    /* 233px */
 
   --color-neutral-950: #0a0a0a;
   --color-neutral-900: #171717;
@@ -24,6 +42,52 @@
 
   --color-dated: #8a6840;
 }
+
+/* ============================================
+   PORTAL EDITORIAL PALETTE
+   Flips the default dark+amber neutral tokens to cream + dark sepia
+   for the portal. Tailwind v4's color utilities reference the CSS
+   variables at runtime (e.g., bg-neutral-950 -> var(--color-neutral-950)),
+   so overriding the variables in this scope flips every pre-existing
+   utility class without per-page edits.
+
+   Applied via body.portal-editorial in Portal.astro, login.astro,
+   set-password.astro.
+
+   Lives in global.css (not portal.css) because portal.css does not
+   get bundled into the client CSS file by the Astro/Vite pipeline,
+   and these rules need to reach the browser.
+   ============================================ */
+
+body.portal-editorial {
+  --color-neutral-950: #faf7f2;   /* page background, cream paper */
+  --color-neutral-900: #f0ead9;   /* card surface */
+  --color-neutral-850: #e8e0cb;
+  --color-neutral-800: #d6cdb5;
+  --color-neutral-700: #a89e8a;
+  --color-neutral-600: #6b6359;   /* muted body text */
+  --color-neutral-500: #4a4239;
+  --color-neutral-400: #38322a;
+  --color-neutral-300: #2c2722;   /* primary body text */
+  --color-neutral-200: #1f1b18;
+  --color-neutral-100: #1a1814;   /* headings, near-black */
+  --color-amber-600: #a86749;
+  --color-amber-500: #c47d5a;     /* terracotta accent */
+  --color-amber-400: #d4906e;
+  background: #faf7f2;
+  color: #1a1814;
+}
+
+body.portal-editorial .border-white\/5  { border-color: rgba(26, 24, 20, 0.06); }
+body.portal-editorial .border-white\/10 { border-color: rgba(26, 24, 20, 0.10); }
+body.portal-editorial .border-white\/15 { border-color: rgba(26, 24, 20, 0.14); }
+body.portal-editorial .border-white\/20 { border-color: rgba(26, 24, 20, 0.18); }
+body.portal-editorial .divide-white\/5  > * + * { border-color: rgba(26, 24, 20, 0.06); }
+body.portal-editorial .divide-white\/10 > * + * { border-color: rgba(26, 24, 20, 0.10); }
+body.portal-editorial .bg-white\/\[0\.03\] { background-color: rgba(26, 24, 20, 0.03); }
+body.portal-editorial .bg-white\/5  { background-color: rgba(26, 24, 20, 0.04); }
+body.portal-editorial .bg-white\/10 { background-color: rgba(26, 24, 20, 0.06); }
+body.portal-editorial .blur-3xl { opacity: 0.35; filter: blur(64px); }
 
 /* ============================================
    SUN THEMES (light base)
@@ -427,14 +491,14 @@
    ============================================ */
 
 @layer components {
-  /* Focus indicators — accessible keyboard navigation */
+  /* Focus indicators: accessible keyboard navigation */
   :focus-visible {
     outline: 2px solid var(--color-amber-400);
     outline-offset: 2px;
     border-radius: 4px;
   }
 
-  /* Quiz — theme-aware via CSS custom properties
+  /* Quiz: theme-aware via CSS custom properties
      The quiz sits over a dark frosted backdrop, so text stays light.
      Accents adapt to the active theme as the user answers questions. */
   #quiz {
@@ -482,7 +546,7 @@
     background: color-mix(in srgb, var(--quiz-accent) 5%, transparent);
   }
 
-  /* .quiz-input and .quiz-skip live outside @layer components — see below */
+  /* .quiz-input and .quiz-skip live outside @layer components, see below */
 
   .reveal {
     opacity: 0;
@@ -629,7 +693,7 @@
     font-family: var(--font-quote);
   }
 
-  /* Growth field uses backdrop-filter — see src/lib/growth-field.ts */
+  /* Growth field uses backdrop-filter, see src/lib/growth-field.ts */
 
   /* Dot grid */
   .dot-grid {
@@ -645,49 +709,10 @@
     background-image: radial-gradient(circle, rgba(240, 232, 224, 0.025) 1px, transparent 1px);
   }
 
-  /* ============================================
-     Theme Switcher (dev tool, can remove later)
-     ============================================ */
-  .theme-switcher {
-    position: fixed;
-    bottom: 1.5rem;
-    right: 1.5rem;
-    z-index: 55;
-    display: flex;
-    gap: 0.25rem;
-    padding: 0.25rem;
-    border-radius: 0.5rem;
-    background-color: var(--color-neutral-900);
-    border: 1px solid rgba(128,128,128,0.15);
-    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
-    font-family: var(--font-mono);
-    font-size: 0.6rem;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-  }
-
-  .theme-switcher button {
-    padding: 0.35rem 0.6rem;
-    border-radius: 0.375rem;
-    color: var(--color-neutral-500);
-    transition: all 0.2s ease;
-    cursor: pointer;
-    background: transparent;
-    border: none;
-  }
-
-  .theme-switcher button:hover {
-    color: var(--color-neutral-100);
-  }
-
-  .theme-switcher button.active {
-    background-color: var(--color-amber-500);
-    color: var(--color-neutral-950);
-  }
 }
 
 /* ============================================
-   QUIZ FORM — UNLAYERED so Tailwind utilities
+   QUIZ FORM: UNLAYERED so Tailwind utilities
    can't beat these via the cascade. Fully self-
    contained: do not add utility classes to the
    input or skip elements in Quiz.astro.
@@ -741,7 +766,7 @@
 }
 
 /* ============================================
-   QUIZ LEAD CAPTURE CARD — persona end state
+   QUIZ LEAD CAPTURE CARD: persona end state
    High-contrast warm gradient panel so the
    inputs read unambiguously against any theme.
    ============================================ */
@@ -795,7 +820,7 @@
   gap: 0.85rem;
 }
 
-/* Inverted inputs: cream fill, near-black text — unmistakable contrast */
+/* Inverted inputs: cream fill, near-black text, unmistakable contrast */
 #quiz .quiz-lead-form .quiz-input {
   display: block;
   width: 100%;
@@ -850,4 +875,639 @@
   filter: brightness(1.08);
   box-shadow: 0 10px 28px color-mix(in srgb, var(--quiz-accent, #c47d5a) 45%, transparent);
   transform: translateY(-1px);
+}
+
+/* ============================================
+   EDITORIAL BROADSHEET SYSTEM
+   Used on the homepage. Asymmetric column grid,
+   high-contrast display type, hairline rules,
+   pull quotes, marginalia. Intentionally not a
+   utility set you can mix into a card grid.
+   ============================================ */
+
+.font-display {
+  font-family: var(--font-display);
+  font-feature-settings: "ss01" on, "ss02" on, "case" on;
+  font-variation-settings: "opsz" 96, "SOFT" 30, "WONK" 0;
+  letter-spacing: -0.022em;
+}
+
+.font-display-soft {
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 144, "SOFT" 100, "WONK" 1;
+  letter-spacing: -0.028em;
+}
+
+.font-news {
+  font-family: var(--font-serif);
+  font-feature-settings: "ss01" on, "onum" on;
+}
+
+.broadsheet {
+  max-width: 78rem;
+  margin: 0 auto;
+  padding-left: clamp(1.5rem, 4vw, 5rem);
+  padding-right: clamp(1.5rem, 4vw, 5rem);
+}
+
+.dateline {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-neutral-500);
+}
+
+.dateline-divider {
+  display: inline-block;
+  width: 1.25rem;
+  height: 0;
+  border-top: 1px solid var(--color-neutral-700);
+  vertical-align: middle;
+  margin: 0 0.75rem;
+}
+
+.masthead-rule {
+  border: 0;
+  border-top: 1px solid var(--color-neutral-700);
+  margin: 0;
+}
+
+.masthead-rule-thick {
+  border: 0;
+  border-top: 3px solid var(--color-neutral-300);
+  margin: 0;
+}
+
+.masthead-rule-hair {
+  border: 0;
+  border-top: 1px solid var(--color-neutral-800);
+  margin: 0;
+}
+
+.display-h1 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-variation-settings: "opsz" 144, "SOFT" 30, "WONK" 0;
+  font-size: clamp(2.75rem, 9vw, 8.5rem);
+  line-height: 0.92;
+  letter-spacing: -0.035em;
+  color: var(--color-neutral-100);
+  text-wrap: balance;
+}
+
+.display-h1 em {
+  font-style: italic;
+  font-variation-settings: "opsz" 144, "SOFT" 100, "WONK" 1;
+  font-weight: 400;
+  color: var(--color-neutral-300);
+}
+
+.display-h2 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-variation-settings: "opsz" 96, "SOFT" 50, "WONK" 0;
+  font-size: clamp(1.75rem, 4.2vw, 3.5rem);
+  line-height: 1.02;
+  letter-spacing: -0.022em;
+  color: var(--color-neutral-100);
+  text-wrap: balance;
+}
+
+.lede {
+  font-family: var(--font-serif);
+  font-variation-settings: "opsz" 18;
+  font-size: clamp(1.0625rem, 1.6vw, 1.375rem);
+  line-height: 1.55;
+  color: var(--color-neutral-300);
+  max-width: 36em;
+}
+
+.lede.lede-narrow {
+  max-width: 28em;
+}
+
+.body-news {
+  font-family: var(--font-serif);
+  font-variation-settings: "opsz" 16;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--color-neutral-400);
+}
+
+.body-news-large {
+  font-family: var(--font-serif);
+  font-variation-settings: "opsz" 22;
+  font-size: clamp(1.125rem, 1.4vw, 1.25rem);
+  line-height: 1.65;
+  color: var(--color-neutral-300);
+}
+
+.byline {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--color-neutral-500);
+}
+
+.section-tag {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-amber-400);
+}
+
+.section-marker {
+  position: sticky;
+  top: 6rem;
+  align-self: start;
+  padding-top: var(--spacing-ed-2);
+  border-top: 3px solid var(--color-neutral-100);
+}
+
+.section-marker__num {
+  display: block;
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 144, "SOFT" 0, "WONK" 0;
+  font-weight: 900;
+  font-size: clamp(3rem, 6vw, 5rem);
+  line-height: 0.85;
+  color: var(--color-neutral-100);
+  letter-spacing: -0.04em;
+}
+
+.section-marker__label {
+  display: block;
+  margin-top: var(--spacing-ed-2);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-neutral-500);
+}
+
+/* Typographic service list. Each item is a row with a number column,
+   the service name as a heading, and the body copy beneath. Hairline
+   rule between items. Hover state pulls the row right a hair and
+   warms the type color. */
+.service-ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: serv;
+}
+
+.service-ol > li {
+  border-top: 1px solid var(--color-neutral-800);
+  position: relative;
+}
+
+.service-ol > li:last-child {
+  border-bottom: 1px solid var(--color-neutral-800);
+}
+
+.service-ol > li > a {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: var(--spacing-ed-4);
+  row-gap: var(--spacing-ed-2);
+  align-items: baseline;
+  padding-top: var(--spacing-ed-4);
+  padding-bottom: var(--spacing-ed-4);
+  text-decoration: none;
+  color: inherit;
+  transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1),
+              color 220ms ease;
+}
+
+.service-ol > li > a:hover {
+  transform: translateX(var(--spacing-ed-2));
+}
+
+.service-ol > li > a:hover .service-ol__name {
+  color: var(--color-amber-400);
+}
+
+.service-ol__num {
+  grid-column: 1;
+  grid-row: 1;
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 96, "SOFT" 30, "WONK" 0;
+  font-weight: 700;
+  font-size: clamp(1.875rem, 3.4vw, 2.625rem);
+  line-height: 0.9;
+  color: var(--color-neutral-500);
+  letter-spacing: -0.02em;
+}
+
+.service-ol__name {
+  grid-column: 2;
+  grid-row: 1;
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 96, "SOFT" 30, "WONK" 0;
+  font-weight: 500;
+  font-size: clamp(1.5rem, 2.6vw, 2.125rem);
+  line-height: 1;
+  color: var(--color-neutral-100);
+  letter-spacing: -0.022em;
+  transition: color 220ms ease;
+}
+
+.service-ol__arrow {
+  grid-column: 3;
+  grid-row: 1;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-variation-settings: "opsz" 96, "SOFT" 100, "WONK" 1;
+  font-size: clamp(1.5rem, 2.6vw, 2.125rem);
+  color: var(--color-neutral-700);
+  transition: color 220ms ease, transform 220ms ease;
+}
+
+.service-ol > li > a:hover .service-ol__arrow {
+  color: var(--color-amber-400);
+  transform: translateX(0.25rem);
+}
+
+.service-ol__body {
+  grid-column: 2 / span 2;
+  grid-row: 2;
+  font-family: var(--font-serif);
+  font-variation-settings: "opsz" 16;
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  color: var(--color-neutral-400);
+  max-width: 38em;
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .service-ol > li > a {
+    grid-template-columns: 3rem 1fr auto;
+    column-gap: var(--spacing-ed-3);
+  }
+}
+
+/* Pull quote: the "Now I do it on purpose." moment. Stretches into the
+   left margin, uses the soft+wonk axes for character, hangs off the body
+   column for a magazine layout feel. */
+.pull-quote {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-style: italic;
+  font-variation-settings: "opsz" 144, "SOFT" 100, "WONK" 1;
+  font-size: clamp(2.25rem, 5.5vw, 4.5rem);
+  line-height: 1.02;
+  letter-spacing: -0.028em;
+  color: var(--color-neutral-100);
+  text-wrap: balance;
+  position: relative;
+  padding-left: 0;
+}
+
+.pull-quote::before {
+  content: "";
+  display: block;
+  width: var(--spacing-ed-5);
+  height: 2px;
+  background: var(--color-amber-400);
+  margin-bottom: var(--spacing-ed-3);
+}
+
+/* Coupon block for the free tool. Dashed border, rotated 1 degree for a
+   torn-out, hand-set feel. Hover removes the rotation and warms the border. */
+.coupon {
+  position: relative;
+  border: 1px dashed var(--color-neutral-700);
+  border-radius: 0;
+  background: var(--color-neutral-900);
+  padding: var(--spacing-ed-5) var(--spacing-ed-5) var(--spacing-ed-4);
+  transform: rotate(-0.6deg);
+  transition: transform 320ms cubic-bezier(0.2, 0.7, 0.2, 1),
+              border-color 220ms ease;
+}
+
+.coupon:hover {
+  transform: rotate(0deg);
+  border-color: var(--color-amber-500);
+}
+
+.coupon::before {
+  content: "FREE COUPON";
+  position: absolute;
+  top: -0.7rem;
+  left: var(--spacing-ed-4);
+  background: var(--color-neutral-950);
+  padding: 0 var(--spacing-ed-2);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.28em;
+  color: var(--color-amber-400);
+}
+
+/* CTA stamp. A bordered, rotated block of type with a postmark hairline
+   ring on the outside. Inspired by ink stamps. Hover straightens it. */
+.cta-stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-ed-3);
+  padding: var(--spacing-ed-3) var(--spacing-ed-5);
+  border: 2px solid var(--color-neutral-100);
+  background: transparent;
+  color: var(--color-neutral-100);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transform: rotate(-1.2deg);
+  position: relative;
+  transition: transform 280ms cubic-bezier(0.2, 0.7, 0.2, 1),
+              background-color 220ms ease,
+              color 220ms ease;
+}
+
+.cta-stamp::before {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border: 1px solid var(--color-neutral-700);
+  pointer-events: none;
+}
+
+.cta-stamp:hover {
+  transform: rotate(0deg);
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-950);
+}
+
+.cta-link {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-variation-settings: "opsz" 22;
+  font-size: 1.125rem;
+  color: var(--color-neutral-400);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 6px;
+  transition: color 220ms ease;
+}
+
+.cta-link:hover {
+  color: var(--color-amber-400);
+}
+
+/* Decorative ornaments. Single-character pieces used between blocks. */
+.ornament {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 144, "SOFT" 100, "WONK" 1;
+  color: var(--color-amber-400);
+  font-size: 1.5rem;
+}
+
+/* Editorial grid: two asymmetric columns. Marker on the left at 1/3 width,
+   body on the right. Stacks under 900px. */
+.editorial-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2.2fr);
+  column-gap: clamp(2rem, 5vw, 6rem);
+  row-gap: var(--spacing-ed-5);
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .editorial-grid {
+    grid-template-columns: 1fr;
+  }
+  .section-marker {
+    position: static;
+    padding-top: var(--spacing-ed-3);
+  }
+}
+
+/* Smaller masthead utility for sub-sections. */
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-top: 3px solid var(--color-neutral-100);
+  padding-top: var(--spacing-ed-2);
+  gap: var(--spacing-ed-4);
+}
+
+.folio-num {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--color-neutral-600);
+}
+
+/* Sun theme overrides for editorial: rules and stamp invert to dark. */
+[data-theme^="sun-"] .masthead-rule,
+[data-theme^="sun-"] .section-marker {
+  border-color: var(--color-neutral-200);
+}
+
+[data-theme^="sun-"] .display-h1,
+[data-theme^="sun-"] .display-h2,
+[data-theme^="sun-"] .section-marker__num,
+[data-theme^="sun-"] .pull-quote {
+  color: var(--color-neutral-100);
+}
+
+[data-theme^="sun-"] .cta-stamp {
+  border-color: var(--color-neutral-100);
+  color: var(--color-neutral-100);
+}
+
+[data-theme^="sun-"] .cta-stamp:hover {
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-950);
+}
+
+[data-theme^="sun-"] .coupon {
+  background: var(--color-neutral-900);
+  border-color: var(--color-neutral-700);
+}
+
+[data-theme^="sun-"] .coupon::before {
+  background: var(--color-neutral-950);
+}
+
+/* Quiz-active dampens editorial ornaments. */
+html.quiz-active .pull-quote::before,
+html.quiz-active .cta-stamp::before {
+  opacity: 0;
+}
+
+/* ============================================
+   PUBLIC SITE EDITORIAL SHELL
+   Homepage redesign spillover for legacy public
+   pages. The portal uses Portal.astro and does
+   not receive body.site-editorial.
+   ============================================ */
+
+.site-editorial main > section:first-of-type {
+  padding-top: var(--spacing-ed-7);
+  padding-bottom: var(--spacing-ed-6);
+}
+
+.site-editorial main > section:first-of-type .absolute.blur-3xl {
+  display: none;
+}
+
+.site-editorial main > section:first-of-type > .relative[class*="max-w-"] {
+  max-width: 78rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: clamp(1.5rem, 4vw, 5rem);
+  padding-right: clamp(1.5rem, 4vw, 5rem);
+}
+
+.site-editorial main > section:first-of-type > .relative[class*="max-w-"] > p:first-of-type,
+.site-editorial main > section:first-of-type > .relative[class*="max-w-"] > a:first-child + div + h1 + p,
+.site-editorial .editorial-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-neutral-500);
+}
+
+.site-editorial main > section:first-of-type h1,
+.site-editorial main > section:first-of-type [role="heading"][aria-level="1"] {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-variation-settings: "opsz" 144, "SOFT" 30, "WONK" 0;
+  font-size: clamp(2.75rem, 9vw, 8.5rem);
+  line-height: 0.92;
+  letter-spacing: -0.035em;
+  color: var(--color-neutral-100);
+  text-wrap: balance;
+}
+
+.site-editorial main > section:first-of-type .gradient-text,
+.site-editorial main > section:first-of-type .font-quote {
+  background: none;
+  -webkit-text-fill-color: currentColor;
+  color: var(--color-neutral-300);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-variation-settings: "opsz" 144, "SOFT" 100, "WONK" 1;
+}
+
+.site-editorial main > section:first-of-type h1 + p,
+.site-editorial main > section:first-of-type [role="heading"][aria-level="1"] + p,
+.site-editorial .editorial-lede {
+  font-family: var(--font-serif);
+  font-variation-settings: "opsz" 18;
+  font-size: clamp(1.0625rem, 1.6vw, 1.375rem);
+  line-height: 1.55;
+  color: var(--color-neutral-300);
+  max-width: 36em;
+}
+
+.site-editorial .surface-1,
+.site-editorial .surface-2 {
+  background: transparent;
+}
+
+.site-editorial .glow-card,
+.site-editorial .blog-case-card,
+.site-editorial .svc-card {
+  border: 0;
+  border-top: 1px solid var(--color-neutral-800);
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible;
+}
+
+.site-editorial .glow-card::before,
+.site-editorial .svc-glow {
+  display: none !important;
+}
+
+.site-editorial .glow-card:hover,
+.site-editorial .blog-case-card:hover,
+.site-editorial .svc-card:hover {
+  border-color: var(--color-neutral-700);
+  box-shadow: none !important;
+}
+
+.site-editorial a.glow-card,
+.site-editorial .blog-case-card {
+  text-decoration: none;
+  transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1), border-color 220ms ease;
+}
+
+.site-editorial a.glow-card:hover,
+.site-editorial .blog-case-card:hover {
+  transform: translateX(var(--spacing-ed-2));
+}
+
+.site-editorial a.bg-amber-500,
+.site-editorial button.bg-amber-500 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-ed-2);
+  border: 2px solid var(--color-neutral-100);
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--color-neutral-100) !important;
+  box-shadow: none !important;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transform: rotate(-0.6deg);
+  transition: transform 280ms cubic-bezier(0.2, 0.7, 0.2, 1), background-color 220ms ease, color 220ms ease;
+}
+
+.site-editorial a.bg-amber-500:hover,
+.site-editorial button.bg-amber-500:hover {
+  transform: rotate(0deg);
+  background: var(--color-neutral-100) !important;
+  color: var(--color-neutral-950) !important;
+}
+
+.site-editorial a.border.border-white\/10,
+.site-editorial button.border.border-white\/10 {
+  border-radius: 0 !important;
+}
+
+.site-editorial .rounded-lg:not(input):not(textarea):not(select),
+.site-editorial .rounded-xl:not(input):not(textarea):not(select) {
+  border-radius: 0 !important;
+}
+
+.site-editorial [class*="hover:shadow-"] {
+  box-shadow: none !important;
+}
+
+.site-editorial .tag-chip,
+.site-editorial .sector-chip {
+  border-radius: 0 !important;
+  font-family: var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.site-editorial details.glow-card summary {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.site-editorial details.glow-card > div {
+  padding-left: 0;
+  padding-right: 0;
 }

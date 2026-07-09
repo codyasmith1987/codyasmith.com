@@ -1,6 +1,6 @@
 ---
 import Portal from '../../layouts/Portal.astro';
-import { getClientVisibleInvoices, getInvoiceItems, getPaymentsByInvoice } from '../../lib/invoices';
+import { getClientVisibleInvoices, getInvoiceItems, getPaymentsByInvoice, splitSubtotals } from '../../lib/invoices';
 export const prerender = false;
 
 const user = Astro.locals.user!;
@@ -8,13 +8,44 @@ if (!user.client_id) return Astro.redirect('/portal/dashboard');
 
 const invoices = await getClientVisibleInvoices(user.client_id);
 
-// Enrich with items and payments
+// Account balance, computed from the visible invoices so it always reconciles
+// with the rows shown below. Open = unpaid remainder of any awaiting/partial/
+// overdue invoice; overdue = the portion already past due (status flagged
+// overdue, or still awaiting/partial with a due date in the past).
+const todayStr = new Date().toISOString().slice(0, 10);
+const isOpen = (s: string) => s === 'sent' || s === 'partial' || s === 'overdue' || s === 'payment_pending';
+const remainder = (inv: typeof invoices[number]) => Math.max(0, inv.total - inv.amount_paid);
+const openBalance = invoices
+  .filter(inv => isOpen(inv.status) && inv.amount_paid < inv.total)
+  .reduce((sum, inv) => sum + remainder(inv), 0);
+const overdueBalance = invoices
+  .filter(inv => inv.amount_paid < inv.total &&
+    (inv.status === 'overdue' ||
+      ((inv.status === 'sent' || inv.status === 'partial') && !!inv.due_date && inv.due_date < todayStr)))
+  .reduce((sum, inv) => sum + remainder(inv), 0);
+
+// Enrich with items (split into Services and Reimbursements, matching the PDF)
+// and payments. A NULL category counts as Services, a NULL name falls back to
+// description, so legacy invoices render unchanged.
 const enriched = await Promise.all(invoices.map(async (inv) => {
-  const items = await getInvoiceItems(inv.id);
+  const allItems = await getInvoiceItems(inv.id);
   const payments = await getPaymentsByInvoice(inv.id);
+  const mapItem = (i: any) => ({
+    name: i.name, sub_description: i.sub_description, description: i.description,
+    frequency: i.frequency, category: i.category,
+    quantity: i.quantity, unit_price: i.unit_price, amount: i.amount,
+  });
+  const cat = (i: any) => i.category || 'services';
+  const isPastDue = (i: any) => cat(i) === 'past_due' || cat(i) === 'late_interest';
+  const services = allItems.filter(i => cat(i) !== 'reimbursements' && !isPastDue(i)).map(mapItem);
+  const reimbursements = allItems.filter(i => cat(i) === 'reimbursements').map(mapItem);
+  const pastDue = allItems.filter(isPastDue).map(mapItem);
   return {
     ...inv,
-    items: items.map(i => ({ description: i.description, quantity: i.quantity, unit_price: i.unit_price, amount: i.amount })),
+    services,
+    reimbursements,
+    pastDue,
+    subs: splitSubtotals(allItems),
     payments: payments.map(p => ({ amount: p.amount, paid_at: p.paid_at, payment_method: p.payment_method })),
   };
 }));
@@ -25,16 +56,20 @@ const statusLabels: Record<string, string> = {
   paid: 'Paid',
   partial: 'Partially paid',
   overdue: 'Overdue',
+  payment_pending: 'Payment pending',
   cancelled: 'Cancelled',
+  carried_forward: 'Carried forward',
 };
 
 const statusColors: Record<string, string> = {
   draft: 'bg-neutral-700/30 text-neutral-400',
   sent: 'bg-blue-500/10 text-blue-400',
   paid: 'bg-emerald-500/10 text-emerald-400',
-  partial: 'bg-amber-500/10 text-amber-400',
+  partial: 'bg-amber-500/10 text-amber-600',
   overdue: 'bg-red-500/10 text-red-400',
+  payment_pending: 'bg-violet-500/10 text-violet-400',
   cancelled: 'bg-neutral-700/30 text-neutral-500',
+  carried_forward: 'bg-neutral-700/30 text-neutral-500',
 };
 ---
 
@@ -45,6 +80,21 @@ const statusColors: Record<string, string> = {
       <p class="text-sm text-neutral-500 mt-2">Your billing history and payment status.</p>
     </div>
 
+    {openBalance > 0 && (
+      <div class="mb-8 bg-neutral-900/30 border border-white/5 rounded-2xl p-6 flex flex-wrap items-center gap-10">
+        <div>
+          <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Account balance</p>
+          <p class="text-3xl font-mono font-semibold text-neutral-100">${openBalance.toFixed(2)}</p>
+        </div>
+        {overdueBalance > 0 && (
+          <div>
+            <p class="text-[10px] font-mono text-red-400/80 tracking-wide uppercase mb-1">Past due</p>
+            <p class="text-3xl font-mono font-semibold text-red-400">${overdueBalance.toFixed(2)}</p>
+          </div>
+        )}
+      </div>
+    )}
+
     {enriched.length > 0 ? (
       <div class="space-y-6">
         {enriched.map(inv => (
@@ -54,13 +104,13 @@ const statusColors: Record<string, string> = {
               <div class="flex items-start justify-between mb-4">
                 <div>
                   <p class="font-mono text-sm text-neutral-200">{inv.invoice_number}</p>
-                  <div class="flex items-center gap-4 mt-1 text-xs text-neutral-600">
+                  <div class="flex items-center gap-4 mt-1 text-xs text-neutral-400">
                     {inv.issued_date && <span>Issued: {inv.issued_date}</span>}
                     {inv.due_date && <span>Due: {inv.due_date}</span>}
                   </div>
                 </div>
                 <div class="flex items-center gap-3">
-                  <a href={`/portal/api/client/invoices/${inv.id}/pdf`} class="text-xs text-amber-400 hover:text-amber-300 transition-colors">PDF</a>
+                  <a href={`/portal/api/client/invoices/${inv.id}/pdf`} class="text-xs text-amber-600 hover:text-amber-600 transition-colors">PDF</a>
                   <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[inv.status] || ''}`}>
                     {statusLabels[inv.status] || inv.status}
                   </span>
@@ -71,7 +121,7 @@ const statusColors: Record<string, string> = {
               {inv.total > 0 && (
                 <div class="mb-4">
                   <div class="flex items-center justify-between mb-1.5">
-                    <p class="text-[10px] font-mono text-neutral-600 uppercase tracking-wide">
+                    <p class="text-[10px] font-mono text-neutral-400 uppercase tracking-wide">
                       {inv.status === 'paid' ? 'Paid in full' : `$${inv.amount_paid.toFixed(2)} of $${inv.total.toFixed(2)}`}
                     </p>
                     <p class="text-lg font-mono font-semibold text-neutral-100">${inv.total.toFixed(2)}</p>
@@ -87,16 +137,51 @@ const statusColors: Record<string, string> = {
               {inv.notes && <p class="text-sm text-neutral-500 mt-3">{inv.notes}</p>}
             </div>
 
-            {/* Line items */}
-            {inv.items.length > 0 && (
+            {/* Line items: Services, then Reimbursements, then Past due (matches the PDF) */}
+            {(inv.services.length > 0 || inv.reimbursements.length > 0 || inv.pastDue.length > 0) && (
               <div class="border-t border-white/5">
                 <table class="w-full text-sm">
                   <tbody>
-                    {inv.items.map(item => (
+                    {inv.services.map(item => (
                       <tr class="border-b border-white/5 last:border-0">
-                        <td class="px-8 py-3 text-neutral-300">{item.description}</td>
-                        <td class="px-4 py-3 text-right text-neutral-500 font-mono text-xs">{item.quantity} x ${item.unit_price.toFixed(2)}</td>
-                        <td class="px-8 py-3 text-right text-neutral-200 font-mono">${item.amount.toFixed(2)}</td>
+                        <td class="px-8 py-3">
+                          <span class="text-neutral-300">{item.name || item.description}</span>
+                          {item.frequency && <span class="ml-2 text-[10px] font-mono text-amber-600/80 uppercase">{item.frequency.replace('_', '-')}</span>}
+                          {item.sub_description && <div class="text-xs text-neutral-500 mt-0.5">{item.sub_description}</div>}
+                        </td>
+                        <td class="px-4 py-3 text-right text-neutral-500 font-mono text-xs align-top">{item.quantity} x ${item.unit_price.toFixed(2)}</td>
+                        <td class="px-8 py-3 text-right text-neutral-200 font-mono align-top">${item.amount.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                    {inv.reimbursements.length > 0 && (
+                      <tr class="border-b border-white/5 bg-neutral-900/40">
+                        <td colspan="3" class="px-8 py-2 text-[10px] font-mono text-neutral-500 uppercase tracking-wide">Reimbursements</td>
+                      </tr>
+                    )}
+                    {inv.reimbursements.map(item => (
+                      <tr class="border-b border-white/5 last:border-0">
+                        <td class="px-8 py-3">
+                          <span class="text-neutral-300">{item.name || item.description}</span>
+                          {item.frequency && <span class="ml-2 text-[10px] font-mono text-amber-600/80 uppercase">{item.frequency.replace('_', '-')}</span>}
+                          {item.sub_description && <div class="text-xs text-neutral-500 mt-0.5">{item.sub_description}</div>}
+                        </td>
+                        <td class="px-4 py-3 text-right text-neutral-500 font-mono text-xs align-top">{item.quantity} x ${item.unit_price.toFixed(2)}</td>
+                        <td class="px-8 py-3 text-right text-neutral-200 font-mono align-top">${item.amount.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                    {inv.pastDue.length > 0 && (
+                      <tr class="border-b border-white/5 bg-neutral-900/40">
+                        <td colspan="3" class="px-8 py-2 text-[10px] font-mono text-neutral-500 uppercase tracking-wide">Past due (carried forward)</td>
+                      </tr>
+                    )}
+                    {inv.pastDue.map(item => (
+                      <tr class="border-b border-white/5 last:border-0">
+                        <td class="px-8 py-3">
+                          <span class="text-neutral-300">{item.name || item.description}</span>
+                          {item.sub_description && <div class="text-xs text-neutral-500 mt-0.5">{item.sub_description}</div>}
+                        </td>
+                        <td class="px-4 py-3 text-right text-neutral-500 font-mono text-xs align-top"></td>
+                        <td class="px-8 py-3 text-right text-neutral-200 font-mono align-top">${item.amount.toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -107,7 +192,7 @@ const statusColors: Record<string, string> = {
             {/* Payments */}
             {inv.payments.length > 0 && (
               <div class="border-t border-white/5 px-8 py-4">
-                <p class="text-[10px] font-mono text-neutral-700 uppercase tracking-wide mb-2">Payments</p>
+                <p class="text-[10px] font-mono text-neutral-500 uppercase tracking-wide mb-2">Payments</p>
                 {inv.payments.map(p => (
                   <div class="flex items-center justify-between py-1.5">
                     <span class="text-xs text-neutral-500">{p.paid_at.split('T')[0]} {p.payment_method ? `via ${p.payment_method}` : ''}</span>

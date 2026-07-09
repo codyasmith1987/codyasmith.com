@@ -1,9 +1,9 @@
 ---
 title: "Ghost Work"
-description: "The byline is a sales tool. Fifteen years inside that bargain."
+description: "The byline is a sales tool. Eleven years inside that bargain."
 publishDate: 2026-04-29T12:00:00Z
 draft: false
-tags: []
+tags: [writing, craft, essay]
 ---
 
 The fluorescent over my desk had a flicker on the left tube. You could only see it if you weren't looking at it. I had asked maintenance about it twice. They came once, replaced nothing, and put a sticker on the ballast that said TEST PASSED. I read that sticker every afternoon for two years.

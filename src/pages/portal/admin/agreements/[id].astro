@@ -1,0 +1,425 @@
+---
+// Admin per-agreement detail. Three panels: status + actions,
+// Schedule A editor (JSON for now; per-field UI is a future polish),
+// and signers + audit trail.
+
+import Portal from '../../../../layouts/Portal.astro';
+import {
+  getAgreement,
+  getSignersForAgreement,
+  getSignaturesForAgreement,
+} from '../../../../lib/agreements';
+import turso from '../../../../lib/turso';
+
+export const prerender = false;
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'admin') return Astro.redirect('/portal/dashboard');
+
+const id = Astro.params.id || '';
+const agreement = await getAgreement(id);
+if (!agreement) return new Response('Not found', { status: 404 });
+
+const signers = await getSignersForAgreement(agreement.id);
+const signatures = await getSignaturesForAgreement(agreement.id, true);
+
+const clientRow = await turso.execute({
+  sql: `SELECT name, slug FROM clients WHERE id = ? LIMIT 1`,
+  args: [agreement.client_id],
+});
+const clientName = (clientRow.rows[0]?.[0] as string) || 'Unknown';
+const clientSlug = (clientRow.rows[0]?.[1] as string) || null;
+
+// If the agreement was generated from a proposal, look it up so the
+// breadcrumb can walk Client > Proposal > Agreement. Audit A9.
+let sourceProposal: { slug: string; title: string } | null = null;
+if (agreement.proposal_id) {
+  const propRow = await turso.execute({
+    sql: `SELECT slug, title FROM proposals WHERE id = ? LIMIT 1`,
+    args: [agreement.proposal_id],
+  });
+  if (propRow.rows.length > 0) {
+    sourceProposal = {
+      slug: String(propRow.rows[0][0]),
+      title: String(propRow.rows[0][1] || ''),
+    };
+  }
+}
+
+// Activity trail is capped at 200 most recent events. Most agreements
+// stay well under but a long-running engagement with many resigns +
+// schedule edits could exceed. Surfaced in the UI with a "truncated"
+// note when the cap is hit so admin knows to query the DB or audit
+// CSV export for the full history. Audit A7.
+const ACTIVITY_LIMIT = 200;
+const activityResult = await turso.execute({
+  sql: `SELECT id, user_id, action, summary, metadata, created_at FROM activity_log WHERE entity_type = 'agreement' AND entity_id = ? ORDER BY created_at DESC LIMIT ?`,
+  args: [agreement.id, ACTIVITY_LIMIT + 1],
+});
+const activityTruncated = activityResult.rows.length > ACTIVITY_LIMIT;
+const activity = (activityResult.rows as any[]).slice(0, ACTIVITY_LIMIT).map(r => ({
+  id: r[0],
+  user_id: r[1],
+  action: r[2],
+  summary: r[3],
+  metadata: r[4],
+  created_at: r[5],
+}));
+
+const statusBadge: Record<string, string> = {
+  draft: 'bg-neutral-700/30 text-neutral-400',
+  issued: 'bg-blue-500/10 text-blue-400',
+  partially_signed: 'bg-amber-500/10 text-amber-600',
+  executed: 'bg-emerald-500/10 text-emerald-400',
+  revoked: 'bg-amber-500/10 text-amber-600',
+  voided: 'bg-red-500/10 text-red-400',
+};
+
+const csrfToken = Astro.locals.csrfToken || '';
+---
+<Portal title={`Agreement: ${agreement.title}`}>
+  <div class="max-w-4xl mx-auto">
+    <div class="mb-6 text-xs font-mono text-neutral-500">
+      <a href="/portal/admin/agreements" class="hover:text-amber-600 transition-colors">Admin / Agreements</a>
+      {clientSlug && (
+        <>
+          <span class="mx-2 text-neutral-600">/</span>
+          <a href={`/portal/admin/clients`} class="hover:text-amber-600 transition-colors">{clientName}</a>
+        </>
+      )}
+      {sourceProposal && (
+        <>
+          <span class="mx-2 text-neutral-600">/</span>
+          <a href={`/portal/proposals/${sourceProposal.slug}`} target="_blank" rel="noopener" class="hover:text-amber-600 transition-colors">{sourceProposal.title}</a>
+        </>
+      )}
+      <span class="mx-2 text-neutral-600">/</span>
+      <span class="text-neutral-300">{agreement.title}</span>
+    </div>
+
+    <div class="flex items-start justify-between gap-6 mb-8">
+      <div>
+        <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-2">{clientName}</p>
+        <h1 class="font-serif text-3xl text-neutral-100">{agreement.title}</h1>
+        <p class="text-xs font-mono text-neutral-400 mt-2">
+          <a href={`/portal/contracts/${agreement.slug}`} target="_blank" rel="noopener" class="hover:text-amber-600">/portal/contracts/{agreement.slug}</a>
+          <span class:list={['ml-3 px-2 py-0.5 text-[10px] font-mono uppercase rounded', statusBadge[agreement.status] || statusBadge.draft]}>{agreement.status}</span>
+        </p>
+      </div>
+      <div class="flex gap-2 shrink-0">
+        {agreement.status === 'draft' && (
+          <button type="button" id="issue-btn" class="px-4 py-2 bg-amber-500 text-neutral-950 text-sm font-semibold rounded-lg hover:bg-amber-400 transition-colors">Send to signers</button>
+        )}
+        {(agreement.status === 'issued' || agreement.status === 'partially_signed') && (
+          <button type="button" id="reissue-btn" class="px-4 py-2 bg-blue-500/20 border border-blue-500/40 text-blue-300 text-sm rounded-lg hover:bg-blue-500/30 transition-colors">Resend invite</button>
+        )}
+        {agreement.status !== 'voided' && agreement.status !== 'executed' && (
+          <button type="button" id="cancel-btn" class="px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-300 text-sm rounded-lg hover:bg-red-500/20 transition-colors">Cancel agreement</button>
+        )}
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <section class="bg-neutral-900/30 border border-white/5 rounded-xl p-6">
+        <h2 class="font-serif text-xl text-neutral-100 mb-4">Schedule A</h2>
+        <p class="text-xs text-neutral-500 mb-3">Edit the JSON below. Saving notifies any signed signer that their signature is paused until they re-sign against the new state.</p>
+        <details class="mb-3">
+          <summary class="text-[10px] font-mono uppercase tracking-[0.18em] text-amber-600 cursor-pointer hover:text-amber-400">Schema reference (expected top-level keys)</summary>
+          <div class="mt-2 p-3 bg-neutral-950/50 border border-white/5 rounded text-[11px] font-mono text-neutral-400 leading-relaxed">
+            <p><span class="text-neutral-300">effective_date</span>: ISO date string (YYYY-MM-DD)</p>
+            <p><span class="text-neutral-300">designated_contacts</span>: {`{`} client: {`{`} name, title, address, email, phone {`}`} {`}`}</p>
+            <p><span class="text-neutral-300">products_purchased</span>: {`{`} web_management, marketing_consulting, build, other_sow: boolean {`}`}</p>
+            <p><span class="text-neutral-300">web_management</span>: {`{`} tier_name, monthly_base, monthly_total, included_hours, update_cadence, response_time, quarterly_training_sessions, sites: [{`{`} domain, label {`}`}], onboarding_total {`}`} | null</p>
+            <p><span class="text-neutral-300">marketing_consulting</span>: {`{`} tier_name, monthly_retainer, initial_audit_fee, access_pool, strategy_call_frequency, deep_advisories_per_cycle, performance_reporting_cadence, portal_reporting_access, operations_consulting {`}`} | null</p>
+            <p><span class="text-neutral-300">hours_and_rates</span>: {`{`} included_hours, overage_buffer, overage_rate, rush_rate, emergency_rate {`}`}</p>
+            <p><span class="text-neutral-300">day_one_access</span>: {`{`} required_by, items: [{`{`} system, provider {`}`}] {`}`}</p>
+            <p><span class="text-neutral-300">pass_through_items</span>: [{`{`} name, monthly_cost, billing_note {`}`}]</p>
+            <p><span class="text-neutral-300">build_sow_ref</span>: string | null</p>
+            <p class="text-neutral-500 mt-2 italic">Save validates JSON shape and rejects with the parse error if invalid. Schedule A is rendered into the contract template on the next signer view; structural breaks surface there.</p>
+          </div>
+        </details>
+        <textarea id="schedule-a-editor" rows="22" class="w-full bg-neutral-950 border border-white/10 rounded-lg px-3 py-2 text-xs font-mono text-neutral-300" spellcheck="false">{JSON.stringify(agreement.schedule_a, null, 2)}</textarea>
+        <div class="mt-3 flex items-center gap-3">
+          <button type="button" id="save-schedule" class="px-4 py-2 bg-amber-500 text-neutral-950 text-sm font-semibold rounded-lg hover:bg-amber-400 transition-colors">Save Schedule A</button>
+          <a href={`/portal/contracts/preview/${agreement.slug}`} target="_blank" rel="noopener" class="px-4 py-2 border border-white/10 text-neutral-300 text-sm rounded-lg hover:border-amber-500/30 hover:text-amber-600 transition-colors">Preview rendered</a>
+          <p id="schedule-status" class="text-xs text-neutral-500"></p>
+        </div>
+        <div class="mt-4 pt-4 border-t border-white/5">
+          <label class="block text-xs font-mono uppercase tracking-[0.18em] text-amber-600 mb-2">Personal note</label>
+          <textarea id="personal-note-editor" rows="4" class="w-full bg-neutral-950 border border-white/10 rounded-lg px-3 py-2 text-sm text-neutral-200" style="font-family: 'Source Serif 4', Georgia, serif;">{agreement.personal_note || ''}</textarea>
+          <button type="button" id="save-note" class="mt-2 text-xs font-mono text-amber-600 hover:text-amber-600">Save note</button>
+        </div>
+      </section>
+
+      <section class="bg-neutral-900/30 border border-white/5 rounded-xl p-6">
+        <h2 class="font-serif text-xl text-neutral-100 mb-4">Signers</h2>
+        <div class="space-y-3 mb-6" id="signers-list">
+          {signers.map(s => {
+            const active = signatures.find(sig => sig.signer_id === s.id && !sig.revoked_at);
+            const canResend = !active && (agreement.status === 'issued' || agreement.status === 'partially_signed');
+            return (
+              <div class="flex items-start justify-between gap-3 pb-3 border-b border-white/5" data-signer-row={s.id}>
+                <div>
+                  <p class="text-sm text-neutral-200">{s.name_snapshot}</p>
+                  <p class="text-xs font-mono text-neutral-400">{s.email_snapshot} · {s.signer_role}</p>
+                  {active ? (
+                    <p class="text-xs text-emerald-400 mt-1">Signed as "{active.signature_value}" on {new Date(active.signed_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                  ) : (
+                    <p class="text-xs text-neutral-400 mt-1">Awaiting</p>
+                  )}
+                  <p class="text-[10px] font-mono mt-1 hidden" data-signer-send-status={s.id}></p>
+                </div>
+                {canResend && (
+                  <button type="button" data-resend-signer={s.id}
+                    class="shrink-0 px-2 py-1 border border-white/10 text-neutral-300 text-[11px] rounded hover:border-amber-500/40 hover:text-amber-600 transition-colors">
+                    Resend
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <details class="border-t border-white/5 pt-4">
+          <summary class="cursor-pointer text-xs font-mono uppercase tracking-[0.18em] text-amber-600 mb-3">Audit trail · {signatures.length + activity.length} events{activityTruncated ? ` (showing most recent ${ACTIVITY_LIMIT}, export CSV for full history)` : ''}</summary>
+          <div class="mt-3 space-y-2 font-mono text-[11px]">
+            {signatures.map(sig => (
+              <div class="p-2 bg-neutral-950/50 rounded">
+                <span class={sig.revoked_at ? 'text-amber-600' : 'text-emerald-400'}>[{sig.revoked_at ? 'revoked' : 'signed'}]</span>
+                <span class="text-neutral-400 ml-2">{new Date(sig.signed_at).toLocaleString()}</span>
+                <div class="text-neutral-500 mt-1">
+                  signer={sig.signer_id} · ip={sig.ip_address || '?'} · ua={(sig.user_agent || '').slice(0, 60)} · hash={sig.document_hash.slice(0, 12)}...
+                </div>
+              </div>
+            ))}
+            {activity.map(ev => (
+              <div class="p-2 bg-neutral-950/30 rounded">
+                <span class="text-blue-400">[{ev.action}]</span>
+                <span class="text-neutral-500 ml-2">{new Date(ev.created_at).toLocaleString()}</span>
+                <div class="text-neutral-400 mt-1">{ev.summary}</div>
+              </div>
+            ))}
+          </div>
+          <div class="mt-4 flex gap-2">
+            <a href={`/portal/api/admin/agreements/${agreement.slug}/audit.csv`} class="px-3 py-1.5 bg-neutral-800/50 border border-white/10 rounded text-xs text-neutral-300 hover:bg-neutral-700/50 transition-colors">Export CSV</a>
+            <button type="button" id="verify-hashes-btn" class="px-3 py-1.5 bg-neutral-800/50 border border-white/10 rounded text-xs text-neutral-300 hover:bg-neutral-700/50 transition-colors">Verify hashes</button>
+          </div>
+          <pre id="verify-output" class="mt-3 hidden text-[10px] text-neutral-400 whitespace-pre-wrap"></pre>
+          <button type="button" id="download-hash-report" class="mt-2 px-3 py-1.5 bg-neutral-800/50 border border-white/10 rounded text-xs text-neutral-300 hover:bg-neutral-700/50 transition-colors hidden">Download hash report as JSON</button>
+        </details>
+      </section>
+    </div>
+  </div>
+</Portal>
+
+<script is:inline define:vars={{ slug: agreement.slug, agreementId: agreement.id, csrfToken }}>
+(function() {
+  function api(url, method, body) {
+    return fetch(url, {
+      method: method,
+      headers: { 'content-type': 'application/json', 'x-csrf-token': csrfToken },
+      body: body ? JSON.stringify(body) : undefined,
+    }).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); });
+  }
+
+  // Run a button-bound async action with consistent loading + toast
+  // feedback. Wraps a fetch, disables the button + swaps its label for
+  // the duration, restores both on completion, and fires a toast.
+  // Keeps all five action buttons on this page from double-firing.
+  function runWithButton(btn, loadingText, doFetch, onSuccess) {
+    var originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = loadingText;
+    return doFetch().then(function(r) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+      if (r.ok) {
+        if (onSuccess) onSuccess(r);
+      } else {
+        window.__toast((r.data && r.data.error) || 'Action failed', 'error');
+      }
+      return r;
+    }).catch(function(err) {
+      btn.disabled = false;
+      btn.textContent = originalText;
+      window.__toast(err && err.message ? err.message : 'Network error', 'error');
+    });
+  }
+
+  // Surface per-signer send results on each signer row so admin can
+  // see exactly which emails went out vs which failed. Falls back to
+  // a toast when a row isn't found (shouldn't happen but defensive).
+  function showSendResults(results) {
+    if (!Array.isArray(results) || results.length === 0) return;
+    var failed = 0;
+    for (var i = 0; i < results.length; i++) {
+      var r = results[i];
+      // Find signer row by email match (server returns email_snapshot).
+      var rows = document.querySelectorAll('[data-signer-row]');
+      var matchedStatusEl = null;
+      for (var j = 0; j < rows.length; j++) {
+        var row = rows[j];
+        var emailLine = row.querySelector('p.font-mono');
+        if (emailLine && emailLine.textContent && emailLine.textContent.indexOf(r.email) !== -1) {
+          var id = row.getAttribute('data-signer-row');
+          matchedStatusEl = document.querySelector('[data-signer-send-status="' + id + '"]');
+          break;
+        }
+      }
+      if (matchedStatusEl) {
+        matchedStatusEl.classList.remove('hidden');
+        if (r.ok) {
+          matchedStatusEl.textContent = 'Email sent ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+          matchedStatusEl.className = 'text-[10px] font-mono mt-1 text-emerald-400';
+        } else {
+          matchedStatusEl.textContent = 'Email send FAILED';
+          matchedStatusEl.className = 'text-[10px] font-mono mt-1 text-red-400';
+          failed++;
+        }
+      }
+    }
+    if (failed > 0) {
+      window.__toast(failed + ' of ' + results.length + ' email(s) failed. See per-signer status above.', 'error');
+    }
+  }
+
+  var issueBtn = document.getElementById('issue-btn');
+  if (issueBtn) issueBtn.addEventListener('click', function() {
+    if (!confirm('Send the contract-issued email to all signers and flip status to "issued"?')) return;
+    runWithButton(issueBtn, 'Issuing…',
+      function() { return api('/portal/api/admin/agreements/' + slug + '/issue', 'POST', {}); },
+      function(r) {
+        showSendResults(r.data && r.data.send_results);
+        if (!r.data || !r.data.send_results || r.data.send_results.every(function(x) { return x.ok; })) {
+          window.__toast('Agreement issued and signers notified.', 'success');
+        }
+        setTimeout(function() { window.location.reload(); }, 1200);
+      }
+    );
+  });
+
+  var reissueBtn = document.getElementById('reissue-btn');
+  if (reissueBtn) reissueBtn.addEventListener('click', function() {
+    if (!confirm('Resend invite emails to all unsigned signers?')) return;
+    runWithButton(reissueBtn, 'Resending…',
+      function() { return api('/portal/api/admin/agreements/' + slug + '/resend', 'POST', {}); },
+      function(r) {
+        showSendResults(r.data && r.data.send_results);
+        if (r.data && r.data.send_results && r.data.send_results.every(function(x) { return x.ok; })) {
+          window.__toast('Invite emails resent to all signers.', 'success');
+        }
+      }
+    );
+  });
+
+  // Per-signer resend buttons. Each fires the resend endpoint with the
+  // specific signer_id so other signers aren't touched.
+  var perRowResendBtns = document.querySelectorAll('[data-resend-signer]');
+  for (var pi = 0; pi < perRowResendBtns.length; pi++) {
+    (function(btn) {
+      var signerId = btn.getAttribute('data-resend-signer');
+      btn.addEventListener('click', function() {
+        runWithButton(btn, 'Sending…',
+          function() { return api('/portal/api/admin/agreements/' + slug + '/resend', 'POST', { signer_id: signerId }); },
+          function(r) {
+            showSendResults(r.data && r.data.send_results);
+            if (r.data && r.data.send_results && r.data.send_results[0] && r.data.send_results[0].ok) {
+              window.__toast('Email sent.', 'success');
+            }
+          }
+        );
+      });
+    })(perRowResendBtns[pi]);
+  }
+
+  var cancelBtn = document.getElementById('cancel-btn');
+  if (cancelBtn) cancelBtn.addEventListener('click', function() {
+    // Reason is REQUIRED so the audit trail never has an ambiguous null
+    // reason. Repeats the prompt until admin provides one or cancels
+    // the prompt explicitly.
+    var reason = '';
+    while (true) {
+      var entered = prompt('Reason for cancelling (required for the audit log):');
+      if (entered === null) return; // admin cancelled the prompt
+      reason = String(entered).trim();
+      if (reason.length > 0) break;
+      alert('A non-empty reason is required to cancel. Try again or close the prompt to abort.');
+    }
+    if (!confirm('Cancel this agreement? This sets status to voided. Reason: "' + reason + '"')) return;
+    runWithButton(cancelBtn, 'Cancelling…',
+      function() { return api('/portal/api/admin/agreements/' + slug + '/cancel', 'POST', { reason: reason }); },
+      function() { window.__toast('Agreement cancelled.', 'success'); setTimeout(function() { window.location.reload(); }, 600); }
+    );
+  });
+
+  var saveScheduleBtn = document.getElementById('save-schedule');
+  var scheduleEditor = document.getElementById('schedule-a-editor');
+  var scheduleStatus = document.getElementById('schedule-status');
+  saveScheduleBtn.addEventListener('click', function() {
+    var parsed;
+    try { parsed = JSON.parse(scheduleEditor.value); } catch (e) {
+      scheduleStatus.textContent = 'Invalid JSON';
+      scheduleStatus.className = 'text-xs text-red-700';
+      window.__toast('Schedule A is not valid JSON.', 'error');
+      return;
+    }
+    scheduleStatus.textContent = 'Saving…';
+    scheduleStatus.className = 'text-xs text-neutral-500';
+    runWithButton(saveScheduleBtn, 'Saving…',
+      function() { return api('/portal/api/admin/agreements/' + slug, 'PATCH', { schedule_a: parsed }); },
+      function() {
+        scheduleStatus.textContent = 'Saved. Active signers notified of change.';
+        scheduleStatus.className = 'text-xs text-emerald-700';
+        window.__toast('Schedule A saved. Active signers were notified.', 'success');
+      }
+    ).then(function(r) {
+      if (r && !r.ok) {
+        scheduleStatus.textContent = (r.data && r.data.error) || 'Save failed';
+        scheduleStatus.className = 'text-xs text-red-700';
+      }
+    });
+  });
+
+  var saveNoteBtn = document.getElementById('save-note');
+  var noteEditor = document.getElementById('personal-note-editor');
+  saveNoteBtn.addEventListener('click', function() {
+    runWithButton(saveNoteBtn, 'Saving…',
+      function() { return api('/portal/api/admin/agreements/' + slug, 'PATCH', { personal_note: noteEditor.value }); },
+      function() { window.__toast('Personal note saved.', 'success'); }
+    );
+  });
+
+  var verifyBtn = document.getElementById('verify-hashes-btn');
+  var verifyOutput = document.getElementById('verify-output');
+  var downloadHashBtn = document.getElementById('download-hash-report');
+  var lastHashReport = null;
+  verifyBtn.addEventListener('click', function() {
+    verifyBtn.disabled = true;
+    verifyBtn.textContent = 'Verifying...';
+    fetch('/portal/api/admin/agreements/' + slug + '/verify-hashes').then(function(r) { return r.json(); }).then(function(data) {
+      verifyOutput.classList.remove('hidden');
+      verifyOutput.textContent = JSON.stringify(data, null, 2);
+      lastHashReport = data;
+      if (downloadHashBtn) downloadHashBtn.classList.remove('hidden');
+      verifyBtn.disabled = false;
+      verifyBtn.textContent = 'Verify hashes';
+    });
+  });
+  // Audit A8: download the hash report as JSON for compliance audits
+  // so admin doesn't have to screenshot or copy-paste from the pre.
+  if (downloadHashBtn) {
+    downloadHashBtn.addEventListener('click', function() {
+      if (!lastHashReport) return;
+      var blob = new Blob([JSON.stringify(lastHashReport, null, 2)], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'hash-report-' + slug + '-' + new Date().toISOString().slice(0, 10) + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+  }
+})();
+</script>

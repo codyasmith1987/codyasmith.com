@@ -1,0 +1,336 @@
+#!/usr/bin/env node
+// Contract renderer unit tests. Verifies the no-internal-exposure
+// boundary (Section 14 internal block stripped), placeholder
+// substitution, hash determinism, and Schedule A conditional sections.
+// Runs via tsx because the modules are TypeScript.
+
+import { readFileSync } from 'node:fs';
+import { renderTemplate, renderTemplateToMarkdown, renderScheduleA, computeDocumentHash, PRACTICE } from '../src/lib/contract-render.ts';
+import { buildScheduleA } from '../src/lib/contract-schedule.ts';
+import { computePricing } from '../src/lib/proposal-pricing.ts';
+
+const results = [];
+function test(name, pass, detail = '') {
+  results.push({ name, pass, detail: String(detail).slice(0, 300) });
+  console.log(`[${pass ? 'PASS' : 'FAIL'}] ${name}`);
+  if (!pass && detail) console.log(`       ${String(detail).slice(0, 300)}`);
+}
+
+const SAMPLE_TEMPLATE = `# Standard Client Services Agreement
+
+## 1. Parties
+
+Between the Practice and **{{ client.legal_entity_name }}**, a {{ client.entity_type }} organized under the laws of {{ client.state_of_organization }}.
+
+## 14. Insurance
+
+<!-- internal:start -->
+*Reserved. Internal draft note about insurance binding in progress.*
+<!-- internal:end -->
+
+The Client is responsible for its own insurance.
+
+## 25. Signatures
+
+**{{ client.legal_entity_name }}**
+`;
+
+const SAMPLE_CONTEXT = {
+  client: {
+    legal_entity_name: 'Raised Bar Group LLC',
+    entity_type: 'limited liability company',
+    state_of_organization: 'Idaho',
+  },
+  schedule_a: {},
+  practice: PRACTICE,
+  today: '2026-05-23',
+};
+
+async function run() {
+  // Test 1: Internal-block strip in client mode.
+  {
+    const html = renderTemplate(SAMPLE_TEMPLATE, SAMPLE_CONTEXT, 'client');
+    const hasInternalNote = html.includes('Reserved. Internal draft note');
+    const hasNeutralLine = html.includes('Client is responsible for its own insurance');
+    test('client mode strips internal block', !hasInternalNote, hasInternalNote ? 'leak: internal-only italic shows in client output' : '');
+    test('client mode keeps neutral one-liner', hasNeutralLine, !hasNeutralLine ? 'neutral section text was lost' : '');
+  }
+
+  // Test 2: Admin-source mode preserves the internal block.
+  {
+    const html = renderTemplate(SAMPLE_TEMPLATE, SAMPLE_CONTEXT, 'admin-source');
+    const hasInternalNote = html.includes('Reserved. Internal draft note');
+    test('admin-source mode preserves internal block', hasInternalNote, !hasInternalNote ? 'internal note missing for admin' : '');
+  }
+
+  // Test 3: Placeholder substitution against context.
+  {
+    const html = renderTemplate(SAMPLE_TEMPLATE, SAMPLE_CONTEXT, 'client');
+    const hasName = html.includes('Raised Bar Group LLC');
+    const hasEntityType = html.includes('limited liability company');
+    const hasState = html.includes('Idaho');
+    test('placeholders resolve from context', hasName && hasEntityType && hasState, !hasName ? 'legal name missing' : !hasEntityType ? 'entity type missing' : 'state missing');
+  }
+
+  // Test 4: Missing values render as pending pill.
+  {
+    const html = renderTemplate(SAMPLE_TEMPLATE, { ...SAMPLE_CONTEXT, client: { ...SAMPLE_CONTEXT.client, entity_type: '' } }, 'client');
+    const hasPending = html.includes('metadata-pending');
+    test('missing values render as pending pill', hasPending, !hasPending ? 'empty values did not produce pending marker' : '');
+  }
+
+  // Test 5: Hash determinism — rendering twice yields the same hash.
+  {
+    const html1 = renderTemplate(SAMPLE_TEMPLATE, SAMPLE_CONTEXT, 'client');
+    const html2 = renderTemplate(SAMPLE_TEMPLATE, SAMPLE_CONTEXT, 'client');
+    const h1 = computeDocumentHash({ body_html: html1, schedule_a: SAMPLE_CONTEXT.schedule_a, client: SAMPLE_CONTEXT.client });
+    const h2 = computeDocumentHash({ body_html: html2, schedule_a: SAMPLE_CONTEXT.schedule_a, client: SAMPLE_CONTEXT.client });
+    test('hash determinism: same input yields identical hash', h1 === h2, `h1=${h1.slice(0, 12)} h2=${h2.slice(0, 12)}`);
+  }
+
+  // Test 6: Hash changes when Schedule A changes.
+  {
+    const html = renderTemplate(SAMPLE_TEMPLATE, SAMPLE_CONTEXT, 'client');
+    const h1 = computeDocumentHash({ body_html: html, schedule_a: { v: 1 }, client: SAMPLE_CONTEXT.client });
+    const h2 = computeDocumentHash({ body_html: html, schedule_a: { v: 2 }, client: SAMPLE_CONTEXT.client });
+    test('hash changes when schedule_a changes', h1 !== h2, h1 === h2 ? 'identical schedule_a changes still produced same hash' : '');
+  }
+
+  // Test 7: Admin path scrub in client mode.
+  {
+    const tpl = `Visit [admin](/portal/admin/agreements/new) for setup.`;
+    const html = renderTemplate(tpl, SAMPLE_CONTEXT, 'client');
+    const hasAdminPath = html.includes('/portal/admin/');
+    test('client mode scrubs admin links', !hasAdminPath, hasAdminPath ? 'admin path leaked in client view' : '');
+  }
+
+  // Test 7b: renderTemplateToMarkdown (the executed-PDF path). Must strip
+  // the internal block, resolve placeholders to plain text, leave NO raw
+  // {{ }} or internal markers, and stay markdown (no marked.parse to HTML).
+  {
+    const md = renderTemplateToMarkdown(SAMPLE_TEMPLATE, SAMPLE_CONTEXT);
+    test('markdown: no raw placeholders remain', !md.includes('{{'), md.includes('{{') ? 'literal {{ leaked into PDF body' : '');
+    test('markdown: internal block stripped', !md.includes('Reserved. Internal draft note'), md.includes('Reserved. Internal draft note') ? 'internal reserved-coverage note leaked into PDF' : '');
+    test('markdown: no internal markers remain', !md.includes('internal:start') && !md.includes('internal:end'));
+    test('markdown: placeholders resolved to plain text', md.includes('Raised Bar Group LLC') && md.includes('limited liability company') && md.includes('Idaho'));
+    test('markdown: keeps neutral one-liner', md.includes('Client is responsible for its own insurance'));
+    test('markdown: stays markdown, not HTML', md.includes('## 1. Parties') && !md.includes('<h2'));
+  }
+
+  // Test 7c: missing values render as a plain pending marker (not an HTML span).
+  {
+    const md = renderTemplateToMarkdown(SAMPLE_TEMPLATE, { ...SAMPLE_CONTEXT, client: { ...SAMPLE_CONTEXT.client, entity_type: '' } });
+    test('markdown: missing value uses plain pending marker', md.includes('[to be completed at signing]') && !md.includes('metadata-pending'));
+  }
+
+  // Test 8: buildScheduleA for raised_bar_v1 with full selections.
+  {
+    const selections = {
+      mgmt_tier: 'better',
+      site_setup: 'o2',
+      consulting: 'yes',
+      consulting_tier: 'better',
+    };
+    const pricing = computePricing('raised_bar_v1', selections);
+    const scheduleA = buildScheduleA({
+      proposalConfig: { pricing_formula: 'raised_bar_v1' },
+      draftSelections: selections,
+      pricing,
+      clientMetadata: { legal_entity_name: 'Raised Bar Group LLC', primary_contact_name: 'Jason Roth' },
+      effectiveDate: '2026-06-01',
+    });
+
+    test('schedule_a marks Web Management purchased', scheduleA.products_purchased.web_management === true);
+    test('schedule_a marks Marketing Consulting purchased when consulting=yes', scheduleA.products_purchased.marketing_consulting === true);
+    test('schedule_a marks build purchased for raised-bar', scheduleA.products_purchased.build === true);
+    test('schedule_a A.5 web_management populated when web_management=true', scheduleA.web_management !== null);
+    test('schedule_a tier_name reflects pricing result', scheduleA.web_management?.tier_name === 'Better');
+    test('schedule_a site_count is 3 for o2 (split setup)', scheduleA.web_management?.site_count === 3);
+    test('schedule_a monthly_total uses multi-site formula', Math.round(scheduleA.web_management?.monthly_total) === 1292);
+    test('schedule_a marketing_consulting populated when consulting=yes', scheduleA.marketing_consulting !== null);
+    test('schedule_a A.6 tier_name reflects pricing result', scheduleA.marketing_consulting?.tier_name === 'Better');
+    test('schedule_a A.6 monthly_retainer is $997', scheduleA.marketing_consulting?.monthly_retainer === 997);
+  }
+
+  // Test 9: buildScheduleA omits MC section when consulting=no.
+  {
+    const selections = {
+      mgmt_tier: 'good',
+      site_setup: 'o1',
+      consulting: 'no',
+    };
+    const pricing = computePricing('raised_bar_v1', selections);
+    const scheduleA = buildScheduleA({
+      proposalConfig: { pricing_formula: 'raised_bar_v1' },
+      draftSelections: selections,
+      pricing,
+      clientMetadata: {},
+      effectiveDate: '2026-06-01',
+    });
+    test('schedule_a omits marketing_consulting when consulting=no', scheduleA.marketing_consulting === null);
+    test('schedule_a products_purchased.marketing_consulting is false', scheduleA.products_purchased.marketing_consulting === false);
+    test('schedule_a site_count is 2 for o1 (single setup)', scheduleA.web_management?.site_count === 2);
+  }
+
+  // Test 10: Schedule A renderer omits A.6 (MC) when products_purchased.marketing_consulting is false.
+  // MC moved A.5 -> A.6 after the A.4 "Amount due at signing" section was inserted.
+  {
+    const selections = { mgmt_tier: 'better', site_setup: 'o1', consulting: 'no' };
+    const pricing = computePricing('raised_bar_v1', selections);
+    const scheduleA = buildScheduleA({
+      proposalConfig: { pricing_formula: 'raised_bar_v1' },
+      draftSelections: selections,
+      pricing,
+      clientMetadata: {},
+      effectiveDate: '2026-06-01',
+    });
+    const html = renderScheduleA(scheduleA, 'client');
+    const hasMc = html.includes('Marketing Consulting specifics');
+    test('Schedule A renderer omits MC section when MC not purchased', !hasMc, hasMc ? 'MC section still rendered despite MC=no' : '');
+  }
+
+  // Test 11: Schedule A renderer includes A.6 (MC) when MC purchased.
+  {
+    const selections = { mgmt_tier: 'better', site_setup: 'o1', consulting: 'yes', consulting_tier: 'best' };
+    const pricing = computePricing('raised_bar_v1', selections);
+    const scheduleA = buildScheduleA({
+      proposalConfig: { pricing_formula: 'raised_bar_v1' },
+      draftSelections: selections,
+      pricing,
+      clientMetadata: {},
+      effectiveDate: '2026-06-01',
+    });
+    const html = renderScheduleA(scheduleA, 'client');
+    test('Schedule A renderer includes A.6 when MC purchased', html.includes('A.6 Marketing Consulting specifics'));
+    test('Schedule A A.6 includes hiring guidance line for Best tier', html.includes('included') && html.includes('Hiring guidance'));
+  }
+
+  // Test 11b: A.4 Amount due at signing block. Itemizes one-time fees +
+  // first month of recurring; total equals pricing.atSigning (one-time +
+  // monthly); line items sum to the total; renderer emits the section.
+  {
+    const selections = { mgmt_tier: 'better', site_setup: 'o2', consulting: 'yes', consulting_tier: 'better' };
+    const pricing = computePricing('raised_bar_v1', selections);
+    const scheduleA = buildScheduleA({
+      proposalConfig: { pricing_formula: 'raised_bar_v1' },
+      draftSelections: selections,
+      pricing,
+      clientMetadata: {},
+      effectiveDate: '2026-06-01',
+    });
+    const ads = scheduleA.amount_due_at_signing;
+    test('A.4 amount_due_at_signing populated', !!ads && Array.isArray(ads.line_items) && ads.line_items.length > 0);
+    test('A.4 total equals pricing.atSigning', !!ads && Math.abs(ads.total - pricing.atSigning) < 0.005,
+      ads ? `total ${ads.total} vs atSigning ${pricing.atSigning}` : 'no block');
+    test('A.4 total equals oneTime + monthly', !!ads && Math.abs(ads.total - (pricing.oneTime + pricing.monthly)) < 0.005);
+    const itemSum = ads ? Math.round(ads.line_items.reduce((s, li) => s + li.amount, 0) * 100) / 100 : NaN;
+    test('A.4 line items sum to total', !!ads && Math.abs(itemSum - ads.total) < 0.005, ads ? `items ${itemSum} vs total ${ads.total}` : 'no block');
+    test('A.4 includes a first-month recurring line', !!ads && ads.line_items.some(li => /First month/i.test(li.label)));
+    const html = renderScheduleA(scheduleA, 'client');
+    test('Schedule A renderer includes A.4 Amount due at signing', html.includes('A.4 Amount due at signing') && html.includes('Total due at signing'));
+  }
+
+  // Test 12: Pricing formula math (multi-site Better, 3 sites).
+  {
+    const pricing = computePricing('raised_bar_v1', { mgmt_tier: 'better', site_setup: 'o2', consulting: 'no' });
+    // 497 + 2 * 497 * 0.80 = 497 + 795.20 = 1292.20
+    test('pricing: Better tier 3-site monthly equals $1,292.20', Math.abs((pricing?.mgmtMonthly || 0) - 1292.20) < 0.001, `got ${pricing?.mgmtMonthly}`);
+  }
+
+  // Test 13: Domain picks land in Schedule A site list.
+  {
+    const selections = {
+      mgmt_tier: 'better',
+      site_setup: 'o2',
+      builders_domain: 'raisedbarbuilders',
+      tailwater_domain: 'tailwaterhailey',
+      consulting: 'no',
+    };
+    const pricing = computePricing('raised_bar_v1', selections);
+    const scheduleA = buildScheduleA({
+      proposalConfig: { pricing_formula: 'raised_bar_v1' },
+      draftSelections: selections,
+      pricing,
+      clientMetadata: {},
+      effectiveDate: '2026-06-01',
+    });
+    const sites = scheduleA.web_management?.sites || [];
+    const buildersSite = sites.find(s => s.domain === 'raisedbarbuilders.com');
+    const tailwaterSite = sites.find(s => s.domain === 'tailwaterhailey.com');
+    test('schedule_a uses picked Builders domain', !!buildersSite, `got: ${sites.map(s => s.domain).join(', ')}`);
+    test('schedule_a uses picked Tailwater domain', !!tailwaterSite, `got: ${sites.map(s => s.domain).join(', ')}`);
+  }
+
+  // Test 14: "discuss" pick falls back to placeholder language.
+  {
+    const selections = {
+      mgmt_tier: 'better',
+      site_setup: 'o1',
+      builders_domain: 'discuss',
+      consulting: 'no',
+    };
+    const pricing = computePricing('raised_bar_v1', selections);
+    const scheduleA = buildScheduleA({
+      proposalConfig: { pricing_formula: 'raised_bar_v1' },
+      draftSelections: selections,
+      pricing,
+      clientMetadata: {},
+      effectiveDate: '2026-06-01',
+    });
+    const sites = scheduleA.web_management?.sites || [];
+    const hasPlaceholder = sites.some(s => s.domain.includes('confirmed by Client at signing'));
+    test('schedule_a falls back to placeholder when domain pick is "discuss"', hasPlaceholder, `got: ${sites.map(s => s.domain).join(', ')}`);
+  }
+
+  // Test 15: Alternative Builders domain pick resolves correctly.
+  {
+    const selections = {
+      mgmt_tier: 'good',
+      site_setup: 'o1',
+      builders_domain: 'raisedbarconstruction',
+      consulting: 'no',
+    };
+    const pricing = computePricing('raised_bar_v1', selections);
+    const scheduleA = buildScheduleA({
+      proposalConfig: { pricing_formula: 'raised_bar_v1' },
+      draftSelections: selections,
+      pricing,
+      clientMetadata: {},
+      effectiveDate: '2026-06-01',
+    });
+    const sites = scheduleA.web_management?.sites || [];
+    const hasAlt = sites.some(s => s.domain === 'raisedbarconstruction.com');
+    test('schedule_a resolves alternative Builders domain', hasAlt, `got: ${sites.map(s => s.domain).join(', ')}`);
+  }
+
+  // Test 16: standard-v5 template is clean and a faithful copy of v4.
+  // v5 only removes the stray </content>/</invoke> artifacts that printed
+  // into the executed PDF; nothing else may drift.
+  {
+    const tplDir = new URL('../src/contracts/templates/', import.meta.url);
+    const v4 = readFileSync(new URL('standard-v4.md', tplDir), 'utf-8');
+    const v5 = readFileSync(new URL('standard-v5.md', tplDir), 'utf-8');
+    test('v5: no </content> artifact', !v5.includes('</content>'));
+    test('v5: no </invoke> artifact', !v5.includes('</invoke>'));
+    test('v5: no stray closing markup', !/<\/(content|invoke|function_calls|parameter)>/.test(v5));
+    // v5 must equal v4 with the artifact lines stripped (no content drift).
+    // Trailing-whitespace normalized: v5 ends with a final newline (better
+    // practice), v4 did not; that difference is not drift.
+    const v4Clean = v4.split('\n').filter(l => l.trim() !== '</content>' && l.trim() !== '</invoke>').join('\n').trimEnd();
+    const v5Clean = v5.trimEnd();
+    test('v5: identical to v4 minus the artifacts', v5Clean === v4Clean,
+      v5Clean === v4Clean ? '' : 'v5 drifted from v4 beyond the artifact removal');
+  }
+
+  // Print summary.
+  const failed = results.filter(r => !r.pass);
+  console.log(`\n${results.length - failed.length}/${results.length} passed`);
+  if (failed.length > 0) {
+    process.exit(1);
+  }
+}
+
+run().catch(err => {
+  console.error('Test run threw:', err);
+  process.exit(1);
+});

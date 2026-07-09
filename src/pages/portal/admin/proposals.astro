@@ -1,0 +1,371 @@
+---
+// Admin-only proposals index. Lists every proposal in the system with
+// client, signing progress, and view/manage/delete actions. Phase 3 of
+// the proposal-builder refactor.
+//
+// Reads proposals JOIN clients in one query. For each proposal we also
+// look up the matching proposal_drafts row (by client_id + slug) so the
+// listing can show per-signer signing progress. Signers come from
+// proposals.config JSON; signature presence comes from proposal_drafts
+// (either the typed jason_signature/kevin_signature columns or the
+// generic signatures JSON column added in Phase 1).
+
+import Portal from '../../../layouts/Portal.astro';
+import turso from '../../../lib/turso';
+
+export const prerender = false;
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'admin') {
+  return Astro.redirect('/portal/dashboard');
+}
+
+type Signer = { id: string; name: string; email: string };
+type ProposalConfig = {
+  title?: string;
+  signers?: Signer[];
+  [key: string]: any;
+};
+type SignerProgress = {
+  id: string;
+  name: string;
+  signed: boolean;
+};
+type ProposalRow = {
+  id: string;
+  slug: string;
+  title: string;
+  status: string;
+  client_id: string;
+  client_name: string;
+  created_at: string | null;
+  published_at: string | null;
+  finalized_at: string | null;
+  signers: SignerProgress[];
+};
+
+// One query to pull every proposal with its client name.
+const proposalsResult = await turso.execute(`
+  SELECT p.id, p.slug, p.title, p.config, p.status, p.client_id,
+         p.created_at, p.published_at, p.finalized_at, c.name as client_name
+  FROM proposals p
+  JOIN clients c ON c.id = p.client_id
+  ORDER BY p.created_at DESC
+`);
+
+// Pull all drafts in one query and index them by client_id + slug so
+// each proposal row can resolve its signing state without N round-trips.
+const draftsResult = await turso.execute(`
+  SELECT client_id, slug, jason_signature, kevin_signature, signatures
+  FROM proposal_drafts
+`);
+const draftsByKey = new Map<string, {
+  jason_signature: string | null;
+  kevin_signature: string | null;
+  signatures: string | null;
+}>();
+for (const row of draftsResult.rows) {
+  const clientId = row[0] as string;
+  const slug = row[1] as string;
+  draftsByKey.set(`${clientId}::${slug}`, {
+    jason_signature: row[2] as string | null,
+    kevin_signature: row[3] as string | null,
+    signatures: row[4] as string | null,
+  });
+}
+
+function resolveSignerProgress(
+  signers: Signer[],
+  draft: { jason_signature: string | null; kevin_signature: string | null; signatures: string | null } | undefined,
+): SignerProgress[] {
+  if (!signers || signers.length === 0) return [];
+
+  // Generic signatures JSON column (added in Phase 1): { [signerId]: { signature, signed_at } }
+  let signaturesJson: Record<string, { signature?: string }> | null = null;
+  if (draft?.signatures) {
+    try { signaturesJson = JSON.parse(draft.signatures); } catch { signaturesJson = null; }
+  }
+
+  return signers.map(s => {
+    let signed = false;
+    // Prefer the generic JSON if present
+    if (signaturesJson && signaturesJson[s.id]?.signature) {
+      signed = true;
+    } else if (draft) {
+      // Fallback to the typed columns for Raised Bar's existing draft
+      if (s.id === 'jason' && draft.jason_signature) signed = true;
+      if (s.id === 'kevin' && draft.kevin_signature) signed = true;
+    }
+    return { id: s.id, name: s.name, signed };
+  });
+}
+
+const proposals: ProposalRow[] = proposalsResult.rows.map(row => {
+  const id = row[0] as string;
+  const slug = row[1] as string;
+  const title = row[2] as string;
+  const configRaw = row[3] as string;
+  const status = row[4] as string;
+  const clientId = row[5] as string;
+  const createdAt = row[6] as string | null;
+  const publishedAt = row[7] as string | null;
+  const finalizedAt = row[8] as string | null;
+  const clientName = row[9] as string;
+
+  let config: ProposalConfig = {};
+  try { config = JSON.parse(configRaw); } catch { config = {}; }
+  const signers = Array.isArray(config.signers) ? config.signers : [];
+  const draft = draftsByKey.get(`${clientId}::${slug}`);
+
+  return {
+    id,
+    slug,
+    title,
+    status,
+    client_id: clientId,
+    client_name: clientName,
+    created_at: createdAt,
+    published_at: publishedAt,
+    finalized_at: finalizedAt,
+    signers: resolveSignerProgress(signers, draft),
+  };
+});
+
+function fmtDate(s: string | null): string {
+  if (!s) return '';
+  const d = new Date(s.includes('T') ? s : s.replace(' ', 'T') + 'Z');
+  if (isNaN(d.getTime())) return s;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+import { PROPOSAL_STATUS, badgeClass, lookupStatus, STATUS_PILL_BASE } from '../../../lib/admin-status-styling';
+---
+
+<Portal title="Proposals">
+  <div class="max-w-4xl mx-auto">
+    <div class="mb-10 flex items-start justify-between gap-6">
+      <div>
+        <p class="text-[10px] font-mono tracking-[0.2em] uppercase mb-3">
+          <a href="/portal/dashboard" class="text-amber-600 hover:text-amber-400 transition-colors">Admin</a>
+          <span class="text-neutral-500"> / Proposals</span>
+        </p>
+        <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Proposals</h1>
+      </div>
+      <a
+        href="/portal/admin/proposals/new"
+        class="shrink-0 px-5 py-2.5 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.2)]"
+      >
+        New proposal
+      </a>
+    </div>
+
+    <details class="mb-6 group">
+      <summary class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase cursor-pointer hover:text-amber-600 transition-colors duration-300 select-none">Status guide</summary>
+      <div class="mt-3 p-4 bg-neutral-900/30 border border-white/5 rounded-lg space-y-2 text-sm text-neutral-300">
+        <p><span class="inline-block text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded bg-neutral-700/30 text-neutral-500 mr-2">Draft</span>Saved but not visible to the prospect. Only I can see it.</p>
+        <p><span class="inline-block text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 mr-2">Published</span>Live at its public URL. The prospect can read and accept it. No agreement yet.</p>
+        <p><span class="inline-block text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-700 mr-2">Finalized</span>Prospect has accepted the LOI (tier picks and signers locked). Ready to be turned into an agreement.</p>
+      </div>
+    </details>
+
+    {proposals.length > 0 ? (
+      <div class="space-y-3">
+        {proposals.map(p => (
+          <div
+            class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 group hover:border-white/10 transition-all duration-300"
+            data-proposal-row={p.slug}
+          >
+            <div class="flex items-start justify-between gap-4">
+              <div class="min-w-0 flex-1">
+                <div class="flex items-baseline gap-3 flex-wrap">
+                  <p class="text-sm font-medium text-neutral-200">{p.client_name}</p>
+                  <a
+                    href={`/portal/proposals/${p.slug}`}
+                    target="_blank"
+                    rel="noopener"
+                    class="text-[10px] font-mono text-neutral-400 hover:text-amber-600 transition-colors"
+                  >
+                    /{p.slug}
+                  </a>
+                </div>
+                <p class="text-xs text-neutral-500 mt-1">{p.title}</p>
+
+                {p.signers.length > 0 && (
+                  <div class="flex items-center gap-4 mt-3 text-xs">
+                    {p.signers.map(s => (
+                      <span class="flex items-center gap-1.5">
+                        {s.signed ? (
+                          <span class="text-emerald-400">✓</span>
+                        ) : (
+                          <span class="text-neutral-400">○</span>
+                        )}
+                        <span class:list={[s.signed ? 'text-neutral-300' : 'text-neutral-400']}>
+                          {s.name}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div class="flex items-center gap-4 mt-3 text-[10px] font-mono text-neutral-500">
+                  {p.created_at && <span>Created {fmtDate(p.created_at)}</span>}
+                  {p.published_at && <span>Published {fmtDate(p.published_at)}</span>}
+                  {p.finalized_at && <span>Finalized {fmtDate(p.finalized_at)}</span>}
+                </div>
+              </div>
+
+              <div class="flex flex-col items-end gap-3 shrink-0">
+                {(() => {
+                  const info = lookupStatus(PROPOSAL_STATUS, p.status);
+                  return (
+                    <span class:list={[STATUS_PILL_BASE, badgeClass(info.token)]}>
+                      {info.label}
+                    </span>
+                  );
+                })()}
+
+                <div class="flex items-center gap-3">
+                  <a
+                    href={`/portal/proposals/${p.slug}`}
+                    target="_blank"
+                    rel="noopener"
+                    class="text-xs text-neutral-300 hover:text-amber-600 transition-colors duration-300"
+                  >
+                    View as client
+                  </a>
+                  {!p.finalized_at && (
+                    <button
+                      data-publish-proposal={p.slug}
+                      data-publish-status={p.status}
+                      data-proposal-title={p.title}
+                      class={`text-xs font-medium px-2.5 py-1 rounded border transition-colors duration-300 ${p.status === 'published' ? 'border-neutral-500/40 text-neutral-300 hover:bg-neutral-500/10 hover:text-neutral-100' : 'border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300'}`}
+                    >
+                      {p.status === 'published' ? 'Unpublish' : 'Publish'}
+                    </button>
+                  )}
+                  <button
+                    data-delete-proposal={p.slug}
+                    data-proposal-title={p.title}
+                    data-client-name={p.client_name}
+                    class="text-xs font-medium px-2.5 py-1 rounded border border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors duration-300"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    ) : (
+      <div class="text-center py-16">
+        <p class="font-serif text-xl text-neutral-100 mb-2">No proposals yet</p>
+        <p class="text-sm text-neutral-500">Create your first one.</p>
+      </div>
+    )}
+  </div>
+
+  <script>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    document.querySelectorAll('[data-delete-proposal]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const button = btn as HTMLButtonElement;
+        const slug = button.dataset.deleteProposal!;
+        const title = button.dataset.proposalTitle || slug;
+        const clientName = button.dataset.clientName || '';
+
+        const message = `Permanently delete "${title}"${clientName ? ` for ${clientName}` : ''}? This removes the proposal row and any draft/signature state. Cannot be undone.`;
+        // Use the portal confirm modal when available; fall back to a
+        // native confirm so the button always works.
+        const confirmFn = (window as any).__confirm;
+        const confirmed = typeof confirmFn === 'function'
+          ? await confirmFn({ title: 'Delete proposal', message, confirmLabel: 'Delete proposal', danger: true })
+          : window.confirm(message);
+        if (!confirmed) return;
+
+        const toast = (msg: string, kind: string) => {
+          const fn = (window as any).__toast;
+          if (typeof fn === 'function') fn(msg, kind);
+          else if (kind === 'error') alert(msg);
+        };
+
+        const run = async () => {
+          const res = await fetch(`/portal/api/admin/proposals/${encodeURIComponent(slug)}`, {
+            method: 'DELETE',
+            headers: { 'X-CSRF-Token': csrfToken },
+          });
+          if (res.ok) {
+            toast(`Deleted "${title}"`, 'success');
+            const row = document.querySelector(`[data-proposal-row="${slug}"]`) as HTMLElement | null;
+            if (row) {
+              row.style.opacity = '0';
+              row.style.transform = 'translateY(-8px)';
+              row.style.transition = 'all 0.3s ease';
+              setTimeout(() => row.remove(), 300);
+            } else {
+              location.reload();
+            }
+          } else {
+            const data = await res.json().catch(() => ({ error: 'Failed to delete' }));
+            toast(data.error || 'Failed to delete proposal', 'error');
+          }
+        };
+
+        const withLoading = (window as any).__withButtonLoading;
+        if (typeof withLoading === 'function') {
+          await withLoading(button, 'Deleting…', run);
+        } else {
+          button.disabled = true;
+          const prev = button.textContent;
+          button.textContent = 'Deleting…';
+          try { await run(); } finally { button.disabled = false; button.textContent = prev; }
+        }
+      });
+    });
+
+    // Publish / unpublish: flips the proposal status. Publishing surfaces
+    // the client's dashboard "Review your proposal" notification; drafts
+    // stay silent so the owner can preview first.
+    document.querySelectorAll('[data-publish-proposal]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const button = btn as HTMLButtonElement;
+        const slug = button.dataset.publishProposal!;
+        const current = button.dataset.publishStatus || 'draft';
+        const title = button.dataset.proposalTitle || slug;
+        const next = current === 'published' ? 'draft' : 'published';
+
+        const toast = (msg: string, kind: string) => {
+          const fn = (window as any).__toast;
+          if (typeof fn === 'function') fn(msg, kind);
+          else if (kind === 'error') alert(msg);
+        };
+
+        const run = async () => {
+          const res = await fetch(`/portal/api/admin/proposals/${encodeURIComponent(slug)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ status: next }),
+          });
+          if (res.ok) {
+            toast(next === 'published' ? `Published "${title}"` : `Returned "${title}" to draft`, 'success');
+            location.reload();
+          } else {
+            const data = await res.json().catch(() => ({ error: 'Failed to update' }));
+            toast(data.error || 'Failed to update proposal', 'error');
+          }
+        };
+
+        const withLoading = (window as any).__withButtonLoading;
+        if (typeof withLoading === 'function') {
+          await withLoading(button, next === 'published' ? 'Publishing…' : 'Updating…', run);
+        } else {
+          button.disabled = true;
+          const prev = button.textContent;
+          button.textContent = next === 'published' ? 'Publishing…' : 'Updating…';
+          try { await run(); } finally { button.disabled = false; button.textContent = prev; }
+        }
+      });
+    });
+  </script>
+</Portal>

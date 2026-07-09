@@ -10,16 +10,16 @@ const clients = await getAllClients();
 <Portal title="Manage Users">
   <div class="max-w-3xl mx-auto">
     <div class="mb-10">
-      <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin</p>
+      <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin</p>
       <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Users</h1>
     </div>
 
     <!-- Create user form -->
     <form id="create-user-form" class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8 mb-10">
-      <p class="text-[10px] font-mono text-neutral-600 tracking-[0.15em] uppercase mb-5">Invite new user</p>
+      <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-5">Invite new user</p>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div>
-          <label for="user-name" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Full name</label>
+          <label for="user-name" class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Full name</label>
           <input
             type="text"
             id="user-name"
@@ -30,7 +30,7 @@ const clients = await getAllClients();
           />
         </div>
         <div>
-          <label for="user-email" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Email</label>
+          <label for="user-email" class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Email</label>
           <input
             type="email"
             id="user-email"
@@ -41,14 +41,14 @@ const clients = await getAllClients();
           />
         </div>
         <div>
-          <label for="user-role" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Role</label>
+          <label for="user-role" class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Role</label>
           <select id="user-role" name="role" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-300 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300">
             <option value="client">Client</option>
             <option value="admin">Admin</option>
           </select>
         </div>
         <div>
-          <label for="user-client" class="block text-[10px] font-mono text-neutral-600 tracking-wide uppercase mb-2">Client (for client role)</label>
+          <label for="user-client" class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Client (for client role)</label>
           <select id="user-client" name="client_id" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-300 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300">
             <option value="">— None —</option>
             {clients.map(c => (
@@ -61,7 +61,7 @@ const clients = await getAllClients();
         <button type="submit" class="px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.2)]">
           Create & send invite
         </button>
-        <label class="flex items-center gap-2 text-xs text-neutral-600 cursor-pointer">
+        <label class="flex items-center gap-2 text-xs text-neutral-400 cursor-pointer">
           <input type="checkbox" id="send-invite" checked class="rounded border-white/10 bg-neutral-900 accent-amber-500" />
           Send magic link email
         </label>
@@ -76,32 +76,52 @@ const clients = await getAllClients();
           <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 flex items-center justify-between group hover:border-white/10 transition-all duration-300" data-user-row={u.id}>
             <div>
               <p class="text-sm font-medium text-neutral-200">{u.name}</p>
-              <p class="text-xs text-neutral-600">{u.email}</p>
-              {u.client_name && <p class="text-xs text-neutral-700 mt-0.5">{u.client_name}</p>}
+              <p class="text-xs text-neutral-400">{u.email}</p>
+              {u.client_name && <p class="text-xs text-neutral-500 mt-0.5">{u.client_name}</p>}
             </div>
             <div class="flex items-center gap-4">
               <span class:list={[
                 'text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full',
-                u.role === 'admin' ? 'bg-amber-500/10 text-amber-400' : 'bg-neutral-800 text-neutral-500',
+                u.role === 'admin' ? 'bg-amber-500/10 text-amber-600' : 'bg-neutral-800 text-neutral-500',
               ]}>
                 {u.role}
               </span>
+              {!u.active && (
+                <span class="text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full bg-red-500/10 text-red-400">
+                  Deactivated
+                </span>
+              )}
               {u.last_login_at && (
-                <span class="text-[10px] text-neutral-700">
+                <span class="text-[10px] text-neutral-500">
                   {new Date(u.last_login_at).toLocaleDateString()}
                 </span>
               )}
               <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                 <button
+                  data-resend-user={u.id}
+                  data-user-name={u.name}
+                  class="text-xs text-neutral-400 hover:text-amber-600 transition-colors duration-300"
+                >
+                  Resend invite
+                </button>
+                <button
                   data-revoke-user={u.id}
-                  class="text-xs text-neutral-600 hover:text-amber-400 transition-colors duration-300"
+                  class="text-xs text-neutral-400 hover:text-amber-600 transition-colors duration-300"
                 >
                   Revoke sessions
                 </button>
                 <button
+                  data-toggle-active={u.id}
+                  data-active={u.active ? '1' : '0'}
+                  data-user-name={u.name}
+                  class="text-xs text-neutral-400 hover:text-amber-600 transition-colors duration-300"
+                >
+                  {u.active ? 'Deactivate' : 'Activate'}
+                </button>
+                <button
                   data-delete-user={u.id}
                   data-user-name={u.name}
-                  class="text-xs text-neutral-600 hover:text-red-400 transition-colors duration-300"
+                  class="text-xs text-neutral-400 hover:text-red-400 transition-colors duration-300"
                 >
                   Delete
                 </button>
@@ -121,24 +141,95 @@ const clients = await getAllClients();
   <script>
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
+    // Resend invite
+    document.querySelectorAll('[data-resend-user]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId = (btn as HTMLElement).dataset.resendUser!;
+        const userName = (btn as HTMLElement).dataset.userName!;
+        const original = (btn as HTMLElement).textContent;
+        (btn as HTMLElement).textContent = 'Sending...';
+        (btn as HTMLButtonElement).disabled = true;
+        try {
+          const res = await fetch('/portal/api/admin/resend-invite', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ user_id: userId }),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            (btn as HTMLElement).textContent = data.invite_sent ? 'Sent ✓' : 'Link logged';
+            (btn as HTMLElement).classList.add('text-emerald-400');
+            (window as any).__toast(data.invite_sent ? `Invite sent to ${userName}` : 'Brevo not configured; link logged to server', data.invite_sent ? 'success' : 'info');
+          } else {
+            (btn as HTMLElement).textContent = 'Failed';
+            (btn as HTMLElement).classList.add('text-red-400');
+            (window as any).__toast(data.error || 'Failed to resend invite', 'error');
+          }
+        } catch {
+          (btn as HTMLElement).textContent = 'Failed';
+          (btn as HTMLElement).classList.add('text-red-400');
+          (window as any).__toast('Connection error', 'error');
+        }
+        setTimeout(() => {
+          (btn as HTMLElement).textContent = original;
+          (btn as HTMLElement).classList.remove('text-emerald-400', 'text-red-400');
+          (btn as HTMLButtonElement).disabled = false;
+        }, 3000);
+      });
+    });
+
     // Revoke sessions
     document.querySelectorAll('[data-revoke-user]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const userId = (btn as HTMLElement).dataset.revokeUser!;
-        const res = await fetch('/portal/api/admin/revoke-sessions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-          body: JSON.stringify({ user_id: userId }),
+        const button = btn as HTMLButtonElement;
+        const userId = button.dataset.revokeUser!;
+        await (window as any).__withButtonLoading(button, 'Revoking…', async () => {
+          const res = await fetch('/portal/api/admin/revoke-sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ user_id: userId }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            (window as any).__toast(`Revoked ${data.sessions_revoked} session${data.sessions_revoked === 1 ? '' : 's'}.`, 'success');
+          } else {
+            (window as any).__toast('Failed to revoke sessions.', 'error');
+          }
         });
-        if (res.ok) {
-          const data = await res.json();
-          (btn as HTMLElement).textContent = `Revoked (${data.sessions_revoked})`;
-          (btn as HTMLElement).classList.add('text-amber-400');
-          setTimeout(() => {
-            (btn as HTMLElement).textContent = 'Revoke sessions';
-            (btn as HTMLElement).classList.remove('text-amber-400');
-          }, 2000);
+      });
+    });
+
+    // Deactivate / reactivate user
+    document.querySelectorAll('[data-toggle-active]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const button = btn as HTMLButtonElement;
+        const userId = button.dataset.toggleActive!;
+        const currentlyActive = button.dataset.active === '1';
+        const userName = button.dataset.userName!;
+        const next = !currentlyActive;
+        if (!next) {
+          const confirmed = await (window as any).__confirm({
+            title: `Deactivate ${userName}`,
+            message: 'This revokes their access and signs them out. The account and all of its history are kept, and you can reactivate any time.',
+            confirmLabel: 'Deactivate',
+            danger: true,
+          });
+          if (!confirmed) return;
         }
+        await (window as any).__withButtonLoading(button, next ? 'Activating…' : 'Deactivating…', async () => {
+          const res = await fetch('/portal/api/admin/set-user-active', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ user_id: userId, active: next }),
+          });
+          if (res.ok) {
+            (window as any).__toast(`${userName} ${next ? 'reactivated' : 'deactivated'}.`, 'success');
+            setTimeout(() => location.reload(), 800);
+          } else {
+            const data = await res.json();
+            (window as any).__toast(data.error || 'Failed to update user', 'error');
+          }
+        });
       });
     });
 
@@ -149,7 +240,7 @@ const clients = await getAllClients();
         const userName = (btn as HTMLElement).dataset.userName!;
         const confirmed = await (window as any).__confirm({
           title: `Delete ${userName}`,
-          message: 'This will permanently delete the user and revoke all their sessions.',
+          message: 'Permanently deletes a user who has no history yet. If they have any activity or business records, deletion is blocked and you should deactivate them instead, which removes access while keeping the records.',
           confirmLabel: 'Delete user',
           danger: true,
         });

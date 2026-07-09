@@ -1,9 +1,78 @@
 ---
 import Base from '../../layouts/Base.astro';
+
+const faqSchema = JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What's the difference between a single session and the guided program?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A single session is a one-time training on a specific topic. Useful for onboarding a new hire or covering a narrow skill. The guided program is three sessions over three to four weeks with real assignments in between. The guided format is what actually makes the skills stick. A single session is faster and cheaper, but most of it gets forgotten within a week."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Do you train remotely or on-site?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Remote by default. Screen-shared, recorded, with everyone working on their own systems from wherever they sit. On-site is possible in southern Utah but the format works just as well remotely. Most of my clients are spread across multiple locations anyway."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What team size works best?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Three to eight people is the sweet spot. Small enough that everyone gets attention and can ask questions. Big enough that you are not building everything around one person. Larger teams I split into cohorts. Smaller teams work fine too; talk to me about the shape."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What if my team needs different things at different skill levels?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Tell me up front. I'll design the program around the real range, not a fake average. Sometimes that means splitting into two cohorts. Sometimes it means the more advanced people get harder assignments between sessions. The goal is everyone leaves more capable, not everyone gets the same slides."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Do we keep the materials?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Yes. Reference guides, SOPs, and checklists are included with any session and they're yours to keep. Use them for onboarding the next hire. Update them as your tools change. They're written for your team, not as a generic handout."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How do you measure if the training worked?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "The real measure is whether your team stops asking you to do things they should be doing themselves. The third session includes a self-sufficiency check where they walk through real scenarios without coaching. If they can do it, training worked. If they can't, we cover the gap before the program closes."
+      }
+    }
+  ]
+});
+
+const serviceSchema = JSON.stringify({
+  "@context": "https://schema.org",
+  "@type": "Service",
+  "name": "Training",
+  "url": "https://codyasmith.com/services/training",
+  "description": "WordPress, SEO, and AI workflow training built on learning science. Not a webinar. A guided program.",
+  "provider": { "@id": "https://codyasmith.com/#organization" },
+  "serviceType": "Training",
+  "areaServed": { "@type": "Country", "name": "United States" },
+  "termsOfService": "Scoped training delivered remotely by default. Assignments and reference materials are defined before the program begins."
+});
 ---
 
-<Base title="Training | WordPress, SEO & AI Workflow Guided Programs" description="WordPress, SEO, and AI workflow training built on learning science. Not a webinar. A guided program.">
-  <script type="application/ld+json" set:html={JSON.stringify({"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Services","item":"https://codyasmith.com/services"},{"@type":"ListItem","position":2,"name":"Training","item":"https://codyasmith.com/services/training"}]})} />
+<Base title="Training | WordPress, SEO & AI Workflow Guided Programs" description="WordPress, SEO, and AI workflow training built on learning science. Not a webinar. A guided program." ogImage="/og/services/training.png" ogImageAlt="Training: built on learning science, not slide decks.">
+  <script type="application/ld+json" set:html={faqSchema} />
+  <script type="application/ld+json" set:html={serviceSchema} />
+  <script type="application/ld+json" set:html={JSON.stringify({"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://codyasmith.com/"},{"@type":"ListItem","position":2,"name":"Services","item":"https://codyasmith.com/services"},{"@type":"ListItem","position":3,"name":"Training","item":"https://codyasmith.com/services/training"}]})} />
   <!-- Hero -->
   <section class="relative pt-40 pb-24 px-6 overflow-hidden">
     <div class="absolute top-0 right-1/3 w-[600px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
@@ -54,13 +123,13 @@ import Base from '../../layouts/Base.astro';
       <div class="grid md:grid-cols-2 gap-12 items-start">
         <div class="reveal space-y-6 text-neutral-400 leading-relaxed">
           <p data-phase="default">
-            Most training is a single session where someone talks at your team for two hours, shows some slides, answers a few questions, and leaves. Without reinforcement, your team forgets 80% of it within a week. That number is from Hermann Ebbinghaus's forgetting curve research, replicated by Murre and Dros in PLOS ONE (2015). You've seen this. You've probably sat through it yourself.
+            Most training is a single session where someone talks at your team for two hours, shows some slides, answers a few questions, and leaves. Without reinforcement and practice, the useful parts fade fast. You've seen this. You've probably sat through it yourself.
           </p>
           <p style="display:none" data-phase="spring">
             Your team needs to own these skills, not rent them from a consultant. Training that actually transfers knowledge means your team becomes self-sufficient. That's the whole point.
           </p>
           <p style="display:none" data-phase="fall">
-            Most training is a single two-hour session: slides, Q&A, handshake, gone. Without reinforcement, 80% retention loss within one week (Ebbinghaus's forgetting curve, replicated by Murre and Dros, PLOS ONE 2015). The format is the problem. Three sessions, three weeks, real assignments between each one. That's what makes it stick.
+            Most training is a single two-hour session: slides, Q&A, handshake, gone. Without reinforcement, the useful parts disappear fast. The format is the problem. Three sessions, three weeks, real assignments between each one. That's what makes it stick.
           </p>
           <p>
             What I build is different. It's a guided program. Three sessions over three to four weeks. Between sessions, your team does real work on their own systems. They make mistakes in a context where mistakes are safe. They come back with questions that matter because they tried the thing and got stuck on something specific.
@@ -129,7 +198,7 @@ import Base from '../../layouts/Base.astro';
             Every time the website needs a change, your team asks you to do it because they don't know how. This program fixes that. Content management, page editing, basic SEO, image optimization, and site maintenance.
           </p>
           <p class="text-neutral-400 text-sm leading-relaxed mb-6" style="display:none" data-processing="stars">
-            Three workflow tiers: page mechanics, then publishing, then maintenance pacing. Each tier compounds on the previous, with assignments between sessions that exercise the new skill on their own systems.
+            Three workflow layers: page mechanics, then publishing, then maintenance pacing. Each layer builds on the previous, with assignments between sessions that exercise the new skill on their own systems.
           </p>
           <p class="text-neutral-400 text-sm leading-relaxed mb-6" style="display:none" data-processing="clouds">
             After three weeks your team can do the day-to-day site work without coming to you. That's the goal.
@@ -237,35 +306,34 @@ import Base from '../../layouts/Base.astro';
     </div>
   </section>
 
-  <!-- Pricing: BPv2 a la carte menu plus the included-at-Best note -->
+  <!-- Scope -->
   <section class="py-28 px-6">
     <div class="max-w-5xl mx-auto">
       <div class="reveal mb-16">
-        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Pricing</p>
-        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Training, two ways.</h2>
-        <p class="text-neutral-400 mt-4 max-w-2xl">Bundled into your engagement at the top tier, or booked from the menu.</p>
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Scope</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Training where the skill gap is real.</h2>
+        <p class="text-neutral-400 mt-4 max-w-2xl">Sometimes training stands alone. Sometimes it belongs inside Web Management, Strategy Consulting, or a scoped Implementation handoff.</p>
       </div>
 
       <div class="grid md:grid-cols-2 gap-8 reveal-stagger">
-        <!-- Left: a la carte menu -->
         <div class="reveal glow-card p-8 flex flex-col" style="--i:0">
-          <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-6">A la carte</p>
+          <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-6">Common formats</p>
           <ul class="space-y-5 text-neutral-300 text-sm leading-relaxed flex-1">
             <li class="flex items-baseline justify-between gap-4">
-              <span><span class="text-neutral-100 font-medium">New Hire Orientation</span> <span class="text-neutral-500 text-xs">(2-3 hrs)</span></span>
-              <span class="text-amber-400 font-medium whitespace-nowrap">$250</span>
+              <span><span class="text-neutral-100 font-medium">New hire orientation</span> <span class="text-neutral-500 text-xs">site and workflow basics</span></span>
+              <span class="text-neutral-500 text-xs italic whitespace-nowrap">scoped</span>
             </li>
             <li class="flex items-baseline justify-between gap-4">
-              <span><span class="text-neutral-100 font-medium">SEO Fundamentals</span> <span class="text-neutral-500 text-xs">(2 hrs)</span></span>
-              <span class="text-amber-400 font-medium whitespace-nowrap">$200</span>
+              <span><span class="text-neutral-100 font-medium">SEO fundamentals</span> <span class="text-neutral-500 text-xs">how to publish with judgment</span></span>
+              <span class="text-neutral-500 text-xs italic whitespace-nowrap">scoped</span>
             </li>
             <li class="flex items-baseline justify-between gap-4">
-              <span><span class="text-neutral-100 font-medium">WordPress Best Practices</span> <span class="text-neutral-500 text-xs">(2 hrs)</span></span>
-              <span class="text-amber-400 font-medium whitespace-nowrap">$200</span>
+              <span><span class="text-neutral-100 font-medium">WordPress best practices</span> <span class="text-neutral-500 text-xs">editing without breaking things</span></span>
+              <span class="text-neutral-500 text-xs italic whitespace-nowrap">scoped</span>
             </li>
             <li class="flex items-baseline justify-between gap-4">
-              <span><span class="text-neutral-100 font-medium">Custom Training</span> <span class="text-neutral-500 text-xs">scoped to your topic</span></span>
-              <span class="text-amber-400 font-medium whitespace-nowrap">$100/hr</span>
+              <span><span class="text-neutral-100 font-medium">Custom training</span> <span class="text-neutral-500 text-xs">scoped to your team</span></span>
+              <span class="text-neutral-500 text-xs italic whitespace-nowrap">scoped</span>
             </li>
             <li class="flex items-baseline justify-between gap-4">
               <span><span class="text-neutral-100 font-medium">Training Materials</span> <span class="text-neutral-500 text-xs">guides, SOPs, checklists</span></span>
@@ -277,21 +345,92 @@ import Base from '../../layouts/Base.astro';
           </a>
         </div>
 
-        <!-- Right: bundled-engagement callout (no tier-system reference) -->
         <div class="reveal glow-card p-8 ring-1 ring-amber-500/30 flex flex-col" style="--i:1">
-          <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-6">Often bundled</p>
+          <p class="text-neutral-500 text-xs tracking-[0.15em] uppercase mb-6">Often attached</p>
           <p class="text-neutral-300 leading-relaxed mb-8 flex-1">
-            Training is often included as part of broader Web Management or Marketing Consulting engagements. Otherwise, this menu is how it gets booked.
+            Training often belongs next to another service: a Web Management handoff, a Strategy Consulting recommendation, or an Implementation project your team needs to own after launch.
           </p>
           <div class="flex flex-col sm:flex-row gap-3">
             <a href="/services/web-management" class="inline-flex items-center justify-center px-6 py-3 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/25 hover:text-amber-400 transition-all duration-300">
               See Web Management
             </a>
             <a href="/services/marketing-strategy" class="inline-flex items-center justify-center px-6 py-3 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/25 hover:text-amber-400 transition-all duration-300">
-              See Marketing Strategy
+              See Strategy Consulting
             </a>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="py-28 px-6">
+    <div class="max-w-3xl mx-auto">
+      <div class="reveal mb-16">
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Questions</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Things people ask.</h2>
+      </div>
+
+      <div class="space-y-4 reveal-stagger">
+        <details class="reveal group glow-card" style="--i:0">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            What's the difference between a single session and the guided program?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            A single session is a one-time training on a specific topic. Useful for onboarding a new hire or covering a narrow skill. The guided program is three sessions over three to four weeks with real assignments in between. The guided format is what actually makes the skills stick. A single session is faster and cheaper, but most of it gets forgotten within a week.
+          </div>
+        </details>
+
+        <details class="reveal group glow-card" style="--i:1">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            Do you train remotely or on-site?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            Remote by default. Screen-shared, recorded, with everyone working on their own systems from wherever they sit. On-site is possible in southern Utah but the format works just as well remotely. Most of my clients are spread across multiple locations anyway.
+          </div>
+        </details>
+
+        <details class="reveal group glow-card" style="--i:2">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            What team size works best?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            Three to eight people is the sweet spot. Small enough that everyone gets attention and can ask questions. Big enough that you are not building everything around one person. Larger teams I'll split into cohorts. Smaller teams work fine too; talk to me about the shape.
+          </div>
+        </details>
+
+        <details class="reveal group glow-card" style="--i:3">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            What if my team needs different things at different skill levels?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            Tell me up front. I'll design the program around the real range, not a fake average. Sometimes that means splitting into two cohorts. Sometimes it means the more advanced people get harder assignments between sessions. The goal is everyone leaves more capable, not everyone gets the same slides.
+          </div>
+        </details>
+
+        <details class="reveal group glow-card" style="--i:4">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            Do we keep the materials?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            Yes. Reference guides, SOPs, and checklists are included with any session and they're yours to keep. Use them for onboarding the next hire. Update them as your tools change. They're written for your team, not as a generic handout.
+          </div>
+        </details>
+
+        <details class="reveal group glow-card" style="--i:5">
+          <summary class="p-6 cursor-pointer flex items-center justify-between text-neutral-100 font-medium">
+            How do you measure if the training worked?
+            <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+          </summary>
+          <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
+            The real measure is whether your team stops asking you to do things they should be doing themselves. The third session includes a self-sufficiency check where they walk through real scenarios without coaching. If they can do it, training worked. If they can't, we cover the gap before the program closes.
+          </div>
+        </details>
       </div>
     </div>
   </section>

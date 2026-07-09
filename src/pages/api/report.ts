@@ -3,6 +3,7 @@ export const prerender = false;
 import type { APIRoute } from 'astro';
 import { getScan, getMentions } from '../../lib/db';
 import { getRecommendation } from '../../lib/recommend';
+import { validateReportToken } from '../../lib/report-token';
 
 export const GET: APIRoute = async ({ url }) => {
   const json = (s: any, status = 200) => new Response(JSON.stringify(s), {
@@ -22,7 +23,12 @@ export const GET: APIRoute = async ({ url }) => {
     return json({ error: 'This report has expired. Run a new scan for fresh results.' }, 410);
   }
 
-  const mentions = await getMentions(scanId);
+  // Token gate: Tier 2 data (mentions, phrase lists, source breakdown) only
+  // returned when the caller supplies the signed token from the unlock email.
+  const token = url.searchParams.get('token');
+  const isUnlocked = validateReportToken(scanId, token);
+
+  const mentions = isUnlocked ? await getMentions(scanId) : [];
   const recommendation = getRecommendation(scan.overall_score, scan.mention_count);
 
   let topPositive: string[] = [];
@@ -32,22 +38,25 @@ export const GET: APIRoute = async ({ url }) => {
   try { topNegative = JSON.parse(scan.top_negative_phrases || '[]'); } catch {}
   try { sourceBreakdown = JSON.parse(scan.source_breakdown || '{}'); } catch {}
 
-  // Build sample mentions for Tier 1 view
+  // Build sample mentions for Tier 1 view. Tier 1 samples always allowed
+  // because they only need a small public preview; pull from full set if
+  // unlocked, otherwise re-query a limited slice.
+  const sampleSource = isUnlocked ? mentions : await getMentions(scanId);
   const sampleMentions: any[] = [];
-  const pos = mentions.find(m => m.sentiment_label === 'positive');
-  const neg = mentions.find(m => m.sentiment_label === 'negative');
-  const neu = mentions.find(m => m.sentiment_label === 'neutral');
+  const pos = sampleSource.find(m => m.sentiment_label === 'positive');
+  const neg = sampleSource.find(m => m.sentiment_label === 'negative');
+  const neu = sampleSource.find(m => m.sentiment_label === 'neutral');
   if (pos) sampleMentions.push(pos);
   if (neg) sampleMentions.push(neg);
   if (neu && sampleMentions.length < 3) sampleMentions.push(neu);
 
-  const hiddenCount = mentions.length - sampleMentions.length;
+  const hiddenCount = scan.mention_count - sampleMentions.length;
   const teaserLines: string[] = [];
   if (hiddenCount > 0) teaserLines.push(`${hiddenCount} more mentions analyzed`);
   if (topNegative.length > 0) teaserLines.push(`Top ${Math.min(3, topNegative.length)} phrases hurting your score`);
   if (topPositive.length > 0) teaserLines.push(`Top ${Math.min(3, topPositive.length)} phrases helping your score`);
 
-  return json({
+  const response: any = {
     scan_id: scan.id,
     brand: scan.brand,
     domain: scan.domain,
@@ -59,10 +68,14 @@ export const GET: APIRoute = async ({ url }) => {
     source_breakdown: sourceBreakdown,
     teaser_lines: teaserLines,
     recommendation,
-    // Full Tier 2 data (already unlocked via email)
-    mentions,
-    top_positive_phrases: topPositive,
-    top_negative_phrases: topNegative,
-    unlocked: true,
-  });
+    unlocked: isUnlocked,
+  };
+
+  if (isUnlocked) {
+    response.mentions = mentions;
+    response.top_positive_phrases = topPositive;
+    response.top_negative_phrases = topNegative;
+  }
+
+  return json(response);
 };

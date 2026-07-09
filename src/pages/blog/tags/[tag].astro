@@ -15,12 +15,36 @@ export async function getStaticPaths() {
 const { tag: tagParam } = Astro.params;
 const { tagLabel } = Astro.props;
 const entries = await getEntriesByTag(tagParam);
+
+const breadcrumbs = [
+  { name: 'Home', url: 'https://codyasmith.com/' },
+  { name: 'Blog', url: 'https://codyasmith.com/blog' },
+  { name: tagLabel, url: `https://codyasmith.com/blog/tags/${tagParam}` },
+];
+
+const itemListJsonLd = entries.length > 0 ? JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'ItemList',
+  itemListElement: entries.map((e, i) => ({
+    '@type': 'ListItem',
+    position: i + 1,
+    url: `https://codyasmith.com${e.href}`,
+    name: e.data.title,
+  })),
+}) : null;
 ---
 
 <Base
   title={`${tagLabel} | Blog | Cody Smith`}
   description={`Articles and case studies tagged ${tagLabel}.`}
+  ogImage="/og/blog/tag.png"
+  ogImageAlt={`Tagged: ${tagLabel}`}
+  breadcrumbs={breadcrumbs}
 >
+  {itemListJsonLd && (
+    <script type="application/ld+json" set:html={itemListJsonLd} />
+  )}
+
   <section class="relative pt-40 pb-12 px-6 overflow-hidden">
     <div class="absolute top-0 right-1/3 w-[500px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
     <div class="relative max-w-4xl mx-auto">

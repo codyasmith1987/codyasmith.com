@@ -25,19 +25,19 @@ export function getRecommendation(overallScore: number, mentionCount: number): R
     return {
       bucket: 'low-visibility',
       headline: 'Your brand is nearly invisible online.',
-      body: "People can't choose you if they can't find you. With this few mentions, potential customers searching for businesses like yours are finding your competitors instead. The fix starts with building a real web presence and getting your name in front of the right people.",
+      body: "The web does not have much to work with yet. With this few mentions, the first job is to make the owned pieces stable, clear, and easier to understand before chasing anything louder.",
       services: [
         {
           name: 'Web Management',
           slug: 'web-management',
           url: '/services/web-management',
-          why: 'Get your site stable, fast, and showing up in search results',
+          why: 'Get your site stable, fast, monitored, and easier to trust',
         },
         {
           name: 'Implementation',
           slug: 'implementation',
           url: '/services/implementation',
-          why: 'Build the pages, integrations, and listings that create visibility',
+          why: 'Build the pages, integrations, and listings the current footprint is missing',
         },
       ],
       cta_text: 'Build my online presence',
@@ -51,23 +51,23 @@ export function getRecommendation(overallScore: number, mentionCount: number): R
     return {
       bucket: 'negative',
       headline: 'Your online reputation needs attention.',
-      body: "People are talking about your brand, and the tone isn't working in your favor. This is fixable. Most businesses can shift their online sentiment within 90 days with the right strategy. But the longer negative mentions sit unanswered, the more they compound.",
+      body: "People are talking about your brand, and the tone is not helping. The first move is a clear read on what is being said, where it is coming from, and what deserves a response, a content change, or no action at all.",
       services: [
         {
-          name: 'Marketing Strategy',
+          name: 'Strategy Consulting',
           slug: 'marketing-strategy',
           url: '/services/marketing-strategy',
-          why: 'Develop a reputation repair plan with review management and content strategy',
+          why: 'Read the reputation pattern and decide what should happen next',
         },
         {
           name: 'Implementation',
           slug: 'implementation',
           url: '/services/implementation',
-          why: 'Execute the changes. Respond to reviews, update listings, publish content',
+          why: 'Make scoped updates after the response plan is clear',
         },
       ],
-      cta_text: 'Fix my reputation',
-      cta_url: '/contact?interest=marketing-strategy&interest=implementation',
+      cta_text: 'Get an outside read',
+      cta_url: '/contact?interest=strategy-consulting&interest=implementation',
       urgency: 'high',
     };
   }
@@ -77,23 +77,23 @@ export function getRecommendation(overallScore: number, mentionCount: number): R
     return {
       bucket: 'mixed',
       headline: "You have presence, but you're not controlling the narrative.",
-      body: "Your brand shows up online, but the signal is inconsistent. Some mentions are positive, some aren't, and there's no clear story. A focused strategy can tip the balance. Amplify what's working, address what isn't, and make sure the right message shows up first.",
+      body: "Your brand shows up online, but the signal is inconsistent. Some mentions are positive, some are not, and there is no clear story. This is a Strategy Consulting problem first: read the pattern before deciding what to change.",
       services: [
         {
-          name: 'Marketing Strategy',
+          name: 'Strategy Consulting',
           slug: 'marketing-strategy',
           url: '/services/marketing-strategy',
-          why: "Build a clear strategy to shape how you show up online",
+          why: "Read the pattern and name the message, search, or operations gap",
         },
         {
           name: 'Web Management',
           slug: 'web-management',
           url: '/services/web-management',
-          why: 'Keep your owned properties tight. Fast site, strong SEO, consistent message',
+          why: 'Keep your owned site stable, monitored, and easy to update',
         },
       ],
-      cta_text: 'Take control of my brand',
-      cta_url: '/contact?interest=marketing-strategy&interest=web-management',
+      cta_text: 'Untangle the signal',
+      cta_url: '/contact?interest=strategy-consulting&interest=web-management',
       urgency: 'medium',
     };
   }
@@ -103,23 +103,23 @@ export function getRecommendation(overallScore: number, mentionCount: number): R
     return {
       bucket: 'positive-thin',
       headline: "Good sentiment. Not enough volume.",
-      body: "When people do find you, they like what they see. The problem is not enough people are finding you. You're leaving money on the table. The foundation is solid, now it's time to amplify. More listings, more content, more places where the right people can discover you.",
+      body: "When your brand appears, the tone is generally positive. There just is not much volume yet. The next move is likely a mix of clearer owned pages, stronger listing coverage, and a strategy read on where attention belongs.",
       services: [
         {
           name: 'Implementation',
           slug: 'implementation',
           url: '/services/implementation',
-          why: 'Build out listings, landing pages, and integrations to increase discoverability',
+          why: 'Build missing pages, listings, and integrations after the scope is clear',
         },
         {
-          name: 'Marketing Strategy',
+          name: 'Strategy Consulting',
           slug: 'marketing-strategy',
           url: '/services/marketing-strategy',
-          why: 'Plan the content and channels that will multiply your positive signal',
+          why: 'Decide where your visibility and positioning need attention next',
         },
       ],
-      cta_text: 'Amplify my brand',
-      cta_url: '/contact?interest=implementation&interest=marketing-strategy',
+      cta_text: 'Name the next move',
+      cta_url: '/contact?interest=implementation&interest=strategy-consulting',
       urgency: 'medium',
     };
   }
@@ -128,19 +128,19 @@ export function getRecommendation(overallScore: number, mentionCount: number): R
   return {
     bucket: 'strong',
     headline: "Your brand is in strong shape.",
-    body: "You've built real positive sentiment across multiple sources. The goal now is to protect it, maintain it, and make sure your team can keep the momentum going without depending on outside help. Or, if you want to push further: monitoring, competitor benchmarking, and scaling what works.",
+    body: "You have positive signal across multiple sources. The work now is maintenance, clarity, and internal capacity: keep the site healthy, keep the story accurate, and make sure the team can handle the parts it should own.",
     services: [
       {
         name: 'Training',
         slug: 'training',
         url: '/services/training',
-        why: 'Teach your team to manage SEO, content, and reputation independently',
+        why: 'Teach your team the workflows it should own internally',
       },
       {
         name: 'Web Management',
         slug: 'web-management',
         url: '/services/web-management',
-        why: 'Ongoing monitoring, updates, and protection so nothing breaks what you built',
+        why: 'Ongoing monitoring, updates, and maintenance so the owned site stays steady',
       },
     ],
     cta_text: "Let's protect what you've built",

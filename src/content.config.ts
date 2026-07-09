@@ -3,16 +3,23 @@ import { glob } from 'astro/loaders';
 
 const baseFields = {
   title: z.string(),
+  seoTitle: z.string().optional(),
   description: z.string(),
+  dek: z.string().optional(),
   publishDate: z.coerce.date(),
   updated: z.coerce.date().optional(),
   draft: z.boolean().default(false),
+  author: z.string().default('Cody Smith'),
   tags: z.array(z.string()).default([]),
   cover: z
     .object({
       src: z.string(),
       alt: z.string(),
       credit: z.string().optional(),
+      // Width and height let the browser reserve layout space (no CLS)
+      // and let Article JSON-LD emit an ImageObject with dimensions.
+      width: z.number().int().positive().optional(),
+      height: z.number().int().positive().optional(),
     })
     .optional(),
 };

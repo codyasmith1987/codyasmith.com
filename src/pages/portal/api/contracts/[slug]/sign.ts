@@ -1,0 +1,445 @@
+// POST /portal/api/contracts/[slug]/sign
+//
+// Captures a signer's typed signature plus the four UETA pillars:
+// affirmative consent, intent to be bound, association with the
+// record (IP, user agent, session id, document hash at the moment of
+// signing), and retention (the signature row is permanent, and the
+// finalized PDF gets dropped in the files table). When this call lands
+// the second signature, the agreement finalizes: a deterministic hash
+// is computed and stored, a PDF is generated, and confirmation emails
+// fire to both signers.
+
+import type { APIRoute } from 'astro';
+import { logActivity } from '../../../../../lib/activity';
+import { logger } from '../../../../../lib/logger';
+import { uploadFile } from '../../../../../lib/storage';
+import {
+  getAgreementBySlug,
+  getSignersForAgreement,
+  getSignaturesForAgreement,
+  getActiveSignatureForSigner,
+  captureSignature,
+  tryMarkAgreementFinalized,
+  updateAgreementStatus,
+  getClientMetadata,
+} from '../../../../../lib/agreements';
+import { getContractTemplate } from '../../../../../lib/contract-templates';
+import { ensureBillingContractFromAgreement } from '../../../../../lib/contract-handoff';
+import { renderTemplate, renderTemplateToMarkdown, computeDocumentHash, PRACTICE } from '../../../../../lib/contract-render';
+import { generateContractPdf } from '../../../../../lib/contract-pdf';
+import {
+  sendCountersignNeededEmail,
+  sendFullyExecutedEmail,
+  sendAtSigningInvoiceEmail,
+} from '../../../../../lib/contract-emails';
+import { getInvoice } from '../../../../../lib/invoices';
+import { generateInvoicePdf } from '../../../../../lib/pdf';
+import turso from '../../../../../lib/turso';
+
+export const prerender = false;
+
+const json = (data: any, status = 200) =>
+  new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
+
+function extractIp(request: Request): string {
+  const xff = request.headers.get('x-forwarded-for');
+  if (xff) return xff.split(',')[0].trim();
+  const real = request.headers.get('x-real-ip');
+  if (real) return real.trim();
+  return '';
+}
+
+export const POST: APIRoute = async ({ locals, request, params }) => {
+  const user = locals.user;
+  if (!user) return json({ error: 'Not authenticated' }, 401);
+
+  const slug = params.slug || '';
+  if (!slug) return json({ error: 'Missing slug' }, 400);
+
+  const agreement = await getAgreementBySlug(slug);
+  if (!agreement) return json({ error: 'Not found' }, 404);
+
+  if (user.role === 'admin') {
+    return json({ error: 'Admin preview mode. The contract must be signed by an authorized signer.' }, 403);
+  }
+  if (user.client_id !== agreement.client_id) return json({ error: 'Forbidden' }, 403);
+  if (agreement.status === 'draft') return json({ error: 'Agreement has not been issued yet' }, 409);
+  if (agreement.status === 'voided') return json({ error: 'Agreement is voided' }, 409);
+  if (agreement.status === 'executed') return json({ error: 'Already executed' }, 409);
+
+  let body: any;
+  try { body = await request.json(); } catch { return json({ error: 'Invalid body' }, 400); }
+
+  // UETA inputs: signature value, consent, intent. All three are
+  // required for a sign POST to proceed.
+  const signatureValue = String(body.signature_value || '').trim().slice(0, 120);
+  if (!signatureValue) return json({ error: 'Type your full legal name to sign' }, 400);
+  if (body.consent !== true) return json({ error: 'Consent to conduct this transaction electronically is required' }, 400);
+  if (body.intent !== true) return json({ error: 'You must affirm intent to be bound to sign' }, 400);
+
+  // Resolve the calling user against the signers list.
+  const signers = await getSignersForAgreement(agreement.id);
+  const me = signers.find(s => s.email_snapshot.toLowerCase() === (user.email || '').toLowerCase());
+  if (!me) return json({ error: 'You are not an authorized signer on this agreement' }, 403);
+
+  const existingActive = await getActiveSignatureForSigner(agreement.id, me.id);
+  if (existingActive) return json({ error: 'You already signed. Revoke first if you want to re-sign.' }, 409);
+
+  // Check intake completeness before allowing a sign.
+  const clientMetadata = await getClientMetadata(agreement.client_id);
+  const intakeComplete = Boolean(
+    clientMetadata?.legal_entity_name &&
+    clientMetadata?.primary_contact_email,
+  );
+  if (!intakeComplete) {
+    return json({ error: 'Complete the required intake fields before signing.' }, 400);
+  }
+
+  // Render the contract body + Schedule A and compute the document
+  // hash against the current state. This is what the signer attests to.
+  const template = await getContractTemplate(agreement.template_slug, agreement.template_version);
+  if (!template) return json({ error: 'Template not found' }, 500);
+  const renderContext = {
+    client: {
+      legal_entity_name: clientMetadata?.legal_entity_name || '',
+      entity_type: clientMetadata?.entity_type || '',
+      state_of_organization: clientMetadata?.state_of_organization || '',
+      primary_contact_name: clientMetadata?.primary_contact_name || undefined,
+      primary_contact_title: clientMetadata?.primary_contact_title || undefined,
+      primary_contact_email: clientMetadata?.primary_contact_email || undefined,
+      primary_contact_phone: clientMetadata?.primary_contact_phone || undefined,
+      principal_address: clientMetadata?.principal_address || undefined,
+      notice_address: clientMetadata?.notice_address || undefined,
+    },
+    schedule_a: agreement.schedule_a,
+    practice: PRACTICE,
+    today: new Date().toISOString().slice(0, 10),
+  };
+  const bodyHtml = renderTemplate(template.body_markdown, renderContext, 'client');
+  const documentHash = computeDocumentHash({
+    body_html: bodyHtml,
+    schedule_a: agreement.schedule_a,
+    client: renderContext.client,
+  });
+
+  // Capture the signature.
+  const signature = await captureSignature({
+    agreement_id: agreement.id,
+    signer_id: me.id,
+    signature_value: signatureValue,
+    document_hash: documentHash,
+    ip_address: extractIp(request),
+    user_agent: request.headers.get('user-agent') || '',
+    session_id: locals.session?.id || null,
+  });
+
+  try {
+    await logActivity({
+      clientId: agreement.client_id,
+      userId: user.id,
+      action: 'signed',
+      entityType: 'agreement',
+      entityId: agreement.id,
+      summary: `${me.name_snapshot} signed ${agreement.title}; hash=${documentHash.slice(0, 12)}`,
+    });
+  } catch (err) {
+    logger.error('signed activity log failed', err);
+  }
+
+  // Check whether everyone signed. If so, finalize (race-safe).
+  const allSignatures = await getSignaturesForAgreement(agreement.id, false);
+  const allSigned = signers.every(s => allSignatures.some(sig => sig.signer_id === s.id && !sig.revoked_at));
+
+  const baseUrl = (import.meta.env.PUBLIC_BASE_URL || 'https://codyasmith.com').replace(/\/$/, '');
+  const agreementUrl = `${baseUrl}/portal/contracts/${agreement.slug}`;
+  const documentsUrl = `${baseUrl}/portal/documents`;
+
+  if (!allSigned) {
+    // Notify the unsigned signers.
+    const unsigned = signers.filter(s => !allSignatures.some(sig => sig.signer_id === s.id && !sig.revoked_at));
+    for (const other of unsigned) {
+      try {
+        await sendCountersignNeededEmail({
+          signedBy: me,
+          otherSigner: other,
+          agreement,
+          agreementUrl,
+          signedAt: new Date(signature.signed_at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
+        });
+      } catch (err) {
+        logger.error('countersign-needed email failed', err);
+      }
+    }
+    await updateAgreementStatus(agreement.id, 'partially_signed');
+    return json({ ok: true, status: 'partially_signed', signature_id: signature.id, document_hash: documentHash });
+  }
+
+  // Validate that every active signature's hash matches the current
+  // hash. If a prior signature was made against an older Schedule A,
+  // finalize is blocked and that signer must re-sign.
+  const hashMismatch = allSignatures.find(s => !s.revoked_at && s.document_hash !== documentHash);
+  if (hashMismatch) {
+    await updateAgreementStatus(agreement.id, 'partially_signed');
+    return json({
+      ok: true,
+      status: 'partially_signed',
+      signature_id: signature.id,
+      document_hash: documentHash,
+      warning: 'A prior signature was made against an outdated Schedule A. That signer needs to re-sign before finalize.',
+    });
+  }
+
+  // Generate the PDF, then upload it. Generation and upload are split
+  // into separate try blocks: an upload failure (e.g. storage misconfig)
+  // is now distinguishable from a render failure AND is recorded in the
+  // activity log. A single silent catch around both is exactly what hid
+  // the missing DO_SPACES_KEY (every executed PDF failed to store, with
+  // no signal). pdfBase64 is captured at generation time so the
+  // fully-executed email can still attach the PDF even if storage upload
+  // fails.
+  let pdfFileId: string | null = null;
+  let pdfBase64: string | undefined;
+  let pdfFilename: string | undefined;
+  let pdfBuffer: Buffer | null = null;
+  try {
+    pdfBuffer = await generateContractPdf({
+      template,
+      context: renderContext as any,
+      resolvedBodyMarkdown: renderTemplateToMarkdown(template.body_markdown, renderContext),
+      scheduleA: agreement.schedule_a,
+      signers: signers.map(s => {
+        const sig = allSignatures.find(x => x.signer_id === s.id && !x.revoked_at);
+        return {
+          name: s.name_snapshot,
+          role: s.signer_role,
+          signature: sig?.signature_value,
+          signed_at: sig?.signed_at,
+        };
+      }),
+      practice: PRACTICE,
+    });
+    pdfBase64 = pdfBuffer.toString('base64');
+    pdfFilename = `${agreement.slug}-executed-${new Date().toISOString().slice(0, 10)}.pdf`;
+  } catch (err) {
+    logger.error('contract PDF generation failed', err);
+    // Surface generation failures in the audit trail too (not just upload
+    // failures), so a missing PDF is never silent regardless of which step
+    // failed.
+    try {
+      await logActivity({
+        clientId: agreement.client_id,
+        userId: user.id,
+        action: 'pdf_generation_failed',
+        entityType: 'agreement',
+        entityId: agreement.id,
+        summary: `Executed PDF for ${agreement.title} FAILED to generate. Agreement is finalized with no PDF; regenerate once the cause is fixed. Error: ${String((err as any)?.message || err).slice(0, 200)}`,
+      });
+    } catch { /* best-effort */ }
+  }
+  if (pdfBuffer && pdfFilename) {
+    try {
+      // Look up client slug for the storage key prefix.
+      const clientRow = await turso.execute({
+        sql: `SELECT slug FROM clients WHERE id = ? LIMIT 1`,
+        args: [agreement.client_id],
+      });
+      const clientSlug = (clientRow.rows[0]?.[0] as string) || 'unknown';
+      const upload = await uploadFile(
+        clientSlug,
+        new Date().toISOString().slice(0, 7),
+        pdfFilename,
+        pdfBuffer,
+        'application/pdf',
+        agreement.client_id,
+        user.id,
+        'contract',
+      );
+      pdfFileId = upload?.id || null;
+    } catch (err) {
+      logger.error('contract PDF upload failed', err);
+      // Surface the storage failure in the audit trail so a missing PDF
+      // is visible immediately, not discovered when a client tries to
+      // download it. The agreement still finalizes (the PDF can be
+      // regenerated once storage is healthy).
+      try {
+        await logActivity({
+          clientId: agreement.client_id,
+          userId: user.id,
+          action: 'pdf_upload_failed',
+          entityType: 'agreement',
+          entityId: agreement.id,
+          summary: `Executed PDF for ${agreement.title} generated but FAILED to store (storage error). Agreement is finalized with no downloadable PDF; regenerate once storage is healthy. Error: ${String((err as any)?.message || err).slice(0, 200)}`,
+        });
+      } catch { /* best-effort */ }
+    }
+  }
+
+  const finalizedOk = await tryMarkAgreementFinalized(agreement.id, documentHash, pdfFileId);
+  if (!finalizedOk) {
+    // Someone else already finalized via a race. The signature row is
+    // recorded; nothing else to do.
+    return json({ ok: true, status: 'executed', signature_id: signature.id, document_hash: documentHash, raced: true });
+  }
+
+  try {
+    await logActivity({
+      clientId: agreement.client_id,
+      userId: user.id,
+      action: 'finalized',
+      entityType: 'agreement',
+      entityId: agreement.id,
+      summary: `${agreement.title} fully executed; hash=${documentHash.slice(0, 12)}; pdf_file=${pdfFileId || 'none'}`,
+    });
+  } catch (err) {
+    logger.error('finalized activity log failed', err);
+  }
+
+  // Billing handoff: turn the executed agreement into a billable contract
+  // and raise the at-signing invoice. Wrapped so a billing hiccup never
+  // breaks execution (the agreement is already finalized above); the
+  // handoff is idempotent and can be retried. We run it on the winning
+  // finalize path only, so it creates exactly one contract per agreement.
+  let atSigningInvoiceId: string | null = null;
+  try {
+    const handoff = await ensureBillingContractFromAgreement(agreement, user.id);
+    atSigningInvoiceId = handoff.invoiceId;
+    await logActivity({
+      clientId: agreement.client_id,
+      userId: user.id,
+      action: handoff.created ? 'contract_created' : 'contract_exists',
+      entityType: 'agreement',
+      entityId: agreement.id,
+      summary: `Billing handoff for ${agreement.title}: contract=${handoff.contractId}; at_signing_invoice=${handoff.invoiceId || 'none'}; created=${handoff.created}`,
+    });
+  } catch (err) {
+    logger.error('billing handoff failed after finalize', err);
+    try {
+      await logActivity({
+        clientId: agreement.client_id,
+        userId: user.id,
+        action: 'contract_handoff_failed',
+        entityType: 'agreement',
+        entityId: agreement.id,
+        summary: `INCIDENT: billing handoff did NOT complete for ${agreement.title}. Automatic contract + at-signing invoice creation failed. The agreement is executed but has no billable contract yet; create one manually as recovery and investigate. Error: ${String((err as any)?.message || err).slice(0, 200)}`,
+      });
+    } catch { /* best-effort */ }
+  }
+
+  // Takeover sites go live: flip every proposed-takeover domain to managed now
+  // that the engagement is executed. Read off the originating proposal config's
+  // takeover_site_domains. Wrapped so a failure never breaks execution (the
+  // agreement is already finalized; an admin can flip manually as recovery).
+  // Idempotent via markDomainsManaged.
+  try {
+    if (agreement.proposal_id) {
+      const propRow = await turso.execute({
+        sql: 'SELECT config FROM proposals WHERE id = ? LIMIT 1',
+        args: [agreement.proposal_id],
+      });
+      const cfgRaw = propRow.rows[0]?.[0];
+      if (cfgRaw) {
+        const cfg = JSON.parse(String(cfgRaw));
+        const domains: string[] = Array.isArray(cfg?.takeover_site_domains) ? cfg.takeover_site_domains : [];
+        if (domains.length > 0) {
+          const { markDomainsManaged } = await import('../../../../../lib/client-sites');
+          const flipped = await markDomainsManaged(agreement.client_id, domains);
+          await logActivity({
+            clientId: agreement.client_id,
+            userId: user.id,
+            action: 'updated',
+            entityType: 'agreement',
+            entityId: agreement.id,
+            summary: `Takeover sites now under management for ${agreement.title}: ${domains.join(', ')} (${flipped} flipped or added).`,
+          });
+        }
+      }
+    }
+  } catch (err) {
+    logger.error('takeover is_managed flip after finalize failed', err);
+  }
+
+  // At-signing invoice auto-email + PDF. Closes the last manual step in
+  // every execution: the client is told what to pay to start, with the
+  // invoice attached, instead of having to find it in the portal. Only
+  // fires when the handoff actually raised an invoice (skipped for the
+  // backfill / already-paid path). Wrapped so any failure never breaks
+  // execution; the invoice is already created and client-visible.
+  // Accountant CC for the financial documents (the at-signing invoice and the
+  // executed contract), per the recipient model (Cody, 2026-06-04): an
+  // accountant rides financial docs only. Empty for clients with no accountant
+  // configured, so this is a no-op until one is set.
+  const financialCc = clientMetadata?.billing_cc_email
+    ? [{ email: clientMetadata.billing_cc_email }]
+    : undefined;
+
+  if (atSigningInvoiceId) {
+    try {
+      const invoice = await getInvoice(atSigningInvoiceId);
+      let invPdfBase64: string | undefined;
+      let invPdfFilename: string | undefined;
+      try {
+        const invBuffer = await generateInvoicePdf(atSigningInvoiceId);
+        invPdfBase64 = invBuffer.toString('base64');
+        invPdfFilename = `${invoice?.invoice_number || 'invoice'}.pdf`;
+      } catch (err) {
+        logger.error('at-signing invoice PDF generation failed', err);
+      }
+      const invoicesUrl = `${baseUrl}/portal/invoices`;
+      // CC the accountant only on the first signer's copy so a two-signer
+      // client does not double-send the accountant the same invoice.
+      for (const [i, signer] of signers.entries()) {
+        try {
+          await sendAtSigningInvoiceEmail({
+            recipient: signer,
+            agreement,
+            invoiceNumber: invoice?.invoice_number || '',
+            amountDue: invoice?.total ?? 0,
+            invoicesUrl,
+            pdfBase64: invPdfBase64,
+            pdfFilename: invPdfFilename,
+            cc: i === 0 ? financialCc : undefined,
+          });
+        } catch (err) {
+          logger.error(`at-signing invoice email to ${signer.email_snapshot} failed`, err);
+        }
+      }
+      await logActivity({
+        clientId: agreement.client_id,
+        userId: user.id,
+        action: 'at_signing_invoice_emailed',
+        entityType: 'agreement',
+        entityId: agreement.id,
+        summary: `At-signing invoice ${invoice?.invoice_number || atSigningInvoiceId} emailed to ${signers.length} signer(s) for ${agreement.title}.`,
+      });
+    } catch (err) {
+      logger.error('at-signing invoice email block failed', err);
+    }
+  }
+
+  // Send fully-executed emails to each signer with the PDF attached.
+  const finalizedAtDisplay = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+  for (const [i, signer] of signers.entries()) {
+    try {
+      await sendFullyExecutedEmail({
+        recipient: signer,
+        agreement,
+        agreementUrl,
+        documentsUrl,
+        finalizedAt: finalizedAtDisplay,
+        pdfBase64,
+        pdfFilename,
+        cc: i === 0 ? financialCc : undefined,
+      });
+    } catch (err) {
+      logger.error(`fully-executed email to ${signer.email_snapshot} failed`, err);
+    }
+  }
+
+  return json({
+    ok: true,
+    status: 'executed',
+    signature_id: signature.id,
+    document_hash: documentHash,
+    pdf_file_id: pdfFileId,
+  });
+};

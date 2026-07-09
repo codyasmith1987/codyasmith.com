@@ -1,0 +1,446 @@
+---
+import Portal from '../../layouts/Portal.astro';
+import ClientSelector from '../../components/portal/ClientSelector.astro';
+import StateLoading from '../../components/portal/StateLoading.astro';
+import StateError from '../../components/portal/StateError.astro';
+import StateEmpty from '../../components/portal/StateEmpty.astro';
+import { getAllClients } from '../../lib/auth';
+export const prerender = false;
+
+const user = Astro.locals.user!;
+const isAdmin = user.role === 'admin';
+const clients = isAdmin ? await getAllClients() : [];
+---
+
+<Portal title="Search">
+
+  <div class="max-w-4xl mx-auto">
+    <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
+      <div>
+        <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Organic Search</p>
+        <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Search</h1>
+        <p class="text-sm text-neutral-400 mt-2">From Google Search Console. <span id="gsc-asof"></span></p>
+        <p class="mt-2">
+          <button id="request-update-btn" class="text-[11px] font-mono text-amber-500 hover:text-amber-400 underline underline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline">Request a data update</button>
+          <span id="request-update-chip" class="text-[11px] font-mono text-neutral-500 ml-2"></span>
+          <span id="request-update-status" class="text-[11px] text-neutral-500 ml-2"></span>
+        </p>
+      </div>
+      {isAdmin && <ClientSelector clients={clients} />}
+    </div>
+
+    <!-- Per-site picker (multi-site clients only; Phase 2) -->
+    <div id="site-picker" class="hidden mb-6 flex flex-wrap items-center gap-2">
+      <span class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase mr-1">Site</span>
+    </div>
+
+    <StateLoading id="gsc-loading" message="Loading search data..." />
+    <StateError id="gsc-error" detailId="gsc-error-detail" retryFn="loadGsc" />
+
+    <!-- Totals hero -->
+    <div id="gsc-hero" class="mb-10 hidden">
+      <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
+        <p id="gsc-period" class="text-[10px] font-mono text-amber-600 tracking-[0.15em] uppercase mb-4"></p>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-6">
+          <div>
+            <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Clicks</p>
+            <p id="kpi-clicks" class="font-serif text-3xl text-neutral-100">-</p>
+            <p id="kpi-clicks-chip" class="text-[11px] font-mono mt-1 h-4"></p>
+          </div>
+          <div>
+            <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Impressions</p>
+            <p id="kpi-impressions" class="font-serif text-3xl text-neutral-100">-</p>
+            <p id="kpi-impressions-chip" class="text-[11px] font-mono mt-1 h-4"></p>
+          </div>
+          <div>
+            <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">CTR</p>
+            <p id="kpi-ctr" class="font-serif text-3xl text-neutral-100">-</p>
+            <p id="kpi-ctr-chip" class="text-[11px] font-mono mt-1 h-4"></p>
+          </div>
+          <div>
+            <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Avg position</p>
+            <p id="kpi-position" class="font-serif text-3xl text-neutral-100">-</p>
+            <p id="kpi-position-chip" class="text-[11px] font-mono mt-1 h-4"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Trend chart -->
+    <div id="gsc-chart-card" class="mb-6 hidden">
+      <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-6">
+        <h2 class="font-serif text-xl text-neutral-100 mb-1">Daily clicks &amp; impressions</h2>
+        <p class="text-xs text-neutral-500 mb-4">Day-by-day, oldest first. The dark line is clicks, the lighter is impressions. Both scaled to fit.</p>
+        <svg id="gsc-chart" class="w-full h-48" viewBox="0 0 800 200" preserveAspectRatio="none"></svg>
+      </div>
+    </div>
+
+    <!-- Data cards rendered in JS -->
+    <div id="gsc-cards" class="space-y-6 mb-8"></div>
+
+    <StateEmpty
+      id="gsc-empty"
+      title="No search data yet"
+      message={isAdmin
+        ? 'Upload the GSC Performance ZIP (the one with Pages.csv, Queries.csv, Chart.csv inside) to populate this view.'
+        : 'Your search report will appear here once data is available.'}
+    />
+  </div>
+
+  <script define:vars={{ clientId: user.client_id, isAdmin, firstClientId: clients[0]?.id || '' }}>
+    function escapeHtml(s) {
+      if (s == null) return '';
+      return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    let activeClientId = isAdmin ? firstClientId : clientId;
+    // Per-site scope for multi-site clients (Phase 2): null = API default
+    // (the primary site). The chips render from the GSC response's site list.
+    let activeSiteDomain = null;
+    const siteQuery = () => activeSiteDomain ? `&site=${encodeURIComponent(activeSiteDomain)}` : '';
+    function renderSitePicker(sites, active) {
+      const wrap = document.getElementById('site-picker');
+      if (!sites || sites.length < 2) { wrap.classList.add('hidden'); return; }
+      activeSiteDomain = active;
+      wrap.querySelectorAll('button').forEach(b => b.remove());
+      for (const s of sites) {
+        const btn = document.createElement('button');
+        const isActive = s.domain === active;
+        btn.className = `text-[11px] font-mono px-2.5 py-1 rounded-full transition-colors ${isActive ? 'bg-amber-500 text-neutral-950' : 'bg-neutral-800/60 text-neutral-400 hover:text-neutral-200'}`;
+        btn.innerHTML = `${escapeHtml(s.domain)}${s.is_primary ? ' &middot; primary' : ''}`;
+        btn.addEventListener('click', () => {
+          if (s.domain === activeSiteDomain) return;
+          activeSiteDomain = s.domain;
+          loadGsc();
+        });
+        wrap.appendChild(btn);
+      }
+      wrap.classList.remove('hidden');
+    }
+
+    const selector = document.getElementById('client-selector');
+    if (selector) {
+      selector.addEventListener('change', (e) => {
+        activeClientId = e.target.value;
+        activeSiteDomain = null; // new client, new site set
+        loadGsc();
+        refreshRequestChip();
+      });
+    }
+
+    // "vs last month" chips. Higher is better for clicks/impressions/CTR;
+    // lower is better for position (handled by posChip). Never fabricates.
+    function deltaChip(prior, current, lowerIsBetter) {
+      if (prior === null || prior === undefined || current === null || current === undefined) return '';
+      if (Number(prior) === 0) return Number(current) > 0 ? '<span class="text-emerald-500">new vs last month</span>' : '';
+      const pct = (Number(current) - Number(prior)) / Number(prior);
+      if (Math.abs(pct) < 0.005) return '<span class="text-neutral-500">flat vs last month</span>';
+      const better = lowerIsBetter ? pct < 0 : pct > 0;
+      return `<span class="${better ? 'text-emerald-500' : 'text-rose-400'}">${pct > 0 ? '+' : ''}${(pct * 100).toFixed(1)}% vs last month</span>`;
+    }
+    function posChip(prior, current) {
+      if (prior === null || prior === undefined || current === null || current === undefined) return '';
+      const diff = Number(current) - Number(prior);
+      if (Math.abs(diff) < 0.05) return '<span class="text-neutral-500">flat vs last month</span>';
+      return `<span class="${diff < 0 ? 'text-emerald-500' : 'text-rose-400'}">${diff > 0 ? '+' : ''}${diff.toFixed(1)} vs last month</span>`;
+    }
+    function setChip(id, html) { const el = document.getElementById(id); if (el) el.innerHTML = html; }
+
+    // Request a data update: capped at twice a month per client; the chip
+    // shows what is left.
+    const reqBtn = document.getElementById('request-update-btn');
+    const reqChip = document.getElementById('request-update-chip');
+    const reqStatus = document.getElementById('request-update-status');
+
+    function renderUsage(usage) {
+      if (!usage) return;
+      if (reqChip) reqChip.textContent = `${usage.used} of ${usage.limit} data updates used this month`;
+      if (reqBtn && usage.remaining <= 0) reqBtn.disabled = true;
+    }
+
+    async function refreshRequestChip() {
+      if (!activeClientId || !reqChip) return;
+      try {
+        const res = await fetch(`/portal/api/request-data-update?client_id=${activeClientId}`);
+        if (res.ok) renderUsage(await res.json());
+      } catch { /* chip is best-effort */ }
+    }
+
+    if (reqBtn) {
+      reqBtn.addEventListener('click', async () => {
+        if (reqBtn.disabled) return;
+        reqBtn.disabled = true;
+        if (reqStatus) reqStatus.textContent = 'Sending...';
+        try {
+          const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+          const res = await fetch('/portal/api/request-data-update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+            body: JSON.stringify({ client_id: activeClientId, source: 'search' }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok) {
+            if (reqStatus) reqStatus.textContent = 'Requested. We will refresh it shortly.';
+            renderUsage(data.usage);
+            if (!data.usage || data.usage.remaining > 0) reqBtn.disabled = false;
+          } else if (res.status === 429) {
+            if (reqStatus) reqStatus.textContent = data.error || 'No requests left this month.';
+            renderUsage(data.usage);
+          } else {
+            if (reqStatus) reqStatus.textContent = 'Could not send the request.';
+            reqBtn.disabled = false;
+          }
+        } catch {
+          if (reqStatus) reqStatus.textContent = 'Could not send the request.';
+          reqBtn.disabled = false;
+        }
+      });
+      refreshRequestChip();
+    }
+
+    function fmtInt(n) {
+      if (n === null || n === undefined) return '-';
+      return Number(n).toLocaleString();
+    }
+    function fmtCtr(n) {
+      if (n === null || n === undefined) return '-';
+      return `${(Number(n) * 100).toFixed(2)}%`;
+    }
+    function fmtPos(n) {
+      if (n === null || n === undefined) return '-';
+      return Number(n).toFixed(1);
+    }
+    function fmtDateUS(yyyymmdd) {
+      // Accepts either YYYY-MM-DD or YYYYMMDD.
+      if (!yyyymmdd) return null;
+      let y, m, d;
+      if (yyyymmdd.length === 10 && yyyymmdd.includes('-')) {
+        [y, m, d] = yyyymmdd.split('-');
+      } else if (yyyymmdd.length === 8) {
+        y = yyyymmdd.slice(0, 4); m = yyyymmdd.slice(4, 6); d = yyyymmdd.slice(6, 8);
+      } else {
+        return null;
+      }
+      const date = new Date(Number(y), Number(m) - 1, Number(d));
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    // Render the trend chart inline. Two lines (clicks + impressions),
+    // each scaled to its own max so both stay visible. Uses the
+    // text-amber-600 (clicks) and text-neutral-400 (impressions) tokens.
+    function renderChart(rows) {
+      const svg = document.getElementById('gsc-chart');
+      if (!svg || rows.length === 0) return;
+      const w = 800, h = 200, pad = 8;
+      const xs = (i) => pad + (i / Math.max(1, rows.length - 1)) * (w - pad * 2);
+      const maxClicks = Math.max(1, ...rows.map(r => r.clicks || 0));
+      const maxImpr = Math.max(1, ...rows.map(r => r.impressions || 0));
+      const yClicks = (v) => h - pad - (v / maxClicks) * (h - pad * 2);
+      const yImpr = (v) => h - pad - (v / maxImpr) * (h - pad * 2);
+      const pathClicks = rows.map((r, i) =>
+        `${i === 0 ? 'M' : 'L'} ${xs(i).toFixed(1)} ${yClicks(r.clicks || 0).toFixed(1)}`
+      ).join(' ');
+      const pathImpr = rows.map((r, i) =>
+        `${i === 0 ? 'M' : 'L'} ${xs(i).toFixed(1)} ${yImpr(r.impressions || 0).toFixed(1)}`
+      ).join(' ');
+      svg.innerHTML = `
+        <path d="${pathImpr}" stroke="currentColor" class="text-neutral-500/60" stroke-width="1.5" fill="none" />
+        <path d="${pathClicks}" stroke="currentColor" class="text-amber-600" stroke-width="2" fill="none" />
+      `;
+    }
+
+    async function loadGsc() {
+      const loadingEl = document.getElementById('gsc-loading');
+      const errorEl = document.getElementById('gsc-error');
+      const heroEl = document.getElementById('gsc-hero');
+      const chartCard = document.getElementById('gsc-chart-card');
+      const cardsEl = document.getElementById('gsc-cards');
+      const emptyEl = document.getElementById('gsc-empty');
+
+      loadingEl.classList.remove('hidden');
+      errorEl.classList.add('hidden');
+      emptyEl.classList.add('hidden');
+      heroEl.classList.add('hidden');
+      chartCard.classList.add('hidden');
+      cardsEl.innerHTML = '';
+
+      if (!activeClientId) {
+        loadingEl.classList.add('hidden');
+        emptyEl.classList.remove('hidden');
+        return;
+      }
+
+      try {
+        const res = await fetch(`/portal/api/dashboard/gsc?client_id=${activeClientId}${siteQuery()}`);
+        if (!res.ok) throw new Error('Failed to load search data');
+        const data = await res.json();
+        loadingEl.classList.add('hidden');
+
+        // Multi-site: draw the site chips + sync with the API's resolution.
+        renderSitePicker(data.sites, data.site);
+
+        if (!data.has_data) {
+          emptyEl.classList.remove('hidden');
+          return;
+        }
+
+        // Totals hero
+        const t = data.totals || {};
+        const fromDate = fmtDateUS(t.first_date);
+        const toDate = fmtDateUS(t.last_date);
+        const periodText = fromDate && toDate
+          ? `${fromDate} to ${toDate}, ${t.days_covered} day${t.days_covered === 1 ? '' : 's'}`
+          : (data.month || '');
+        document.getElementById('gsc-period').textContent = periodText;
+        const asofEl = document.getElementById('gsc-asof');
+        if (asofEl) asofEl.textContent = toDate ? `Data through ${toDate}.` : (data.month ? `Latest data: ${data.month}.` : '');
+        document.getElementById('kpi-clicks').textContent = fmtInt(t.clicks);
+        document.getElementById('kpi-impressions').textContent = fmtInt(t.impressions);
+        document.getElementById('kpi-ctr').textContent = fmtCtr(t.ctr);
+        document.getElementById('kpi-position').textContent = fmtPos(t.avg_position);
+        // "vs last month" chips from the prior cycle (when present).
+        const pt = data.prior_totals || null;
+        setChip('kpi-clicks-chip', deltaChip(pt && pt.clicks, t.clicks, false));
+        setChip('kpi-impressions-chip', deltaChip(pt && pt.impressions, t.impressions, false));
+        setChip('kpi-ctr-chip', deltaChip(pt && pt.ctr, t.ctr, false));
+        setChip('kpi-position-chip', posChip(pt && pt.avg_position, t.avg_position));
+        heroEl.classList.remove('hidden');
+
+        // Chart
+        if (data.chart && data.chart.length > 0) {
+          renderChart(data.chart);
+          chartCard.classList.remove('hidden');
+        }
+
+        const cards = [];
+
+        // Top queries
+        if (data.queries && data.queries.length > 0) {
+          const rows = data.queries.slice(0, 15).map(q => `
+            <tr class="border-b border-white/[0.03] last:border-0">
+              <td class="py-2 pr-4 text-sm text-neutral-200">${escapeHtml(q.value)}</td>
+              <td class="py-2 pr-4 text-xs font-mono text-neutral-400 text-right">${fmtInt(q.clicks)}</td>
+              <td class="py-2 pr-4 text-xs font-mono text-neutral-400 text-right">${fmtInt(q.impressions)}</td>
+              <td class="py-2 pr-4 text-xs font-mono text-neutral-400 text-right">${fmtCtr(q.ctr)}</td>
+              <td class="py-2 text-xs font-mono text-amber-600 text-right">${fmtPos(q.position)}</td>
+            </tr>`).join('');
+          cards.push(`
+            <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-6">
+              <h2 class="font-serif text-xl text-neutral-100 mb-1">Top queries</h2>
+              <p class="text-xs text-neutral-500 mb-4">What people typed into Google before clicking through to your site.</p>
+              <table class="w-full text-left">
+                <thead><tr class="border-b border-white/5">
+                  <th class="py-2 pr-4 text-[10px] font-mono text-neutral-400 uppercase tracking-wide">Query</th>
+                  <th class="py-2 pr-4 text-[10px] font-mono text-neutral-400 uppercase tracking-wide text-right">Clicks</th>
+                  <th class="py-2 pr-4 text-[10px] font-mono text-neutral-400 uppercase tracking-wide text-right">Impressions</th>
+                  <th class="py-2 pr-4 text-[10px] font-mono text-neutral-400 uppercase tracking-wide text-right">CTR</th>
+                  <th class="py-2 text-[10px] font-mono text-neutral-400 uppercase tracking-wide text-right">Position</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          `);
+        }
+
+        // Top pages
+        if (data.pages && data.pages.length > 0) {
+          const rows = data.pages.slice(0, 15).map(p => {
+            const safe = escapeHtml(p.value);
+            return `<tr class="border-b border-white/[0.03] last:border-0">
+              <td class="py-2 pr-4 text-xs font-mono"><a href="${safe}" target="_blank" rel="noopener noreferrer" class="text-amber-600 hover:underline break-all">${safe}</a></td>
+              <td class="py-2 pr-4 text-xs font-mono text-neutral-400 text-right">${fmtInt(p.clicks)}</td>
+              <td class="py-2 pr-4 text-xs font-mono text-neutral-400 text-right">${fmtInt(p.impressions)}</td>
+              <td class="py-2 pr-4 text-xs font-mono text-neutral-400 text-right">${fmtCtr(p.ctr)}</td>
+              <td class="py-2 text-xs font-mono text-amber-600 text-right">${fmtPos(p.position)}</td>
+            </tr>`;
+          }).join('');
+          cards.push(`
+            <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-6">
+              <h2 class="font-serif text-xl text-neutral-100 mb-1">Top landing pages</h2>
+              <p class="text-xs text-neutral-500 mb-4">The pages Google sent visitors to. Click a URL to open it.</p>
+              <table class="w-full text-left">
+                <thead><tr class="border-b border-white/5">
+                  <th class="py-2 pr-4 text-[10px] font-mono text-neutral-400 uppercase tracking-wide">Page</th>
+                  <th class="py-2 pr-4 text-[10px] font-mono text-neutral-400 uppercase tracking-wide text-right">Clicks</th>
+                  <th class="py-2 pr-4 text-[10px] font-mono text-neutral-400 uppercase tracking-wide text-right">Impressions</th>
+                  <th class="py-2 pr-4 text-[10px] font-mono text-neutral-400 uppercase tracking-wide text-right">CTR</th>
+                  <th class="py-2 text-[10px] font-mono text-neutral-400 uppercase tracking-wide text-right">Position</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          `);
+        }
+
+        // Devices side-by-side with Countries
+        const sideCards = [];
+        if (data.devices && data.devices.length > 0) {
+          const totalDeviceClicks = data.devices.reduce((s, d) => s + (d.clicks || 0), 0);
+          const rows = data.devices.map(d => {
+            const share = totalDeviceClicks > 0 ? Math.round(((d.clicks || 0) / totalDeviceClicks) * 100) : 0;
+            return `<tr class="border-b border-white/[0.03] last:border-0">
+              <td class="py-2 pr-4 text-sm text-neutral-200">${escapeHtml(d.value)}</td>
+              <td class="py-2 pr-4 text-xs font-mono text-neutral-400 text-right">${fmtInt(d.clicks)}</td>
+              <td class="py-2 text-xs font-mono text-amber-600 text-right">${share}%</td>
+            </tr>`;
+          }).join('');
+          sideCards.push(`
+            <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-6">
+              <h2 class="font-serif text-xl text-neutral-100 mb-1">Devices</h2>
+              <p class="text-xs text-neutral-500 mb-4">Where the clicks came from.</p>
+              <table class="w-full text-left"><tbody>${rows}</tbody></table>
+            </div>
+          `);
+        }
+        if (data.countries && data.countries.length > 0) {
+          const rows = data.countries.slice(0, 10).map(c => `
+            <tr class="border-b border-white/[0.03] last:border-0">
+              <td class="py-2 pr-4 text-sm text-neutral-200">${escapeHtml(c.value)}</td>
+              <td class="py-2 pr-4 text-xs font-mono text-neutral-400 text-right">${fmtInt(c.clicks)}</td>
+              <td class="py-2 text-xs font-mono text-amber-600 text-right">${fmtPos(c.position)}</td>
+            </tr>`).join('');
+          sideCards.push(`
+            <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-6">
+              <h2 class="font-serif text-xl text-neutral-100 mb-1">Top countries</h2>
+              <p class="text-xs text-neutral-500 mb-4">Top 10 by clicks.</p>
+              <table class="w-full text-left"><tbody>${rows}</tbody></table>
+            </div>
+          `);
+        }
+        if (sideCards.length === 2) {
+          cards.push(`<div class="grid md:grid-cols-2 gap-6">${sideCards.join('')}</div>`);
+        } else if (sideCards.length === 1) {
+          cards.push(sideCards[0]);
+        }
+
+        // Search appearance (rich results, etc.)
+        if (data.search_appearance && data.search_appearance.length > 0) {
+          const rows = data.search_appearance.map(s => `
+            <tr class="border-b border-white/[0.03] last:border-0">
+              <td class="py-2 pr-4 text-sm text-neutral-200">${escapeHtml(s.value)}</td>
+              <td class="py-2 pr-4 text-xs font-mono text-neutral-400 text-right">${fmtInt(s.clicks)}</td>
+              <td class="py-2 text-xs font-mono text-neutral-400 text-right">${fmtInt(s.impressions)}</td>
+            </tr>`).join('');
+          cards.push(`
+            <div class="bg-neutral-900/30 border border-white/5 rounded-2xl p-6">
+              <h2 class="font-serif text-xl text-neutral-100 mb-1">Search appearance</h2>
+              <p class="text-xs text-neutral-500 mb-4">How your pages showed up in search results (rich snippets, merchant listings, etc.).</p>
+              <table class="w-full text-left"><tbody>${rows}</tbody></table>
+            </div>
+          `);
+        }
+
+        cardsEl.innerHTML = cards.join('');
+
+      } catch (err) {
+        loadingEl.classList.add('hidden');
+        document.getElementById('gsc-error-detail').textContent = err.message || 'Could not connect to the server.';
+        errorEl.classList.remove('hidden');
+      }
+    }
+
+    loadGsc();
+  </script>
+</Portal>

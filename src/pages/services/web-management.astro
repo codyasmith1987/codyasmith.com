@@ -42,16 +42,27 @@ const faqSchema = JSON.stringify({
       "name": "Do maintenance hours roll over?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "They don't. Hours are use-it-or-lose-it each month. Keeps pricing predictable for both of us. If you consistently need more, we'll adjust your tier. Consistently need fewer, same thing."
+        "text": "They don't. Hours are use-it-or-lose-it each month. Keeps the monthly shape predictable for both of us. If the work consistently needs a different shape, we'll talk about it before changing anything."
       }
     }
   ]
 });
 ---
 
-<Base title="Web Management | Managed WordPress Hosting & Security" description="Managed WordPress hosting, security, updates, and monthly reporting. Your site lives on my infrastructure.">
+<Base title="Web Management | Managed WordPress Hosting & Security" description="Managed WordPress hosting, security, updates, and monthly reporting. Your site lives on my infrastructure." ogImage="/og/services/web-management.png" ogImageAlt="Web Management: your site lives on my infrastructure.">
   <script type="application/ld+json" set:html={faqSchema} />
-  <script type="application/ld+json" set:html={JSON.stringify({"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Services","item":"https://codyasmith.com/services"},{"@type":"ListItem","position":2,"name":"Web Management","item":"https://codyasmith.com/services/web-management"}]})} />
+  <script type="application/ld+json" set:html={JSON.stringify({"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://codyasmith.com/"},{"@type":"ListItem","position":2,"name":"Services","item":"https://codyasmith.com/services"},{"@type":"ListItem","position":3,"name":"Web Management","item":"https://codyasmith.com/services/web-management"}]})} />
+  <script type="application/ld+json" set:html={JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "Service",
+    "name": "Web Management",
+    "url": "https://codyasmith.com/services/web-management",
+    "provider": { "@id": "https://codyasmith.com/#organization" },
+    "serviceType": "Managed WordPress Hosting and Maintenance",
+    "areaServed": { "@type": "Country", "name": "United States" },
+    "description": "Dedicated cloud hosting, security monitoring, daily backups, core and plugin updates, and a monthly Site Health Report. Month-to-month after onboarding.",
+    "termsOfService": "Month-to-month after onboarding. No lock-in. Full backup and 30 days to migrate elsewhere on exit."
+  })} />
   <!-- Hero -->
   <section class="relative pt-40 pb-24 px-6 overflow-hidden">
     <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
@@ -161,13 +172,13 @@ const faqSchema = JSON.stringify({
             </div>
             <h3 class="text-neutral-100 text-xl font-medium mb-3">First of every month, the report lands.</h3>
             <p class="text-neutral-400 leading-relaxed" data-frame="default">
-              Plain language. What I did, what I found, what's coming next, and how performance compares to last month. You never have to wonder if the money's doing anything. The report is the receipt.
+              Plain language. What I did, what I found, what maintenance is queued, and how performance compares to last month. You never have to wonder if the work happened. The report is the receipt.
             </p>
             <p class="text-neutral-400 leading-relaxed" style="display:none" data-frame="sun">
-              Every month, a clear read on where the site is gaining ground: load times trending down, Core Web Vitals improving, security clean, work queued. You see what's improving and decide what to push on next.
+              Every month, a clear read on the site's condition: load times, Core Web Vitals, security status, uptime, and work queued. You see what changed without having to read a dashboard.
             </p>
             <p class="text-neutral-400 leading-relaxed" style="display:none" data-frame="moon">
-              First of every month, a written report lands. What I did, what I found, what's coming, with month-over-month comparisons. The receipt for the work, in your inbox, in writing.
+              First of every month, a written report lands. What I did, what I found, what maintenance is queued, with month-over-month comparisons. The receipt for the work, in your inbox, in writing.
             </p>
           </div>
         </div>
@@ -260,7 +271,7 @@ const faqSchema = JSON.stringify({
           The portal is the receipt for the engagement. Contracts, change orders, invoices, approvals, every milestone, every file. Nothing the engagement produces lives in a thread you'd lose.
         </p>
         <p class="text-neutral-300 leading-relaxed text-lg mt-6 pt-6 border-t border-white/5" style="display:none" data-vibe="mountain">
-          Magic-link sign-in (no passwords to leak). Sessions hashed. Files in encrypted storage. Activity log behind every action. Your data stays yours, end to end.
+          Password sign-in with bcrypt hashing. Sessions stored as SHA-256 hashes. Files in encrypted storage with signed time-bound download links. Activity log behind every action. Your data stays yours, end to end.
         </p>
       </div>
     </div>
@@ -276,14 +287,14 @@ const faqSchema = JSON.stringify({
     </div>
   </section>
 
-  <!-- Pricing (calibrated, no public tier ladder until ecosystem routing exists) -->
+  <!-- Scope -->
   <section class="py-28 px-6 surface-1">
     <div class="max-w-3xl mx-auto text-center">
       <div class="reveal">
-        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Pricing</p>
-        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100 mb-8">Calibrated, not off the rack.</h2>
+        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Scope</p>
+        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100 mb-8">Quoted after I see the site.</h2>
         <p class="text-neutral-400 text-lg leading-relaxed mb-10">
-          Pricing is calibrated to your site. A 20-page brochure site doesn't carry the same maintenance load as a 120-page lead-generation engine. Tell me what you're running and I'll show you what fits.
+          A small brochure site does not carry the same maintenance load as a large WordPress site with forms, plugins, analytics, and years of old decisions inside it. Tell me what you're running and I'll show you what the takeover looks like.
         </p>
         <a href="/contact?interest=web-management" class="inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
           Tell me about your site
@@ -347,7 +358,7 @@ const faqSchema = JSON.stringify({
             <svg class="w-5 h-5 text-neutral-500 group-open:rotate-45 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
           </summary>
           <div class="px-6 pb-6 text-neutral-400 text-sm leading-relaxed">
-            No. Use them or lose them. Keeps it simple and keeps pricing honest for both of us. If you're consistently using more than your tier allows, we bump you up. Consistently using fewer, we bump you down. Nobody pays for time they're not using.
+            No. Use them or lose them. Keeps the monthly shape simple for both of us. If the work consistently needs a different shape, we talk about it before changing anything.
           </div>
         </details>
       </div>

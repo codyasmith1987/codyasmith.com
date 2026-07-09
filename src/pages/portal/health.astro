@@ -17,10 +17,21 @@ const clients = isAdmin ? await getAllClients() : [];
   <div class="max-w-4xl mx-auto">
     <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10">
       <div>
-        <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Technical Audit</p>
+        <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Technical Audit</p>
         <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Site Health</h1>
+        <p class="text-sm text-neutral-400 mt-2">From a full crawl of your site. <span id="health-asof"></span></p>
+        <p class="mt-2">
+          <button id="request-update-btn" class="text-[11px] font-mono text-amber-500 hover:text-amber-400 underline underline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:no-underline">Request a data update</button>
+          <span id="request-update-chip" class="text-[11px] font-mono text-neutral-500 ml-2"></span>
+          <span id="request-update-status" class="text-[11px] text-neutral-500 ml-2"></span>
+        </p>
       </div>
       {isAdmin && <ClientSelector clients={clients} />}
+    </div>
+
+    <!-- Per-site picker (multi-site clients only; drives every section below) -->
+    <div id="site-picker" class="hidden mb-6 flex flex-wrap items-center gap-2">
+      <span class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase mr-1">Site</span>
     </div>
 
     <!-- Health Score -->
@@ -31,23 +42,37 @@ const clients = isAdmin ? await getAllClients() : [];
           <div>
             <h2 id="health-headline" class="font-serif text-xl text-neutral-100 mb-2"></h2>
             <p id="health-description" class="text-sm text-neutral-400 leading-relaxed"></p>
+            {isAdmin && (
+              <p id="health-admin-diag" class="hidden mt-2 text-[10px] font-mono text-neutral-500 tracking-wide"></p>
+            )}
           </div>
         </div>
         <!-- Issue breakdown bar -->
         <div class="grid grid-cols-3 gap-6">
           <div class="text-center">
             <p id="count-critical" class="text-2xl font-bold text-red-400 mb-1">0</p>
-            <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase">critical / high</p>
+            <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">critical / high</p>
+            <p id="count-critical-chip" class="text-[10px] font-mono mt-1 h-4"></p>
           </div>
           <div class="text-center">
-            <p id="count-medium" class="text-2xl font-bold text-amber-400 mb-1">0</p>
-            <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase">medium</p>
+            <p id="count-medium" class="text-2xl font-bold text-amber-600 mb-1">0</p>
+            <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">medium</p>
+            <p id="count-medium-chip" class="text-[10px] font-mono mt-1 h-4"></p>
           </div>
           <div class="text-center">
             <p id="count-low" class="text-2xl font-bold text-neutral-500 mb-1">0</p>
-            <p class="text-[10px] font-mono text-neutral-600 tracking-wide uppercase">low priority</p>
+            <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">low priority</p>
+            <p id="count-low-chip" class="text-[10px] font-mono mt-1 h-4"></p>
           </div>
         </div>
+        <details class="mt-6 group">
+          <summary class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase cursor-pointer hover:text-amber-600 transition-colors duration-300 select-none">Priority guide</summary>
+          <div class="mt-3 p-4 bg-neutral-900/30 border border-white/5 rounded-lg space-y-2 text-sm text-neutral-300">
+            <p><span class="inline-block w-3 h-3 rounded-full bg-red-400 mr-2 align-middle"></span><strong>Critical / High:</strong> Blocks search engines or breaks the user experience. Fix soon. Examples: missing H1, page returning 5xx, broken canonical tag.</p>
+            <p><span class="inline-block w-3 h-3 rounded-full bg-amber-600 mr-2 align-middle"></span><strong>Medium:</strong> Hurts search performance or content quality but does not break the site. Worth addressing this cycle. Examples: thin content, missing alt text, duplicate page titles.</p>
+            <p><span class="inline-block w-3 h-3 rounded-full bg-neutral-500 mr-2 align-middle"></span><strong>Low priority:</strong> Refinements and nice-to-haves. Address when the higher-priority items are clear. Examples: page titles slightly over the recommended length, single-page link issues.</p>
+          </div>
+        </details>
       </div>
     </div>
 
@@ -57,6 +82,15 @@ const clients = isAdmin ? await getAllClients() : [];
     <!-- Issue categories -->
     <div id="issue-groups" class="space-y-6 mb-8"></div>
 
+    <!-- Optional hardening recommendations (advisories: not scored, not problems) -->
+    <div id="advisory-section" class="mb-8 hidden"></div>
+
+    <!-- Month-over-month movement of the site data (trends) -->
+    <div id="trend-section" class="mb-8 hidden"></div>
+
+    <!-- Per-URL insights from crawl_urls / image_urls / redirect_chains -->
+    <div id="url-insights" class="space-y-6 mb-8 hidden"></div>
+
     <StateEmpty
       id="health-empty"
       title="No health data yet"
@@ -65,14 +99,122 @@ const clients = isAdmin ? await getAllClients() : [];
   </div>
 
   <script define:vars={{ clientId: user.client_id, isAdmin, firstClientId: clients[0]?.id || '' }}>
+    function escapeHtml(s) {
+      if (s == null) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
     let activeClientId = isAdmin ? firstClientId : clientId;
+    // Per-site scope for multi-site clients (Phase 1b). null = let the API
+    // pick (primary). One page-level state drives the score, the issues
+    // panel, the per-URL findings, and the trends together so every section
+    // always describes the SAME site.
+    let activeSiteDomain = null;
 
     const selector = document.getElementById('client-selector');
     if (selector) {
       selector.addEventListener('change', (e) => {
         activeClientId = e.target.value;
+        activeSiteDomain = null; // new client, new site set
         loadHealth();
+        loadUrlInsights();
+        loadTrends();
+        refreshRequestChip();
       });
+    }
+
+    const siteQuery = () => activeSiteDomain ? `&site=${encodeURIComponent(activeSiteDomain)}` : '';
+
+    // Draw the page-level site chips from the issues response (which carries
+    // the site list for multi-site clients) and keep the local state in sync
+    // with the API's resolution (default = primary).
+    function renderSitePicker(sites, active) {
+      const wrap = document.getElementById('site-picker');
+      if (!sites || sites.length < 2) { wrap.classList.add('hidden'); return; }
+      activeSiteDomain = active;
+      wrap.querySelectorAll('button').forEach(b => b.remove());
+      for (const s of sites) {
+        const btn = document.createElement('button');
+        const isActive = s.domain === active;
+        btn.className = `text-[11px] font-mono px-2.5 py-1 rounded-full transition-colors ${isActive ? 'bg-amber-500 text-neutral-950' : 'bg-neutral-800/60 text-neutral-400 hover:text-neutral-200'}`;
+        btn.innerHTML = `${escapeHtml(s.domain)}${s.is_primary ? ' &middot; primary' : ''}`;
+        btn.addEventListener('click', () => {
+          if (s.domain === activeSiteDomain) return;
+          activeSiteDomain = s.domain;
+          loadHealth();
+          loadUrlInsights();
+          loadTrends();
+        });
+        wrap.appendChild(btn);
+      }
+      wrap.classList.remove('hidden');
+    }
+
+    // "vs last month" for issue counts. Fewer issues is better, so a drop is
+    // green. Absolute change (counts are small integers). Never fabricates.
+    function countChip(prior, current) {
+      if (prior === null || prior === undefined || current === null || current === undefined) return '';
+      const diff = Number(current) - Number(prior);
+      if (diff === 0) return '<span class="text-neutral-500">no change</span>';
+      return `<span class="${diff < 0 ? 'text-emerald-500' : 'text-rose-400'}">${diff > 0 ? '+' : ''}${diff} vs last month</span>`;
+    }
+    function setChip(id, html) { const el = document.getElementById(id); if (el) el.innerHTML = html; }
+
+    // Request a data update: capped at twice a month per client; the chip
+    // shows what is left.
+    const reqBtn = document.getElementById('request-update-btn');
+    const reqChip = document.getElementById('request-update-chip');
+    const reqStatus = document.getElementById('request-update-status');
+
+    function renderUsage(usage) {
+      if (!usage) return;
+      if (reqChip) reqChip.textContent = `${usage.used} of ${usage.limit} data updates used this month`;
+      if (reqBtn && usage.remaining <= 0) reqBtn.disabled = true;
+    }
+
+    async function refreshRequestChip() {
+      if (!activeClientId || !reqChip) return;
+      try {
+        const res = await fetch(`/portal/api/request-data-update?client_id=${activeClientId}`);
+        if (res.ok) renderUsage(await res.json());
+      } catch { /* chip is best-effort */ }
+    }
+
+    if (reqBtn) {
+      reqBtn.addEventListener('click', async () => {
+        if (reqBtn.disabled) return;
+        reqBtn.disabled = true;
+        if (reqStatus) reqStatus.textContent = 'Sending...';
+        try {
+          const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+          const res = await fetch('/portal/api/request-data-update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf },
+            body: JSON.stringify({ client_id: activeClientId, source: 'health' }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok) {
+            if (reqStatus) reqStatus.textContent = 'Requested. We will refresh it shortly.';
+            renderUsage(data.usage);
+            if (!data.usage || data.usage.remaining > 0) reqBtn.disabled = false;
+          } else if (res.status === 429) {
+            if (reqStatus) reqStatus.textContent = data.error || 'No requests left this month.';
+            renderUsage(data.usage);
+          } else {
+            if (reqStatus) reqStatus.textContent = 'Could not send the request.';
+            reqBtn.disabled = false;
+          }
+        } catch {
+          if (reqStatus) reqStatus.textContent = 'Could not send the request.';
+          reqBtn.disabled = false;
+        }
+      });
+      refreshRequestChip();
     }
 
     const ISSUE_CATEGORIES = [
@@ -107,9 +249,40 @@ const clients = isAdmin ? await getAllClients() : [];
     function gradeFromIssues(high, medium) {
       if (high === 0 && medium <= 2) return { icon: '✓', color: 'bg-emerald-500/20 text-emerald-400', label: 'Excellent' };
       if (high <= 1 && medium <= 5) return { icon: '✓', color: 'bg-emerald-500/10 text-emerald-400', label: 'Good' };
-      if (high <= 3 && medium <= 10) return { icon: '!', color: 'bg-amber-500/15 text-amber-400', label: 'Fair' };
+      if (high <= 3 && medium <= 10) return { icon: '!', color: 'bg-amber-500/15 text-amber-600', label: 'Fair' };
       if (high <= 5) return { icon: '!', color: 'bg-red-500/10 text-red-400', label: 'Needs work' };
       return { icon: '!!', color: 'bg-red-500/20 text-red-400', label: 'Critical' };
+    }
+
+    // Optional hardening recommendations: benign/advisory findings (SF
+    // Warning/Opportunity + site_audit) that do NOT count toward the health
+    // score and must not read as problems. Rendered as a muted, separate
+    // section — no priority dots, no red. (M3, classification audit.)
+    function renderAdvisories(advisories) {
+      const advEl = document.getElementById('advisory-section');
+      if (!advEl) return;
+      if (!advisories || advisories.length === 0) { advEl.classList.add('hidden'); advEl.innerHTML = ''; return; }
+      const rows = advisories.map(a => {
+        const name = escapeHtml(String(a.issue_name || ''));
+        const count = Number(a.affected_urls) || 0;
+        const expl = ISSUE_EXPLAIN[String(a.issue_name || '').toLowerCase()] || a.description || '';
+        return `<div class="px-6 py-3">
+          <div class="flex items-center justify-between gap-4">
+            <span class="text-sm text-neutral-300">${name}</span>
+            <span class="text-[10px] font-mono text-neutral-500 shrink-0">${count} URL${count !== 1 ? 's' : ''}</span>
+          </div>
+          ${expl ? `<p class="text-xs text-neutral-500 mt-1 leading-relaxed">${escapeHtml(expl)}</p>` : ''}
+        </div>`;
+      }).join('');
+      advEl.innerHTML = `
+        <div class="health-animate bg-neutral-900/20 border border-white/5 rounded-2xl overflow-hidden">
+          <div class="px-6 py-5 border-b border-white/5">
+            <h3 class="text-sm font-medium text-neutral-200">Hardening recommendations (optional)</h3>
+            <p class="text-xs text-neutral-400 mt-0.5">Best-practice improvements, not problems. These don't affect your health score.</p>
+          </div>
+          <div class="divide-y divide-white/[0.03]">${rows}</div>
+        </div>`;
+      advEl.classList.remove('hidden');
     }
 
     async function loadHealth() {
@@ -130,14 +303,33 @@ const clients = isAdmin ? await getAllClients() : [];
       }
 
       try {
-        const res = await fetch(`/portal/api/dashboard/issues?client_id=${cid}`);
-        if (!res.ok) throw new Error('Failed to load health data');
-        const data = await res.json();
+        // Load issues + crawl-stats in parallel. Crawl-stats supplies
+        // the honest "real page count" and "distinct affected URLs"
+        // numbers so the headline can drop the misleading "page
+        // instances" rollup. When site_issue_urls has not been
+        // populated yet (no per-issue CSVs uploaded), distinct count
+        // falls back to summing affected_urls.
+        const [issuesRes, statsRes] = await Promise.all([
+          fetch(`/portal/api/dashboard/issues?client_id=${cid}${siteQuery()}`),
+          fetch(`/portal/api/dashboard/crawl-stats?client_id=${cid}${siteQuery()}`).catch(() => null),
+        ]);
+        if (!issuesRes.ok) throw new Error('Failed to load health data');
+        const data = await issuesRes.json();
+        // Multi-site: draw the page-level site chips + sync the active site
+        // with the API's resolution (default primary).
+        renderSitePicker(data.sites, data.site);
         const issues = data.issues || [];
+        const advisories = data.advisories || [];
+        const stats = statsRes && statsRes.ok ? await statsRes.json() : { navigable_pages: 0, urls_crawled: 0, distinct_affected_urls: 0 };
 
         loadingEl.classList.add('hidden');
 
-        if (issues.length === 0) {
+        // Render optional hardening recommendations (advisories) regardless of
+        // whether there are scored problems — but only treat the page as
+        // "empty" when there are neither problems NOR advisories.
+        renderAdvisories(advisories);
+
+        if (issues.length === 0 && advisories.length === 0) {
           document.getElementById('health-empty').classList.remove('hidden');
           return;
         }
@@ -145,27 +337,82 @@ const clients = isAdmin ? await getAllClients() : [];
         document.getElementById('health-empty').classList.add('hidden');
         document.getElementById('health-hero').classList.remove('hidden');
 
-        const high = issues.filter(i => ['critical', 'high'].includes((i.priority || '').toLowerCase())).length;
-        const medium = issues.filter(i => (i.priority || '').toLowerCase() === 'medium').length;
-        const low = issues.filter(i => (i.priority || '').toLowerCase() === 'low' || !i.priority).length;
+        // Priority counts come from the shared rollup (by_priority), so the
+        // page, the score, and the report all bucket priority the same way.
+        const bp = data.by_priority || { high: 0, medium: 0, low: 0 };
+        const high = bp.high, medium = bp.medium, low = bp.low;
 
         document.getElementById('count-critical').textContent = high;
         document.getElementById('count-medium').textContent = medium;
         document.getElementById('count-low').textContent = low;
 
+        const asofEl = document.getElementById('health-asof');
+        if (asofEl) asofEl.textContent = data.month ? `Latest crawl: ${data.month}.` : '';
+
+        // "vs last month" comparison from the prior crawl (when present).
+        const pbp = data.prior_by_priority || null;
+        setChip('count-critical-chip', countChip(pbp && pbp.high, high));
+        setChip('count-medium-chip', countChip(pbp && pbp.medium, medium));
+        setChip('count-low-chip', countChip(pbp && pbp.low, low));
+
         const grade = gradeFromIssues(high, medium);
         document.getElementById('health-grade').textContent = grade.icon;
         document.getElementById('health-grade').className = `w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold shrink-0 ${grade.color}`;
 
-        const totalUrls = issues.reduce((s, i) => s + (i.affected_urls || 0), 0);
+        // Counts framed the way clients name pages. Three honest
+        // states the headline can be in:
+        //
+        //   1. Best: navigable_pages > 0 AND distinct_affected_urls
+        //      came from site_issue_urls (the per-issue URL lists).
+        //      "X of your Y pages" is anchored against real numbers.
+        //   2. OK: distinct_affected_urls came from site_issue_urls
+        //      but navigable_pages is 0 (no crawl_internal upload).
+        //      "X pages" is still trustworthy (X is a distinct count).
+        //   3. Fallback: distinct_affected_urls is 0 because per-issue
+        //      URL lists were not uploaded. The only number available
+        //      is the SUM of affected_urls across categories — which
+        //      over-counts (an image with 3 issues counts 3 times).
+        //      Must NOT call that a page count.
+        const navigablePages = Number(stats.navigable_pages) || 0;
+        const urlsCrawled = Number(stats.urls_crawled) || 0;
+        const distinctAffectedUrls = Number(stats.distinct_affected_urls) || 0;
+        const usingSumFallback = distinctAffectedUrls === 0;
+        const findingsSum = usingSumFallback
+          ? issues.reduce((s, i) => s + (i.affected_urls || 0), 0)
+          : 0;
+
+        let pageFraming;
+        let pageFramingHasVerb;
+        if (navigablePages > 0 && !usingSumFallback) {
+          pageFraming = `${distinctAffectedUrls} of your ${navigablePages} page${navigablePages !== 1 ? 's' : ''}`;
+          pageFramingHasVerb = false; // verb handled by caller
+        } else if (!usingSumFallback) {
+          pageFraming = `${distinctAffectedUrls} page${distinctAffectedUrls !== 1 ? 's' : ''}`;
+          pageFramingHasVerb = false;
+        } else {
+          // Honest about over-counting: name findings, name categories,
+          // explicitly disclaim that a page can show up in multiple.
+          pageFraming = `${findingsSum} finding${findingsSum !== 1 ? 's' : ''} across ${issues.length} categor${issues.length !== 1 ? 'ies' : 'y'}`;
+          pageFramingHasVerb = true; // self-contained phrase
+        }
         let headline = '', desc = '';
+
+        // Tail sentence varies by what we actually know. The
+        // sum-fallback case names findings + disclaims overlap so we
+        // never claim a page count we can't substantiate.
+        const tail = usingSumFallback
+          ? `${pageFraming} reported. A single page can appear in multiple categories, so the finding count is higher than the page count.`
+          : `${pageFraming} ${distinctAffectedUrls === 1 ? 'has' : 'have'} at least one.`;
 
         if (grade.label === 'Excellent' || grade.label === 'Good') {
           headline = `Site health: ${grade.label}`;
-          desc = `Your site is in good shape. ${issues.length} issues found across ${totalUrls.toLocaleString()} page instances, but nothing critical. The items below are opportunities to polish, not emergencies.`;
+          const middle = usingSumFallback
+            ? `${pageFraming}`
+            : `across ${pageFraming}`;
+          desc = `Your site is in good shape. ${issues.length} issue categor${issues.length !== 1 ? 'ies' : 'y'} found ${middle}, but nothing critical. The items below are opportunities to polish, not emergencies.`;
         } else if (grade.label === 'Fair') {
           headline = `Site health: ${grade.label} (fixable issues)`;
-          desc = `${issues.length} issues found, with ${high > 0 ? `${high} high-priority item${high !== 1 ? 's' : ''} that should be addressed soon` : `${medium} medium-priority items worth cleaning up`}. These are affecting ${totalUrls.toLocaleString()} page instances. None of this is unusual for a site that's actively being worked on.`;
+          desc = `${issues.length} issue categor${issues.length !== 1 ? 'ies' : 'y'} found, with ${high > 0 ? `${high} high-priority item${high !== 1 ? 's' : ''} that should be addressed soon` : `${medium} medium-priority item${medium !== 1 ? 's' : ''} worth cleaning up`}. ${tail} None of this is unusual for a site that's actively being worked on.`;
         } else {
           headline = `Site health: ${grade.label}`;
           desc = `${high} high-priority issue${high !== 1 ? 's' : ''} and ${medium} medium-priority issue${medium !== 1 ? 's' : ''} found. These are actively hurting your search rankings and should be addressed. The list below is ordered by impact.`;
@@ -173,6 +420,20 @@ const clients = isAdmin ? await getAllClients() : [];
 
         document.getElementById('health-headline').textContent = headline;
         document.getElementById('health-description').textContent = desc;
+
+        // Admin-only diagnostic. Surfaces the gap between crawler
+        // reach and what we count as "your pages" so Cody can sanity
+        // check the utility-URL filter without exposing the inflated
+        // URL count to clients. Hidden unless isAdmin (Astro guard on
+        // the element render) AND we have crawl data.
+        if (isAdmin && urlsCrawled > 0) {
+          const diagEl = document.getElementById('health-admin-diag');
+          if (diagEl) {
+            const filtered = Math.max(0, urlsCrawled - navigablePages);
+            diagEl.textContent = `Admin: crawler saw ${urlsCrawled} URLs; ${filtered} filtered as utility (tag archives, pagination, feeds, attachment, WP system).`;
+            diagEl.classList.remove('hidden');
+          }
+        }
 
         const grouped = ISSUE_CATEGORIES.map(cat => ({
           ...cat,
@@ -185,15 +446,147 @@ const clients = isAdmin ? await getAllClients() : [];
           grouped.push({ name: 'Other', description: 'Additional items from the site audit', issues: ungrouped });
         }
 
+        // Wire up the per-issue expandable URL fetch after rendering.
+        // Each <details data-issue-card> fetches its URL list the first
+        // time it opens; subsequent toggles use the cached render.
+        const fetchedIssueUrls = new Set();
+        function attachIssueUrlExpanders() {
+          document.querySelectorAll('[data-issue-card]').forEach(el => {
+            el.addEventListener('toggle', async (e) => {
+              const details = e.currentTarget;
+              if (!details.open) return;
+              const issueName = details.getAttribute('data-issue-name');
+              if (!issueName || fetchedIssueUrls.has(issueName)) return;
+              fetchedIssueUrls.add(issueName);
+              const slot = details.querySelector('[data-issue-urls]');
+              if (!slot) return;
+              try {
+                const res = await fetch(`/portal/api/dashboard/issue-urls?client_id=${cid}&issue_name=${encodeURIComponent(issueName)}`);
+                const data = await res.json();
+                if (!data.urls || data.urls.length === 0) {
+                  // Empty state messaging keyed off what's actually
+                  // missing. The endpoint tells us:
+                  //   - source: 'derived' means the derivation ran
+                  //     against a source table that returned zero
+                  //     rows (legit empty, not a missing-data state)
+                  //   - has_expected_source tells us whether the
+                  //     specific table this issue needs has any
+                  //     data at all
+                  //   - derivable tells us whether the portal has a
+                  //     derivation path for this issue at all
+                  const TABLE_LABELS = {
+                    crawl_urls: 'Screaming Frog Internal HTML (internal_all.csv)',
+                    image_urls: 'Screaming Frog Images bulk export (images_all.csv)',
+                    content_urls: 'Screaming Frog Content bulk export (content_all.csv)',
+                    accessibility_urls: 'Screaming Frog Accessibility bulk export (accessibility_all.csv)',
+                    structured_data_urls: 'Screaming Frog Structured Data bulk export (structured_data_all.csv)',
+                  };
+                  let emptyMsg;
+                  if (!isAdmin) {
+                    // Clients never see tool names, filenames, or upload
+                    // instructions (those are Cody's operational steps).
+                    emptyMsg = `The detailed page list for this item is being prepared.`;
+                  } else if (data.source === 'derived') {
+                    emptyMsg = `No URLs in your latest data match this pattern. The audit summary may have flagged it from an older upload or a slightly different rule than the portal's derivation.`;
+                  } else if (data.derivable && !data.has_expected_source) {
+                    const tableHint = data.expected_source ? TABLE_LABELS[data.expected_source] : 'the relevant SF export';
+                    emptyMsg = `Upload the ${tableHint} and the portal will derive the affected URLs automatically. Or upload the per-issue CSV (${escapeHtml(issueName)}) for the exact list the audit produced.`;
+                  } else if (!data.derivable) {
+                    emptyMsg = `The detailed URL list for this issue is not available from the current upload. It needs the per-issue export (${escapeHtml(issueName)}) from the latest crawl.`;
+                  } else {
+                    emptyMsg = `Upload the per-issue CSV (${escapeHtml(issueName)}) from Screaming Frog to populate the list.`;
+                  }
+                  slot.innerHTML = `<span class="text-neutral-500 italic">${emptyMsg}</span>`;
+                  return;
+                }
+                // When the list was derived rather than pulled from
+                // a per-issue CSV, surface that — counts may differ
+                // slightly from the audit's affected_urls value.
+                const sourceBanner = (data.source === 'derived' && isAdmin)
+                  ? `<p class="text-[10px] font-mono text-amber-600 mb-2 leading-relaxed">Derived from your ${escapeHtml((data.source_table || '').replace(/_/g, ' '))} data. Count may differ slightly from the audit's affected_urls value because the audit applies edge-case rules (pixel widths, whitespace handling, etc.) the portal doesn't replicate exactly.</p>`
+                  : '';
+                // Each row carries the URL, a classification from the
+                // server (type + label + is_page), and an optional
+                // extras blob. Pages are listed plain; non-pages get
+                // a small label chip so an image is called an image
+                // and a tag archive is called a tag archive. Two
+                // sections — pages first, other URLs underneath with
+                // a short note explaining why they're separate.
+                function rowHtml(u) {
+                  const safeUrl = escapeHtml(u.url);
+                  // Surface the first scalar extra (often a length or
+                  // count) next to the URL so each row has context
+                  // without dumping the whole extras blob.
+                  let extraNote = '';
+                  if (u.extras && typeof u.extras === 'object') {
+                    const keys = Object.keys(u.extras).filter(k => /length|pixel|character|count|word/i.test(k));
+                    if (keys.length > 0) {
+                      const k = keys[0];
+                      extraNote = ` <span class="text-neutral-400">(${escapeHtml(String(k))}: ${escapeHtml(String(u.extras[k]))})</span>`;
+                    }
+                  }
+                  const typeChip = u.is_page
+                    ? ''
+                    : `<span class="inline-block text-[9px] font-mono uppercase tracking-wide text-neutral-400 bg-neutral-800/40 border border-white/5 rounded px-1.5 py-0.5 mr-2 align-baseline">${escapeHtml(u.label)}</span>`;
+                  return `<li class="text-[11px] font-mono">${typeChip}<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="text-amber-600 hover:text-amber-700 hover:underline break-all">${safeUrl}</a>${extraNote}</li>`;
+                }
+
+                const pageRows = data.urls.filter(u => u.is_page);
+                const otherRows = data.urls.filter(u => !u.is_page);
+                const parts = [];
+                if (pageRows.length > 0) {
+                  // Skip the "Pages" header when there are only pages
+                  // — no other section means no need to label this one.
+                  const header = otherRows.length > 0
+                    ? `<p class="text-[10px] font-mono text-neutral-400 uppercase tracking-wide mb-1.5">Pages (${pageRows.length})</p>`
+                    : '';
+                  parts.push(header + `<ul class="space-y-1">${pageRows.map(rowHtml).join('')}</ul>`);
+                }
+                if (otherRows.length > 0) {
+                  parts.push(`
+                    <div class="${pageRows.length > 0 ? 'mt-4 pt-3 border-t border-white/5' : ''}">
+                      <p class="text-[10px] font-mono text-neutral-400 uppercase tracking-wide mb-1">Other URLs (${otherRows.length})</p>
+                      <p class="text-[11px] text-neutral-500 mb-2 leading-relaxed">Other URLs Google sees but most clients don't think of as pages. Sometimes worth fixing, sometimes safe to ignore.</p>
+                      <ul class="space-y-1">${otherRows.map(rowHtml).join('')}</ul>
+                    </div>
+                  `);
+                }
+                slot.innerHTML = sourceBanner + parts.join('');
+
+                // After we know the split, update the card-row count
+                // language to match. Defaults to "${count} affected"
+                // which is neutral; once data lands we can be precise:
+                // "5 pages" if all pages, "5 affected (2 pages, 3
+                // other)" if mixed, "5 other URLs" if no pages at all.
+                const countEl = details.querySelector('[data-issue-count]');
+                if (countEl) {
+                  const totalCount = data.urls.length;
+                  let label;
+                  if (otherRows.length === 0) {
+                    label = `${pageRows.length} page${pageRows.length !== 1 ? 's' : ''}`;
+                  } else if (pageRows.length === 0) {
+                    label = `${otherRows.length} URL${otherRows.length !== 1 ? 's' : ''}`;
+                  } else {
+                    label = `${totalCount} affected (${pageRows.length} page${pageRows.length !== 1 ? 's' : ''}, ${otherRows.length} other)`;
+                  }
+                  countEl.firstChild.textContent = label + ' ';
+                }
+              } catch (err) {
+                slot.innerHTML = `<span class="text-red-500">Failed to load URL list. Try again.</span>`;
+              }
+            });
+          });
+        }
+
         document.getElementById('issue-groups').innerHTML = grouped.map((group, gi) => `
           <div class="health-animate bg-neutral-900/30 border border-white/5 rounded-2xl overflow-hidden" style="animation-delay:${0.1 + gi * 0.1}s">
             <div class="px-6 py-5 border-b border-white/5">
               <div class="flex items-center justify-between">
                 <div>
-                  <h3 class="text-sm font-medium text-neutral-200">${group.name}</h3>
-                  <p class="text-xs text-neutral-600 mt-0.5">${group.description}</p>
+                  <h3 class="text-sm font-medium text-neutral-200">${escapeHtml(group.name)}</h3>
+                  <p class="text-xs text-neutral-400 mt-0.5">${escapeHtml(group.description)}</p>
                 </div>
-                <span class="text-[10px] font-mono text-neutral-700 tracking-wide">${group.issues.length} issue${group.issues.length !== 1 ? 's' : ''}</span>
+                <span class="text-[10px] font-mono text-neutral-500 tracking-wide">${group.issues.length} issue${group.issues.length !== 1 ? 's' : ''}</span>
               </div>
             </div>
             <div class="divide-y divide-white/[0.03]">
@@ -201,26 +594,43 @@ const clients = isAdmin ? await getAllClients() : [];
                 const p = (i.priority || 'low').toLowerCase();
                 const dotColor = ['critical', 'high'].includes(p) ? 'bg-red-500' : p === 'medium' ? 'bg-amber-500' : 'bg-neutral-600';
                 const dotLabel = ['critical', 'high'].includes(p) ? 'High priority' : p === 'medium' ? 'Medium priority' : 'Low priority';
-                const explanation = ISSUE_EXPLAIN[i.issue_name.toLowerCase()] || i.description || '';
+                const issueName = String(i.issue_name || '');
+                const explanation = ISSUE_EXPLAIN[issueName.toLowerCase()] || i.description || '';
+                const count = Number(i.affected_urls) || 0;
+                // Each issue is a <details> so clicking the row
+                // reveals the affected-URL list, fetched on first
+                // expand. Per the page-trust work that surfaced when
+                // KelseyVerse showed "354 page instances" — admins
+                // and clients both want clickable URLs to inspect.
                 return `
-                  <div class="px-6 py-4 hover:bg-white/[0.01] transition-colors duration-300">
-                    <div class="flex items-start gap-3">
-                      <div class="w-2 h-2 rounded-full ${dotColor} mt-1.5 shrink-0" title="${dotLabel}" aria-label="${dotLabel}"></div>
-                      <div class="flex-1 min-w-0">
-                        <div class="flex items-center justify-between gap-4">
-                          <span class="text-sm text-neutral-200">${i.issue_name}</span>
-                          <span class="text-[10px] font-mono text-neutral-700 shrink-0">${i.affected_urls || 0} pages</span>
+                  <details class="group/issue px-6 py-4 hover:bg-white/[0.01] transition-colors duration-300"
+                           data-issue-card data-issue-name="${escapeHtml(issueName)}">
+                    <summary class="list-none cursor-pointer">
+                      <div class="flex items-start gap-3">
+                        <div class="w-2 h-2 rounded-full ${dotColor} mt-1.5 shrink-0" title="${dotLabel}" aria-label="${dotLabel}"></div>
+                        <div class="flex-1 min-w-0">
+                          <div class="flex items-center justify-between gap-4">
+                            <span class="text-sm text-neutral-200">${escapeHtml(issueName)}</span>
+                            <span data-issue-count class="text-[10px] font-mono text-neutral-500 shrink-0">${count} affected <span class="ml-1 text-neutral-400 group-open/issue:rotate-90 inline-block transition-transform">▸</span></span>
+                          </div>
+                          ${explanation ? `<p class="text-xs text-neutral-500 mt-1.5 leading-relaxed">${escapeHtml(explanation)}</p>` : ''}
+                          ${i.how_to_fix ? `<p class="text-xs text-amber-600 mt-1">Fix: ${escapeHtml(i.how_to_fix)}</p>` : ''}
                         </div>
-                        ${explanation ? `<p class="text-xs text-neutral-500 mt-1.5 leading-relaxed">${explanation}</p>` : ''}
-                        ${i.how_to_fix ? `<p class="text-xs text-amber-500/40 mt-1">Fix: ${i.how_to_fix}</p>` : ''}
                       </div>
+                    </summary>
+                    <div data-issue-urls class="mt-3 ml-5 text-[11px] text-neutral-500">
+                      <span class="text-neutral-400 italic">Loading affected pages...</span>
                     </div>
-                  </div>
+                  </details>
                 `;
               }).join('')}
             </div>
           </div>
         `).join('');
+
+        // Now that the issue groups are in the DOM, attach the
+        // on-expand fetch handler to each issue card.
+        attachIssueUrlExpanders();
       } catch (err) {
         loadingEl.classList.add('hidden');
         document.getElementById('health-error-detail').textContent = err.message || 'Could not connect to the server.';
@@ -228,6 +638,653 @@ const clients = isAdmin ? await getAllClients() : [];
       }
     }
 
+    // =========================================================================
+    // Per-URL insights from the URL-level tables. Renders below the
+    // existing issue groups. Quiet when no data exists for the client.
+    // =========================================================================
+
+    function fmtBytes(n) {
+      if (n == null) return '';
+      if (n >= 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+      if (n >= 1024) return `${Math.round(n / 1024)} KB`;
+      return `${n} B`;
+    }
+    function shorten(u, max = 70) {
+      if (!u) return '';
+      if (u.length <= max) return u;
+      const path = u.replace(/^https?:\/\//, '');
+      return path.length > max ? path.slice(0, max - 1) + '…' : path;
+    }
+
+    function renderUrlList(items, formatter) {
+      if (!items || items.length === 0) {
+        return '<p class="text-xs text-neutral-500">No URLs.</p>';
+      }
+      return `<ul class="mt-3 space-y-1.5 text-[11px] font-mono text-neutral-400">
+        ${items.map(formatter).join('')}
+      </ul>`;
+    }
+
+    // Wrap a URL in an external link with the cream-theme readable color.
+    // Display text is the shortened URL (or supplied text); href is the
+    // full URL. New tab + noopener so we never lose the portal context.
+    // Centralizes the <a> wrap so every widget callsite (page-titles,
+    // indexability, thin content, response time, oversized images,
+    // redirects, orphans, deep pages) gets clickable URLs from one edit.
+    function urlLink(url, displayText) {
+      if (!url) return escapeHtml(displayText || '');
+      const display = displayText !== undefined ? displayText : shorten(url);
+      return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="text-amber-600 hover:underline">${escapeHtml(display)}</a>`;
+    }
+
+    function widgetCard(opts) {
+      // opts: { id, title, description, stat_lines, has_data, sample_html }
+      // stat_lines: array of { count, label, severity }
+      const sev = (s) => s === 'high' ? 'text-red-400'
+        : s === 'medium' ? 'text-amber-600'
+        : s === 'low' ? 'text-neutral-300'
+        : s === 'none' ? 'text-neutral-600'
+        : 'text-emerald-400';
+      const stats = (opts.stat_lines || []).map(s => `
+        <div>
+          <p class="text-2xl font-bold ${sev(s.severity)} mb-1">${s.count}</p>
+          <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">${escapeHtml(s.label)}</p>
+        </div>
+      `).join('');
+      const detailsBlock = opts.sample_html
+        ? `<details class="mt-4 border-t border-white/5 pt-4">
+             <summary class="cursor-pointer text-[11px] font-mono text-amber-600 hover:text-amber-600 transition-colors">Show URLs</summary>
+             ${opts.sample_html}
+           </details>`
+        : '';
+      return `
+        <div class="health-animate bg-neutral-900/30 border border-white/5 rounded-2xl overflow-hidden" id="${opts.id}">
+          <div class="px-6 py-5 border-b border-white/5">
+            <h3 class="text-sm font-medium text-neutral-200">${escapeHtml(opts.title)}</h3>
+            ${opts.description ? `<p class="text-xs text-neutral-400 mt-0.5">${escapeHtml(opts.description)}</p>` : ''}
+          </div>
+          <div class="px-6 py-5">
+            <div class="grid grid-cols-${Math.min(3, Math.max(1, (opts.stat_lines || []).length))} gap-6">${stats}</div>
+            ${detailsBlock}
+          </div>
+        </div>
+      `;
+    }
+
+    // Pick the honest display state for a signal category from its
+    // category_coverage block (from url-insights). Mirrors
+    // src/lib/portal/coverage-display.ts verbatim inside the DRIFT-LOCK
+    // markers; a guard test asserts the two are byte-identical. This inline
+    // copy exists because the page's script runs under define:vars and is not
+    // bundled, so it cannot import the module.
+    //   'measured'     -> render the widget (a real 0 reads as clean)
+    //   'not_measured' -> file provided but the analysis was blank; show a
+    //                     neutral muted line, NOT the green all-clear
+    //   'omit'         -> never provided; render nothing
+    // DRIFT-LOCK:START — mirrored verbatim in src/pages/portal/health.astro
+    function coverageDisplayState(cov) {
+      if (!cov) return 'omit';
+      if (cov.measured === 1) return 'measured';
+      if ((cov.rows_total || 0) > 0) return 'not_measured';
+      return 'omit';
+    }
+    // Content-quality has three INDEPENDENT sub-metrics (near-duplicate,
+    // spelling/grammar, readability). A content export can be measured overall
+    // while one sub-metric column was never populated (the paid analysis filled
+    // some columns but not others). An unmeasured sub-metric must render as a
+    // neutral "not checked" dash, never a green 0, and the all-clear may only fire
+    // when ALL THREE sub-metrics were measured AND clean — otherwise the page
+    // would imply a passing result for a sub-metric that never ran.
+    function contentStatLine(measured, count, label, activeSeverity) {
+      if (!measured) return { count: 'n/a', label: label + ' (not checked)', severity: 'none' };
+      return { count: count, label: label, severity: count > 0 ? activeSeverity : 'ok' };
+    }
+    function contentStatLines(cq) {
+      const m = (cq && cq.measured) || {};
+      return [
+        contentStatLine(!!m.near_duplicate, cq.near_duplicate_count, 'near-duplicate pages', 'medium'),
+        contentStatLine(!!m.spelling_grammar, cq.spelling_grammar_count, 'pages with spelling/grammar', 'medium'),
+        m.readability
+          ? { count: cq.hard_to_read_count, label: 'dense for a general reader', severity: 'low' }
+          : { count: 'n/a', label: 'dense for a general reader (not checked)', severity: 'none' },
+      ];
+    }
+    function contentAllClear(cq) {
+      const m = (cq && cq.measured) || {};
+      if (!(m.near_duplicate && m.spelling_grammar && m.readability)) return false;
+      return cq.near_duplicate_count === 0 && cq.spelling_grammar_count === 0 && cq.hard_to_read_count === 0;
+    }
+    // DRIFT-LOCK:END
+
+    // Client-facing copy for the not-measured state. Frames the category as
+    // not part of this crawl — no tool names, no filenames, no jargon, and
+    // nothing that reads as a clean all-clear.
+    const NOT_MEASURED_COPY = {
+      accessibility: "Accessibility wasn't part of this crawl, so there's nothing to report here yet.",
+      structured_data: "Schema markup wasn't part of this crawl, so there's nothing to report here yet.",
+      content_quality: "A content-quality review wasn't part of this crawl, so there's nothing to report here yet.",
+    };
+
+    // A muted card that says a category was not measured. Visually distinct
+    // from a measured-clean widget (no green stat numbers, no "no issues
+    // flagged"): a single neutral line under the title.
+    function notMeasuredCard(opts) {
+      const copy = NOT_MEASURED_COPY[opts.category]
+        || "This wasn't part of the latest crawl, so there's nothing to report here yet.";
+      return `
+        <div class="health-animate bg-neutral-900/30 border border-white/5 rounded-2xl overflow-hidden" id="${opts.id}">
+          <div class="px-6 py-5 border-b border-white/5">
+            <h3 class="text-sm font-medium text-neutral-200">${escapeHtml(opts.title)}</h3>
+            ${opts.description ? `<p class="text-xs text-neutral-400 mt-0.5">${escapeHtml(opts.description)}</p>` : ''}
+          </div>
+          <div class="px-6 py-5">
+            <p class="text-xs text-neutral-500">${escapeHtml(copy)}</p>
+          </div>
+        </div>
+      `;
+    }
+
+    async function loadUrlInsights() {
+      const cid = activeClientId;
+      const container = document.getElementById('url-insights');
+      container.classList.add('hidden');
+      container.innerHTML = '';
+      if (!cid) return;
+
+      let data;
+      try {
+        const res = await fetch(`/portal/api/dashboard/url-insights?client_id=${encodeURIComponent(cid)}${siteQuery()}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        data = await res.json();
+      } catch {
+        // Quiet on failure. The issues panel above is the primary
+        // health surface; this section augments it.
+        return;
+      }
+
+      // Honest display state per signal category, read from the explicit
+      // coverage block (never re-derived from NULLs). 'not_measured' means the
+      // file was provided but the analysis columns were blank, so we surface a
+      // neutral muted line instead of a green all-clear; 'omit' means it was
+      // never provided and we render nothing, as before.
+      const cov = data.category_coverage || {};
+      const accessibilityState = coverageDisplayState(cov.accessibility);
+      const structuredState = coverageDisplayState(cov.structured_data);
+      const contentState = coverageDisplayState(cov.content_quality);
+
+      // If no per-URL data exists at all for this client, do not
+      // render the section. The existing empty state handles "no
+      // health data". A provided-but-unmeasured signal category
+      // ('not_measured') still counts as something to show.
+      if (
+        !data.has_crawl_data && !data.has_image_data && !data.has_redirect_data && !data.has_link_data &&
+        !data.has_accessibility_data && !data.has_structured_data && !data.has_content_quality &&
+        !data.has_url_structure_data && !data.has_javascript_data && !data.has_hreflang_data &&
+        accessibilityState !== 'not_measured' && structuredState !== 'not_measured' && contentState !== 'not_measured'
+      ) return;
+
+      const cards = [];
+
+      // ----- Title quality -----
+      if (data.has_crawl_data) {
+        const tq = data.title_quality;
+        const stats = [
+          { count: tq.missing_count, label: 'missing', severity: tq.missing_count > 0 ? 'high' : 'ok' },
+          { count: tq.too_long_count, label: 'over 60 chars', severity: tq.too_long_count > 0 ? 'medium' : 'ok' },
+          { count: tq.too_short_count, label: 'under 30 chars', severity: tq.too_short_count > 0 ? 'medium' : 'ok' },
+        ];
+        const totalIssues = tq.missing_count + tq.too_long_count + tq.too_short_count + tq.duplicate_count;
+        let sampleHtml = '';
+        if (totalIssues > 0) {
+          const parts = [];
+          if (tq.sample_missing.length) {
+            parts.push(`<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">Missing</p>` +
+              renderUrlList(tq.sample_missing, x => `<li>${urlLink(x.url)}</li>`));
+          }
+          if (tq.sample_too_long.length) {
+            parts.push(`<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">Over 60 chars</p>` +
+              renderUrlList(tq.sample_too_long, x => `<li>${urlLink(x.url)} <span class="text-neutral-400">${x.title_length} chars</span></li>`));
+          }
+          if (tq.sample_too_short.length) {
+            parts.push(`<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">Under 30 chars</p>` +
+              renderUrlList(tq.sample_too_short, x => `<li>${urlLink(x.url)} <span class="text-neutral-400">${x.title_length} chars</span></li>`));
+          }
+          if (tq.sample_duplicates.length) {
+            parts.push(`<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">Duplicates</p>` +
+              renderUrlList(tq.sample_duplicates, x => `<li>"${escapeHtml(shorten(x.title, 50))}" used ${x.count} times</li>`));
+          }
+          sampleHtml = parts.join('');
+        }
+        if (totalIssues > 0 || tq.duplicate_count > 0) {
+          cards.push(widgetCard({
+            id: 'widget-title',
+            title: 'Page title quality',
+            description: 'How well your page titles read in Google search results. Aim for 50 to 60 characters, unique on every page.',
+            stat_lines: stats,
+            sample_html: sampleHtml,
+          }));
+        }
+      }
+
+      // ----- Indexability blocks -----
+      if (data.has_crawl_data && data.indexability_blocks.total_blocked > 0) {
+        const ib = data.indexability_blocks;
+        const stats = [
+          { count: ib.total_blocked, label: 'pages blocked from index', severity: 'medium' },
+        ];
+        const byStatusItems = Object.entries(ib.by_status)
+          .map(([k, v]) => `<li>${escapeHtml(k)} <span class="text-neutral-400">${v} page${v !== 1 ? 's' : ''}</span></li>`)
+          .join('');
+        const sampleHtml =
+          `<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">By reason</p>
+           <ul class="mt-2 space-y-1.5 text-[11px] font-mono text-neutral-400">${byStatusItems}</ul>` +
+          renderUrlList(ib.samples,
+            x => `<li>${urlLink(x.url)} <span class="text-neutral-400">${escapeHtml(x.indexability_status || x.indexability || '')}</span></li>`);
+        cards.push(widgetCard({
+          id: 'widget-indexability',
+          title: 'Indexability blocks',
+          description: 'Pages Google has been told not to index. Review to confirm each block is intentional.',
+          stat_lines: stats,
+          sample_html: sampleHtml,
+        }));
+      }
+
+      // ----- Thin content -----
+      if (data.has_crawl_data && data.thin_content.under_200_count > 0) {
+        const tc = data.thin_content;
+        cards.push(widgetCard({
+          id: 'widget-thin',
+          title: 'Thin content',
+          description: 'Pages with light text. Google often rates pages with under 200 words as low quality.',
+          stat_lines: [
+            { count: tc.under_200_count, label: 'under 200 words', severity: tc.under_100_count > 0 ? 'medium' : 'low' },
+            { count: tc.under_100_count, label: 'under 100 words', severity: tc.under_100_count > 0 ? 'high' : 'ok' },
+          ],
+          sample_html: renderUrlList(tc.samples,
+            x => `<li>${urlLink(x.url)} <span class="text-neutral-400">${x.word_count} words</span></li>`),
+        }));
+      }
+
+      // ----- Response time outliers -----
+      if (data.has_crawl_data && data.response_time.over_1500_count > 0) {
+        const rt = data.response_time;
+        cards.push(widgetCard({
+          id: 'widget-response-time',
+          title: 'Slow response times',
+          description: 'Pages that take over 1.5 seconds to respond. Slower pages reduce visitor patience and search ranking.',
+          stat_lines: [
+            { count: rt.over_1500_count, label: 'over 1.5 seconds', severity: rt.over_3000_count > 0 ? 'medium' : 'low' },
+            { count: rt.over_3000_count, label: 'over 3 seconds', severity: rt.over_3000_count > 0 ? 'high' : 'ok' },
+          ],
+          sample_html: renderUrlList(rt.samples,
+            x => `<li>${urlLink(x.url)} <span class="text-neutral-400">${x.response_time_ms} ms</span></li>`),
+        }));
+      }
+
+      // ----- Oversized images -----
+      if (data.has_image_data && data.oversized_images.over_100kb_count > 0) {
+        const oi = data.oversized_images;
+        cards.push(widgetCard({
+          id: 'widget-images',
+          title: 'Oversized images',
+          description: 'Image files larger than 100 KB. Compressing these makes pages load faster.',
+          stat_lines: [
+            { count: oi.over_100kb_count, label: 'over 100 KB', severity: oi.over_500kb_count > 0 ? 'medium' : 'low' },
+            { count: oi.over_500kb_count, label: 'over 500 KB', severity: oi.over_500kb_count > 0 ? 'high' : 'ok' },
+          ],
+          sample_html: renderUrlList(oi.samples,
+            x => `<li>${urlLink(x.url)} <span class="text-neutral-400">${fmtBytes(x.size_bytes)}${x.dimensions ? ', ' + escapeHtml(x.dimensions) : ''}</span></li>`),
+        }));
+      }
+
+      // ----- Redirect chains -----
+      if (data.has_redirect_data && (data.redirect_chains.loop_count > 0 || data.redirect_chains.multi_hop_count > 0)) {
+        const rc = data.redirect_chains;
+        const parts = [];
+        if (rc.sample_loops.length) {
+          parts.push(`<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">Loops</p>` +
+            renderUrlList(rc.sample_loops, x => `<li>${urlLink(x.source_url)} <span class="text-neutral-400">${x.hop_count} hops</span></li>`));
+        }
+        if (rc.sample_multi_hop.length) {
+          parts.push(`<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">Multi-hop</p>` +
+            renderUrlList(rc.sample_multi_hop,
+              x => `<li>${urlLink(x.source_url)} <span class="text-neutral-400">to ${urlLink(x.final_url, shorten(x.final_url || '', 40))}, ${x.hop_count} hops</span></li>`));
+        }
+        cards.push(widgetCard({
+          id: 'widget-redirects',
+          title: 'Redirect chains',
+          description: 'URLs that redirect through more than one stop, or loop back on themselves. Each hop wastes time and link value.',
+          stat_lines: [
+            { count: rc.loop_count, label: 'redirect loops', severity: rc.loop_count > 0 ? 'high' : 'ok' },
+            { count: rc.multi_hop_count, label: '2+ hop chains', severity: rc.multi_hop_count > 0 ? 'medium' : 'ok' },
+          ],
+          sample_html: parts.join(''),
+        }));
+      }
+
+      // ----- Orphan pages -----
+      if (data.has_crawl_data && data.orphan_pages.count > 0) {
+        const op = data.orphan_pages;
+        cards.push(widgetCard({
+          id: 'widget-orphans',
+          title: 'Orphan pages',
+          description: 'Pages no other page on your site links to. Visitors and Google can only reach them by direct URL.',
+          stat_lines: [
+            { count: op.count, label: 'pages with no internal links in', severity: 'medium' },
+          ],
+          sample_html: renderUrlList(op.samples,
+            x => `<li>${urlLink(x.url)}${x.title ? ` <span class="text-neutral-400">${escapeHtml(shorten(x.title, 30))}</span>` : ''}</li>`),
+        }));
+      }
+
+      // ----- Deep pages -----
+      if (data.has_crawl_data && data.deep_pages.over_5_count > 0) {
+        const dp = data.deep_pages;
+        cards.push(widgetCard({
+          id: 'widget-deep',
+          title: 'Deep pages',
+          description: 'Pages more than five clicks from the homepage. Buried content gets less search weight and less visitor traffic.',
+          stat_lines: [
+            { count: dp.over_5_count, label: 'over 5 clicks deep', severity: dp.over_10_count > 0 ? 'medium' : 'low' },
+            { count: dp.over_10_count, label: 'over 10 clicks deep', severity: dp.over_10_count > 0 ? 'high' : 'ok' },
+          ],
+          sample_html: renderUrlList(dp.samples,
+            x => `<li>${urlLink(x.url)} <span class="text-neutral-400">depth ${x.crawl_depth}</span></li>`),
+        }));
+      }
+
+      // ----- Links to broken pages -----
+      if (data.has_link_data && data.inbound_broken_links.broken_destination_count > 0) {
+        const ibl = data.inbound_broken_links;
+        const sev4xx = ibl.samples.some(s => s.status_code >= 500) ? 'high' : 'medium';
+        cards.push(widgetCard({
+          id: 'widget-inbound-broken',
+          title: 'Links to broken pages',
+          description: 'Pages on your site that link to URLs returning 4xx or 5xx errors. Fixing or removing these links improves the visitor experience.',
+          stat_lines: [
+            { count: ibl.broken_destination_count, label: 'broken destination URLs', severity: sev4xx },
+            { count: ibl.total_inbound_links, label: 'total inbound links to fix', severity: ibl.total_inbound_links > 10 ? 'medium' : 'low' },
+          ],
+          sample_html: renderUrlList(ibl.samples, x => {
+            const sources = x.sample_source_urls.length === 0
+              ? ''
+              : `<ul class="ml-4 mt-1 space-y-0.5 text-neutral-500">
+                  ${x.sample_source_urls.map(s => `<li>linked from ${urlLink(s)}</li>`).join('')}
+                </ul>`;
+            return `<li>${urlLink(x.destination_url)} <span class="text-neutral-400">${x.status_code}, ${x.inbound_count} inbound</span>${sources}</li>`;
+          }),
+        }));
+      }
+
+      // ----- Duplicate content (url_structure_urls Hash) -----
+      if (data.has_url_structure_data && data.duplicate_content.group_count > 0) {
+        const dc = data.duplicate_content;
+        cards.push(widgetCard({
+          id: 'widget-duplicate-content',
+          title: 'Duplicate content',
+          description: 'Sets of pages with byte-identical content. Search engines split ranking signals across duplicates, so consolidating or canonicalizing them helps each rank better.',
+          stat_lines: [
+            { count: dc.group_count, label: 'duplicate groups', severity: 'medium' },
+            { count: dc.affected_count, label: 'pages affected', severity: dc.affected_count > 10 ? 'medium' : 'low' },
+          ],
+          sample_html: renderUrlList(dc.samples, g =>
+            `<li>${g.count} identical pages:<ul class="ml-4 mt-1 space-y-0.5 text-neutral-500">${g.urls.map(u => `<li>${urlLink(u)}</li>`).join('')}</ul></li>`),
+        }));
+      }
+
+      // ----- Content that needs JavaScript (javascript_urls) -----
+      if (data.has_javascript_data && data.js_rendering.needs_js_count > 0) {
+        const js = data.js_rendering;
+        cards.push(widgetCard({
+          id: 'widget-js-rendering',
+          title: 'Content that needs JavaScript',
+          description: 'Pages where most of the content only appears after JavaScript runs. Search engines that render poorly may miss it, so server-rendering the key content can help.',
+          stat_lines: [
+            { count: js.needs_js_count, label: 'pages depend on JS for content', severity: 'medium' },
+          ],
+          sample_html: renderUrlList(js.samples, x =>
+            `<li>${urlLink(x.url)} <span class="text-neutral-400">${x.html_word_count} static &rarr; ${x.rendered_word_count} rendered words</span></li>`),
+        }));
+      }
+
+      // ----- Hreflang coverage (hreflang_urls) -----
+      if (data.has_hreflang_data && data.hreflang.pages_with_hreflang > 0) {
+        const hl = data.hreflang;
+        cards.push(widgetCard({
+          id: 'widget-hreflang',
+          title: 'Hreflang coverage',
+          description: 'Pages with hreflang annotations that tell search engines which language or region version to show. Relevant for sites targeting multiple locales.',
+          stat_lines: [
+            { count: hl.pages_with_hreflang, label: 'pages with hreflang', severity: 'none' },
+          ],
+          sample_html: renderUrlList(hl.samples, x =>
+            `<li>${urlLink(x.url)} <span class="text-neutral-400">${x.hreflang_count} annotation${x.hreflang_count !== 1 ? 's' : ''}</span></li>`),
+        }));
+      }
+
+      // ----- Accessibility (WCAG) -----
+      // Three honest states, driven by the explicit coverage record:
+      //   measured     -> render the widget (a clean 0 reads as checked-clean,
+      //                   visibly distinct from "not run")
+      //   not_measured -> the export was provided but the analysis was blank;
+      //                   a neutral muted line, NOT a green "all clear"
+      //   omit         -> never provided; render nothing
+      const accessibilityDesc = 'Pages with accessibility issues that can affect visitors who use assistive technology such as screen readers. Each count is the number of issues the audit flagged on that page.';
+      if (accessibilityState === 'measured') {
+        const ac = data.accessibility;
+        const clean = ac.pages_with_violations === 0;
+        const byLevelItems = Object.entries(ac.by_level)
+          .map(([k, v]) => `<li>${escapeHtml(k)} <span class="text-neutral-400">${v} page${v !== 1 ? 's' : ''}</span></li>`)
+          .join('');
+        const byLevelHtml = byLevelItems
+          ? `<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">By standard</p>
+             <ul class="mt-2 space-y-1.5 text-[11px] font-mono text-neutral-400">${byLevelItems}</ul>`
+          : '';
+        cards.push(widgetCard({
+          id: 'widget-accessibility',
+          title: 'Accessibility',
+          description: accessibilityDesc,
+          stat_lines: [
+            { count: ac.pages_with_violations, label: 'pages with issues', severity: clean ? 'ok' : 'medium' },
+            { count: ac.total_violations, label: 'total issues found', severity: ac.total_violations > 0 ? 'medium' : 'ok' },
+          ],
+          sample_html: clean
+            ? `<p class="text-xs text-neutral-400">No accessibility issues flagged in the latest crawl data.</p>`
+            : byLevelHtml + renderUrlList(ac.samples,
+                x => `<li>${urlLink(x.url)} <span class="text-neutral-400">${x.all_violations} issue${x.all_violations !== 1 ? 's' : ''}</span></li>`),
+        }));
+      } else if (accessibilityState === 'not_measured') {
+        cards.push(notMeasuredCard({
+          id: 'widget-accessibility',
+          category: 'accessibility',
+          title: 'Accessibility',
+          description: accessibilityDesc,
+        }));
+      }
+
+      // ----- Structured data (schema markup) -----
+      // measured     -> render the widget (the "types found" list is useful
+      //                 even with zero errors; a clean result reads as checked)
+      // not_measured -> provided but the validation did not run; neutral line
+      // omit         -> never provided; render nothing
+      const structuredDesc = 'Schema markup tells search engines what your pages are about and powers rich results (star ratings, FAQs, breadcrumbs). Errors or warnings here are worth reviewing.';
+      if (structuredState === 'measured') {
+        const sd = data.structured_data;
+        const clean = sd.pages_with_errors === 0 && sd.pages_with_warnings === 0;
+        const typeItems = Object.entries(sd.top_types)
+          .map(([k, v]) => `<li>${escapeHtml(k)} <span class="text-neutral-400">${v} page${v !== 1 ? 's' : ''}</span></li>`)
+          .join('');
+        const typesHtml = typeItems
+          ? `<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">Schema types found</p>
+             <ul class="mt-2 space-y-1.5 text-[11px] font-mono text-neutral-400">${typeItems}</ul>`
+          : '';
+        const cleanHtml = clean
+          ? `<p class="text-xs text-neutral-400">No schema markup errors or warnings flagged in the latest crawl data.</p>`
+          : renderUrlList(sd.samples,
+              x => `<li>${urlLink(x.url)} <span class="text-neutral-400">${x.error_count} error${x.error_count !== 1 ? 's' : ''}, ${x.warning_count} warning${x.warning_count !== 1 ? 's' : ''}</span></li>`);
+        cards.push(widgetCard({
+          id: 'widget-structured-data',
+          title: 'Structured data',
+          description: structuredDesc,
+          stat_lines: [
+            { count: sd.pages_with_errors, label: 'pages with errors', severity: sd.pages_with_errors > 0 ? 'high' : 'ok' },
+            { count: sd.pages_with_warnings, label: 'pages with warnings', severity: 'low' },
+          ],
+          sample_html: typesHtml + cleanHtml,
+        }));
+      } else if (structuredState === 'not_measured') {
+        cards.push(notMeasuredCard({
+          id: 'widget-structured-data',
+          category: 'structured_data',
+          title: 'Structured data',
+          description: structuredDesc,
+        }));
+      }
+
+      // ----- Content quality -----
+      // measured     -> render the widget; each sub-section shows only when it
+      //                 has samples; a fully-clean result shows a neutral line
+      //                 so the client sees the content was checked
+      // not_measured -> provided but the content review did not run; neutral line
+      // omit         -> never provided; render nothing
+      const contentDesc = 'Pages worth a content review: close duplicates of other pages, spelling or grammar errors, and pages that read dense for a general audience. Dense reading is only a flag worth a look, not a problem on its own (technical pages are expected to read dense).';
+      if (contentState === 'measured') {
+        const cq = data.content_quality;
+        // Per-sub-metric honesty: an unmeasured sub-metric renders a neutral
+        // "not checked" dash (never a green 0), and the all-clear only fires
+        // when all three sub-metrics were measured AND clean.
+        const clean = contentAllClear(cq);
+        const sections = [];
+        if (cq.near_duplicate_samples.length) {
+          sections.push(`<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">Near-duplicate content</p>` +
+            renderUrlList(cq.near_duplicate_samples, x => `<li>${urlLink(x.url)} <span class="text-neutral-400">${escapeHtml(x.detail)}</span></li>`));
+        }
+        if (cq.spelling_grammar_samples.length) {
+          sections.push(`<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">Spelling and grammar</p>` +
+            renderUrlList(cq.spelling_grammar_samples, x => `<li>${urlLink(x.url)} <span class="text-neutral-400">${escapeHtml(x.detail)}</span></li>`));
+        }
+        if (cq.hard_to_read_samples.length) {
+          sections.push(`<p class="text-[10px] font-mono text-neutral-500 mt-3 uppercase tracking-wide">Readability (for a general audience)</p>` +
+            renderUrlList(cq.hard_to_read_samples, x => `<li>${urlLink(x.url)} <span class="text-neutral-400">${escapeHtml(x.detail)}</span></li>`));
+        }
+        cards.push(widgetCard({
+          id: 'widget-content-quality',
+          title: 'Content quality',
+          description: contentDesc,
+          stat_lines: contentStatLines(cq),
+          sample_html: clean
+            ? `<p class="text-xs text-neutral-400">No content issues flagged in the latest crawl data.</p>`
+            : sections.join(''),
+        }));
+      } else if (contentState === 'not_measured') {
+        cards.push(notMeasuredCard({
+          id: 'widget-content-quality',
+          category: 'content_quality',
+          title: 'Content quality',
+          description: contentDesc,
+        }));
+      }
+
+      if (cards.length > 0) {
+        container.innerHTML = `
+          <div class="border-t border-white/5 pt-8">
+            <p class="text-[10px] font-mono text-amber-600 tracking-[0.15em] uppercase mb-1">URL deep dive</p>
+            <h2 class="font-serif text-xl text-neutral-100">Per-URL findings</h2>
+            <p class="text-xs text-neutral-500 mt-1 mb-6">Specific URLs that match the patterns above. Sample lists; not exhaustive.</p>
+          </div>
+        ` + cards.join('');
+        container.classList.remove('hidden');
+      }
+    }
+
+    // ----- Month-over-month trends -----
+    // Renders how the site's numbers moved across recent monthly uploads:
+    // search clicks/impressions/position (GSC), sessions (GA4), scored issues,
+    // broken links, page count, top-10 keywords. Quiet on failure (the issues
+    // panel is the primary surface); hidden entirely with fewer than 2 months.
+    async function loadTrends() {
+      const cid = activeClientId;
+      const container = document.getElementById('trend-section');
+      container.classList.add('hidden');
+      container.innerHTML = '';
+      if (!cid) return;
+
+      let data;
+      try {
+        const res = await fetch(`/portal/api/dashboard/trends?series=site&months=6&client_id=${encodeURIComponent(cid)}${siteQuery()}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        data = await res.json();
+      } catch { return; }
+
+      const months = data.months || [];
+      if (months.length < 2) return;
+
+      // A value cell: the number plus a small movement chip against the prior
+      // month with data. Improved = emerald, worsened = red, flat = neutral --
+      // direction already accounts for lower-is-better metrics server-side.
+      const chip = (delta) => {
+        if (!delta || delta.direction === 'none' || delta.isNew) return '';
+        if (delta.direction === 'flat') return `<span class="text-neutral-600 ml-1">&middot;</span>`;
+        const up = (delta.absoluteChange ?? 0) > 0;
+        const cls = delta.direction === 'improved' ? 'text-emerald-400' : 'text-red-400';
+        // percentChange is a FRACTION (0.25 = +25%), matching the report
+        // pipeline's Delta shape -- scale to percent for display.
+        const pctVal = delta.percentChange == null ? null : Math.abs(delta.percentChange) * 100;
+        const pct = pctVal == null ? '' : `${pctVal >= 100 ? Math.round(pctVal) : pctVal.toFixed(1)}%`;
+        return `<span class="${cls} ml-1">${up ? '&#9650;' : '&#9660;'}${pct ? ' ' + pct : ''}</span>`;
+      };
+      const cell = (val, delta, fmt) => {
+        if (val == null) return '<td class="px-3 py-2 text-right font-mono text-neutral-700">-</td>';
+        return `<td class="px-3 py-2 text-right font-mono text-neutral-300 whitespace-nowrap">${fmt ? fmt(val) : val.toLocaleString()}<span class="text-[10px]">${chip(delta)}</span></td>`;
+      };
+
+      const COLS = [
+        { label: 'Clicks', get: m => m.gsc?.clicks ?? null, d: 'gsc.clicks' },
+        { label: 'Impressions', get: m => m.gsc?.impressions ?? null, d: 'gsc.impressions' },
+        { label: 'Avg position', get: m => m.gsc?.avg_position ?? null, d: 'gsc.avg_position', fmt: v => v.toFixed(1) },
+        { label: 'Sessions', get: m => m.ga4?.sessions ?? null, d: 'ga4.sessions' },
+        { label: 'Issues', get: m => m.health?.scored_issues ?? null, d: 'health.scored_issues' },
+        { label: 'Broken', get: m => m.crawl?.broken ?? null, d: 'crawl.broken' },
+        { label: 'Pages', get: m => m.crawl?.pages ?? null, d: 'crawl.pages' },
+        { label: 'Top 10 kw', get: m => m.keywords?.top10 ?? null, d: 'keywords.top10' },
+      ];
+      // Only show columns where at least one month has data.
+      const cols = COLS.filter(c => months.some(m => c.get(m) != null));
+      if (cols.length === 0) return;
+
+      const monthLabel = (m) => {
+        const [y, mo] = m.split('-').map(Number);
+        return new Date(y, mo - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      };
+
+      const head = `<tr class="text-[10px] font-mono text-neutral-500 uppercase tracking-wide border-b border-white/5">
+        <th class="text-left px-4 py-3 font-normal">Month</th>
+        ${cols.map(c => `<th class="text-right px-3 py-3 font-normal">${c.label}</th>`).join('')}
+      </tr>`;
+      const rows = months.map(m => `<tr class="border-b border-white/5 last:border-0">
+        <td class="px-4 py-2 font-mono text-xs text-neutral-400 whitespace-nowrap">${monthLabel(m.month)}</td>
+        ${cols.map(c => cell(c.get(m), (m.deltas || {})[c.d], c.fmt)).join('')}
+      </tr>`).join('');
+
+      // Site selection lives in the PAGE-LEVEL picker (Phase 1b) so the score,
+      // issues, per-URL findings, and this table always show the same site;
+      // the subtitle still names the scoped site for clarity.
+      container.innerHTML = `
+        <div class="health-animate bg-neutral-900/30 border border-white/5 rounded-2xl overflow-hidden">
+          <div class="px-6 py-5 border-b border-white/5">
+            <p class="text-[10px] font-mono text-amber-600 tracking-[0.15em] uppercase mb-1">Month over month</p>
+            <h2 class="font-serif text-xl text-neutral-100">How the numbers are moving${data.site ? ` <span class="text-sm text-neutral-500 font-sans">for ${escapeHtml(data.site)}</span>` : ''}</h2>
+            <p class="text-xs text-neutral-500 mt-1">Each month compared with the one before it. Green is moving the right way for that metric; a dash means no data was uploaded for that month.</p>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">${head}${rows}</table>
+          </div>
+        </div>`;
+      container.classList.remove('hidden');
+    }
+
     loadHealth();
+    loadUrlInsights();
+    loadTrends();
   </script>
 </Portal>

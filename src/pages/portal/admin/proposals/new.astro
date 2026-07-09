@@ -1,0 +1,3683 @@
+---
+// Admin wizard: build a proposal from product picks and routing variables.
+//
+// The wizard collects compose-args (which client, which products, per-product
+// variables, narrative variables, signer rows) and POSTs them to
+// /portal/api/admin/proposals/create. The server calls composeProposal()
+// from src/lib/products/index.ts to produce the full proposal config from
+// canonical product definitions in src/lib/products/.
+//
+// What the wizard does NOT do: pick headings, pick copy, pick step structure,
+// pick prices, pick legal-entity fields. Those are derived (headings + copy
+// + steps + prices from product definitions) or collected later (legal
+// entity from the client at contract intake).
+//
+// Auto-derive on client pick: title, slug, prepared_on, prepared_for, and
+// initial signer rows. Admin can override any of those four.
+
+import Portal from '../../../../layouts/Portal.astro';
+import { getAllClients, getUsersByClientId } from '../../../../lib/auth';
+import turso from '../../../../lib/turso';
+import { PRODUCT_REGISTRY, PRODUCT_ORDER } from '../../../../lib/products';
+
+export const prerender = false;
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'admin') {
+  return Astro.redirect('/portal/dashboard');
+}
+
+const clients = await getAllClients();
+
+// Pre-load per-client signer candidates so the wizard can pre-fill signer
+// rows the moment the admin picks a client. Falls back to an empty list.
+const usersByClient: Record<string, Array<{ id: string; name: string; email: string }>> = {};
+for (const c of clients) {
+  const users = await getUsersByClientId(c.id);
+  usersByClient[c.id] = users
+    .filter(u => u.role !== 'admin')
+    .map(u => ({ id: u.id, name: u.name, email: u.email }));
+}
+
+// Existing client_sites per client. The wizard lazy-syncs new
+// detections from uploaded data when a client is picked (POST
+// /portal/api/admin/clients/sites with action=sync); this pre-load
+// is just the already-saved rows so the page paints fast.
+const clientSitesRows = await turso.execute({
+  sql: `SELECT id, client_id, domain, is_primary, is_managed, label, sort_order, page_count
+        FROM client_sites
+        ORDER BY is_primary DESC, sort_order ASC, domain ASC`,
+  args: [],
+});
+const clientSitesByClient: Record<string, Array<{
+  id: string;
+  domain: string;
+  is_primary: boolean;
+  is_managed: boolean;
+  label: string | null;
+  sort_order: number;
+  page_count: number | null;
+}>> = {};
+for (const row of clientSitesRows.rows as any[]) {
+  const cid = row[1] as string;
+  if (!clientSitesByClient[cid]) clientSitesByClient[cid] = [];
+  clientSitesByClient[cid].push({
+    id: row[0] as string,
+    domain: row[2] as string,
+    is_primary: !!(row[3] as number),
+    is_managed: !!(row[4] as number),
+    label: (row[5] as string | null) ?? null,
+    sort_order: (row[6] as number) ?? 0,
+    page_count: (row[7] as number | null) ?? null,
+  });
+}
+
+// Real HTML page count per client for the WM page_count pre-fill: the
+// primary site's page_count (synced from content_type text/html), NOT the
+// total_urls metric. total_urls counts every asset URL (images, CSS, JS)
+// and would over-count and over-route the pricing ecosystem; the page count
+// has to be real navigable pages.
+const latestRealPages: Record<string, number> = {};
+for (const [cid, sites] of Object.entries(clientSitesByClient)) {
+  const primary = sites.find(s => s.is_primary) || sites[0];
+  if (primary && typeof primary.page_count === 'number' && primary.page_count > 0) {
+    latestRealPages[cid] = primary.page_count;
+  }
+}
+
+// Build a serializable product manifest for client-side rendering: just
+// the metadata the wizard needs to draw inputs. Pricing and Schedule A
+// composition happen server-side in composeProposal().
+const productManifest = PRODUCT_ORDER.map(id => {
+  const p = PRODUCT_REGISTRY[id];
+  return {
+    id: p.id,
+    name: p.name,
+    short_name: p.short_name,
+    variableSchema: p.variableSchema,
+    ecosystemLabels: Object.fromEntries(
+      Object.entries(p.ecosystems).map(([eid, eco]: any) => [eid, { label: eco.label, band: eco.band }])
+    ),
+  };
+});
+
+// Build product fees + subsequent-build discount, mirrored client-side
+// so the BuildOption editor can auto-compute the build cost added by
+// a picked option. The composer's source of truth is
+// src/lib/products/build.ts BUILD_FEES + SUBSEQUENT_BUILD_DISCOUNT;
+// these values must stay in sync.
+const BUILD_FEES = { small: 5625, mid: 11875, large: 22500 };
+const BUILD_SUBSEQUENT_DISCOUNT = 0.10;
+
+const todayLong = new Date().toLocaleDateString('en-US', {
+  year: 'numeric', month: 'long', day: 'numeric',
+});
+const todayISO = new Date().toISOString().slice(0, 10);
+---
+
+<Portal title="New Proposal">
+  <div class="max-w-4xl mx-auto">
+    <div class="mb-10">
+      <p class="text-[10px] font-mono tracking-[0.2em] uppercase mb-3">
+        <a href="/portal/admin/proposals" class="text-amber-600 hover:text-amber-400 transition-colors">Admin / Proposals</a>
+        <span class="text-neutral-500"> / New</span>
+      </p>
+      <div class="flex items-baseline justify-between gap-4 flex-wrap">
+        <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">New proposal</h1>
+        <span id="autosave-indicator" class="text-[10px] font-mono text-neutral-500"></span>
+      </div>
+      <p class="text-neutral-500 text-sm mt-3">
+        Pick the client and the products in scope. The system composes the rest from product definitions.
+      </p>
+    </div>
+
+    <form id="proposal-form" class="space-y-10">
+
+      <!-- 1. CLIENT -->
+      <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
+        <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-5">1. Client</p>
+
+        <div class="flex items-center gap-3">
+          <select
+            id="client_id"
+            name="client_id"
+            required
+            class="flex-1 px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30 transition-colors duration-300"
+          >
+            <option value="">Select a client</option>
+            {clients.map(c => (
+              <option value={c.id} data-slug={c.slug} data-name={c.name} data-domain={c.domain || ''} data-discount={c.discount_rate ?? 0}>{c.name}</option>
+            ))}
+          </select>
+          <button type="button" id="add-client-btn" class="px-4 py-3 bg-neutral-800 border border-white/10 text-neutral-300 text-sm rounded-lg hover:border-amber-500/40 hover:text-amber-600 transition-colors">
+            Add new
+          </button>
+        </div>
+
+        <div id="add-client-slot" class="hidden mt-3 p-4 bg-neutral-900/40 border border-amber-500/20 rounded-lg space-y-3">
+          <p class="text-[10px] font-mono text-amber-600 tracking-wide uppercase">Create new client</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <input type="text" id="new_client_name" placeholder="Business name"
+              class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+            <input type="text" id="new_client_slug" placeholder="business-slug" pattern="[a-z0-9\-]+"
+              class="px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
+          </div>
+          <input type="text" id="new_client_domain" placeholder="example.com (optional, no protocol)"
+            class="w-full px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
+          <div class="flex items-center gap-3">
+            <button type="button" id="create-client-btn" class="px-4 py-2 bg-amber-500 text-neutral-950 font-medium text-xs rounded-md hover:bg-amber-400 transition-colors">
+              Create client
+            </button>
+            <button type="button" id="cancel-add-client-btn" class="text-xs text-neutral-500 hover:text-neutral-300 transition-colors">Cancel</button>
+            <p id="new-client-msg" class="text-xs hidden"></p>
+          </div>
+        </div>
+
+        <p id="client-prefill-note" class="hidden mt-3 text-[11px] text-amber-600 font-mono leading-relaxed"></p>
+
+        <!-- Research panel: appears after a client is picked. Domain
+             is required for research; if missing, an inline input lets
+             admin set it. -->
+        <div id="research-panel" class="hidden mt-5 pt-5 border-t border-white/5">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase">AI client research</p>
+              <p class="text-[11px] text-neutral-500 mt-1">Pulls public info to seed revenue band, industry, urgency, focus, domains, and page count. You apply each suggestion.</p>
+            </div>
+            <button type="button" id="research-btn"
+              class="px-4 py-2 bg-amber-500/10 border border-amber-500/40 text-amber-600 text-xs rounded-md hover:bg-amber-500/20 transition-colors">
+              Research this client
+            </button>
+          </div>
+
+          <!-- Domains detected from already-uploaded data: Screaming
+               Frog Internal HTML crawls plus rank-tracking uploads.
+               Shows when at least one is found; otherwise hidden and
+               the manual input below is the only path. -->
+          <div id="derived-domains-slot" class="hidden mt-3 p-3 bg-neutral-900/40 border border-amber-500/20 rounded-md">
+            <p class="text-[10px] font-mono text-amber-600 tracking-wide uppercase mb-2">Detected from your uploaded data</p>
+            <div id="derived-domains-list" class="flex flex-wrap gap-2"></div>
+            <p class="text-[11px] text-neutral-500 mt-2">Highlighted chip is the primary domain. Click any chip to set as primary, or click the primary again to re-research.</p>
+          </div>
+
+          <div id="research-domain-slot" class="hidden mt-3 p-3 bg-neutral-900/40 border border-amber-500/20 rounded-md">
+            <p class="text-[10px] font-mono text-amber-600 tracking-wide uppercase mb-2">Set primary domain first</p>
+            <div class="flex items-center gap-2">
+              <input type="text" id="research-domain-input" placeholder="example.com (no protocol)"
+                class="flex-1 px-3 py-2 bg-neutral-900/50 border border-white/10 rounded-md text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
+              <button type="button" id="research-domain-save"
+                class="px-3 py-2 bg-amber-500 text-neutral-950 text-xs font-medium rounded-md hover:bg-amber-400 transition-colors">
+                Save
+              </button>
+            </div>
+            <p id="research-domain-msg" class="hidden text-[11px] mt-2"></p>
+          </div>
+
+          <p id="research-status" class="hidden mt-3 text-[11px] text-neutral-400"></p>
+
+          <div id="research-results" class="hidden mt-4 space-y-3"></div>
+
+          <!--
+            Engagement-strategy panel. Admin-facing only; never composed
+            into client-facing narrative copy (no-dangling-tier-references
+            rule keeps tier names off the client side until ecosystem
+            routing is fully built). This is a briefing for me.
+          -->
+          <div id="research-strategy" class="hidden mt-6 pt-6 border-t border-white/5">
+            <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-1">Engagement strategy</p>
+            <p class="text-[11px] text-neutral-500 mb-4">Synthesis briefing. Admin-only; not for client copy.</p>
+            <div id="research-strategy-body" class="space-y-4"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. PRODUCTS IN SCOPE -->
+      <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
+        <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-5">2. Products in scope</p>
+        <p class="text-[11px] text-neutral-500 mb-5">Pick one or more. Each contributes its own narrative, steps, pricing, and Schedule A.</p>
+
+        <div id="products-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {productManifest.map(p => (
+            <label class="flex items-start gap-3 p-4 bg-neutral-900/40 border border-white/5 rounded-lg cursor-pointer hover:border-amber-500/30 transition-colors" data-product-card={p.id}>
+              <input type="checkbox" value={p.id} class="mt-1 product-pick" />
+              <div>
+                <p class="text-sm text-neutral-200 font-medium">{p.name}</p>
+                <p class="text-[11px] text-neutral-500 mt-1 font-mono">{p.id}</p>
+              </div>
+            </label>
+          ))}
+        </div>
+      </section>
+
+      <!-- 3. PER-PRODUCT VARIABLES -->
+      <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8" id="vars-section" hidden>
+        <div class="flex items-baseline justify-between gap-4 flex-wrap mb-5">
+          <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase">3. Per-product variables</p>
+          <p class="text-[11px] text-neutral-500" id="vars-scope-summary"></p>
+        </div>
+        <p class="text-[11px] text-neutral-500 mb-5">Routing variables for each in-scope product. Defaults pre-fill from client data when available.</p>
+
+        <div id="vars-container" class="space-y-6"></div>
+      </section>
+
+      <!-- 4. NARRATIVE VARIABLES -->
+      <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
+        <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-5">4. Narrative variables</p>
+        <p class="text-[11px] text-neutral-500 mb-5">These drive snippet selection in the composed narrative.</p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" for="narr_industry">Industry</label>
+            <select id="narr_industry" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+              <option value="">Select</option>
+              <option value="solo">Solo professional</option>
+              <option value="professional-services">Professional services firm</option>
+              <option value="contractor">Contractor or trades</option>
+              <option value="family-of-companies">Family of companies</option>
+              <option value="nonprofit">Nonprofit</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" for="narr_urgency">Urgency</label>
+            <select id="narr_urgency" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+              <option value="">Select</option>
+              <option value="tactical">Tactical (fix what is broken)</option>
+              <option value="growth">Growth (lean in)</option>
+              <option value="maintenance">Maintenance (steady state)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" for="narr_focus">Focus</label>
+            <select id="narr_focus" multiple size="4" class="w-full px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+              <option value="brand">Brand</option>
+              <option value="takeover">Takeover</option>
+              <option value="search">Search</option>
+              <option value="pre-sell">Pre-sell</option>
+            </select>
+            <p class="text-[10px] text-neutral-400 mt-1">Hold Ctrl or Cmd to pick more than one.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. SIGNERS -->
+      <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
+        <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-5">5. Signers</p>
+        <p class="text-[11px] text-neutral-500 mb-4">Pre-filled from existing portal users on the client. Add rows for new signers.</p>
+
+        <div id="signers-container" class="space-y-3"></div>
+
+        <button type="button" id="add-signer-btn" class="mt-4 text-xs text-amber-600 hover:text-amber-600 transition-colors">
+          + Add signer
+        </button>
+      </section>
+
+      <!-- 5b. EXISTING-CLIENT OPTIONS -->
+      <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
+        <p class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase mb-5">5b. Existing-client options</p>
+        <p id="client-discount-note" class="text-[11px] text-amber-500/80 mb-4 hidden"></p>
+        <label class="flex items-start gap-3 cursor-pointer">
+          <input type="checkbox" id="waive-onboarding" class="mt-1" />
+          <span class="text-[11px] text-neutral-500 leading-relaxed">
+            <span class="text-neutral-200">Waive one-time setup (existing client / reissue).</span>
+            Zeros the Web Management onboarding and Marketing Consulting initial audit because this client already paid them on a prior engagement. Recurring fees and the first month collected at signing are unchanged. For a pro-bono client, set a client discount instead.
+          </span>
+        </label>
+        <label class="flex items-start gap-3 cursor-pointer mt-4">
+          <input type="checkbox" id="bundle-mode" class="mt-1" />
+          <span class="text-[11px] text-neutral-500 leading-relaxed">
+            <span class="text-neutral-200">Bundle into one Good/Better/Best card.</span>
+            Fuses Web Management and Marketing Consulting into a single tier card (one monthly, one to-start) instead of separate pickers. Good = both at Good, Better = both at Better, Best = both at Best. If a build with two options is in scope, the second becomes an optional add-on below the card. Requires both Web Management and Marketing Consulting selected above.
+          </span>
+        </label>
+      </section>
+
+      <!-- 6. HEADER OVERRIDES (auto-derived from client; expanded by
+           default so admin sees what's being auto-filled and can
+           override before publish. Audit W14.) -->
+      <section class="bg-neutral-900/30 border border-white/5 rounded-2xl p-8">
+        <details open>
+          <summary class="cursor-pointer">
+            <span class="text-[10px] font-mono text-neutral-400 tracking-[0.15em] uppercase">6. Header overrides</span>
+            <span class="text-[11px] text-neutral-500 ml-3">(optional; auto-derived from client and signers)</span>
+          </summary>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 mt-5">
+            <div class="sm:col-span-2">
+              <label for="title" class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Title</label>
+              <input type="text" id="title" placeholder="Auto: Engagement Proposal for {client}"
+                class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+            </div>
+            <div>
+              <label for="slug" class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Slug</label>
+              <input type="text" id="slug" placeholder="Auto: client-slug" pattern="[a-z0-9\-]+"
+                class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30" />
+            </div>
+            <div>
+              <label for="prepared_on" class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Prepared on</label>
+              <input type="date" id="prepared_on" value={todayISO}
+                class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+            </div>
+            <div class="sm:col-span-2">
+              <label for="prepared_for" class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Prepared for</label>
+              <input type="text" id="prepared_for" placeholder="Auto: composed from signer names"
+                class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <!-- ACTIONS -->
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
+        <button type="button" id="save-draft-btn"
+          class="flex-1 px-6 py-3 bg-neutral-800 border border-white/10 text-neutral-300 font-medium text-sm rounded-lg hover:border-amber-500/40 hover:text-amber-600 transition-colors">
+          Save as draft
+        </button>
+        <button type="button" id="publish-btn"
+          class="flex-1 px-6 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300">
+          Publish
+        </button>
+      </div>
+
+      <p id="submit-msg" class="text-sm hidden"></p>
+    </form>
+  </div>
+
+  <script is:inline define:vars={{ todayLong, productManifest, usersByClient, latestRealPages, clientSitesByClient, BUILD_FEES, BUILD_SUBSEQUENT_DISCOUNT }}>
+    // =========================================================================
+    // Standard-option dropdowns
+    // =========================================================================
+    //
+    // Each free-text field that has canonical phrasings (sourced from
+    // business-design-v2.docx, Jason's Raised Bar proposal, and the
+    // Cody voice memory) gets a small dropdown above the input. Pick
+    // an option to populate the input with that template; placeholders
+    // like {client}, {existing_domain}, {vertical} get auto-filled
+    // from wizard state where known, the rest stay as {placeholder}
+    // text for the admin to fill in. Pick the blank to type freely.
+    const STANDARD_OPTIONS = {
+      // Main Build scope only. This field names the base build type;
+      // option architecture (unified site vs split microsite, pre-sell
+      // section vs standalone URL, launch order, etc.) belongs in the
+      // Build Options fields below.
+      build_description: [
+        "A new site for {client}",
+        "A new microsite for {client}",
+        "A redesign of {client}'s existing site",
+      ],
+      option_name_unified: [
+        "Single unified site",
+        "One site with a focused section",
+        "Brand-led primary site",
+        "Existing site expansion",
+        "Existing site redesign",
+        "Keep one site and add the new content there",
+      ],
+      option_name_split: [
+        "Split setup",
+        "Primary site plus standalone microsite",
+        "Standalone microsite option",
+        "Separate launch site",
+        "Two-site rollout",
+      ],
+      option_pitch: [
+        "One site carries the main brand and the focused section. Less to manage, one URL to promote.",
+        "Two sites: one primary site and one standalone microsite. Cleaner separation, more to launch and manage.",
+        "Use the existing site and add the new section there. Faster to launch, with the current URL still doing the work.",
+        "Build the standalone microsite when the offer needs its own URL, its own message, and a cleaner handoff later.",
+      ],
+      option_schedule_a: [
+        "Single site build covering the primary site and focused section.",
+        "Two site builds: the primary site plus a standalone microsite.",
+        "Existing site expansion with the new section added to the managed site.",
+        "Existing site redesign with the new section included in the scope.",
+        "Site expansion at {existing_domain} to incorporate the new section.",
+        "Page additions to {existing_domain} for the new content.",
+      ],
+      rollout_phase_header: [
+        "The unified primary site, new section first",
+        "The standalone microsite",
+        "Brand-led rebuild of the primary site",
+        "Launch the microsite first",
+        "Discovery and content inventory",
+        "Design and content production",
+        "Pre-launch QA and stakeholder review",
+        "Launch and handoff to Web Management",
+        "Soft launch with limited audience",
+        "Full public launch",
+      ],
+      rollout_phase_body: [
+        "I build the primary site with the focused section completed first so it launches while the rest of the build is still being finished. The site moves onto Web Management at launch.",
+        "I take over the existing site, fix what's broken, and tighten the site inside your monthly pooled hours. The site joins the management pool.",
+        "The microsite launches first on its own URL, focused entirely on the new offer or section. Signage, ads, and direct outreach point at this site. Lean, focused, fast to launch.",
+        "I build the primary site without the new section. This becomes the primary brand site. The site moves onto Web Management at launch.",
+      ],
+      wm_sites_added_label: [
+        "Standalone microsite",
+        "Product-line microsite",
+        "New managed site",
+        "{client} primary site",
+        "{client} secondary site",
+      ],
+      other_sow_title: [
+        "Content production sprint",
+        "Ad creative for launch campaign",
+        "Brand asset production",
+        "Campaign setup and launch",
+        "Research production",
+        "Copy production at scale",
+        "Marketing automation setup",
+        "Email campaign series production",
+        "SEO content production",
+        "Lead magnet production",
+        "Sales collateral redesign",
+        "Photography or video production",
+        "Email newsletter design",
+        "Brand strategy intensive",
+        "Sales playbook production",
+      ],
+      title: [
+        "Engagement Proposal for {client}",
+        "Engagement Proposal for {signers}",
+        "Web Management Proposal for {client}",
+        "Marketing Consulting Proposal for {client}",
+        "{client}: Engagement Proposal",
+      ],
+    };
+
+    // Substitution map. Auto-fills the placeholders the wizard knows
+    // values for; leaves unknown placeholders as literal text so the
+    // admin can spot and edit them.
+    function buildSubstitutionMap() {
+      const primarySite = (clientSitesCache[state.client_id] || []).find(s => s.is_primary);
+      const signerFirstNames = (state.signers || []).map(s => (s.name || '').split(' ')[0]).filter(Boolean);
+      const signersJoined = signerFirstNames.length === 0
+        ? state.client_name || ''
+        : signerFirstNames.length === 1
+          ? signerFirstNames[0]
+          : signerFirstNames.length === 2
+            ? signerFirstNames.join(' and ')
+            : signerFirstNames.slice(0, -1).join(', ') + ', and ' + signerFirstNames[signerFirstNames.length - 1];
+      return {
+        client: state.client_name || '',
+        brand: state.client_name || '',
+        primary_domain: state.client_domain || (primarySite ? primarySite.domain : ''),
+        existing_domain: (primarySite ? primarySite.domain : state.client_domain || ''),
+        signers: signersJoined,
+      };
+    }
+
+    // Reusable AI-draft button for any wizard input. Mirrors the
+    // build_description pattern: click POSTs to an endpoint with
+    // payload built by the caller, applies the response back to the
+    // input, surfaces voice-lint violations inline.
+    //
+    // opts:
+    //   endpoint: API route to POST to
+    //   buildPayload: () => object | string. Return a payload object
+    //     to POST, or a string error message to surface without
+    //     calling the endpoint (e.g., "Set the option name first.")
+    //   applyResponse: (data, input) => void. Populates the input
+    //     from the response and dispatches an input event so any
+    //     existing listener runs.
+    function attachAiDraftButton(opts) {
+      const row = document.createElement('div');
+      row.className = 'mt-1 flex items-center gap-2 flex-wrap';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'px-2 py-1 text-[10px] rounded bg-amber-500/10 border border-amber-500/30 text-amber-700 hover:bg-amber-500/20 transition-colors';
+      btn.textContent = 'AI draft this';
+      const msg = document.createElement('span');
+      msg.className = 'text-[10px] text-neutral-500 hidden';
+      btn.addEventListener('click', async () => {
+        if (!state.client_id) {
+          msg.textContent = 'Pick a client first.';
+          msg.className = 'text-[10px] text-red-400';
+          msg.classList.remove('hidden');
+          return;
+        }
+        const payloadOrError = opts.buildPayload();
+        if (typeof payloadOrError === 'string') {
+          msg.textContent = payloadOrError;
+          msg.className = 'text-[10px] text-red-400';
+          msg.classList.remove('hidden');
+          return;
+        }
+        btn.disabled = true;
+        msg.textContent = 'Drafting...';
+        msg.className = 'text-[10px] text-neutral-400';
+        msg.classList.remove('hidden');
+        let res;
+        try {
+          res = await fetch(opts.endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify(payloadOrError),
+          });
+        } catch (err) {
+          msg.textContent = `Network error: ${err && err.message ? err.message : 'fetch failed'}`;
+          msg.className = 'text-[10px] text-red-400';
+          btn.disabled = false;
+          return;
+        }
+        const rawText = await res.text();
+        let data = null;
+        try { data = rawText ? JSON.parse(rawText) : null; } catch {}
+        if (res.ok && data && data.ok) {
+          opts.applyResponse(data);
+          const violations = (data.voice_violations && data.voice_violations.length)
+            ? ` (voice warnings: ${data.voice_violations.map(v => v.rule).join(', ')})`
+            : '';
+          msg.textContent = `Drafted${violations}. Edit as needed.`;
+          msg.className = 'text-[10px] text-emerald-400/80';
+        } else {
+          const errMsg = (data && data.error)
+            ? data.error
+            : `HTTP ${res.status}${rawText ? ': ' + rawText.slice(0, 120) : ''}`;
+          msg.textContent = errMsg;
+          msg.className = 'text-[10px] text-red-400';
+        }
+        btn.disabled = false;
+      });
+      row.appendChild(btn);
+      row.appendChild(msg);
+      return row;
+    }
+
+    // Attach a standard-options dropdown above an existing text input
+    // or textarea. On pick, populate the input with the template (with
+    // known placeholders substituted), dispatch an input event so any
+    // existing listener runs, and keep the picked template visible in
+    // the dropdown. If the admin types manually afterward, the dropdown
+    // returns to the blank helper prompt.
+    function attachStandardDropdown(input, optionsKey) {
+      const options = STANDARD_OPTIONS[optionsKey];
+      if (!Array.isArray(options) || options.length === 0) return;
+      const select = document.createElement('select');
+      select.className = 'mb-1 w-full px-2 py-1 bg-neutral-900/30 border border-amber-500/20 rounded text-amber-700 text-[10px] font-mono cursor-pointer hover:border-amber-500/40 transition-colors';
+      const blank = document.createElement('option');
+      blank.value = '';
+      blank.textContent = '— pick a starting point, or type your own below —';
+      select.appendChild(blank);
+      const custom = document.createElement('option');
+      custom.value = '__custom__';
+      custom.textContent = 'Custom text entered below';
+      custom.disabled = true;
+      select.appendChild(custom);
+      for (const tpl of options) {
+        const o = document.createElement('option');
+        o.value = tpl;
+        o.textContent = tpl.length > 90 ? tpl.slice(0, 87) + '…' : tpl;
+        select.appendChild(o);
+      }
+      let lastApplied = '';
+      function syncSelectToInput() {
+        const value = input.value || '';
+        if (!value.trim()) {
+          select.value = '';
+          return;
+        }
+        const subs = buildSubstitutionMap();
+        for (const tpl of options) {
+          let text = tpl;
+          for (const [k, v] of Object.entries(subs)) {
+            if (v) text = text.split('{' + k + '}').join(v);
+          }
+          if (value === text || value === tpl) {
+            select.value = tpl;
+            return;
+          }
+        }
+        select.value = '__custom__';
+      }
+      input.addEventListener('input', () => {
+        if (lastApplied && input.value === lastApplied) return;
+        lastApplied = '';
+        syncSelectToInput();
+      });
+      select.addEventListener('change', () => {
+        if (!select.value || select.value === '__custom__') return;
+        let text = select.value;
+        const subs = buildSubstitutionMap();
+        for (const [k, v] of Object.entries(subs)) {
+          if (v) text = text.split('{' + k + '}').join(v);
+        }
+        input.value = text;
+        lastApplied = text;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      syncSelectToInput();
+      if (input.parentNode) input.parentNode.insertBefore(select, input);
+    }
+
+    // =========================================================================
+    // Wizard state
+    // =========================================================================
+    const state = {
+      client_id: '',
+      client_name: '',
+      client_slug: '',
+      client_domain: '',
+      products: [],                    // array of product ids picked
+      product_vars: {},                // { productId: { var_id: value, ... } }
+      narrative_variables: {},         // { industry, urgency, focus[] }
+      signers: [],                     // [{ name, email }]
+      overrides: {},                   // { title?, slug?, prepared_for?, prepared_on? }
+      research_result: null,           // last AI research blob, when populated
+      // Admin tier-overrides per product. Audit Finding 3 UI piece.
+      // Empty object = use AI rec (or static default if no AI). Set
+      // `state.tier_overrides[productId] = 'best'` to pin a tier
+      // different from AI's. Picked via the dropdown in the strategy
+      // panel; flows into the create endpoint's tier_overrides field.
+      tier_overrides: {},              // { productId: 'good' | 'better' | 'best' }
+      // Reissue / already-onboarded: waive the one-time setup fees (WM
+      // onboarding + MC initial audit). For re-issuing to an existing
+      // client; pro-bono uses the client discount instead.
+      waive_onboarding: false,
+      // Bundle mode: fuse WM + MC into one Good/Better/Best card.
+      bundle_mode: false,
+    };
+
+    // Autosave wizard state to sessionStorage every 3 seconds. Clears
+    // on successful submit (in submitProposal below). No auto-restore
+    // in v1 — admin sees the indicator and knows state is preserved
+    // in case of a tab close. A follow-up PR can add a "Restore draft
+    // from X" prompt once the per-product UI re-render path is wired
+    // to a single state-restore entry point.
+    const AUTOSAVE_KEY = 'proposal-wizard-draft';
+    let lastAutosaveJson = '';
+    function autosaveNow() {
+      try {
+        const json = JSON.stringify(state);
+        if (json === lastAutosaveJson) return;
+        sessionStorage.setItem(AUTOSAVE_KEY, JSON.stringify({
+          state,
+          savedAt: new Date().toISOString(),
+        }));
+        lastAutosaveJson = json;
+        const indicator = document.getElementById('autosave-indicator');
+        if (indicator) {
+          const time = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+          indicator.textContent = 'Autosaved ' + time;
+        }
+      } catch (err) {
+        // sessionStorage may be full or disabled (private browsing on
+        // some browsers). Silently degrade.
+      }
+    }
+    function clearAutosave() {
+      try { sessionStorage.removeItem(AUTOSAVE_KEY); } catch { /* ignore */ }
+      const indicator = document.getElementById('autosave-indicator');
+      if (indicator) indicator.textContent = '';
+    }
+    setInterval(autosaveNow, 3000);
+
+    // Surface that an unsaved draft exists from a prior session so
+    // admin knows the data is recoverable (e.g., they can ask me to
+    // pull it out of sessionStorage manually). Banner is dismissible.
+    (function noteExistingDraft() {
+      try {
+        const raw = sessionStorage.getItem(AUTOSAVE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (!parsed || !parsed.savedAt) return;
+        const savedAt = new Date(parsed.savedAt);
+        const ageMin = Math.round((Date.now() - savedAt.getTime()) / 60000);
+        // Ignore drafts older than 24 hours.
+        if (ageMin > 24 * 60) {
+          sessionStorage.removeItem(AUTOSAVE_KEY);
+          return;
+        }
+        const friendly = ageMin < 1 ? 'just now' : ageMin < 60 ? ageMin + ' min ago' : Math.round(ageMin / 60) + ' hr ago';
+        const banner = document.createElement('div');
+        banner.className = 'bg-amber-500/10 border border-amber-500/40 rounded-md px-4 py-3 mb-6 flex flex-wrap items-center justify-between gap-3 text-[12px]';
+        banner.innerHTML =
+          '<p class="text-amber-600">There is an unsaved draft from ' + friendly + ' in browser memory.</p>' +
+          '<div class="flex items-center gap-3">' +
+            '<button type="button" id="autosave-restore" class="px-3 py-1 bg-amber-500 text-neutral-950 text-[11px] font-mono uppercase tracking-wide rounded hover:bg-amber-400 transition-colors">Restore draft</button>' +
+            '<button type="button" id="autosave-discard" class="text-amber-600 hover:text-red-400 transition-colors text-[11px] font-mono uppercase tracking-wide">Discard</button>' +
+          '</div>';
+        const form = document.getElementById('proposal-form');
+        if (form && form.parentNode) form.parentNode.insertBefore(banner, form);
+        document.getElementById('autosave-discard').addEventListener('click', () => {
+          clearAutosave();
+          banner.remove();
+        });
+        document.getElementById('autosave-restore').addEventListener('click', () => {
+          // Best-effort restore: copy saved fields into state, then
+          // re-set form inputs to match, then call every existing
+          // render function so dependent sections rebuild from state.
+          // Some derived UI (research panel, strategy panel, build
+          // options editor) re-renders only when admin re-triggers
+          // the corresponding action; we don't try to rehydrate
+          // those automatically. Cross-cutting B (audit).
+          const saved = parsed.state || {};
+          Object.keys(saved).forEach(k => { state[k] = saved[k]; });
+          // Re-set primary form inputs from the restored state.
+          // Client picker
+          if (state.client_id) {
+            const sel = document.getElementById('client_id');
+            if (sel) sel.value = state.client_id;
+          }
+          // Signers — rebuild the signer list from saved entries.
+          // Skipped here for the rare full-signer-list rehydration
+          // case; admin re-adds via the Add signer button if needed.
+          // Narrative variables
+          ['industry', 'urgency'].forEach(k => {
+            const sel = document.getElementById('nv-' + k);
+            if (sel && state.narrative_variables && state.narrative_variables[k]) {
+              sel.value = state.narrative_variables[k];
+            }
+          });
+          // Overrides
+          ['title', 'slug', 'prepared_on', 'prepared_for'].forEach(k => {
+            const el = document.getElementById(k);
+            if (el && state.overrides && state.overrides[k] != null) {
+              el.value = state.overrides[k];
+            }
+          });
+          // Re-render dependent sections.
+          try { if (typeof renderVars === 'function') renderVars(); } catch {}
+          try { if (typeof renderDerivedDomains === 'function') renderDerivedDomains(); } catch {}
+          try { if (typeof syncOverrides === 'function') syncOverrides(); } catch {}
+          banner.remove();
+          if (window.__toast) {
+            window.__toast('Draft restored. Some sections (research, strategy, build options) may need re-triggering.', 'success');
+          }
+        });
+      } catch { /* ignore */ }
+    })();
+
+    // =========================================================================
+    // CSRF + helpers
+    // =========================================================================
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+    function slugify(s) {
+      return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    }
+
+    function showMsg(text, type) {
+      const el = document.getElementById('submit-msg');
+      el.textContent = text;
+      el.className = 'text-sm ' + (type === 'ok' ? 'text-emerald-400' : 'text-red-400');
+      el.classList.remove('hidden');
+    }
+
+    // =========================================================================
+    // Client pick + add-new
+    // =========================================================================
+    const clientSelect = document.getElementById('client_id');
+    const prefillNote = document.getElementById('client-prefill-note');
+
+    clientSelect.addEventListener('change', async () => {
+      const opt = clientSelect.selectedOptions[0];
+      if (!opt) return;
+      state.client_id = opt.value;
+      state.client_name = opt.dataset.name || '';
+      state.client_slug = opt.dataset.slug || '';
+      state.client_domain = opt.dataset.domain || '';
+      // Surface the client's standing discount so the admin sees it without
+      // leaving the wizard. discount_rate scales ALL fees; the waive
+      // checkbox below zeros only one-time setup. Different tools.
+      const discNote = document.getElementById('client-discount-note');
+      if (discNote) {
+        const rate = Number(opt.dataset.discount || 0);
+        if (rate > 0) {
+          discNote.textContent = `This client has a standing ${(rate * 100).toFixed(rate * 100 % 1 === 0 ? 0 : 1)}% discount on the client record; it is applied to all fees on this proposal automatically.`;
+          discNote.classList.remove('hidden');
+        } else {
+          discNote.textContent = '';
+          discNote.classList.add('hidden');
+        }
+      }
+      refreshResearchPanel();
+      if (state.client_id) {
+        const users = usersByClient[state.client_id] || [];
+        // Reset signers from client users.
+        state.signers = users.map(u => ({ name: u.name, email: u.email }));
+        renderSigners();
+
+        // Lazy-sync client_sites from uploaded data. Picks up newly-
+        // detected hostnames from crawls / rank-tracker uploads
+        // without touching admin overrides on existing rows.
+        await syncClientSites();
+        renderDerivedDomains();
+        syncWmSiteCountFromManaged();
+
+        // Pre-fill page_count when WM is in scope and a crawl exists.
+        if (state.products.includes('web-management') && latestRealPages[state.client_id]) {
+          state.product_vars['web-management'] = {
+            ...(state.product_vars['web-management'] || {}),
+            page_count: latestRealPages[state.client_id],
+          };
+          renderVars();
+        }
+        // Pre-fill header defaults note.
+        const hints = [];
+        hints.push(`Title -> Engagement Proposal for ${state.client_name}`);
+        hints.push(`Slug -> ${state.client_slug}`);
+        if (latestRealPages[state.client_id]) hints.push(`Crawl pages -> ${latestRealPages[state.client_id]}`);
+        const managedCount = (clientSitesCache[state.client_id] || []).filter(s => s.is_managed).length;
+        if (managedCount > 0) hints.push(`Managed sites -> ${managedCount}`);
+        prefillNote.textContent = hints.join('  |  ');
+        prefillNote.classList.remove('hidden');
+      } else {
+        prefillNote.classList.add('hidden');
+      }
+    });
+
+    const addClientBtn = document.getElementById('add-client-btn');
+    const addClientSlot = document.getElementById('add-client-slot');
+    const cancelAddClientBtn = document.getElementById('cancel-add-client-btn');
+    const createClientBtn = document.getElementById('create-client-btn');
+    const newClientName = document.getElementById('new_client_name');
+    const newClientSlug = document.getElementById('new_client_slug');
+    const newClientMsg = document.getElementById('new-client-msg');
+
+    addClientBtn.addEventListener('click', () => {
+      addClientSlot.classList.remove('hidden');
+      newClientName.focus();
+    });
+    cancelAddClientBtn.addEventListener('click', () => {
+      addClientSlot.classList.add('hidden');
+      newClientName.value = '';
+      newClientSlug.value = '';
+      newClientMsg.classList.add('hidden');
+    });
+    newClientName.addEventListener('input', () => {
+      if (!newClientSlug.dataset.manual) newClientSlug.value = slugify(newClientName.value);
+    });
+    newClientSlug.addEventListener('input', () => { newClientSlug.dataset.manual = '1'; });
+
+    const newClientDomain = document.getElementById('new_client_domain');
+
+    createClientBtn.addEventListener('click', async () => {
+      const name = newClientName.value.trim();
+      const slug = newClientSlug.value.trim();
+      const domain = (newClientDomain?.value || '').trim();
+      if (!name || !slug) {
+        newClientMsg.textContent = 'Name and slug are required';
+        newClientMsg.className = 'text-xs text-red-400';
+        newClientMsg.classList.remove('hidden');
+        return;
+      }
+      newClientMsg.textContent = 'Creating...';
+      newClientMsg.className = 'text-xs text-neutral-400';
+      newClientMsg.classList.remove('hidden');
+      // Two-stage error reporting (same pattern as the research call).
+      let res;
+      try {
+        res = await fetch('/portal/api/admin/create-client', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ name, slug, domain: domain || undefined }),
+        });
+      } catch (err) {
+        newClientMsg.textContent = `Network error: ${err && err.message ? err.message : 'fetch failed'}`;
+        newClientMsg.className = 'text-xs text-red-400';
+        return;
+      }
+      const _rawText = await res.text();
+      let data = null;
+      try { data = _rawText ? JSON.parse(_rawText) : null; } catch {}
+      if (res.ok && data && data.id) {
+        const opt = document.createElement('option');
+        opt.value = data.id;
+        opt.dataset.slug = slug;
+        opt.dataset.name = name;
+        opt.dataset.domain = domain || '';
+        opt.textContent = name;
+        opt.selected = true;
+        clientSelect.appendChild(opt);
+        clientSelect.dispatchEvent(new Event('change'));
+        addClientSlot.classList.add('hidden');
+        newClientName.value = '';
+        newClientSlug.value = '';
+        if (newClientDomain) newClientDomain.value = '';
+        newClientMsg.classList.add('hidden');
+      } else {
+        const msg = (data && data.error)
+          ? data.error
+          : `HTTP ${res.status}${_rawText ? ': ' + _rawText.slice(0, 140) : ''}`;
+        newClientMsg.textContent = msg;
+        newClientMsg.className = 'text-xs text-red-400';
+      }
+    });
+
+    // =========================================================================
+    // Product picks
+    // =========================================================================
+    const productPicks = document.querySelectorAll('.product-pick');
+    productPicks.forEach(box => {
+      box.addEventListener('change', () => {
+        state.products = Array.from(productPicks).filter(b => b.checked).map(b => b.value);
+        renderVars();
+      });
+    });
+
+    // Programmatic product-scope helpers used by the engagement strategy
+    // panel and by the research-panel Apply buttons. pitchProduct ticks
+    // the product checkbox and optionally seeds its variables; unpitch
+    // unticks. Both fire the same change event so state stays in sync.
+    function pitchProduct(productId, extraVars) {
+      const box = Array.from(productPicks).find(b => b.value === productId);
+      if (!box) return;
+      if (!box.checked) {
+        box.checked = true;
+        box.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      if (extraVars && Object.keys(extraVars).length > 0) {
+        state.product_vars[productId] = {
+          ...(state.product_vars[productId] || {}),
+          ...extraVars,
+        };
+        renderVars();
+      }
+    }
+    function unpitchProduct(productId) {
+      const box = Array.from(productPicks).find(b => b.value === productId);
+      if (!box || !box.checked) return;
+      box.checked = false;
+      box.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    const PRODUCT_SHORT_LABELS = {
+      'web-management': 'Web Management',
+      'marketing-consulting': 'Marketing Consulting',
+      'build': 'Build',
+      'training': 'Training',
+      'other-sow': 'Other SOW',
+    };
+    const SYNTH_TO_WIZARD_ID = {
+      web_management: 'web-management',
+      marketing_consulting: 'marketing-consulting',
+      build: 'build',
+      training: 'training',
+    };
+    function seedsForProductFromResearch(productId, r) {
+      const vars = {};
+      if (!r) return vars;
+      if (productId === 'web-management') {
+        if (typeof r.estimated_page_count === 'number' && r.estimated_page_count > 0) {
+          vars.page_count = r.estimated_page_count;
+        }
+        const managedCount = (clientSitesCache[state.client_id] || []).filter(s => s.is_managed).length;
+        if (managedCount > 0) vars.site_count = managedCount;
+      }
+      if (productId === 'marketing-consulting') {
+        if (typeof r.estimated_revenue_band === 'string' && r.estimated_revenue_band !== 'unknown') {
+          vars.revenue_band = r.estimated_revenue_band;
+        }
+      }
+      return vars;
+    }
+
+    // =========================================================================
+    // Per-product variables
+    // =========================================================================
+    const varsSection = document.getElementById('vars-section');
+    const varsContainer = document.getElementById('vars-container');
+
+    function renderVars() {
+      if (state.products.length === 0) {
+        varsSection.hidden = true;
+        return;
+      }
+      varsSection.hidden = false;
+      // Scope summary above the variable blocks so admin can see at a
+      // glance how many products are in scope without scanning the
+      // checkbox list. Audit W8.
+      const scopeEl = document.getElementById('vars-scope-summary');
+      if (scopeEl) {
+        const names = state.products
+          .map(pid => productManifest.find(p => p.id === pid))
+          .filter(Boolean)
+          .map(p => p.name);
+        scopeEl.textContent = state.products.length + ' in scope: ' + names.join(', ');
+      }
+      varsContainer.innerHTML = '';
+      for (const id of state.products) {
+        const product = productManifest.find(p => p.id === id);
+        if (!product) continue;
+        const block = document.createElement('div');
+        block.className = 'p-5 bg-neutral-900/40 border border-white/5 rounded-lg';
+        const heading = document.createElement('p');
+        heading.className = 'text-sm font-medium text-neutral-200 mb-3';
+        heading.textContent = product.name;
+        block.appendChild(heading);
+
+        if (product.variableSchema.length === 0) {
+          const note = document.createElement('p');
+          note.className = 'text-[11px] text-neutral-500';
+          note.textContent = 'No routing variables.';
+          block.appendChild(note);
+        }
+
+        for (const field of product.variableSchema) {
+          const wrap = document.createElement('div');
+          wrap.className = 'mb-3';
+          const label = document.createElement('label');
+          label.className = 'block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1';
+          label.textContent = field.label;
+          wrap.appendChild(label);
+
+          let input;
+          const currentVal = state.product_vars[id]?.[field.id];
+          if (field.type === 'select') {
+            input = document.createElement('select');
+            input.className = 'w-full px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30';
+            const blank = document.createElement('option');
+            blank.value = '';
+            blank.textContent = 'Select';
+            input.appendChild(blank);
+            for (const o of (field.options || [])) {
+              const opt = document.createElement('option');
+              opt.value = o.id;
+              opt.textContent = o.label;
+              if (currentVal !== undefined && currentVal === o.id) opt.selected = true;
+              input.appendChild(opt);
+            }
+          } else if (field.type === 'number') {
+            input = document.createElement('input');
+            input.type = 'number';
+            input.className = 'w-full px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-md text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
+            if (currentVal !== undefined && currentVal !== null) input.value = String(currentVal);
+            else if (field.default !== undefined && field.default !== null) input.value = String(field.default);
+          } else if (field.type === 'boolean') {
+            input = document.createElement('input');
+            input.type = 'checkbox';
+            input.className = 'h-4 w-4';
+            if (currentVal === true) input.checked = true;
+          } else {
+            input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'w-full px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30';
+            if (currentVal !== undefined && currentVal !== null) input.value = String(currentVal);
+          }
+          input.dataset.product = id;
+          input.dataset.var = field.id;
+          input.dataset.kind = field.type;
+          input.addEventListener('input', onVarChange);
+          input.addEventListener('change', onVarChange);
+          wrap.appendChild(input);
+
+          // Standard-options dropdown for canonical free-text fields.
+          // The select renders ABOVE the input via attachStandardDropdown.
+          if (id === 'build' && field.id === 'build_description') {
+            attachStandardDropdown(input, 'build_description');
+          }
+          if (id === 'other-sow' && field.id === 'title') {
+            attachStandardDropdown(input, 'other_sow_title');
+          }
+
+          if (field.help) {
+            const help = document.createElement('p');
+            help.className = 'text-[10px] text-neutral-500 mt-1';
+            help.textContent = field.help;
+            wrap.appendChild(help);
+          }
+
+          // Slice 3: AI-draft button next to Build's build_description
+          // input. Calls /portal/api/admin/proposals/ai/build-description
+          // with the client + build size + narrative variables and
+          // fills the input with the returned sentence.
+          if (id === 'build' && field.id === 'build_description') {
+            const aiRow = document.createElement('div');
+            aiRow.className = 'mt-2 flex items-center gap-3';
+            const aiBtn = document.createElement('button');
+            aiBtn.type = 'button';
+            aiBtn.className = 'px-3 py-1.5 text-[11px] rounded-md bg-amber-500/10 border border-amber-500/40 text-amber-600 hover:bg-amber-500/20 transition-colors';
+            aiBtn.textContent = 'AI draft this';
+            const aiMsg = document.createElement('span');
+            aiMsg.className = 'text-[11px] text-neutral-500 hidden';
+            aiBtn.addEventListener('click', async () => {
+              // Prefer explicit legacy build_size (back-compat with older
+              // drafts); otherwise derive from build_total_pages so the
+              // page-count migration doesn't break the AI draft button.
+              const explicitSize = state.product_vars['build']?.build_size;
+              const totalPages = state.product_vars['build']?.build_total_pages;
+              let buildSize = explicitSize;
+              if (!buildSize && typeof totalPages === 'number' && totalPages > 0) {
+                buildSize = totalPages < 30 ? 'small' : (totalPages <= 150 ? 'mid' : 'large');
+              }
+              if (!buildSize) {
+                aiMsg.textContent = 'Enter a total page estimate for the build first.';
+                aiMsg.className = 'text-[11px] text-red-400';
+                aiMsg.classList.remove('hidden');
+                return;
+              }
+              if (!state.client_id || !state.client_domain) {
+                aiMsg.textContent = 'Pick a client and confirm domain first.';
+                aiMsg.className = 'text-[11px] text-red-400';
+                aiMsg.classList.remove('hidden');
+                return;
+              }
+              aiBtn.disabled = true;
+              aiMsg.textContent = 'Drafting...';
+              aiMsg.className = 'text-[11px] text-neutral-400';
+              aiMsg.classList.remove('hidden');
+              let res;
+              try {
+                res = await fetch('/portal/api/admin/proposals/ai/build-description', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                  body: JSON.stringify({
+                    client_id: state.client_id,
+                    build_size: buildSize,
+                    admin_hint: input.value || null,
+                    inferred_industry: state.narrative_variables.industry || null,
+                    inferred_urgency: state.narrative_variables.urgency || null,
+                    current_sites: (clientSitesCache[state.client_id] || []).map(s => ({
+                      domain: s.domain,
+                      label: s.label || null,
+                      is_primary: !!s.is_primary,
+                      is_managed: !!s.is_managed,
+                      page_count: s.page_count ?? null,
+                    })),
+                  }),
+                });
+              } catch (err) {
+                aiMsg.textContent = `Network error: ${err && err.message ? err.message : 'fetch failed'}`;
+                aiMsg.className = 'text-[11px] text-red-400';
+                aiBtn.disabled = false;
+                return;
+              }
+              const rawText = await res.text();
+              let data = null;
+              try { data = rawText ? JSON.parse(rawText) : null; } catch {}
+              if (res.ok && data && data.ok && data.sentence) {
+                input.value = data.sentence;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                const violationNote = (data.voice_violations && data.voice_violations.length)
+                  ? ` (voice warnings: ${data.voice_violations.map(v => v.rule).join(', ')})`
+                  : '';
+                aiMsg.textContent = `Drafted${violationNote}. Edit as needed before publishing.`;
+                aiMsg.className = 'text-[11px] text-emerald-400/80';
+              } else {
+                const errMsg = (data && data.error)
+                  ? data.error
+                  : `HTTP ${res.status}${rawText ? ': ' + rawText.slice(0, 140) : ''}`;
+                aiMsg.textContent = errMsg;
+                aiMsg.className = 'text-[11px] text-red-400';
+              }
+              aiBtn.disabled = false;
+            });
+            aiRow.appendChild(aiBtn);
+            aiRow.appendChild(aiMsg);
+            wrap.appendChild(aiRow);
+          }
+
+          block.appendChild(wrap);
+        }
+
+        // Live ecosystem routing display
+        const ecoNote = document.createElement('p');
+        ecoNote.className = 'text-[11px] text-amber-600 mt-2 font-mono';
+        ecoNote.dataset.ecoNote = id;
+        ecoNote.textContent = computeRoutingNote(id);
+        block.appendChild(ecoNote);
+
+        // Per-site page-count editor. Only renders for Web Management
+        // when the client has 2+ managed sites. Each site has its own
+        // ecosystem routed by its own page count (audit finding 1 +
+        // Phase 4 UI). Empty page_count falls back to the primary's
+        // ecosystem on the server side; the row UI marks the fallback
+        // visually.
+        if (id === 'web-management') {
+          const allSites = clientSitesCache[state.client_id] || [];
+          const managed = allSites.filter(s => s.is_managed);
+          if (managed.length >= 2) {
+            block.appendChild(buildPerSiteEditor(managed));
+          }
+          // Proposed-takeover sites: existing sites we inherit (not build).
+          block.appendChild(takeoverSitesEditor());
+        }
+
+        // Build product: when Build is in scope, surface the
+        // deployment-options editor. Multi-option builds (Raised Bar
+        // pattern) get the two-column choice cards on the proposal
+        // page; the data model is in src/lib/products/types.ts
+        // BuildOption and the composer reads it from
+        // ctx.variables.build_options. Empty array (or fewer than 2
+        // entries) = no picker; standard single-option flow.
+        if (id === 'build') {
+          block.appendChild(buildOptionsEditor(id));
+        }
+
+        varsContainer.appendChild(block);
+      }
+    }
+
+    // Build options editor. Lets admin author multiple deployment
+    // shapes for a Build product (e.g., Raised Bar's "unified site
+    // with section inside" vs "standalone micro-site + separate
+    // brand site"). Two or more options become a binary/n-ary picker
+    // on the proposal page; each option's rollout phases swap when
+    // the prospect picks; pricing delta and Schedule A note apply.
+    function buildOptionsEditor(productId) {
+      const wrap = document.createElement('div');
+      wrap.className = 'mt-4 p-3 bg-neutral-900/30 border border-white/5 rounded-md';
+      const header = document.createElement('p');
+      header.className = 'text-[10px] font-mono text-neutral-500 tracking-wide uppercase mb-1';
+      header.textContent = 'Build shape options (optional)';
+      wrap.appendChild(header);
+      const desc = document.createElement('p');
+      desc.className = 'text-[11px] text-neutral-400 mb-3 leading-relaxed';
+      desc.textContent = 'Use this only when the client should choose between build shapes for the same scope: for example, one site with a focused section versus a primary site plus standalone microsite. Each option carries its own new-site rows, page counts, rollout, and contract sentence.';
+      wrap.appendChild(desc);
+      const list = document.createElement('div');
+      list.className = 'space-y-3';
+      wrap.appendChild(list);
+      const addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.className = 'mt-3 text-xs px-3 py-1.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-700 hover:bg-amber-500/20 transition-colors';
+      addBtn.textContent = '+ Add option';
+      addBtn.addEventListener('click', () => {
+        if (!state.product_vars[productId]) state.product_vars[productId] = {};
+        const opts = Array.isArray(state.product_vars[productId].build_options)
+          ? state.product_vars[productId].build_options
+          : [];
+        const nextIndex = opts.length;
+        opts.push({
+          id: 'opt' + (nextIndex + 1),
+          name: nextIndex === 0
+            ? 'Single unified site'
+            : nextIndex === 1
+              ? 'Split setup'
+              : `Build option ${nextIndex + 1}`,
+          pitch: '',
+          pricing_delta: 0,
+          rollout_phases: [],
+          schedule_a_note: '',
+        });
+        state.product_vars[productId].build_options = opts;
+        renderBuildOptionsList(list, productId);
+      });
+      wrap.appendChild(addBtn);
+      renderBuildOptionsList(list, productId);
+      return wrap;
+    }
+
+    // Route a page count to its WM ecosystem. Module scope so the takeover
+    // editor can tag rows (buildWmImpactEditor has its own inner copy that
+    // shadows this within that function). Mirrors routeWebManagementEcosystem
+    // server-side: under 30 = A, 30 to 150 = B, over 150 = C.
+    function routeWmEcoFromPages(pages) {
+      if (typeof pages !== 'number' || !Number.isFinite(pages) || pages <= 0) return null;
+      if (pages < 30) return 'A';
+      if (pages <= 150) return 'B';
+      return 'C';
+    }
+
+    // Takeover sites editor. Existing sites the proposal proposes to MANAGE
+    // (not build). Each prices at its real navigable page count and pays full
+    // WM onboarding. Emits state.product_vars['web-management'].takeover_sites =
+    // [{ domain, label, page_count, is_primary }]; the server validates the
+    // rest (normalizeWmTakeoverSites). Exactly one site is the primary anchor.
+    function takeoverSitesEditor() {
+      const wrap = document.createElement('div');
+      wrap.className = 'mt-4 p-3 bg-neutral-900/30 border border-white/5 rounded-md';
+      const header = document.createElement('p');
+      header.className = 'text-[10px] font-mono text-neutral-500 tracking-wide uppercase mb-1';
+      header.textContent = 'Sites to take over (optional)';
+      wrap.appendChild(header);
+      const desc = document.createElement('p');
+      desc.className = 'text-[11px] text-neutral-400 mb-3 leading-relaxed';
+      desc.textContent = 'Existing sites you propose to manage but did not build. Each is priced at its real navigable page count and pays full Web Management onboarding. Do not list a site you are also building here (that goes under the build option instead).';
+      wrap.appendChild(desc);
+      const list = document.createElement('div');
+      list.className = 'space-y-2';
+      wrap.appendChild(list);
+      const addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.className = 'mt-3 text-xs px-3 py-1.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-700 hover:bg-amber-500/20 transition-colors';
+      addBtn.textContent = '+ Add takeover site';
+      addBtn.addEventListener('click', () => {
+        if (!state.product_vars['web-management']) state.product_vars['web-management'] = {};
+        const wm = state.product_vars['web-management'];
+        const arr = Array.isArray(wm.takeover_sites) ? wm.takeover_sites : [];
+        arr.push({ domain: '', label: '', page_count: undefined, is_primary: arr.length === 0 });
+        wm.takeover_sites = arr;
+        renderTakeoverList(list);
+      });
+      wrap.appendChild(addBtn);
+      renderTakeoverList(list);
+      return wrap;
+    }
+
+    function renderTakeoverList(container) {
+      container.innerHTML = '';
+      const wm = state.product_vars['web-management'] || {};
+      const arr = Array.isArray(wm.takeover_sites) ? wm.takeover_sites : [];
+      if (arr.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'text-[11px] text-neutral-500 italic';
+        empty.textContent = 'No takeover sites. Add one only if the proposal inherits an existing site you did not build.';
+        container.appendChild(empty);
+        return;
+      }
+      // Exactly one primary (the anchor existing site): keep the first marked,
+      // clear the rest. Defensive against a restored state with 0 or 2+ primaries.
+      const primaryIdx = arr.findIndex(s => s.is_primary);
+      arr.forEach((s, i) => { s.is_primary = (i === (primaryIdx >= 0 ? primaryIdx : 0)); });
+      arr.forEach((site, i) => container.appendChild(takeoverRow(site, i, container, arr)));
+    }
+
+    function takeoverRow(site, index, listContainer, arr) {
+      const card = document.createElement('div');
+      card.className = 'p-2.5 bg-neutral-900/40 border border-white/5 rounded flex flex-wrap items-center gap-2';
+
+      const domainInput = document.createElement('input');
+      domainInput.type = 'text';
+      domainInput.className = 'flex-1 min-w-[140px] px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30';
+      domainInput.placeholder = 'existing-site.com';
+      domainInput.value = site.domain || '';
+      domainInput.addEventListener('input', () => { site.domain = domainInput.value.trim().toLowerCase(); });
+      card.appendChild(domainInput);
+
+      const labelInput = document.createElement('input');
+      labelInput.type = 'text';
+      labelInput.className = 'flex-1 min-w-[120px] px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30';
+      labelInput.placeholder = 'Label (optional)';
+      labelInput.value = site.label || '';
+      labelInput.addEventListener('input', () => { site.label = labelInput.value; });
+      card.appendChild(labelInput);
+
+      const pagesWrap = document.createElement('div');
+      pagesWrap.className = 'flex items-center gap-1.5';
+      const pagesInput = document.createElement('input');
+      pagesInput.type = 'number';
+      pagesInput.min = '1';
+      pagesInput.className = 'w-20 px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30';
+      pagesInput.placeholder = 'pages';
+      pagesInput.value = (site.page_count != null) ? String(site.page_count) : '';
+      const ecoTag = document.createElement('span');
+      ecoTag.className = 'text-[10px] font-mono text-neutral-500';
+      const setEcoTag = () => {
+        const eco = (typeof site.page_count === 'number' && site.page_count > 0) ? routeWmEcoFromPages(site.page_count) : null;
+        ecoTag.textContent = eco ? ('Eco ' + eco) : '';
+      };
+      pagesInput.addEventListener('input', () => {
+        const n = parseInt(pagesInput.value, 10);
+        site.page_count = (Number.isFinite(n) && n > 0) ? n : undefined;
+        setEcoTag();
+      });
+      setEcoTag();
+      pagesWrap.appendChild(pagesInput);
+      pagesWrap.appendChild(ecoTag);
+      card.appendChild(pagesWrap);
+
+      const primaryWrap = document.createElement('label');
+      primaryWrap.className = 'flex items-center gap-1 text-[11px] text-neutral-400 cursor-pointer';
+      const primaryRadio = document.createElement('input');
+      primaryRadio.type = 'radio';
+      primaryRadio.name = 'takeover-primary';
+      primaryRadio.checked = !!site.is_primary;
+      primaryRadio.addEventListener('change', () => {
+        arr.forEach(s => { s.is_primary = false; });
+        site.is_primary = true;
+      });
+      primaryWrap.appendChild(primaryRadio);
+      primaryWrap.appendChild(document.createTextNode('primary'));
+      card.appendChild(primaryWrap);
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'text-xs text-neutral-400 hover:text-red-600 transition-colors ml-auto';
+      removeBtn.textContent = 'Remove';
+      removeBtn.addEventListener('click', () => {
+        arr.splice(index, 1);
+        if (arr.length > 0 && !arr.some(s => s.is_primary)) arr[0].is_primary = true;
+        renderTakeoverList(listContainer);
+      });
+      card.appendChild(removeBtn);
+
+      return card;
+    }
+
+    function renderBuildOptionsList(container, productId) {
+      container.innerHTML = '';
+      const opts = (state.product_vars[productId] && Array.isArray(state.product_vars[productId].build_options))
+        ? state.product_vars[productId].build_options
+        : [];
+      if (opts.length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'text-[11px] text-neutral-500 italic';
+        empty.textContent = 'No options yet. The build ships as one shape.';
+        container.appendChild(empty);
+        return;
+      }
+      if (opts.length === 1) {
+        const warn = document.createElement('p');
+        warn.className = 'text-[11px] text-amber-700';
+        warn.textContent = 'Only one option here. Add a second one so the client gets a side-by-side choice card on the proposal page.';
+        container.appendChild(warn);
+      }
+      opts.forEach((opt, i) => {
+        container.appendChild(buildOptionRow(opt, i, productId, container));
+      });
+    }
+
+    function buildOptionRow(opt, index, productId, listContainer) {
+      const card = document.createElement('div');
+      card.className = 'p-3 bg-neutral-900/40 border border-white/5 rounded';
+      const topRow = document.createElement('div');
+      topRow.className = 'flex items-center justify-between gap-3 mb-2';
+      const idLabel = document.createElement('span');
+      idLabel.className = 'text-[10px] font-mono text-neutral-500 uppercase tracking-wide';
+      idLabel.textContent = `Option ${index + 1}  ·  id: ${opt.id}`;
+      topRow.appendChild(idLabel);
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'text-xs text-neutral-400 hover:text-red-600 transition-colors';
+      removeBtn.textContent = 'Remove';
+      removeBtn.addEventListener('click', () => {
+        state.product_vars[productId].build_options.splice(index, 1);
+        renderBuildOptionsList(listContainer, productId);
+      });
+      topRow.appendChild(removeBtn);
+      card.appendChild(topRow);
+
+      const nameWrap = document.createElement('div');
+      nameWrap.className = 'mb-2';
+      nameWrap.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Option name (what the client sees on the choice card)</label>`;
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30';
+      nameInput.value = opt.name || '';
+      nameInput.placeholder = index === 0 ? 'Single unified site' : 'Standalone microsite';
+      nameInput.addEventListener('input', () => { opt.name = nameInput.value; });
+      nameWrap.appendChild(nameInput);
+      attachStandardDropdown(nameInput, index === 0 ? 'option_name_unified' : 'option_name_split');
+      card.appendChild(nameWrap);
+
+      const pitchWrap = document.createElement('div');
+      pitchWrap.className = 'mb-2';
+      pitchWrap.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Short pitch (1-2 sentences the client reads under the option name)</label>`;
+      const pitchInput = document.createElement('textarea');
+      pitchInput.rows = 3;
+      pitchInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
+      pitchInput.value = opt.pitch || '';
+      pitchInput.placeholder = 'One site with a focused section.';
+      pitchInput.addEventListener('input', () => { opt.pitch = pitchInput.value; });
+      pitchWrap.appendChild(pitchInput);
+      attachStandardDropdown(pitchInput, 'option_pitch');
+      // Per audit move 6: AI-draft button for the option pitch.
+      // Endpoint contrasts THIS option against the OTHER option's
+      // pitch so the two cards differentiate cleanly.
+      pitchWrap.appendChild(attachAiDraftButton({
+        endpoint: '/portal/api/admin/proposals/ai/option-pitch',
+        buildPayload: () => {
+          if (!opt.name) return 'Set the option name first.';
+          const allOpts = state.product_vars && state.product_vars['build'] && state.product_vars['build'].build_options
+            ? state.product_vars['build'].build_options : [];
+          const other = allOpts.find((_o, i) => i !== index);
+          return {
+            client_id: state.client_id,
+            option_name: opt.name,
+            other_option_name: (other && other.name) || null,
+            other_option_pitch: (other && other.pitch) || null,
+            build_description: (state.product_vars && state.product_vars['build'] && state.product_vars['build'].build_description) || null,
+            inferred_industry: (state.narrative_variables && state.narrative_variables.industry) || null,
+            admin_hint: pitchInput.value || null,
+            current_sites: (clientSitesCache[state.client_id] || []).map(s => ({
+              domain: s.domain,
+              label: s.label || null,
+              is_primary: !!s.is_primary,
+              is_managed: !!s.is_managed,
+              page_count: s.page_count ?? null,
+            })),
+          };
+        },
+        applyResponse: (data) => {
+          pitchInput.value = data.sentence;
+          pitchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        },
+      }));
+      card.appendChild(pitchWrap);
+
+      const grid = document.createElement('div');
+      grid.className = 'mb-2 grid grid-cols-1 gap-3';
+
+      const idCol = document.createElement('div');
+      idCol.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Internal id (leave as-is unless you have a reason)</label>`;
+      const optIdInput = document.createElement('input');
+      optIdInput.type = 'text';
+      optIdInput.pattern = '[a-z0-9_-]+';
+      optIdInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
+      optIdInput.value = opt.id || '';
+      optIdInput.addEventListener('input', () => {
+        opt.id = optIdInput.value.toLowerCase().replace(/[^a-z0-9_-]/g, '');
+        idLabel.textContent = `Option ${index + 1}  ·  id: ${opt.id}`;
+      });
+      idCol.appendChild(optIdInput);
+      grid.appendChild(idCol);
+      card.appendChild(grid);
+
+      const sowWrap = document.createElement('div');
+      sowWrap.className = 'mb-2';
+      sowWrap.innerHTML = `<label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Sentence about this option for the signed contract</label>`;
+      const sowInput = document.createElement('textarea');
+      sowInput.rows = 2;
+      sowInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
+      sowInput.value = opt.schedule_a_note || '';
+      sowInput.placeholder = 'Single site build covering the primary site and focused section.';
+      sowInput.addEventListener('input', () => { opt.schedule_a_note = sowInput.value; });
+      sowWrap.appendChild(sowInput);
+      attachStandardDropdown(sowInput, 'option_schedule_a');
+      card.appendChild(sowWrap);
+
+      // Cross-product WM impact subsection. Options carry structural
+      // changes only: added build sites and existing-site page-count
+      // changes. WM prices them later at the buyer's selected tier.
+      card.appendChild(buildWmImpactEditor(opt));
+
+      card.appendChild(buildPhasesEditor(opt));
+      return card;
+    }
+
+    function buildWmImpactEditor(opt) {
+      const wrap = document.createElement('div');
+      wrap.className = 'mt-3 pl-3 border-l-2 border-amber-500/30';
+      const label = document.createElement('p');
+      label.className = 'text-[10px] font-mono text-neutral-500 mb-2 uppercase tracking-wide';
+      label.textContent = 'What this option adds or changes';
+      wrap.appendChild(label);
+      const help = document.createElement('p');
+      help.className = 'text-[11px] text-neutral-400 mb-3 leading-relaxed';
+      help.textContent = 'Pick the structural changes this option makes. Build fees route by these page counts now. Web Management monthly is calculated later from the tier the client picks on the proposal page.';
+      wrap.appendChild(help);
+
+      // Computed summary box. Read-only. Updates live whenever any
+      // structural input below changes. The admin never types a WM
+      // dollar amount; buyer tier selection owns that math.
+      const summary = document.createElement('div');
+      summary.className = 'mb-3 p-3 bg-neutral-900/40 border border-amber-500/20 rounded';
+      const summaryTitle = document.createElement('p');
+      summaryTitle.className = 'text-[10px] font-mono text-amber-700 uppercase tracking-wide mb-1';
+      summaryTitle.textContent = 'If client picks this option';
+      const summaryBody = document.createElement('p');
+      summaryBody.className = 'text-[12px] text-neutral-200 leading-relaxed';
+      summaryBody.textContent = 'Add a new site or a modification below to see the impact.';
+      summary.appendChild(summaryTitle);
+      summary.appendChild(summaryBody);
+      wrap.appendChild(summary);
+
+      function routeWmEcoFromPages(pages) {
+        if (pages == null || !Number.isFinite(pages)) return null;
+        if (pages < 30) return 'A';
+        if (pages <= 150) return 'B';
+        return 'C';
+      }
+
+      // Map a site's page count to the build size band. Mirrors the
+      // BUILD_SIZES routing in src/lib/products/build.ts.
+      function buildSizeFromPages(pages) {
+        if (pages == null || !Number.isFinite(pages)) return null;
+        if (pages < 30) return 'small';
+        if (pages <= 150) return 'mid';
+        return 'large';
+      }
+
+      // Single source of truth for option structure. Called on every
+      // structural change. Writes only Build's fixed-fee delta onto
+      // opt; WM monthly/onboarding are computed later at the buyer's
+      // selected tier by the Web Management product itself.
+      function recompute() {
+        const addedArr = Array.isArray(opt.wm_sites_added) ? opt.wm_sites_added : [];
+        const modArr = Array.isArray(opt.wm_site_modifications) ? opt.wm_site_modifications : [];
+
+        // Compute the FULL build cost for this option. Each option
+        // is treated as fully self-contained: the option's sites
+        // define the entire build for that option, not extras on
+        // top of a base. First site = full BUILD_FEES[size]; each
+        // subsequent site = × 0.90 (subsequent-build discount,
+        // matches src/lib/products/build.ts SUBSEQUENT_BUILD_DISCOUNT).
+        let optionBuildCost = 0;
+        let buildSkipped = 0;
+        const buildBreakdownParts = [];
+        let buildIdx = 0;
+        for (const site of addedArr) {
+          const pages = typeof site.page_count_estimate === 'number' ? site.page_count_estimate : null;
+          const sizeId = buildSizeFromPages(pages);
+          if (!sizeId || BUILD_FEES[sizeId] == null) {
+            buildSkipped++;
+            continue;
+          }
+          // First valid site = full fee. Each subsequent = × 0.90.
+          const fee = buildIdx === 0
+            ? BUILD_FEES[sizeId]
+            : BUILD_FEES[sizeId] * (1 - BUILD_SUBSEQUENT_DISCOUNT);
+          optionBuildCost += fee;
+          const labelText = site.label || site.domain || '(new site)';
+          const tag = buildIdx === 0 ? 'first build' : 'subsequent (-10%)';
+          buildBreakdownParts.push(`${labelText} ${sizeId} build $${Math.round(fee).toLocaleString()} ${tag}`);
+          buildIdx++;
+        }
+        const optionBuildCostRounded = Math.round(optionBuildCost * 100) / 100;
+
+        // Compute the BASE build cost from the top-level build_size +
+        // build_count. The composer adds pricing_delta to this base,
+        // so we set pricing_delta = optionBuildCost - baseBuildCost.
+        // When the option is picked, the composer's total becomes the
+        // option's full build cost (base + delta = option's total).
+        let baseBuildCost = 0;
+        try {
+          // Derive base size from build_total_pages (new model). Falls
+          // back to legacy build_size if present (older drafts).
+          const explicitSize = state.product_vars?.build?.build_size || null;
+          const totalPages = state.product_vars?.build?.build_total_pages;
+          let baseSize = explicitSize;
+          if (!baseSize && typeof totalPages === 'number' && totalPages > 0) {
+            baseSize = buildSizeFromPages(totalPages);
+          }
+          if (baseSize && BUILD_FEES[baseSize] != null) {
+            baseBuildCost = BUILD_FEES[baseSize]; // always 1 build at base
+          }
+        } catch {}
+        const baseBuildCostRounded = Math.round(baseBuildCost * 100) / 100;
+        const buildCostDelta = optionBuildCostRounded > 0
+          ? Math.round((optionBuildCostRounded - baseBuildCostRounded) * 100) / 100
+          : 0;
+
+        // Describe WM impact structurally. Dollar amounts are not
+        // computed here because the buyer's picked wm_tier owns that
+        // math on the proposal page and in Schedule A.
+        let wmAddedSkipped = 0;
+        const wmAddedParts = [];
+        for (const site of addedArr) {
+          const pages = typeof site.page_count_estimate === 'number' ? site.page_count_estimate : null;
+          const eco = routeWmEcoFromPages(pages);
+          if (!eco) {
+            wmAddedSkipped++;
+            continue;
+          }
+          const labelText = site.label || site.domain || '(new site)';
+          wmAddedParts.push(`${labelText}: ${pages} pages, Eco ${eco}, priced at the client-picked WM tier; build covers WM onboarding for this site`);
+        }
+
+        // Compute WM modification impact structurally. Modifications
+        // apply before pricing, so we describe the route change without
+        // pre-pricing a tier here.
+        const modParts = [];
+        let modSkipped = 0;
+        const managedNow = (clientSitesCache[state.client_id] || []).filter(s => s.is_managed);
+        for (const mod of modArr) {
+          const domain = (mod && typeof mod.site_domain === 'string') ? mod.site_domain : '';
+          const newPages = (mod && typeof mod.new_page_count === 'number') ? mod.new_page_count : null;
+          if (!domain || newPages == null) { modSkipped++; continue; }
+          const existing = managedNow.find(s => (s.domain || '').toLowerCase() === domain.toLowerCase());
+          if (!existing) { modSkipped++; continue; }
+          const oldEco = routeWmEcoFromPages(existing.page_count);
+          const newEco = routeWmEcoFromPages(newPages);
+          if (!oldEco || !newEco) {
+            modSkipped++;
+            continue;
+          }
+          if (oldEco === newEco) {
+            modParts.push(`${domain}: ${newPages} pages, stays Eco ${newEco}`);
+            continue;
+          }
+          modParts.push(`${domain}: ${existing.page_count ?? '?'} pages Eco ${oldEco} -> ${newPages} pages Eco ${newEco}; priced at the client-picked WM tier`);
+        }
+
+        // Write only the build fixed-fee delta. Stale static WM deltas
+        // from older drafts are removed so they cannot double-count.
+        opt.pricing_delta = buildCostDelta;
+        delete opt.wm_monthly_delta;
+        delete opt.wm_onboarding_delta;
+
+        // Render summary
+        if (addedArr.length === 0 && modArr.length === 0) {
+          summaryBody.textContent = 'Add a new site or a modification below to see the impact.';
+          return;
+        }
+        const lines = [];
+        if (optionBuildCostRounded > 0) {
+          lines.push(`Build cost: <strong>$${optionBuildCostRounded.toLocaleString()}</strong> (${buildBreakdownParts.join(', ')})`);
+        }
+        if (addedArr.length > 0 || modArr.length > 0) {
+          lines.push(`Web Management: <strong>computed from the tier the client picks on the proposal page</strong>`);
+        }
+        if (wmAddedParts.length > 0) {
+          lines.push(`<span class="text-neutral-400 text-[11px]">New sites: ${wmAddedParts.join(', ')}</span>`);
+        }
+        if (modParts.length > 0) {
+          lines.push(`<span class="text-neutral-400 text-[11px]">Modifications: ${modParts.join('; ')}</span>`);
+        }
+        const skips = [];
+        if (buildSkipped > 0) skips.push(`${buildSkipped} new site(s) missing page count`);
+        if (modSkipped > 0) skips.push(`${modSkipped} modification(s) missing site or page count`);
+        if (skips.length > 0) {
+          lines.push(`<span class="text-amber-700 text-[11px]">Skipped: ${skips.join('; ')}</span>`);
+        }
+        summaryBody.innerHTML = lines.join('<br>');
+      }
+
+      // Expose recompute so the sites + modifications subsections
+      // can trigger it whenever their inputs change.
+      opt._recomputeSummary = recompute;
+
+      const sitesLabel = document.createElement('p');
+      sitesLabel.className = 'text-[10px] font-mono text-neutral-500 mb-2 uppercase tracking-wide';
+      sitesLabel.textContent = 'New sites this option builds';
+      wrap.appendChild(sitesLabel);
+      const sitesHelp = document.createElement('p');
+      sitesHelp.className = 'text-[11px] text-neutral-400 mb-2 leading-relaxed';
+      sitesHelp.textContent = 'Add one row per net-new site or microsite. Page count routes both the fixed Build fee and the future Web Management formula. Domain can wait if it is not decided yet.';
+      wrap.appendChild(sitesHelp);
+
+      const sitesList = document.createElement('div');
+      sitesList.className = 'space-y-2';
+      wrap.appendChild(sitesList);
+
+      function renderSites() {
+        sitesList.innerHTML = '';
+        const arr = Array.isArray(opt.wm_sites_added) ? opt.wm_sites_added : [];
+        arr.forEach((site, idx) => {
+          const row = document.createElement('div');
+          row.className = 'grid grid-cols-12 gap-2 items-end p-2 bg-neutral-900/40 border border-white/5 rounded';
+          row.innerHTML =
+            '<div class="col-span-5"><label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Domain, if known</label></div>' +
+            '<div class="col-span-4"><label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Display label</label></div>' +
+            '<div class="col-span-2"><label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Pages (est)</label></div>' +
+            '<div class="col-span-1"></div>';
+          const domainCol = row.children[0];
+          const labelCol = row.children[1];
+          const pagesCol = row.children[2];
+          const rmCol = row.children[3];
+          const domainInput = document.createElement('input');
+          domainInput.type = 'text';
+          domainInput.className = 'w-full px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono';
+          domainInput.value = site.domain || '';
+          domainInput.placeholder = 'new-site.com';
+          domainInput.addEventListener('input', () => { site.domain = domainInput.value.trim().toLowerCase(); if (opt._recomputeSummary) opt._recomputeSummary(); });
+          domainCol.appendChild(domainInput);
+          const labelInput = document.createElement('input');
+          labelInput.type = 'text';
+          labelInput.className = 'w-full px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs';
+          labelInput.value = site.label || '';
+          labelInput.placeholder = 'Product-line microsite';
+          labelInput.addEventListener('input', () => { site.label = labelInput.value; if (opt._recomputeSummary) opt._recomputeSummary(); });
+          labelCol.appendChild(labelInput);
+          attachStandardDropdown(labelInput, 'wm_sites_added_label');
+          const pagesInput = document.createElement('input');
+          pagesInput.type = 'number';
+          pagesInput.min = '0';
+          pagesInput.className = 'w-full px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono';
+          pagesInput.value = site.page_count_estimate != null ? String(site.page_count_estimate) : '';
+          pagesInput.addEventListener('input', () => {
+            const n = parseInt(pagesInput.value, 10);
+            site.page_count_estimate = Number.isFinite(n) ? n : undefined;
+            if (opt._recomputeSummary) opt._recomputeSummary();
+          });
+          pagesCol.appendChild(pagesInput);
+          const rmBtn = document.createElement('button');
+          rmBtn.type = 'button';
+          rmBtn.className = 'text-[11px] text-neutral-400 hover:text-red-400 transition-colors';
+          rmBtn.textContent = '×';
+          rmBtn.title = 'Remove this added site';
+          rmBtn.addEventListener('click', () => {
+            opt.wm_sites_added.splice(idx, 1);
+            renderSites();
+            if (opt._recomputeSummary) opt._recomputeSummary();
+          });
+          rmCol.appendChild(rmBtn);
+          sitesList.appendChild(row);
+        });
+      }
+      renderSites();
+
+      const addSiteBtn = document.createElement('button');
+      addSiteBtn.type = 'button';
+      addSiteBtn.className = 'mt-2 text-[11px] font-mono text-amber-600 hover:text-amber-400 transition-colors';
+      addSiteBtn.textContent = '+ Add site';
+      addSiteBtn.addEventListener('click', () => {
+        if (!Array.isArray(opt.wm_sites_added)) opt.wm_sites_added = [];
+        opt.wm_sites_added.push({ domain: '', label: '', page_count_estimate: undefined });
+        renderSites();
+        if (opt._recomputeSummary) opt._recomputeSummary();
+      });
+      wrap.appendChild(addSiteBtn);
+
+      // Modifications subsection: lets the option re-route an EXISTING
+      // managed site by changing its page count when this option is
+      // picked. The composer mutates managedSites before pricing, so
+      // both the WM monthly/onboarding line and Schedule A reflect the
+      // post-option ecosystem automatically (no delta to maintain).
+      const modsSeparator = document.createElement('div');
+      modsSeparator.className = 'mt-4 mb-2 border-t border-white/5';
+      wrap.appendChild(modsSeparator);
+
+      const modsLabel = document.createElement('p');
+      modsLabel.className = 'text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide';
+      modsLabel.textContent = 'Existing sites whose page count changes if this option is picked';
+      wrap.appendChild(modsLabel);
+      const modsHelp = document.createElement('p');
+      modsHelp.className = 'text-[11px] text-neutral-400 mb-2 leading-relaxed';
+      modsHelp.textContent = 'Use this when the build adds pages to a site I already manage. If the new page count moves the site to a different ecosystem, pricing updates from the client-picked Web Management tier.';
+      wrap.appendChild(modsHelp);
+
+      const modsList = document.createElement('div');
+      modsList.className = 'space-y-2';
+      wrap.appendChild(modsList);
+
+      function renderMods() {
+        modsList.innerHTML = '';
+        const arr = Array.isArray(opt.wm_site_modifications) ? opt.wm_site_modifications : [];
+        const managedNow = (clientSitesCache[state.client_id] || []).filter(s => s.is_managed);
+        arr.forEach((mod, idx) => {
+          const row = document.createElement('div');
+          row.className = 'grid grid-cols-12 gap-2 items-end p-2 bg-neutral-900/40 border border-white/5 rounded';
+          row.innerHTML =
+            '<div class="col-span-5"><label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Site</label></div>' +
+            '<div class="col-span-2"><label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">New total pages</label></div>' +
+            '<div class="col-span-4"><label class="block text-[10px] font-mono text-neutral-500 mb-1 uppercase tracking-wide">Note (optional)</label></div>' +
+            '<div class="col-span-1"></div>';
+          const siteCol = row.children[0];
+          const pagesCol = row.children[1];
+          const noteCol = row.children[2];
+          const rmCol = row.children[3];
+
+          const siteSel = document.createElement('select');
+          siteSel.className = 'w-full px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono';
+          const placeholder = document.createElement('option');
+          placeholder.value = '';
+          placeholder.textContent = managedNow.length === 0
+            ? '(no managed sites yet — add one in the Sites step first)'
+            : '(pick a site)';
+          siteSel.appendChild(placeholder);
+          for (const s of managedNow) {
+            const opt2 = document.createElement('option');
+            opt2.value = s.domain;
+            const pageNote = (s.page_count !== null && s.page_count !== undefined)
+              ? ` (${s.page_count}p, Eco ${routeWmEcoFromPages(s.page_count) || '?'})`
+              : ' (page count unset)';
+            opt2.textContent = (s.label && s.label !== s.domain ? s.label + ' — ' : '') + s.domain + pageNote;
+            siteSel.appendChild(opt2);
+          }
+          siteSel.value = mod.site_domain || '';
+          siteSel.addEventListener('change', () => { mod.site_domain = siteSel.value; if (opt._recomputeSummary) opt._recomputeSummary(); });
+          siteCol.appendChild(siteSel);
+
+          const pagesInput = document.createElement('input');
+          pagesInput.type = 'number';
+          pagesInput.min = '0';
+          pagesInput.className = 'w-full px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs font-mono';
+          pagesInput.placeholder = '31';
+          pagesInput.value = mod.new_page_count != null ? String(mod.new_page_count) : '';
+          pagesInput.addEventListener('input', () => {
+            const n = parseInt(pagesInput.value, 10);
+            mod.new_page_count = Number.isFinite(n) ? n : undefined;
+            if (opt._recomputeSummary) opt._recomputeSummary();
+          });
+          pagesCol.appendChild(pagesInput);
+
+          const noteInput = document.createElement('input');
+          noteInput.type = 'text';
+          noteInput.className = 'w-full px-2 py-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-xs';
+          noteInput.placeholder = 'adds switchgear category section, ~15 pages';
+          noteInput.value = mod.note || '';
+          noteInput.addEventListener('input', () => { mod.note = noteInput.value; });
+          noteCol.appendChild(noteInput);
+
+          const rmBtn = document.createElement('button');
+          rmBtn.type = 'button';
+          rmBtn.className = 'text-[11px] text-neutral-400 hover:text-red-400 transition-colors';
+          rmBtn.textContent = '×';
+          rmBtn.title = 'Remove this modification';
+          rmBtn.addEventListener('click', () => {
+            opt.wm_site_modifications.splice(idx, 1);
+            renderMods();
+            if (opt._recomputeSummary) opt._recomputeSummary();
+          });
+          rmCol.appendChild(rmBtn);
+          modsList.appendChild(row);
+        });
+      }
+      renderMods();
+
+      const addModBtn = document.createElement('button');
+      addModBtn.type = 'button';
+      addModBtn.className = 'mt-2 text-[11px] font-mono text-amber-600 hover:text-amber-400 transition-colors';
+      addModBtn.textContent = '+ Add modification';
+      addModBtn.addEventListener('click', () => {
+        if (!Array.isArray(opt.wm_site_modifications)) opt.wm_site_modifications = [];
+        opt.wm_site_modifications.push({ site_domain: '', new_page_count: undefined, note: '' });
+        renderMods();
+        if (opt._recomputeSummary) opt._recomputeSummary();
+      });
+      wrap.appendChild(addModBtn);
+
+      // Initial summary render — covers draft proposals that already
+      // have saved sites or modifications so the admin sees the
+      // current math, not the empty-state placeholder.
+      recompute();
+
+      return wrap;
+    }
+
+    function buildPhasesEditor(opt) {
+      const wrap = document.createElement('div');
+      wrap.className = 'mt-2 pl-3 border-l-2 border-amber-500/30';
+      const label = document.createElement('p');
+      label.className = 'text-[10px] font-mono text-neutral-500 mb-2 uppercase tracking-wide';
+      label.textContent = 'Build steps shown to the client on the proposal page (the "how it rolls out" section)';
+      wrap.appendChild(label);
+      const phasesList = document.createElement('div');
+      phasesList.className = 'space-y-2';
+      wrap.appendChild(phasesList);
+      const renderPhases = () => {
+        phasesList.innerHTML = '';
+        if (!Array.isArray(opt.rollout_phases)) opt.rollout_phases = [];
+        if (opt.rollout_phases.length === 0) {
+          const empty = document.createElement('p');
+          empty.className = 'text-[11px] text-neutral-500 italic';
+          empty.textContent = 'No phases. Add the first.';
+          phasesList.appendChild(empty);
+        }
+        opt.rollout_phases.forEach((phase, pIdx) => {
+          const row = document.createElement('div');
+          row.className = 'p-2 bg-neutral-900/30 border border-white/5 rounded';
+          const phaseTop = document.createElement('div');
+          phaseTop.className = 'flex items-center justify-between gap-2 mb-1';
+          phaseTop.innerHTML = `<span class="text-[10px] font-mono text-amber-700 uppercase tracking-wide">Phase ${pIdx + 1}</span>`;
+          const phaseRemove = document.createElement('button');
+          phaseRemove.type = 'button';
+          phaseRemove.className = 'text-[11px] text-neutral-400 hover:text-red-600 transition-colors';
+          phaseRemove.textContent = 'Remove';
+          phaseRemove.addEventListener('click', () => {
+            opt.rollout_phases.splice(pIdx, 1);
+            renderPhases();
+          });
+          phaseTop.appendChild(phaseRemove);
+          row.appendChild(phaseTop);
+          const h3Input = document.createElement('input');
+          h3Input.type = 'text';
+          h3Input.className = 'w-full px-2 py-1.5 mb-1 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30';
+          h3Input.value = phase.h3 || '';
+          h3Input.placeholder = 'Phase header';
+          h3Input.addEventListener('input', () => {
+            phase.h3 = h3Input.value;
+            phase.phase_num = `Phase ${pIdx + 1}`;
+          });
+          row.appendChild(h3Input);
+          attachStandardDropdown(h3Input, 'rollout_phase_header');
+          const htmlInput = document.createElement('textarea');
+          htmlInput.rows = 2;
+          htmlInput.className = 'w-full px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
+          htmlInput.value = phase.html || '';
+          htmlInput.placeholder = 'Phase description (HTML allowed).';
+          htmlInput.addEventListener('input', () => { phase.html = htmlInput.value; });
+          row.appendChild(htmlInput);
+          attachStandardDropdown(htmlInput, 'rollout_phase_body');
+          // Per audit move 6: AI-draft button for the phase body.
+          // Pulls phase index/total + parent option context so the
+          // drafter can render last-phase handoff language correctly.
+          row.appendChild(attachAiDraftButton({
+            endpoint: '/portal/api/admin/proposals/ai/phase-body',
+            buildPayload: () => {
+              if (!phase.h3) return 'Set the phase header first.';
+              return {
+                client_id: state.client_id,
+                phase_header: phase.h3,
+                phase_index: pIdx + 1,
+                total_phases: (Array.isArray(opt.rollout_phases) ? opt.rollout_phases.length : 1),
+                option_name: opt.name || null,
+                option_pitch: opt.pitch || null,
+                build_description: (state.product_vars && state.product_vars['build'] && state.product_vars['build'].build_description) || null,
+                web_management_in_scope: Array.isArray(state.products) && state.products.indexOf('web-management') >= 0,
+                admin_hint: htmlInput.value || null,
+                current_sites: (clientSitesCache[state.client_id] || []).map(s => ({
+                  domain: s.domain,
+                  label: s.label || null,
+                  is_primary: !!s.is_primary,
+                  is_managed: !!s.is_managed,
+                  page_count: s.page_count ?? null,
+                })),
+              };
+            },
+            applyResponse: (data) => {
+              htmlInput.value = data.html;
+              htmlInput.dispatchEvent(new Event('input', { bubbles: true }));
+            },
+          }));
+          phasesList.appendChild(row);
+        });
+      };
+      const addPhase = document.createElement('button');
+      addPhase.type = 'button';
+      addPhase.className = 'mt-2 text-[11px] px-2 py-1 rounded bg-neutral-900 border border-white/10 text-neutral-300 hover:border-amber-500/40 hover:text-amber-700 transition-colors';
+      addPhase.textContent = '+ Add phase';
+      addPhase.addEventListener('click', () => {
+        if (!Array.isArray(opt.rollout_phases)) opt.rollout_phases = [];
+        opt.rollout_phases.push({
+          phase_num: `Phase ${opt.rollout_phases.length + 1}`,
+          h3: '',
+          html: '',
+        });
+        renderPhases();
+      });
+      wrap.appendChild(addPhase);
+      renderPhases();
+      return wrap;
+    }
+
+    // Per-site editor (multi-site WM). One row per managed site:
+    // primary indicator | domain | page count input | routed
+    // ecosystem chip. Blur saves the page count via the client_sites
+    // API; the row's ecosystem chip updates live.
+    function buildPerSiteEditor(managedSites) {
+      const wrap = document.createElement('div');
+      wrap.className = 'mt-4 p-3 bg-neutral-900/30 border border-white/5 rounded-md';
+      const header = document.createElement('p');
+      header.className = 'text-[10px] font-mono text-neutral-500 tracking-wide uppercase mb-1';
+      header.textContent = 'Per-site routing';
+      wrap.appendChild(header);
+      const desc = document.createElement('p');
+      desc.className = 'text-[11px] text-neutral-400 mb-3 leading-relaxed';
+      desc.textContent = 'Each site routes to its own ecosystem by its own page count. Primary pays full base. Each additional site pays 0.90 of its own ecosystem base. Empty page count falls back to the primary site’s ecosystem for that site.';
+      wrap.appendChild(desc);
+
+      const sorted = [...managedSites].sort((a, b) => {
+        if (!!a.is_primary === !!b.is_primary) return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+        return a.is_primary ? -1 : 1;
+      });
+
+      for (const site of sorted) {
+        const row = document.createElement('div');
+        row.className = 'py-2 border-b border-white/5 last:border-0 last:pb-0 first:pt-0 grid grid-cols-12 gap-3 items-center';
+
+        const tag = document.createElement('span');
+        tag.className = 'col-span-2 text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded text-center ' + (
+          site.is_primary
+            ? 'bg-amber-500/10 border border-amber-500/40 text-amber-700'
+            : 'bg-neutral-900 border border-white/10 text-neutral-400'
+        );
+        tag.textContent = site.is_primary ? 'primary' : 'site';
+        row.appendChild(tag);
+
+        const domain = document.createElement('span');
+        domain.className = 'col-span-4 text-sm text-neutral-100 truncate font-mono';
+        domain.textContent = site.label && site.label !== site.domain ? `${site.label} (${site.domain})` : site.domain;
+        row.appendChild(domain);
+
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.min = '0';
+        input.className = 'col-span-3 px-2 py-1.5 bg-neutral-900/50 border border-white/5 rounded text-neutral-200 text-sm font-mono focus:outline-none focus:border-amber-500/30';
+        input.placeholder = 'pages';
+        if (site.page_count !== null && site.page_count !== undefined) {
+          input.value = String(site.page_count);
+        }
+
+        const ecoTag = document.createElement('span');
+        ecoTag.className = 'col-span-3 text-[10px] font-mono text-amber-700 text-right';
+        ecoTag.textContent = describeSiteEcosystem(site.page_count, sorted);
+        row.appendChild(input);
+        row.appendChild(ecoTag);
+
+        // Blur-saves the page count. Updates the cached site so the
+        // routing chip refreshes immediately. On failure, the chip
+        // shows an error tag and the previous value is restored.
+        const priorValue = input.value;
+        input.addEventListener('blur', async () => {
+          const raw = input.value.trim();
+          const newPc = raw === '' ? null : Number(raw);
+          if (raw !== '' && (!Number.isFinite(newPc) || newPc < 0)) {
+            input.value = priorValue;
+            if (window.__toast) window.__toast('Page count must be a non-negative number.', 'error');
+            return;
+          }
+          // Optimistic update: refresh chip immediately.
+          site.page_count = newPc;
+          ecoTag.textContent = describeSiteEcosystem(newPc, sorted);
+          try {
+            const res = await fetch('/portal/api/admin/clients/sites', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+              body: JSON.stringify({
+                client_id: state.client_id,
+                action: 'set_page_count',
+                site_id: site.id,
+                page_count: newPc,
+              }),
+            });
+            if (!res.ok) {
+              const data = await res.json().catch(() => ({}));
+              if (window.__toast) window.__toast(data.error || 'Failed to save page count.', 'error');
+              site.page_count = priorValue === '' ? null : Number(priorValue);
+              input.value = priorValue;
+              ecoTag.textContent = describeSiteEcosystem(site.page_count, sorted);
+            } else {
+              if (window.__toast) window.__toast(`Page count saved for ${site.domain}.`, 'success');
+            }
+          } catch (err) {
+            if (window.__toast) window.__toast('Network error saving page count.', 'error');
+          }
+        });
+
+        wrap.appendChild(row);
+      }
+      return wrap;
+    }
+
+    // Compact ecosystem-routing chip text for a single site. Null
+    // page count routes to the primary site's ecosystem (the
+    // fallback path in the pricing pipeline).
+    function describeSiteEcosystem(pageCount, allSites) {
+      if (pageCount === null || pageCount === undefined) {
+        const primary = (allSites || []).find(s => s.is_primary);
+        if (primary && primary.page_count !== null && primary.page_count !== undefined) {
+          return `→ Primary’s eco (${routeWmEcoLabel(primary.page_count)})`;
+        }
+        return '→ Primary’s eco (TBD)';
+      }
+      return `→ ${routeWmEcoLabel(pageCount)}`;
+    }
+    function routeWmEcoLabel(pc) {
+      if (pc < 30) return 'Eco A';
+      if (pc <= 150) return 'Eco B';
+      return 'Eco C';
+    }
+
+    function onVarChange(e) {
+      const t = e.currentTarget;
+      const pid = t.dataset.product;
+      const vid = t.dataset.var;
+      const kind = t.dataset.kind;
+      state.product_vars[pid] = state.product_vars[pid] || {};
+      let val;
+      if (kind === 'number') {
+        const n = parseFloat(t.value);
+        val = Number.isFinite(n) ? n : null;
+      } else if (kind === 'boolean') {
+        val = !!t.checked;
+      } else {
+        val = t.value;
+      }
+      state.product_vars[pid][vid] = val;
+      // Refresh routing note for this product.
+      const note = varsContainer.querySelector(`[data-eco-note="${pid}"]`);
+      if (note) note.textContent = computeRoutingNote(pid);
+      // When the top-level Build total pages (or legacy size/count)
+      // changes, every option's pricing_delta needs to recompute
+      // (the base build cost in the delta math just changed). Walk
+      // every option on the Build product and call its summary
+      // recompute if exposed.
+      if (pid === 'build' && (vid === 'build_total_pages' || vid === 'build_size' || vid === 'build_count')) {
+        const buildOpts = (state.product_vars?.build?.build_options) || [];
+        for (const o of buildOpts) {
+          if (o && typeof o._recomputeSummary === 'function') {
+            try { o._recomputeSummary(); } catch {}
+          }
+        }
+      }
+    }
+
+    function computeRoutingNote(productId) {
+      // Mirrors each product's routeEcosystem(). Kept simple and inline
+      // so the wizard can render the routed ecosystem live without an
+      // extra server roundtrip on every keystroke.
+      const vars = state.product_vars[productId] || {};
+      if (productId === 'web-management') {
+        const n = vars.page_count;
+        if (typeof n !== 'number') return 'Ecosystem: not yet (need page count)';
+        if (n < 30) return 'Ecosystem: A (under 30 pages)';
+        if (n <= 150) return 'Ecosystem: B (30 to 150 pages)';
+        return 'Ecosystem: C (150 or more pages)';
+      }
+      if (productId === 'marketing-consulting') {
+        const b = vars.revenue_band;
+        if (b === 'under-1m') return 'Ecosystem: A (under $1M revenue)';
+        if (b === '1m-to-10m') return 'Ecosystem: B ($1M to $10M revenue)';
+        if (b === 'over-10m') return 'Ecosystem: C ($10M or more)';
+        return 'Ecosystem: not yet (need revenue band)';
+      }
+      if (productId === 'build') {
+        // Prefer the new build_total_pages routing; fall back to the
+        // legacy build_size picker for older drafts.
+        const tp = vars.build_total_pages;
+        const pages = typeof tp === 'number' ? tp : parseInt(tp, 10);
+        if (Number.isFinite(pages) && pages > 0) {
+          if (pages < 30) return `Routes to: Small build, $5,625 (under 30 pages)`;
+          if (pages <= 150) return `Routes to: Mid build, $11,875 (30 to 150 pages)`;
+          return `Routes to: Large build, $22,500 (150 or more pages)`;
+        }
+        const s = vars.build_size;
+        if (s === 'small') return 'Build size: Small ($5,625)';
+        if (s === 'mid') return 'Build size: Mid ($11,875)';
+        if (s === 'large') return 'Build size: Large ($22,500)';
+        return 'Type a page count to route the build size';
+      }
+      if (productId === 'training') {
+        const m = vars.mode;
+        if (m === 'bundled') return 'Mode: Bundled (free with Best tier)';
+        if (m === 'a-la-carte') return 'Mode: A la carte';
+        return 'Mode: not yet';
+      }
+      if (productId === 'other-sow') {
+        const t = vars.title;
+        return t ? `SOW: ${t}` : 'SOW: title pending';
+      }
+      return '';
+    }
+
+    // =========================================================================
+    // Narrative variables (industry / urgency / focus)
+    // =========================================================================
+    document.getElementById('narr_industry').addEventListener('change', e => {
+      state.narrative_variables.industry = e.target.value || undefined;
+    });
+    document.getElementById('narr_urgency').addEventListener('change', e => {
+      state.narrative_variables.urgency = e.target.value || undefined;
+    });
+    document.getElementById('narr_focus').addEventListener('change', e => {
+      const picks = Array.from(e.target.selectedOptions).map(o => o.value);
+      state.narrative_variables.focus = picks.length ? picks : undefined;
+    });
+
+    // Existing-client / reissue: waive the one-time setup fees.
+    const waiveBox = document.getElementById('waive-onboarding');
+    if (waiveBox) {
+      waiveBox.checked = state.waive_onboarding === true;
+      waiveBox.addEventListener('change', () => { state.waive_onboarding = waiveBox.checked; });
+    }
+
+    // Bundle mode: fuse WM + MC into one GBB card.
+    const bundleBox = document.getElementById('bundle-mode');
+    if (bundleBox) {
+      bundleBox.checked = state.bundle_mode === true;
+      bundleBox.addEventListener('change', () => { state.bundle_mode = bundleBox.checked; });
+    }
+
+    // =========================================================================
+    // Signers
+    // =========================================================================
+    const signersContainer = document.getElementById('signers-container');
+    const addSignerBtn = document.getElementById('add-signer-btn');
+
+    function renderSigners() {
+      signersContainer.innerHTML = '';
+      if (state.signers.length === 0) {
+        addSignerRow({ name: '', email: '' });
+        return;
+      }
+      for (const s of state.signers) addSignerRow(s);
+    }
+
+    function addSignerRow(s) {
+      const row = document.createElement('div');
+      row.className = 'flex items-center gap-2';
+      row.innerHTML = `
+        <input type="text" placeholder="Full name" value="${escapeHtml(s.name)}" data-signer-name
+          class="flex-1 px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+        <input type="email" placeholder="email@domain.com" value="${escapeHtml(s.email)}" data-signer-email
+          class="flex-1 px-3 py-2 bg-neutral-900/50 border border-white/5 rounded-md text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+        <button type="button" data-remove-signer class="px-3 py-2 text-xs text-neutral-500 hover:text-red-400 transition-colors">Remove</button>
+      `;
+      row.querySelectorAll('input').forEach(inp => inp.addEventListener('input', syncSigners));
+      row.querySelector('[data-remove-signer]').addEventListener('click', () => {
+        row.remove();
+        syncSigners();
+      });
+      signersContainer.appendChild(row);
+    }
+
+    function syncSigners() {
+      state.signers = [];
+      signersContainer.querySelectorAll(':scope > div').forEach(r => {
+        const name = r.querySelector('[data-signer-name]').value.trim();
+        const email = r.querySelector('[data-signer-email]').value.trim().toLowerCase();
+        if (name || email) state.signers.push({ name, email });
+      });
+    }
+
+    function escapeHtml(s) {
+      return String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    addSignerBtn.addEventListener('click', () => {
+      addSignerRow({ name: '', email: '' });
+    });
+
+    renderSigners();
+
+    // =========================================================================
+    // Header overrides
+    // =========================================================================
+    // Standard-options dropdown for the title override. Slug and
+    // prepared_for stay free-text (auto-derived; no canonical menu).
+    (function attachTitleDropdown() {
+      const titleEl = document.getElementById('title');
+      if (titleEl) attachStandardDropdown(titleEl, 'title');
+    })();
+
+    function syncOverrides() {
+      const title = document.getElementById('title').value.trim();
+      const slug = document.getElementById('slug').value.trim();
+      const prepared_for = document.getElementById('prepared_for').value.trim();
+      const preparedIso = document.getElementById('prepared_on').value;
+      let prepared_on = '';
+      if (preparedIso) {
+        const d = new Date(preparedIso + 'T12:00:00');
+        if (!isNaN(d.getTime())) {
+          prepared_on = d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        }
+      }
+      const overrides = {};
+      if (title) overrides.title = title;
+      if (slug) overrides.slug = slug;
+      if (prepared_for) overrides.prepared_for = prepared_for;
+      if (prepared_on && prepared_on !== todayLong) overrides.prepared_on = prepared_on;
+      state.overrides = overrides;
+    }
+
+    // =========================================================================
+    // Submit
+    // =========================================================================
+    function normalizeBuildOptionsForSubmit() {
+      const vars = state.product_vars?.build;
+      if (!vars || !Array.isArray(vars.build_options)) return null;
+      for (const opt of vars.build_options) {
+        if (!opt || typeof opt !== 'object') continue;
+        delete opt.wm_monthly_delta;
+        delete opt.wm_onboarding_delta;
+
+        const rawSites = Array.isArray(opt.wm_sites_added) ? opt.wm_sites_added : [];
+        const cleanedSites = [];
+        for (const site of rawSites) {
+          const domain = typeof site?.domain === 'string' ? site.domain.trim().toLowerCase() : '';
+          const label = typeof site?.label === 'string' ? site.label.trim() : '';
+          const pages = typeof site?.page_count_estimate === 'number' && Number.isFinite(site.page_count_estimate)
+            ? site.page_count_estimate
+            : null;
+          const hasAny = !!domain || !!label || pages !== null;
+          if (!hasAny) continue;
+          if (pages === null || pages < 1) {
+            return `${opt.name || 'A build option'} has a new site without a page estimate.`;
+          }
+          cleanedSites.push({ domain, label, page_count_estimate: pages });
+        }
+        opt.wm_sites_added = cleanedSites;
+
+        const rawMods = Array.isArray(opt.wm_site_modifications) ? opt.wm_site_modifications : [];
+        const cleanedMods = [];
+        for (const mod of rawMods) {
+          const siteDomain = typeof mod?.site_domain === 'string' ? mod.site_domain.trim().toLowerCase() : '';
+          const pages = typeof mod?.new_page_count === 'number' && Number.isFinite(mod.new_page_count)
+            ? mod.new_page_count
+            : null;
+          const note = typeof mod?.note === 'string' ? mod.note.trim() : '';
+          const hasAny = !!siteDomain || pages !== null || !!note;
+          if (!hasAny) continue;
+          if (!siteDomain || pages === null || pages < 1) {
+            return `${opt.name || 'A build option'} has an existing-site change without both site and new page count.`;
+          }
+          cleanedMods.push({ site_domain: siteDomain, new_page_count: pages, note });
+        }
+        opt.wm_site_modifications = cleanedMods;
+      }
+      return null;
+    }
+
+    async function submitProposal(status) {
+      syncOverrides();
+      syncSigners();
+
+      if (!state.client_id) { showMsg('Pick a client first.', 'error'); return; }
+      if (state.products.length === 0) { showMsg('Pick at least one product.', 'error'); return; }
+      if (state.signers.length === 0) { showMsg('At least one signer is required.', 'error'); return; }
+      for (const s of state.signers) {
+        if (!s.email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s.email)) {
+          showMsg(`Signer "${s.name || '(unnamed)'}" needs a valid email.`, 'error');
+          return;
+        }
+      }
+      const buildOptionsError = normalizeBuildOptionsForSubmit();
+      if (buildOptionsError) { showMsg(buildOptionsError, 'error'); return; }
+
+      // Bundle mode fuses Web Management and Marketing Consulting into one
+      // card, so both must be in scope. Otherwise the composer silently
+      // drops bundle mode and renders separate cards with no feedback.
+      if (state.bundle_mode === true &&
+          !(state.products.includes('web-management') && state.products.includes('marketing-consulting'))) {
+        showMsg('Bundle mode needs both Web Management and Marketing Consulting selected. Add the missing product or untick bundle mode.', 'error');
+        return;
+      }
+
+      const draftBtn = document.getElementById('save-draft-btn');
+      const pubBtn = document.getElementById('publish-btn');
+      draftBtn.disabled = true;
+      pubBtn.disabled = true;
+
+      // Engagement-strategy synthesis subset, pulled from the research
+      // result when present. Used by the composer to drive the
+      // proposal opener (The Situation) and to adapt per-product copy.
+      // Absent for manual composes that skip the research step.
+      const r = state.research_result;
+      const engagement_strategy = r && typeof r === 'object' ? {
+        sales_angles: Array.isArray(r.sales_angles) ? r.sales_angles : [],
+        clv_horizon: r.clv_horizon && typeof r.clv_horizon === 'object' ? r.clv_horizon.signal : null,
+        cody_time_intensity: r.cody_time_intensity && typeof r.cody_time_intensity === 'object' ? r.cody_time_intensity.level : null,
+        // AI's per-prospect tier recommendation; surfaces on the
+        // prospect's tier picker as the recommended card. Per finding 3.
+        recommended_tier_per_product: r.recommended_tier_per_product && typeof r.recommended_tier_per_product === 'object'
+          ? r.recommended_tier_per_product
+          : null,
+      } : null;
+
+      // Strip tier_overrides entries for products no longer in scope so
+      // the payload only carries live picks. Composer ignores unknown
+      // entries anyway but this keeps the persisted config tidy.
+      const tier_overrides_payload = {};
+      for (const [pid, tier] of Object.entries(state.tier_overrides || {})) {
+        if (!tier) continue;
+        if (state.products.includes(pid)) tier_overrides_payload[pid] = tier;
+      }
+
+      const payload = {
+        client_id: state.client_id,
+        status,
+        compose: {
+          products: state.products,
+          product_vars: state.product_vars,
+          narrative_variables: state.narrative_variables,
+          signers: state.signers,
+          overrides: state.overrides,
+          engagement_strategy,
+          tier_overrides: Object.keys(tier_overrides_payload).length > 0 ? tier_overrides_payload : undefined,
+          waive_onboarding: state.waive_onboarding === true,
+          bundle_mode: state.bundle_mode === true,
+        },
+      };
+
+      // Two-stage error reporting (same pattern as the research call).
+      let res;
+      try {
+        res = await fetch('/portal/api/admin/proposals/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify(payload),
+        });
+      } catch (err) {
+        showMsg(`Network error: ${err && err.message ? err.message : 'fetch failed'}`, 'error');
+        draftBtn.disabled = false;
+        pubBtn.disabled = false;
+        return;
+      }
+      const rawText = await res.text();
+      let data = null;
+      try { data = rawText ? JSON.parse(rawText) : null; } catch {}
+      if (res.ok && data && data.ok) {
+        clearAutosave();
+        const verb = status === 'draft' ? 'Draft saved' : 'Proposal published';
+        showMsg(verb + '. Redirecting...', 'ok');
+        if (window.__toast) window.__toast(verb + '.', 'success');
+        setTimeout(() => { window.location.href = '/portal/admin/proposals'; }, 800);
+      } else {
+        // Voice-lint violations from the create endpoint render with
+        // per-field detail so admin sees exactly what rule fired and
+        // where. Cross-cutting D from the 2026-05-25 UI/UX audit.
+        if (res.status === 400 && data && Array.isArray(data.voice_violations) && data.voice_violations.length > 0) {
+          const parts = data.voice_violations.map(function(v) {
+            const rules = (v.violations || []).map(function(x) { return x.rule + ' matched "' + x.matched + '"'; }).join('; ');
+            const snippet = v.text.length > 100 ? v.text.slice(0, 100) + '…' : v.text;
+            return v.field + ': "' + snippet + '" — ' + rules;
+          }).join(' | ');
+          showMsg('Voice-lint failed. ' + parts, 'error');
+        } else {
+          const msg = (data && data.error)
+            ? data.error
+            : `HTTP ${res.status}${rawText ? ': ' + rawText.slice(0, 140) : ''}`;
+          showMsg(msg, 'error');
+        }
+        draftBtn.disabled = false;
+        pubBtn.disabled = false;
+      }
+    }
+
+    document.getElementById('save-draft-btn').addEventListener('click', () => submitProposal('draft'));
+    document.getElementById('publish-btn').addEventListener('click', () => submitProposal('published'));
+
+    // =========================================================================
+    // AI client research panel
+    // =========================================================================
+    const researchPanel = document.getElementById('research-panel');
+    const researchBtn = document.getElementById('research-btn');
+    const researchDomainSlot = document.getElementById('research-domain-slot');
+    const researchDomainInput = document.getElementById('research-domain-input');
+    const researchDomainSave = document.getElementById('research-domain-save');
+    const researchDomainMsg = document.getElementById('research-domain-msg');
+    const researchStatus = document.getElementById('research-status');
+    const researchResults = document.getElementById('research-results');
+    const researchStrategy = document.getElementById('research-strategy');
+    const researchStrategyBody = document.getElementById('research-strategy-body');
+    const derivedDomainsSlot = document.getElementById('derived-domains-slot');
+    const derivedDomainsList = document.getElementById('derived-domains-list');
+
+    // client_sites cache, populated server-side and refreshed after
+    // each sites action.
+    let clientSitesCache = clientSitesByClient;
+
+    async function callSitesApi(payload) {
+      const res = await fetch('/portal/api/admin/clients/sites', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+        body: JSON.stringify(payload),
+      });
+      const rawText = await res.text();
+      let data = null;
+      try { data = rawText ? JSON.parse(rawText) : null; } catch {}
+      if (res.ok && data && data.ok) {
+        if (Array.isArray(data.sites)) {
+          clientSitesCache[state.client_id] = data.sites.map(s => ({
+            id: s.id, domain: s.domain,
+            is_primary: !!s.is_primary, is_managed: !!s.is_managed,
+            label: s.label || null, sort_order: s.sort_order || 0,
+            page_count: (s.page_count === null || s.page_count === undefined) ? null : Number(s.page_count),
+          }));
+        }
+        return { ok: true, data };
+      }
+      const msg = (data && data.error) ? data.error : `HTTP ${res.status}${rawText ? ': ' + rawText.slice(0, 140) : ''}`;
+      return { ok: false, error: msg };
+    }
+
+    async function syncClientSites() {
+      const result = await callSitesApi({ client_id: state.client_id, action: 'sync' });
+      return result.ok;
+    }
+
+    function renderDerivedDomains() {
+      derivedDomainsList.innerHTML = '';
+      const list = clientSitesCache[state.client_id] || [];
+      const managed = list.filter(s => s.is_managed);
+      if (managed.length === 0) {
+        derivedDomainsSlot.classList.add('hidden');
+        return;
+      }
+      derivedDomainsSlot.classList.remove('hidden');
+
+      // Keep state.client_domain in sync with the primary site so the
+      // research button and other consumers know what to use.
+      const primary = list.find(s => s.is_primary);
+      if (primary) state.client_domain = primary.domain;
+
+      for (const s of managed) {
+        const wrap = document.createElement('div');
+        wrap.className = 'inline-flex items-center gap-0.5';
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        const isPrimary = s.is_primary;
+        btn.className = 'px-3 py-1.5 text-xs rounded-l-md font-mono transition-colors ' +
+          (isPrimary
+            ? 'bg-amber-500/20 border border-amber-500/60 text-amber-600'
+            : 'bg-neutral-900/60 border border-white/10 text-neutral-300 hover:border-amber-500/40 hover:text-amber-600');
+        btn.textContent = s.label || s.domain;
+        btn.title = isPrimary
+          ? `Primary research target. Click to re-run research.`
+          : `Click to make ${s.domain} the primary research target.`;
+        btn.addEventListener('click', async () => {
+          if (s.is_primary) {
+            researchBtn.click();
+            return;
+          }
+          const result = await callSitesApi({ client_id: state.client_id, action: 'set_primary', site_id: s.id });
+          if (result.ok) {
+            state.client_domain = s.domain;
+            const opt = clientSelect.selectedOptions[0];
+            if (opt) opt.dataset.domain = s.domain;
+            renderDerivedDomains();
+            refreshResearchPanel();
+          } else {
+            alert(`Could not set primary: ${result.error}`);
+          }
+        });
+        wrap.appendChild(btn);
+
+        // Small x button to unmanage (cannot remove the primary; user
+        // must promote another first).
+        if (!isPrimary) {
+          const xBtn = document.createElement('button');
+          xBtn.type = 'button';
+          xBtn.className = 'px-2 py-1.5 text-xs rounded-r-md border border-l-0 ' +
+            'bg-neutral-900/60 border-white/10 text-neutral-500 hover:bg-red-500/10 hover:border-red-500/40 hover:text-red-400 transition-colors';
+          xBtn.textContent = 'x';
+          xBtn.title = `Remove ${s.domain} from managed sites for this client`;
+          xBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!confirm(`Remove ${s.domain} from managed sites?`)) return;
+            const result = await callSitesApi({ client_id: state.client_id, action: 'toggle_managed', site_id: s.id, is_managed: false });
+            if (result.ok) {
+              renderDerivedDomains();
+              // Site count downstream: update WM site_count variable
+              // based on managed count.
+              syncWmSiteCountFromManaged();
+            } else {
+              alert(`Could not remove: ${result.error}`);
+            }
+          });
+          wrap.appendChild(xBtn);
+        }
+
+        derivedDomainsList.appendChild(wrap);
+      }
+
+      // "Add site" inline at the end of the chip row.
+      const addWrap = document.createElement('div');
+      addWrap.className = 'inline-flex items-center gap-1';
+      const addInput = document.createElement('input');
+      addInput.type = 'text';
+      addInput.placeholder = '+ add site (example.com)';
+      addInput.className = 'px-2 py-1 text-xs bg-neutral-900/40 border border-dashed border-white/10 rounded-md text-neutral-400 font-mono w-44 focus:outline-none focus:border-amber-500/40';
+      addInput.addEventListener('keydown', async (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const domain = addInput.value.trim();
+        if (!domain) return;
+        // Loading state so admin sees the request is in flight and
+        // doesn't hit Enter again thinking the keypress was ignored.
+        // Audit W13.
+        const originalPlaceholder = addInput.placeholder;
+        addInput.disabled = true;
+        addInput.placeholder = 'Adding...';
+        const result = await callSitesApi({ client_id: state.client_id, action: 'add', domain });
+        addInput.disabled = false;
+        addInput.placeholder = originalPlaceholder;
+        if (result.ok) {
+          addInput.value = '';
+          renderDerivedDomains();
+          syncWmSiteCountFromManaged();
+        } else {
+          alert(`Could not add: ${result.error}`);
+        }
+      });
+      addWrap.appendChild(addInput);
+      derivedDomainsList.appendChild(addWrap);
+    }
+
+    function syncWmSiteCountFromManaged() {
+      const list = clientSitesCache[state.client_id] || [];
+      const managedCount = list.filter(s => s.is_managed).length;
+      if (managedCount === 0) return;
+      if (!state.product_vars['web-management']) state.product_vars['web-management'] = {};
+      state.product_vars['web-management'].site_count = managedCount;
+      // If WM is currently in scope, re-render variables to reflect.
+      if (state.products.includes('web-management')) renderVars();
+    }
+
+    function refreshResearchPanel() {
+      if (!state.client_id) {
+        researchPanel.classList.add('hidden');
+        return;
+      }
+      researchPanel.classList.remove('hidden');
+      researchResults.classList.add('hidden');
+      researchResults.innerHTML = '';
+      researchStrategy.classList.add('hidden');
+      researchStrategyBody.innerHTML = '';
+      researchStatus.classList.add('hidden');
+      renderDerivedDomains();
+      if (state.client_domain) {
+        researchDomainSlot.classList.add('hidden');
+        researchBtn.disabled = false;
+        researchBtn.textContent = `Research ${state.client_name} (${state.client_domain})`;
+      } else {
+        researchDomainSlot.classList.remove('hidden');
+        researchBtn.disabled = true;
+        researchBtn.textContent = `Set domain first`;
+        researchDomainInput.value = '';
+      }
+    }
+
+    function showResearchDomainMsg(text, type) {
+      researchDomainMsg.textContent = text;
+      researchDomainMsg.className = 'text-[11px] mt-2 ' + (type === 'ok' ? 'text-emerald-400' : 'text-red-400');
+      researchDomainMsg.classList.remove('hidden');
+    }
+
+    researchDomainSave.addEventListener('click', async () => {
+      const raw = researchDomainInput.value.trim();
+      if (!raw) { showResearchDomainMsg('Enter a domain', 'error'); return; }
+      researchDomainSave.disabled = true;
+      // Two-stage error reporting (same pattern as the research call).
+      let res;
+      try {
+        res = await fetch('/portal/api/admin/clients/set-domain', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ client_id: state.client_id, domain: raw }),
+        });
+      } catch (err) {
+        showResearchDomainMsg(`Network error: ${err && err.message ? err.message : 'fetch failed'}`, 'error');
+        researchDomainSave.disabled = false;
+        return;
+      }
+      const rawText = await res.text();
+      let data = null;
+      try { data = rawText ? JSON.parse(rawText) : null; } catch {}
+      if (res.ok && data && data.ok) {
+        state.client_domain = data.domain || raw.toLowerCase();
+        const opt = clientSelect.selectedOptions[0];
+        if (opt) opt.dataset.domain = state.client_domain;
+        showResearchDomainMsg('Saved', 'ok');
+        setTimeout(refreshResearchPanel, 400);
+      } else {
+        const msg = (data && data.error)
+          ? data.error
+          : `HTTP ${res.status}${rawText ? ': ' + rawText.slice(0, 140) : ''}`;
+        showResearchDomainMsg(msg, 'error');
+      }
+      researchDomainSave.disabled = false;
+    });
+
+    researchBtn.addEventListener('click', async () => {
+      if (!state.client_id || !state.client_domain) return;
+      researchBtn.disabled = true;
+      // Loading state: spinner + skeleton cards so admin sees the
+      // call is in progress (research takes 5-15 seconds typically).
+      // Same status text still appears so the timing expectation is
+      // explicit.
+      researchStatus.innerHTML =
+        '<span class="inline-flex items-center gap-2">' +
+          '<span class="inline-block w-3 h-3 border-2 border-amber-600/40 border-t-amber-600 rounded-full animate-spin"></span>' +
+          '<span>Looking up. This usually takes 5 to 15 seconds.</span>' +
+        '</span>';
+      researchStatus.classList.remove('hidden');
+      researchResults.classList.remove('hidden');
+      // Skeleton card stand-ins for the 4 result blocks so the layout
+      // doesn't jump when results land.
+      researchResults.innerHTML =
+        '<div class="space-y-3 animate-pulse">' +
+          '<div class="h-24 bg-neutral-900/40 border border-white/5 rounded-md"></div>' +
+          '<div class="h-32 bg-neutral-900/40 border border-white/5 rounded-md"></div>' +
+          '<div class="h-20 bg-neutral-900/40 border border-white/5 rounded-md"></div>' +
+          '<div class="h-28 bg-neutral-900/40 border border-white/5 rounded-md"></div>' +
+        '</div>';
+
+      // Two-stage error reporting: the fetch itself can throw (network),
+      // and the response body may not be JSON (Cloudflare swaps 5xx
+      // bodies for HTML error pages). Surface the actual HTTP status
+      // and a short body snippet so failures are debuggable instead of
+      // collapsing to a generic "Connection error."
+      let res;
+      try {
+        res = await fetch('/portal/api/admin/proposals/ai/research', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ client_id: state.client_id }),
+        });
+      } catch (err) {
+        researchStatus.textContent = `Network error: ${err && err.message ? err.message : 'fetch failed'}. Fill manually.`;
+        researchBtn.disabled = false;
+        return;
+      }
+      const rawText = await res.text();
+      let data = null;
+      try { data = rawText ? JSON.parse(rawText) : null; } catch { /* leave as null */ }
+
+      if (res.ok && data && data.ok) {
+        state.research_result = data.result;
+        researchStatus.classList.add('hidden');
+        renderResearchResults(data.result);
+      } else {
+        // Prefer the structured error message when present; fall back
+        // to status + truncated body so the wizard surfaces what
+        // actually happened (e.g., "503 Gemini is not configured" or
+        // "504 upstream timeout").
+        const msg = (data && data.error)
+          ? data.error
+          : `HTTP ${res.status}${rawText ? ': ' + rawText.slice(0, 140) : ''}`;
+        researchStatus.textContent = `${msg} (you can fill manually).`;
+      }
+      researchBtn.disabled = false;
+    });
+
+    // Track which research findings the admin has applied. Map keyed
+    // by block label; value is the pre-apply snapshot the unapply
+    // action restores. Snapshot per block depends on what the apply
+    // touched (a product scope flag, a narrative variable, a primary
+    // domain). Per audit finding 5.
+    const appliedFindings = new Map();
+
+    // Map a numeric/string confidence value to clearer admin-facing text.
+    // The AI uses high / medium / low which is opaque without context.
+    function evidenceLabel(conf) {
+      if (conf === 'high') return 'strong evidence';
+      if (conf === 'medium') return 'some evidence';
+      if (conf === 'low') return 'weak signal';
+      return conf || '';
+    }
+
+    function renderResearchResults(r) {
+      researchResults.innerHTML = '';
+      researchResults.classList.remove('hidden');
+      const blocks = [
+        {
+          label: 'Revenue band',
+          value: r.estimated_revenue_band,
+          evidence: r.revenue_evidence,
+          confidence: r.revenue_confidence,
+          target_product_synth_id: 'marketing_consulting',
+          destination: 'Sets Marketing Consulting revenue band, routes its ecosystem',
+          apply: () => {
+            if (r.estimated_revenue_band === 'unknown') return false;
+            const beforeInScope = state.products.includes('marketing-consulting');
+            const priorRevenueBand = state.product_vars['marketing-consulting']?.revenue_band ?? null;
+            pitchProduct('marketing-consulting', { revenue_band: r.estimated_revenue_band });
+            showResearchApplyMsg(
+              beforeInScope
+                ? 'Revenue band applied to Marketing Consulting.'
+                : 'Marketing Consulting added to scope. Revenue band applied.',
+              'ok'
+            );
+            renderEngagementStrategy(r);
+            return { addedToScope: !beforeInScope, priorRevenueBand };
+          },
+          unapply: (snapshot) => {
+            // Restore the prior revenue_band value. If Apply added MC
+            // to scope (was not in scope before), remove MC entirely
+            // so the engagement returns to the pre-Apply state.
+            if (snapshot && snapshot.addedToScope) {
+              unpitchProduct('marketing-consulting');
+              showResearchApplyMsg('Marketing Consulting removed from scope (revenue band unapplied).', 'ok');
+            } else {
+              if (state.product_vars['marketing-consulting']) {
+                state.product_vars['marketing-consulting'].revenue_band = snapshot ? snapshot.priorRevenueBand : null;
+                renderVars();
+              }
+              showResearchApplyMsg('Revenue band unapplied.', 'ok');
+            }
+            renderEngagementStrategy(r);
+          },
+          disabled: r.estimated_revenue_band === 'unknown',
+        },
+        {
+          label: 'Industry',
+          value: r.inferred_industry,
+          evidence: r.industry_evidence,
+          confidence: 'high',
+          destination: 'Sets narrative tone (industry)',
+          apply: () => {
+            const sel = document.getElementById('narr_industry');
+            if (sel && r.inferred_industry !== 'unknown') {
+              const priorIndustry = state.narrative_variables.industry || '';
+              sel.value = r.inferred_industry;
+              sel.dispatchEvent(new Event('change', { bubbles: true }));
+              state.narrative_variables.industry = r.inferred_industry;
+              showResearchApplyMsg(`Industry set to ${r.inferred_industry}.`, 'ok');
+              return { priorIndustry };
+            }
+            return false;
+          },
+          unapply: (snapshot) => {
+            const sel = document.getElementById('narr_industry');
+            const prior = (snapshot && snapshot.priorIndustry) || '';
+            if (sel) {
+              sel.value = prior;
+              sel.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            state.narrative_variables.industry = prior || undefined;
+            showResearchApplyMsg('Industry unapplied.', 'ok');
+          },
+          disabled: r.inferred_industry === 'unknown',
+        },
+        {
+          label: 'Urgency',
+          value: r.inferred_urgency,
+          evidence: r.urgency_evidence,
+          confidence: 'high',
+          destination: 'Sets narrative cadence (urgency)',
+          apply: () => {
+            const sel = document.getElementById('narr_urgency');
+            if (sel && r.inferred_urgency !== 'unknown') {
+              const priorUrgency = state.narrative_variables.urgency || '';
+              sel.value = r.inferred_urgency;
+              sel.dispatchEvent(new Event('change', { bubbles: true }));
+              state.narrative_variables.urgency = r.inferred_urgency;
+              showResearchApplyMsg(`Urgency set to ${r.inferred_urgency}.`, 'ok');
+              return { priorUrgency };
+            }
+            return false;
+          },
+          unapply: (snapshot) => {
+            const sel = document.getElementById('narr_urgency');
+            const prior = (snapshot && snapshot.priorUrgency) || '';
+            if (sel) {
+              sel.value = prior;
+              sel.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            state.narrative_variables.urgency = prior || undefined;
+            showResearchApplyMsg('Urgency unapplied.', 'ok');
+          },
+          disabled: r.inferred_urgency === 'unknown',
+        },
+        {
+          label: 'Focus',
+          value: (r.inferred_focus || []).join(', ') || '(none)',
+          evidence: '',
+          confidence: 'medium',
+          destination: 'Sets narrative focus tags (brand / takeover / search / pre-sell)',
+          apply: () => {
+            const sel = document.getElementById('narr_focus');
+            if (sel && Array.isArray(r.inferred_focus) && r.inferred_focus.length > 0) {
+              const priorFocus = Array.isArray(state.narrative_variables.focus)
+                ? [...state.narrative_variables.focus]
+                : [];
+              Array.from(sel.options).forEach(o => { o.selected = r.inferred_focus.includes(o.value); });
+              sel.dispatchEvent(new Event('change', { bubbles: true }));
+              state.narrative_variables.focus = r.inferred_focus.length ? r.inferred_focus : undefined;
+              showResearchApplyMsg(`Focus tags set: ${r.inferred_focus.join(', ')}.`, 'ok');
+              return { priorFocus };
+            }
+            return false;
+          },
+          unapply: (snapshot) => {
+            const sel = document.getElementById('narr_focus');
+            const prior = (snapshot && Array.isArray(snapshot.priorFocus)) ? snapshot.priorFocus : [];
+            if (sel) {
+              Array.from(sel.options).forEach(o => { o.selected = prior.includes(o.value); });
+              sel.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            state.narrative_variables.focus = prior.length ? prior : undefined;
+            showResearchApplyMsg('Focus tags unapplied.', 'ok');
+          },
+          disabled: !r.inferred_focus || r.inferred_focus.length === 0,
+        },
+        {
+          label: 'CMS detected',
+          value: r.detected_cms || 'unknown',
+          evidence: r.cms_evidence || '',
+          confidence: r.detected_cms && r.detected_cms !== 'unknown' ? 'high' : 'low',
+          destination: 'Informational only (no wizard mapping yet)',
+          apply: () => {
+            showResearchApplyMsg(`CMS noted as ${r.detected_cms}. Informational, no wizard variable to update.`, 'ok');
+            return {}; // empty snapshot — nothing to unapply other than the badge
+          },
+          unapply: () => {
+            showResearchApplyMsg('CMS marker cleared.', 'ok');
+          },
+          disabled: !r.detected_cms || r.detected_cms === 'unknown',
+        },
+        {
+          label: 'Page count',
+          value: r.estimated_page_count == null ? '(unknown)' : String(r.estimated_page_count),
+          evidence: r.page_count_source,
+          confidence: 'medium',
+          target_product_synth_id: 'web_management',
+          destination: 'Sets Web Management page count, routes its ecosystem',
+          apply: () => {
+            if (r.estimated_page_count == null) return false;
+            const beforeInScope = state.products.includes('web-management');
+            const priorVars = beforeInScope
+              ? { ...(state.product_vars['web-management'] || {}) }
+              : null;
+            pitchProduct('web-management', seedsForProductFromResearch('web-management', r));
+            showResearchApplyMsg(
+              beforeInScope
+                ? 'Page count applied to Web Management.'
+                : 'Web Management added to scope. Page count applied.',
+              'ok'
+            );
+            renderEngagementStrategy(r);
+            return { addedToScope: !beforeInScope, priorVars };
+          },
+          unapply: (snapshot) => {
+            if (snapshot && snapshot.addedToScope) {
+              unpitchProduct('web-management');
+              showResearchApplyMsg('Web Management removed from scope (page count unapplied).', 'ok');
+            } else if (state.product_vars['web-management'] && snapshot && snapshot.priorVars) {
+              state.product_vars['web-management'] = { ...snapshot.priorVars };
+              renderVars();
+              showResearchApplyMsg('Page count unapplied.', 'ok');
+            }
+            renderEngagementStrategy(r);
+          },
+          disabled: r.estimated_page_count == null,
+        },
+        // Primary domain detected. Renamed from "Domains found" so the
+        // Apply scope is explicit: this card sets the primary domain
+        // ONLY. Non-primary domains are surfaced separately below the
+        // blocks loop as "we found these too, confirm which are
+        // yours." Audit 2026-05-25 domain-attribution review.
+        {
+          label: 'Primary domain detected',
+          value: (() => {
+            const primary = (r.domains_found || []).find(d => d.role_guess === 'primary');
+            return primary ? primary.domain : '(none)';
+          })(),
+          evidence: (() => {
+            const primary = (r.domains_found || []).find(d => d.role_guess === 'primary');
+            return primary && primary.evidence ? primary.evidence : '';
+          })(),
+          confidence: (() => {
+            const primary = (r.domains_found || []).find(d => d.role_guess === 'primary');
+            return primary ? primary.confidence : 'low';
+          })(),
+          destination: 'Sets the client’s primary domain',
+          applyLabel: 'Set as primary domain',
+          apply: () => {
+            const primary = (r.domains_found || []).find(d => d.role_guess === 'primary');
+            if (!primary || !primary.domain) {
+              showResearchApplyMsg('No primary domain in the result to apply.', 'error');
+              return false;
+            }
+            if (primary.domain === state.client_domain) {
+              showResearchApplyMsg(`Primary domain already set to ${primary.domain}.`, 'ok');
+              return { priorDomain: state.client_domain, changed: false };
+            }
+            if (confirm(`Set client domain to ${primary.domain}?`)) {
+              const priorDomain = state.client_domain || '';
+              researchDomainInput.value = primary.domain;
+              researchDomainSave.click();
+              showResearchApplyMsg(`Primary domain set to ${primary.domain}.`, 'ok');
+              return { priorDomain, changed: true };
+            }
+            return false;
+          },
+          unapply: (snapshot) => {
+            if (snapshot && snapshot.changed && snapshot.priorDomain) {
+              showResearchApplyMsg(
+                `Domain was changed to ${state.client_domain} server-side. To revert to ${snapshot.priorDomain}, edit the chip above.`,
+                'ok'
+              );
+            } else {
+              showResearchApplyMsg('Primary domain marker cleared.', 'ok');
+            }
+          },
+          disabled: !(r.domains_found || []).some(d => d.role_guess === 'primary'),
+        },
+      ];
+      for (const b of blocks) {
+        const isApplied = appliedFindings.has(b.label);
+        const snapshot = appliedFindings.get(b.label);
+        const row = document.createElement('div');
+        // Applied row gets a left amber border accent + a subtle amber-tinted
+        // background to make the applied state unmistakable on first glance.
+        row.className = isApplied
+          ? 'p-3 bg-amber-500/5 border border-amber-500/30 border-l-4 border-l-amber-600 rounded-md flex items-start justify-between gap-3'
+          : 'p-3 bg-neutral-900/40 border border-white/5 rounded-md flex items-start justify-between gap-3';
+        const meta = document.createElement('div');
+        meta.className = 'flex-1 min-w-0';
+        // Evidence-strength chip in plain language. "strong / some / weak"
+        // is admin-readable; raw high/medium/low needs translation.
+        const confText = evidenceLabel(b.confidence);
+        const confPill = confText
+          ? `<span class="text-[9px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded bg-neutral-900/60 border border-white/10 text-neutral-500">${escapeHtml(confText)}</span>`
+          : '';
+        // Target-product pill: only on findings that drive product variables.
+        let targetPill = '';
+        if (b.target_product_synth_id && r.recommended_product_mix && r.recommended_product_mix[b.target_product_synth_id]) {
+          const slot = r.recommended_product_mix[b.target_product_synth_id];
+          const wizardId = SYNTH_TO_WIZARD_ID[b.target_product_synth_id];
+          const label = wizardId ? PRODUCT_SHORT_LABELS[wizardId] : b.target_product_synth_id;
+          targetPill = slot.recommended
+            ? `<span class="text-[9px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-600">${escapeHtml(label)}: pitch</span>`
+            : `<span class="text-[9px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded bg-neutral-900 border border-white/10 text-neutral-400">${escapeHtml(label)}: skip</span>`;
+        }
+        const appliedBadge = isApplied
+          ? `<span class="text-[9px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/50 text-amber-600">✓ applied</span>`
+          : '';
+        meta.innerHTML = `
+          <div class="flex items-center gap-2 flex-wrap">
+            <p class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase">${escapeHtml(b.label)}</p>
+            ${confPill}
+            ${targetPill}
+            ${appliedBadge}
+          </div>
+          <p class="text-sm text-neutral-100 mt-1.5">${escapeHtml(String(b.value))}</p>
+          ${b.evidence ? `<p class="text-[11px] text-neutral-400 mt-1 leading-relaxed">${escapeHtml(b.evidence)}</p>` : ''}
+          ${b.destination ? `<p class="text-[11px] text-neutral-500 mt-2 leading-relaxed">↳ ${escapeHtml(b.destination)}</p>` : ''}
+        `;
+        // Action button. Three states:
+        //   disabled: no value to apply (e.g., "unknown" / empty)
+        //   not applied: primary amber Apply button
+        //   applied: ghost Unapply button (border + amber text) that
+        //     reverts via b.unapply(snapshot)
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        // Per-block override of the Apply button label. Currently
+        // used by the "Primary domain detected" card to read "Set as
+        // primary domain" instead of generic "Apply" so admin sees
+        // exactly what gets changed.
+        const applyLabel = b.applyLabel || 'Apply';
+        if (b.disabled) {
+          btn.className = 'px-3 py-2 text-xs rounded-md bg-neutral-900 border border-white/5 text-neutral-600 cursor-not-allowed';
+          btn.textContent = applyLabel;
+          btn.disabled = true;
+        } else if (isApplied) {
+          btn.className = 'px-3 py-2 text-xs rounded-md bg-amber-500/10 border border-amber-500/40 text-amber-700 hover:bg-amber-500/20 transition-colors';
+          btn.innerHTML = 'Unapply';
+          btn.title = 'Revert this finding to its pre-apply state';
+          btn.addEventListener('click', () => {
+            if (typeof b.unapply === 'function') {
+              b.unapply(snapshot);
+            }
+            appliedFindings.delete(b.label);
+            renderResearchResults(r);
+          });
+        } else {
+          btn.className = 'px-3 py-2 text-xs rounded-md bg-amber-500 text-neutral-950 font-semibold hover:bg-amber-400 transition-colors';
+          btn.textContent = applyLabel;
+          btn.addEventListener('click', () => {
+            // apply() returns false on no-op, true/object snapshot on success.
+            const result = b.apply();
+            if (result === false) return;
+            // Object result IS the snapshot; bare true means "no snapshot needed."
+            const snap = typeof result === 'object' && result !== null ? result : {};
+            appliedFindings.set(b.label, snap);
+            renderResearchResults(r);
+          });
+        }
+        row.appendChild(meta);
+        row.appendChild(btn);
+        researchResults.appendChild(row);
+      }
+
+      // Related domains (non-primary). Per-domain confirm/skip pattern
+      // so admin explicitly accepts each entry instead of trusting a
+      // bulk attribution. Audit 2026-05-25 domain-attribution review.
+      const otherDomains = (r.domains_found || []).filter(d => d.role_guess !== 'primary');
+      if (otherDomains.length > 0) {
+        const wrap = document.createElement('div');
+        wrap.className = 'mt-3 p-3 bg-neutral-900/40 border border-white/5 rounded-md';
+        const header = document.createElement('p');
+        header.className = 'text-[10px] font-mono text-neutral-500 uppercase tracking-wide mb-2';
+        header.textContent = 'We also found these — confirm which are yours';
+        wrap.appendChild(header);
+        const helper = document.createElement('p');
+        helper.className = 'text-[11px] text-neutral-400 mb-3 leading-relaxed';
+        helper.textContent = 'These domains showed up alongside the primary site during research. The AI is guessing they belong to the same business. Confirm to add a managed-site row, skip to dismiss, mark not ours to flag in the audit log.';
+        wrap.appendChild(helper);
+
+        otherDomains.forEach((d, idx) => {
+          if (!d || !d.domain) return;
+          const item = document.createElement('div');
+          item.className = 'py-2.5 border-t border-white/5 first:border-0 first:pt-0';
+          item.setAttribute('data-related-domain', d.domain);
+
+          const top = document.createElement('div');
+          top.className = 'flex items-center justify-between gap-3 flex-wrap';
+          const left = document.createElement('div');
+          left.className = 'min-w-0';
+          const domainEl = document.createElement('p');
+          domainEl.className = 'text-sm font-mono text-neutral-200';
+          domainEl.textContent = d.domain;
+          left.appendChild(domainEl);
+          const meta2 = document.createElement('p');
+          meta2.className = 'text-[10px] font-mono text-neutral-500 uppercase tracking-wide mt-1';
+          meta2.textContent = `${(d.role_guess || 'other').replace(/-/g, ' ')} · confidence ${d.confidence || 'low'}`;
+          left.appendChild(meta2);
+          top.appendChild(left);
+
+          const actions = document.createElement('div');
+          actions.className = 'flex items-center gap-2 shrink-0';
+          const confirmBtn = document.createElement('button');
+          confirmBtn.type = 'button';
+          confirmBtn.className = 'text-[11px] px-3 py-1 bg-amber-500 text-neutral-950 font-medium rounded hover:bg-amber-400 transition-colors';
+          confirmBtn.textContent = 'Confirm as a managed site';
+          confirmBtn.addEventListener('click', async () => {
+            if (!confirm(`Add ${d.domain} as a managed site for ${state.client_name || 'this client'}?`)) return;
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Adding...';
+            const result = await callSitesApi({ client_id: state.client_id, action: 'add', domain: d.domain });
+            if (result.ok) {
+              item.classList.add('opacity-50');
+              actions.innerHTML = '<span class="text-[11px] text-emerald-400 font-mono">Added</span>';
+              if (typeof renderDerivedDomains === 'function') renderDerivedDomains();
+            } else {
+              confirmBtn.disabled = false;
+              confirmBtn.textContent = 'Confirm as a managed site';
+              showResearchApplyMsg('Could not add: ' + (result.error || 'unknown error'), 'error');
+            }
+          });
+          actions.appendChild(confirmBtn);
+
+          const skipBtn = document.createElement('button');
+          skipBtn.type = 'button';
+          skipBtn.className = 'text-[11px] px-2 py-1 text-neutral-400 hover:text-neutral-200 transition-colors';
+          skipBtn.textContent = 'Skip';
+          skipBtn.addEventListener('click', () => {
+            item.remove();
+            // If we just removed the last related-domain row, also
+            // remove the wrapper so the section disappears cleanly.
+            if (wrap.querySelectorAll('[data-related-domain]').length === 0) {
+              wrap.remove();
+            }
+          });
+          actions.appendChild(skipBtn);
+
+          const notOursBtn = document.createElement('button');
+          notOursBtn.type = 'button';
+          notOursBtn.className = 'text-[11px] px-2 py-1 text-neutral-400 hover:text-red-400 transition-colors';
+          notOursBtn.textContent = 'Not ours';
+          notOursBtn.addEventListener('click', () => {
+            item.classList.add('opacity-50');
+            actions.innerHTML = '<span class="text-[11px] text-red-400 font-mono">Flagged not ours</span>';
+            // Persistence of the "not ours" flag is a v2 feature
+            // (would need a rejected_domains table to de-prioritize
+            // on future research calls). For now this only hides the
+            // entry from the current panel + acts as a visual record
+            // for the admin during this session.
+          });
+          actions.appendChild(notOursBtn);
+
+          top.appendChild(actions);
+          item.appendChild(top);
+
+          if (d.evidence) {
+            const ev = document.createElement('p');
+            ev.className = 'text-[11px] text-neutral-400 mt-2 leading-relaxed italic';
+            ev.textContent = `Evidence: ${d.evidence}`;
+            item.appendChild(ev);
+          } else {
+            const noEv = document.createElement('p');
+            noEv.className = 'text-[11px] text-amber-700 mt-2';
+            noEv.textContent = 'No source evidence cited. Verify before confirming.';
+            item.appendChild(noEv);
+          }
+
+          wrap.appendChild(item);
+        });
+        researchResults.appendChild(wrap);
+      }
+
+      if (r.notes) {
+        const notes = document.createElement('p');
+        // Notes are a genuine callout (AI's parenthetical observations).
+        // In the portal-editorial cream theme, amber-600 reads as darker
+        // terracotta (#a86749) - the right "sun" on cream paper. The
+        // amber-500/10 background + amber-500/30 border give it weight
+        // as a callout block (mountain) without overwhelming.
+        notes.className = 'text-[11px] text-amber-600 mt-3 leading-relaxed bg-amber-500/10 border border-amber-500/30 rounded p-2.5';
+        notes.textContent = 'Notes: ' + r.notes;
+        researchResults.appendChild(notes);
+      }
+      renderEngagementStrategy(r);
+    }
+
+    // -----------------------------------------------------------------
+    // Engagement-strategy synthesis panel (admin-only).
+    //
+    // The six synthesis fields the research call now returns:
+    //   recommended_product_mix       -- which of WM/MC/Build/Training
+    //   recommended_tier_per_product  -- good/better/best per recommended
+    //   clv_horizon                   -- long-term-stable | medium-term | churn-risk | unknown
+    //   cody_time_intensity           -- low | medium | high
+    //   sales_angles[]                -- short phrases each with evidence
+    //   risk_signals[]                -- sponsor/decision/velocity warnings
+    //
+    // No Apply buttons here. Each is a briefing card with rationale.
+    // -----------------------------------------------------------------
+    const PRODUCT_LABELS = {
+      web_management: 'Web Management',
+      marketing_consulting: 'Marketing Consulting',
+      build: 'Build',
+      training: 'Training',
+    };
+    // Engagement-strategy panel render.
+    //
+    // Design decisions, tied to Cody's persona quiz picks:
+    //   sun     -> saturated amber-400/500 accents at full opacity, never
+    //              pale amber-200 on dark. Matches the portal's active-nav
+    //              pattern: bg-amber-500/10 border border-amber-500/40
+    //              text-amber-600.
+    //   mountain-> visible weight differences between primary (text-neutral-100)
+    //              and secondary (text-neutral-400 rationale) and tertiary
+    //              (text-neutral-500 evidence). Action buttons use solid
+    //              amber-500 (the portal's primary-button pattern) for
+    //              real visual weight.
+    //   spring  -> generous row padding (py-4), gap-y between cards (space-y-5),
+    //              white space inside each card (p-4).
+    //   clouds  -> one signal per row: one pitch/skip pill, one action button,
+    //              no stacked confidence + scope + tier pills.
+    function renderEngagementStrategy(r) {
+      researchStrategyBody.innerHTML = '';
+      const mix = r && r.recommended_product_mix;
+      const tiers = (r && r.recommended_tier_per_product) || {};
+      const clv = r && r.clv_horizon;
+      const intensity = r && r.cody_time_intensity;
+      const angles = (r && r.sales_angles) || [];
+      const gaps = (r && r.internal_gaps) || [];
+      const risks = (r && r.risk_signals) || [];
+      const haveAny = mix || clv || intensity || angles.length || gaps.length || risks.length;
+      if (!haveAny) {
+        researchStrategy.classList.add('hidden');
+        return;
+      }
+      researchStrategy.classList.remove('hidden');
+      researchStrategyBody.className = 'space-y-5';
+
+      // -------------------------------------------------------------
+      // Recommended product mix. Each product is a row with ONE action
+      // button. Pitch in scope = "In scope" (no action). Pitch not in
+      // scope = "Pitch X" primary button. Skip not in scope = no button
+      // (matches AI). Skip in scope = "Remove" subtle button.
+      // -------------------------------------------------------------
+      if (mix) {
+        const card = document.createElement('div');
+        card.className = 'p-4 bg-neutral-900/40 border border-white/5 rounded-md';
+
+        const header = document.createElement('p');
+        header.className = 'text-[10px] font-mono text-neutral-500 tracking-wide uppercase mb-4';
+        header.textContent = 'Recommended product mix';
+        card.appendChild(header);
+
+        const synthIds = ['web_management', 'marketing_consulting', 'build', 'training'];
+        for (const synthId of synthIds) {
+          const slot = mix[synthId];
+          if (!slot) continue;
+          const wizardId = SYNTH_TO_WIZARD_ID[synthId];
+          const tier = tiers[synthId];
+          const inScope = state.products.includes(wizardId);
+          const isPitch = !!slot.recommended;
+
+          const row = document.createElement('div');
+          row.className = 'py-4 border-b border-white/5 last:border-0 last:pb-0 first:pt-0';
+
+          const topRow = document.createElement('div');
+          topRow.className = 'flex items-center justify-between gap-4';
+
+          const nameAndStatus = document.createElement('div');
+          nameAndStatus.className = 'flex items-baseline gap-3 min-w-0';
+          // ONE pill per row (clouds). Pill carries the verdict. Tier
+          // hint and confidence move below as text, not stacked pills.
+          const pill = inScope
+            ? `<span class="text-[10px] font-mono uppercase tracking-wide px-2 py-1 rounded bg-amber-500/10 border border-amber-500/40 text-amber-600">In scope</span>`
+            : isPitch
+              ? `<span class="text-[10px] font-mono uppercase tracking-wide px-2 py-1 rounded bg-amber-500/10 border border-amber-500/40 text-amber-600">Pitch</span>`
+              : `<span class="text-[10px] font-mono uppercase tracking-wide px-2 py-1 rounded bg-neutral-900 border border-white/10 text-neutral-400">Skip</span>`;
+          nameAndStatus.innerHTML = `
+            <p class="text-base text-neutral-100 font-medium">${escapeHtml(PRODUCT_LABELS[synthId] || synthId)}</p>
+            ${pill}
+          `;
+          topRow.appendChild(nameAndStatus);
+
+          // ONE action button (clouds simplicity). Primary uses the
+          // portal's solid amber-500 button pattern (sun).
+          const actionWrap = document.createElement('div');
+          actionWrap.className = 'shrink-0';
+          if (inScope && isPitch) {
+            actionWrap.innerHTML = `<span class="text-xs text-neutral-500">already in scope</span>`;
+          } else if (inScope && !isPitch) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'text-xs px-3 py-1.5 rounded text-neutral-400 hover:text-red-400 transition-colors';
+            btn.textContent = 'Remove';
+            btn.addEventListener('click', () => {
+              unpitchProduct(wizardId);
+              showResearchApplyMsg(`${PRODUCT_SHORT_LABELS[wizardId]} removed from scope.`, 'ok');
+              renderEngagementStrategy(r);
+            });
+            actionWrap.appendChild(btn);
+          } else if (isPitch) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'text-xs px-4 py-2 rounded-lg bg-amber-500 text-neutral-950 font-semibold hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.2)]';
+            btn.textContent = `Pitch ${PRODUCT_SHORT_LABELS[wizardId]}`;
+            btn.addEventListener('click', () => {
+              const seeds = seedsForProductFromResearch(wizardId, r);
+              pitchProduct(wizardId, seeds);
+              const seedNote = Object.keys(seeds).length > 0
+                ? `, variables filled from research (${Object.keys(seeds).join(', ')})`
+                : '';
+              showResearchApplyMsg(`${PRODUCT_SHORT_LABELS[wizardId]} added to scope${seedNote}.`, 'ok');
+              renderEngagementStrategy(r);
+            });
+            actionWrap.appendChild(btn);
+          } else {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'text-xs px-3 py-1.5 rounded text-neutral-400 hover:text-amber-600 transition-colors';
+            btn.textContent = 'Pitch anyway';
+            btn.addEventListener('click', () => {
+              const seeds = seedsForProductFromResearch(wizardId, r);
+              pitchProduct(wizardId, seeds);
+              showResearchApplyMsg(`${PRODUCT_SHORT_LABELS[wizardId]} added to scope (overriding AI skip).`, 'ok');
+              renderEngagementStrategy(r);
+            });
+            actionWrap.appendChild(btn);
+          }
+          topRow.appendChild(actionWrap);
+          row.appendChild(topRow);
+
+          // Rationale + tier hint as text (no stacked pills). Mountain
+          // hierarchy: primary heading above is bright (neutral-100);
+          // rationale here is mid-tone (neutral-400); tier hint amber-400
+          // saturated.
+          if (slot.rationale) {
+            const p = document.createElement('p');
+            p.className = 'text-xs text-neutral-400 mt-2 leading-relaxed';
+            p.textContent = slot.rationale;
+            row.appendChild(p);
+          }
+          if (slot.confidence) {
+            const p = document.createElement('p');
+            p.className = 'text-[10px] font-mono text-neutral-500 mt-1 uppercase tracking-wide';
+            p.textContent = `Confidence: ${slot.confidence}`;
+            row.appendChild(p);
+          }
+          if (tier) {
+            const p = document.createElement('p');
+            p.className = 'text-xs text-amber-600 mt-2 leading-relaxed';
+            p.textContent = `Tier hint: ${tier.tier}${tier.rationale ? '. ' + tier.rationale : ''}`;
+            row.appendChild(p);
+          }
+
+          // Tier-override picker (audit Finding 3 UI). Only renders when
+          // the product is IN SCOPE and the product supports tier picks.
+          // Build doesn't use tiers; Training only has one option. Skip
+          // those. Dropdown defaults to the effective tier: explicit
+          // override beats AI rec beats static product default.
+          if (inScope && (wizardId === 'web-management' || wizardId === 'marketing-consulting')) {
+            const STATIC_DEFAULT_TIER = 'better';
+            const override = state.tier_overrides[wizardId];
+            const aiTier = tier ? tier.tier : null;
+            const effectiveTier = override || aiTier || STATIC_DEFAULT_TIER;
+
+            const wrap = document.createElement('div');
+            wrap.className = 'mt-3 flex flex-wrap items-center gap-2';
+
+            const label = document.createElement('span');
+            label.className = 'text-[11px] font-mono text-neutral-400 uppercase tracking-wide';
+            label.textContent = 'Set recommended tier:';
+            wrap.appendChild(label);
+
+            const select = document.createElement('select');
+            select.className = 'text-xs bg-neutral-900/50 border border-white/10 rounded px-2 py-1 text-neutral-200 focus:outline-none focus:border-amber-500/40';
+            for (const tierId of ['good', 'better', 'best']) {
+              const opt = document.createElement('option');
+              opt.value = tierId;
+              const note = tierId === aiTier ? ' (AI rec)'
+                : tierId === STATIC_DEFAULT_TIER && !aiTier ? ' (default)'
+                : '';
+              opt.textContent = tierId.charAt(0).toUpperCase() + tierId.slice(1) + note;
+              if (tierId === effectiveTier) opt.selected = true;
+              select.appendChild(opt);
+            }
+            select.addEventListener('change', () => {
+              const picked = select.value;
+              const matchesDefault = picked === (aiTier || STATIC_DEFAULT_TIER);
+              if (matchesDefault) {
+                delete state.tier_overrides[wizardId];
+              } else {
+                state.tier_overrides[wizardId] = picked;
+              }
+            });
+            wrap.appendChild(select);
+
+            const sourceTag = document.createElement('span');
+            sourceTag.className = 'text-[10px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded';
+            const source = override ? 'admin override'
+              : aiTier ? 'from AI rec'
+              : 'product default';
+            sourceTag.textContent = source;
+            sourceTag.classList.add(
+              override ? 'bg-amber-500/10' : 'bg-neutral-900',
+              override ? 'border' : 'border',
+              override ? 'border-amber-500/40' : 'border-white/10',
+              override ? 'text-amber-600' : 'text-neutral-500',
+            );
+            wrap.appendChild(sourceTag);
+
+            row.appendChild(wrap);
+          }
+
+          card.appendChild(row);
+        }
+        researchStrategyBody.appendChild(card);
+      }
+
+      // -------------------------------------------------------------
+      // CLV + time-intensity row.
+      // -------------------------------------------------------------
+      if (clv || intensity) {
+        const card = document.createElement('div');
+        card.className = 'p-4 bg-neutral-900/40 border border-white/5 rounded-md grid grid-cols-1 sm:grid-cols-2 gap-5';
+        const clvBlock = clv ? `
+          <div>
+            <p class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase mb-2">CLV horizon</p>
+            <p class="text-base text-neutral-100">${escapeHtml(clv.signal)}</p>
+            ${clv.rationale ? `<p class="text-xs text-neutral-400 mt-2 leading-relaxed">${escapeHtml(clv.rationale)}</p>` : ''}
+          </div>` : '<div></div>';
+        const intBlock = intensity ? `
+          <div>
+            <p class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase mb-2">Cody time intensity</p>
+            <p class="text-base text-neutral-100">${escapeHtml(intensity.level)}</p>
+            ${intensity.rationale ? `<p class="text-xs text-neutral-400 mt-2 leading-relaxed">${escapeHtml(intensity.rationale)}</p>` : ''}
+          </div>` : '<div></div>';
+        card.innerHTML = clvBlock + intBlock;
+        researchStrategyBody.appendChild(card);
+      }
+
+      // -------------------------------------------------------------
+      // How they describe themselves (the prospect's customer-facing
+      // pitch). Per finding 2 in the audit: this is NOT my pitch to
+      // them; it is THEIR pitch to their own customers. The proposal
+      // opener echoes these back so they feel understood. They are
+      // also starting points for which of my products amplifies each
+      // stated value.
+      // -------------------------------------------------------------
+      if (angles.length) {
+        const card = document.createElement('div');
+        card.className = 'p-4 bg-neutral-900/40 border border-white/5 rounded-md';
+        const PRODUCT_IMPL_LABELS = {
+          web_management: 'WM amplifies this',
+          marketing_consulting: 'MC sharpens this',
+          build: 'Build can foreground this',
+          training: 'Training keeps this sharp',
+          none: 'no clear product fit',
+        };
+        const items = angles.map(a => {
+          const impl = a.product_implication && PRODUCT_IMPL_LABELS[a.product_implication]
+            ? `<span class="text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-700 shrink-0 ml-2">${escapeHtml(PRODUCT_IMPL_LABELS[a.product_implication])}</span>`
+            : '';
+          return `
+            <div class="py-3 border-b border-white/5 last:border-0 last:pb-0 first:pt-0">
+              <div class="flex items-baseline justify-between gap-3 flex-wrap">
+                <p class="text-sm text-neutral-100 leading-relaxed flex-1 min-w-0">${escapeHtml(a.angle)}</p>
+                ${impl}
+              </div>
+              ${a.supporting_evidence ? `<p class="text-[11px] text-neutral-500 mt-1 leading-relaxed">${escapeHtml(a.supporting_evidence)}</p>` : ''}
+            </div>`;
+        }).join('');
+        card.innerHTML = `
+          <p class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase mb-1">How they describe themselves to their customers</p>
+          <p class="text-[11px] text-neutral-400 mb-3 leading-relaxed">Their value props, in their own language. Echoed in the proposal opener. Each angle is tagged with the product that amplifies or supports it, so the connection from their pitch to mine is explicit.</p>
+          ${items}
+        `;
+        researchStrategyBody.appendChild(card);
+      }
+
+      // -------------------------------------------------------------
+      // Internal gaps — what is broken or under-served. Distinct from
+      // the angles above (which is their pitch). Each gap maps to one
+      // of my products that could fix it. Per audit finding 2C.
+      // -------------------------------------------------------------
+      if (gaps.length) {
+        const card = document.createElement('div');
+        card.className = 'p-4 bg-neutral-900/40 border border-white/5 rounded-md';
+        const sevPill = (sev) => {
+          if (sev === 'high') return 'bg-red-500/10 border border-red-500/40 text-red-700';
+          if (sev === 'medium') return 'bg-amber-500/10 border border-amber-500/40 text-amber-700';
+          return 'bg-neutral-900 border border-white/10 text-neutral-500';
+        };
+        const PRODUCT_IMPL_LABELS = {
+          web_management: 'WM',
+          marketing_consulting: 'MC',
+          build: 'Build',
+          training: 'Training',
+          none: 'no product',
+        };
+        const items = gaps.map(g => {
+          const sev = `<span class="text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded ${sevPill(g.severity)} shrink-0">${escapeHtml(g.severity)}</span>`;
+          const impl = g.product_implication && PRODUCT_IMPL_LABELS[g.product_implication]
+            ? `<span class="text-[10px] font-mono uppercase tracking-wide px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/40 text-amber-700 shrink-0">${escapeHtml(PRODUCT_IMPL_LABELS[g.product_implication])} fixes this</span>`
+            : '';
+          return `
+            <div class="py-3 border-b border-white/5 last:border-0 last:pb-0 first:pt-0">
+              <div class="flex items-baseline justify-between gap-3 flex-wrap">
+                <p class="text-sm text-neutral-100 leading-relaxed flex-1 min-w-0">${escapeHtml(g.gap)}</p>
+                <div class="flex items-baseline gap-2 shrink-0">${sev}${impl}</div>
+              </div>
+              ${g.evidence ? `<p class="text-[11px] text-neutral-500 mt-1 leading-relaxed">${escapeHtml(g.evidence)}</p>` : ''}
+            </div>`;
+        }).join('');
+        card.innerHTML = `
+          <p class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase mb-1">What is broken or under-served</p>
+          <p class="text-[11px] text-neutral-400 mb-3 leading-relaxed">Concrete things I can fix. What they have NOT said out loud but the data reveals. Each maps to a product.</p>
+          ${items}
+        `;
+        researchStrategyBody.appendChild(card);
+      }
+
+      // -------------------------------------------------------------
+      // Risk signals. Severity uses saturated colors at full opacity.
+      // -------------------------------------------------------------
+      if (risks.length) {
+        const card = document.createElement('div');
+        card.className = 'p-4 bg-neutral-900/40 border border-white/5 rounded-md';
+        const sevPill = (sev) => {
+          if (sev === 'high') return 'bg-red-500/10 border border-red-500/40 text-red-400';
+          if (sev === 'medium') return 'bg-amber-500/10 border border-amber-500/40 text-amber-600';
+          return 'bg-neutral-900 border border-white/10 text-neutral-400';
+        };
+        const items = risks.map(rs => `
+          <div class="py-3 border-b border-white/5 last:border-0 last:pb-0 first:pt-0 flex items-center justify-between gap-4">
+            <p class="text-sm text-neutral-100 leading-relaxed">${escapeHtml(rs.risk)}</p>
+            <span class="text-[10px] font-mono uppercase tracking-wide px-2 py-1 rounded ${sevPill(rs.severity)} shrink-0">${escapeHtml(rs.severity)}</span>
+          </div>`).join('');
+        card.innerHTML = `
+          <p class="text-[10px] font-mono text-neutral-500 tracking-wide uppercase mb-3">Risk signals</p>
+          ${items}
+        `;
+        researchStrategyBody.appendChild(card);
+      }
+    }
+
+    // Re-render the strategy panel when product picks change anywhere
+    // (checkbox toggle, pitch button, remove button, research apply).
+    // Keeps the action-button state in sync with state.products.
+    productPicks.forEach(box => {
+      box.addEventListener('change', () => {
+        if (state.research_result) renderEngagementStrategy(state.research_result);
+      });
+    });
+
+    function showResearchApplyMsg(text, type) {
+      // Inline (in-panel) status for accessibility and context near the
+      // research button. The viewport-anchored confirmation comes from
+      // the shared portal Toast (window.__toast in components/portal/Toast.astro)
+      // which auto-positions bottom-right and dismisses after 4s.
+      researchStatus.textContent = text;
+      researchStatus.className = 'mt-3 text-[11px] ' + (type === 'ok' ? 'text-emerald-700' : 'text-red-700');
+      researchStatus.classList.remove('hidden');
+      setTimeout(() => researchStatus.classList.add('hidden'), 4000);
+      if (typeof window.__toast === 'function') {
+        window.__toast(text, type === 'ok' ? 'success' : 'error');
+      }
+    }
+  </script>
+</Portal>

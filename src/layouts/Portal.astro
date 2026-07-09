@@ -3,6 +3,8 @@ import '../styles/global.css';
 import '../styles/portal.css';
 import ConfirmModal from '../components/portal/ConfirmModal.astro';
 import Toast from '../components/portal/Toast.astro';
+import turso from '../lib/turso';
+import { getUnreadCount } from '../lib/notifications';
 
 export const prerender = false;
 
@@ -14,6 +16,35 @@ const { title } = Astro.props;
 const user = Astro.locals.user;
 const csrfToken = Astro.locals.csrfToken || '';
 const currentPath = Astro.url.pathname;
+
+// Resolve which proposals the current user should see in the sidebar.
+// Client users see every proposal their client_id owns; admin sees
+// every proposal in the system. Queried per request so adding a new
+// proposal needs no code change.
+let proposalItems: Array<{ href: string; label: string }> = [];
+if (user?.role === 'admin') {
+  try {
+    const res = await turso.execute({
+      sql: `SELECT slug, title FROM proposals ORDER BY created_at DESC LIMIT 20`,
+      args: [],
+    });
+    proposalItems = (res.rows as any[]).map(r => ({
+      href: `/portal/proposals/${r[0]}`,
+      label: String(r[1] || r[0]),
+    }));
+  } catch { /* leave empty on db hiccup */ }
+} else if (user?.client_id) {
+  try {
+    const res = await turso.execute({
+      sql: `SELECT slug, title FROM proposals WHERE client_id = ? ORDER BY created_at DESC LIMIT 20`,
+      args: [user.client_id],
+    });
+    proposalItems = (res.rows as any[]).map(r => ({
+      href: `/portal/proposals/${r[0]}`,
+      label: String(r[1] || r[0]),
+    }));
+  } catch { /* leave empty on db hiccup */ }
+}
 
 // Dashboard — always first
 const topItems = [
@@ -31,16 +62,25 @@ const workItems = user?.role === 'client' ? [
 const reportItems = [
   { href: '/portal/keywords', label: 'Keywords' },
   { href: '/portal/health', label: 'Site Health' },
+  { href: '/portal/traffic', label: 'Traffic' },
+  { href: '/portal/search', label: 'Search' },
+  { href: '/portal/security', label: 'Security' },
+  { href: '/portal/documents', label: 'Documents' },
   { href: '/portal/files', label: 'Files' },
 ];
 
-// Admin section (admin only)
+// Admin section (admin only). Includes a per-proposal "Manage" entry
+// so the admin can provision the client + users and resend invites for
+// each active proposal in one place.
 const adminItems = [
   { href: '/portal/admin/contracts', label: 'Contracts' },
+  { href: '/portal/admin/agreements', label: 'Agreements' },
   { href: '/portal/admin/invoices', label: 'Invoices' },
+  { href: '/portal/admin/at-signing-awaiting', label: 'Awaiting payment' },
   { href: '/portal/admin/approvals', label: 'Approvals' },
   { href: '/portal/admin/clients', label: 'Clients' },
   { href: '/portal/admin/users', label: 'Users' },
+  { href: '/portal/admin/proposals', label: 'Proposals' },
   { href: '/portal/admin/csv', label: 'CSV Upload' },
   { href: '/portal/admin/activity', label: 'Activity' },
 ];
@@ -49,13 +89,22 @@ const adminItems = [
 const linkClass = (href: string) => [
   'flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm transition-all duration-300',
   currentPath.startsWith(href)
-    ? 'bg-amber-500/10 text-amber-400 font-medium'
+    ? 'bg-amber-500/10 text-amber-600 font-medium'
     : 'text-neutral-500 hover:text-neutral-200 hover:bg-white/[0.03]',
 ];
 const mobileLinkClass = (href: string) => [
   'block px-4 py-2.5 rounded-lg text-sm transition-colors duration-300',
-  currentPath.startsWith(href) ? 'bg-amber-500/10 text-amber-400' : 'text-neutral-500',
+  currentPath.startsWith(href) ? 'bg-amber-500/10 text-amber-600' : 'text-neutral-500',
 ];
+
+// Unread notification count, rendered as a badge on the Notifications
+// link and on the mobile header bell. Fail-soft: a notifications-table
+// hiccup must not break layout rendering.
+let unreadNotifications = 0;
+if (user?.id) {
+  try { unreadNotifications = await getUnreadCount(user.id); } catch { unreadNotifications = 0; }
+}
+const unreadBadge = unreadNotifications > 99 ? '99+' : String(unreadNotifications);
 ---
 
 <!DOCTYPE html>
@@ -68,18 +117,28 @@ const mobileLinkClass = (href: string) => [
     <title>{title} | Portal</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    {/* Editorial type stack — same Fraunces + Newsreader + JetBrains Mono
+        as the marketing site so the portal reads as part of the same
+        publication, not a tacked-on admin tool. */}
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,400,30,0;9..144,500,30,0;9..144,700,50,1;9..144,900,100,1&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=JetBrains+Mono:wght@400;500&display=swap"
+    />
     <meta name="csrf-token" content={csrfToken} />
   </head>
-  <body class="min-h-screen bg-neutral-950 text-neutral-300 font-sans">
+  <body class="portal-editorial min-h-screen bg-neutral-950 text-neutral-300 font-sans">
     <div class="flex min-h-screen">
       <!-- Sidebar -->
       <aside class="hidden md:flex w-64 flex-col bg-neutral-900/50 border-r border-white/5">
         <div class="p-6 pb-5 border-b border-white/5">
-          <a href="/portal/dashboard" class="font-serif text-xl text-neutral-100 hover:text-amber-400 transition-colors duration-300">
+          <a
+            href="/portal/dashboard"
+            class="text-2xl text-neutral-100 hover:text-amber-600 transition-colors duration-300"
+            style="font-family: var(--font-display); font-variation-settings: 'opsz' 48, 'SOFT' 30, 'WONK' 0; letter-spacing: -0.022em;"
+          >
             Cody Smith
           </a>
-          <p class="text-[10px] text-neutral-600 font-mono tracking-[0.15em] uppercase mt-1.5">Client Portal</p>
+          <p class="text-[10px] text-neutral-400 tracking-[0.15em] uppercase mt-1.5" style="font-family: var(--font-mono);">Client Portal</p>
         </div>
 
         <nav class="flex-1 px-4 py-6 space-y-1">
@@ -90,7 +149,7 @@ const mobileLinkClass = (href: string) => [
           {workItems.length > 0 && (
             <>
               <div class="pt-6 pb-2">
-                <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Work</p>
+                <p class="px-4 text-[10px] font-mono text-neutral-500 uppercase tracking-[0.15em]">Work</p>
               </div>
               {workItems.map(item => (
                 <a href={item.href} class:list={linkClass(item.href)}>{item.label}</a>
@@ -99,16 +158,27 @@ const mobileLinkClass = (href: string) => [
           )}
 
           <div class="pt-6 pb-2">
-            <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Reports</p>
+            <p class="px-4 text-[10px] font-mono text-neutral-500 uppercase tracking-[0.15em]">Reports</p>
           </div>
           {reportItems.map(item => (
             <a href={item.href} class:list={linkClass(item.href)}>{item.label}</a>
           ))}
 
+          {proposalItems.length > 0 && (
+            <>
+              <div class="pt-6 pb-2">
+                <p class="px-4 text-[10px] font-mono text-neutral-500 uppercase tracking-[0.15em]">Proposals</p>
+              </div>
+              {proposalItems.map(item => (
+                <a href={item.href} class:list={linkClass(item.href)}>{item.label}</a>
+              ))}
+            </>
+          )}
+
           {user?.role === 'admin' && (
             <>
               <div class="pt-6 pb-2">
-                <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Admin</p>
+                <p class="px-4 text-[10px] font-mono text-neutral-500 uppercase tracking-[0.15em]">Admin</p>
               </div>
               {adminItems.map(item => (
                 <a href={item.href} class:list={linkClass(item.href)}>{item.label}</a>
@@ -118,21 +188,30 @@ const mobileLinkClass = (href: string) => [
         </nav>
 
         <div class="p-4 border-t border-white/5 space-y-3">
-          <a href="/portal/notifications" class:list={['flex items-center gap-2 px-4 py-2 text-xs rounded-lg transition-colors duration-300', currentPath === '/portal/notifications' ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-600 hover:text-amber-400 hover:bg-white/[0.03]']}>
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>
+          <a href="/portal/notifications" class:list={['flex items-center gap-2 px-4 py-2 text-xs rounded-lg transition-colors duration-300', currentPath === '/portal/notifications' ? 'text-amber-600 bg-amber-500/10' : 'text-neutral-400 hover:text-amber-600 hover:bg-white/[0.03]']}>
+            <span class="relative inline-flex items-center">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>
+              {unreadNotifications > 0 && (
+                <span class="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 bg-amber-500 text-neutral-950 text-[9px] font-semibold rounded-full flex items-center justify-center leading-none">{unreadBadge}</span>
+              )}
+            </span>
             Notifications
+            {unreadNotifications > 0 && (
+              <span class="ml-auto text-[10px] text-amber-600 font-mono">{unreadBadge} new</span>
+            )}
           </a>
-          <a href="/" class="flex items-center gap-2 px-4 py-2 text-xs text-neutral-600 hover:text-amber-400 transition-colors duration-300 rounded-lg hover:bg-white/[0.03]">
+          <a href="/" class="flex items-center gap-2 px-4 py-2 text-xs text-neutral-400 hover:text-amber-600 transition-colors duration-300 rounded-lg hover:bg-white/[0.03]">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
             Back to website
           </a>
           <div class="flex items-center justify-between px-4">
             <div class="min-w-0">
               <p class="text-sm font-medium text-neutral-300 truncate">{user?.name}</p>
-              <p class="text-xs text-neutral-600 truncate">{user?.email}</p>
+              <p class="text-xs text-neutral-400 truncate">{user?.email}</p>
             </div>
             <form method="POST" action="/portal/auth/logout">
-              <button type="submit" class="text-xs text-neutral-600 hover:text-red-400 transition-colors duration-300 whitespace-nowrap ml-3">
+              <input type="hidden" name="csrf-token" value={csrfToken} />
+              <button type="submit" class="text-xs text-neutral-400 hover:text-red-400 transition-colors duration-300 whitespace-nowrap ml-3">
                 Log out
               </button>
             </form>
@@ -143,15 +222,27 @@ const mobileLinkClass = (href: string) => [
       <!-- Mobile header -->
       <div class="flex flex-col flex-1">
         <header class="md:hidden flex items-center justify-between px-6 py-4 bg-neutral-900/50 border-b border-white/5">
-          <a href="/portal/dashboard" class="font-serif text-lg text-neutral-100">Portal</a>
-          <button id="mobile-menu-btn" class="text-neutral-400 hover:text-neutral-200 transition-colors" aria-label="Menu" aria-expanded="false">
-            <svg id="mob-icon-open" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-            <svg id="mob-icon-close" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <a
+            href="/portal/dashboard"
+            class="text-xl text-neutral-100"
+            style="font-family: var(--font-display); font-variation-settings: 'opsz' 36, 'SOFT' 30, 'WONK' 0; letter-spacing: -0.022em;"
+          >Portal</a>
+          <div class="flex items-center gap-3">
+            <a href="/portal/notifications" class="relative inline-flex items-center text-neutral-400 hover:text-amber-600 transition-colors" aria-label={`Notifications${unreadNotifications > 0 ? `, ${unreadNotifications} unread` : ''}`}>
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" /></svg>
+              {unreadNotifications > 0 && (
+                <span class="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 bg-amber-500 text-neutral-950 text-[9px] font-semibold rounded-full flex items-center justify-center leading-none">{unreadBadge}</span>
+              )}
+            </a>
+            <button id="mobile-menu-btn" class="text-neutral-400 hover:text-neutral-200 transition-colors" aria-label="Menu" aria-expanded="false">
+              <svg id="mob-icon-open" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              <svg id="mob-icon-close" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </header>
 
         <!-- Mobile nav drawer -->
@@ -163,7 +254,7 @@ const mobileLinkClass = (href: string) => [
             {workItems.length > 0 && (
               <>
                 <div class="pt-4 pb-1">
-                  <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Work</p>
+                  <p class="px-4 text-[10px] font-mono text-neutral-500 uppercase tracking-[0.15em]">Work</p>
                 </div>
                 {workItems.map(item => (
                   <a href={item.href} class:list={mobileLinkClass(item.href)}>{item.label}</a>
@@ -171,15 +262,25 @@ const mobileLinkClass = (href: string) => [
               </>
             )}
             <div class="pt-4 pb-1">
-              <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Reports</p>
+              <p class="px-4 text-[10px] font-mono text-neutral-500 uppercase tracking-[0.15em]">Reports</p>
             </div>
             {reportItems.map(item => (
               <a href={item.href} class:list={mobileLinkClass(item.href)}>{item.label}</a>
             ))}
+            {proposalItems.length > 0 && (
+              <>
+                <div class="pt-4 pb-1">
+                  <p class="px-4 text-[10px] font-mono text-neutral-500 uppercase tracking-[0.15em]">Proposals</p>
+                </div>
+                {proposalItems.map(item => (
+                  <a href={item.href} class:list={mobileLinkClass(item.href)}>{item.label}</a>
+                ))}
+              </>
+            )}
             {user?.role === 'admin' && (
               <>
                 <div class="pt-4 pb-1">
-                  <p class="px-4 text-[10px] font-mono text-neutral-700 uppercase tracking-[0.15em]">Admin</p>
+                  <p class="px-4 text-[10px] font-mono text-neutral-500 uppercase tracking-[0.15em]">Admin</p>
                 </div>
                 {adminItems.map(item => (
                   <a href={item.href} class:list={mobileLinkClass(item.href)}>{item.label}</a>
@@ -187,10 +288,11 @@ const mobileLinkClass = (href: string) => [
               </>
             )}
             <div class="pt-4 mt-2 border-t border-white/5 flex items-center justify-between">
-              <a href="/portal/notifications" class="text-xs text-neutral-600 hover:text-amber-400 transition-colors">Notifications</a>
-              <a href="/" class="text-xs text-neutral-600 hover:text-amber-400 transition-colors">Back to website</a>
+              <a href="/portal/notifications" class="text-xs text-neutral-400 hover:text-amber-600 transition-colors">Notifications</a>
+              <a href="/" class="text-xs text-neutral-400 hover:text-amber-600 transition-colors">Back to website</a>
               <form method="POST" action="/portal/auth/logout">
-                <button type="submit" class="text-xs text-neutral-600 hover:text-red-400 transition-colors">Log out</button>
+              <input type="hidden" name="csrf-token" value={csrfToken} />
+                <button type="submit" class="text-xs text-neutral-400 hover:text-red-400 transition-colors">Log out</button>
               </form>
             </div>
           </div>

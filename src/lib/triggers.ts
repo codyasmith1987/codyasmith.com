@@ -3,10 +3,11 @@
 // Triggers create notifications, cascade status changes, and log activity.
 // They never fail the parent operation — errors are logged and swallowed.
 
-import { getTask, getMilestone, getProject, getContract, getTasksByMilestone, getMilestonesByProject, updateMilestone, updateProject, updateTask, updateContract } from './contracts';
+import { getTask, getMilestone, getProject, getContract, getTasksByMilestone, getMilestonesByProject, updateMilestone, updateProject, updateTask, updateContract, createProject, getProjectsByContract } from './contracts';
 import { getInvoice, getChangeOrder } from './invoices';
 import { createPendingCharge } from './billing';
 import { createNotification } from './notifications';
+import turso from './turso';
 import { getUsersByClientId, getAdminUsers } from './auth';
 import { logActivity } from './activity';
 import { logger } from './logger';
@@ -27,6 +28,185 @@ async function notifyAdmins(notification: { type: Parameters<typeof createNotifi
   for (const admin of admins) {
     await createNotification({ user_id: admin.id, ...notification });
   }
+}
+
+// A client asked for fresher data on one of their live pages. Not all
+// sources are auto-connected (a site crawl is a manual or paid step), so the
+// page offers a request button that pings Cody to refresh. In-portal
+// notification only today (no email on this path).
+export async function onDataUpdateRequested(args: { clientId: string; clientName: string; sourceLabel: string; requestedByName: string }): Promise<void> {
+  try {
+    await notifyAdmins({
+      type: 'data_update_requested',
+      title: `Data update requested: ${args.clientName}`,
+      body: `${args.requestedByName} requested fresher ${args.sourceLabel} data for ${args.clientName}.`,
+      entity_type: 'client',
+      entity_id: args.clientId,
+    });
+  } catch (err) {
+    logger.error('onDataUpdateRequested failed', err);
+  }
+}
+
+// Cody deliberately issued a prescriptive deliverable (a strategic
+// recommendation or a research report) to the client. This is the delivery
+// event: notify the client in-portal and email them. Value-first copy
+// (what they get, not what the system did). Fired once per file, from
+// /portal/api/files/issue.
+export async function onDocumentIssued(args: { clientId: string; fileId: string; fileName: string; category: string }): Promise<void> {
+  try {
+    const { fileCategoryLabel } = await import('./storage');
+    const { escapeHtml } = await import('./email-safety');
+    const label = fileCategoryLabel(args.category);
+    const users = await getUsersByClientId(args.clientId);
+
+    for (const user of users) {
+      await createNotification({
+        user_id: user.id,
+        type: 'document_issued',
+        title: `New ${label} ready`,
+        body: `"${args.fileName}" is ready to read in your documents.`,
+        entity_type: 'file',
+        entity_id: args.fileId,
+      });
+    }
+
+    if (users.length > 0) {
+      const { sendEmail } = await import('./email');
+      const portalUrl = import.meta.env.SITE || 'https://codyasmith.com';
+      const safeName = escapeHtml(args.fileName);
+      await sendEmail(
+        users.map(u => ({ email: u.email, name: u.name })),
+        `New ${label} ready in your portal`,
+        `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+          <h2 style="color: #171717; margin-bottom: 16px;">Something new to read</h2>
+          <p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">I just added <strong>${safeName}</strong> to your portal. It is ready whenever you are.</p>
+          <a href="${portalUrl}/portal/documents" style="display: inline-block; background: #f59e0b; color: #0a0a0a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; margin-top: 16px;">Open your documents</a>
+          <p style="color: #a3a3a3; font-size: 12px; margin-top: 32px;"><a href="${portalUrl}" style="color: #a3a3a3;">codyasmith.com</a></p>
+        </div>
+        `
+      );
+    }
+  } catch (err) {
+    logger.error('onDocumentIssued failed', err);
+  }
+}
+
+// ============================================================
+// Automated-failure alert (Cody, 2026-06-04: alert the admin on any major
+// automated failure). The automated billing/email jobs run unattended on the
+// daily cron, so a thrown task or a failed send would otherwise be silent.
+// Alerts in-portal (always lands) AND emails the admin (best-effort). The
+// admin email is wrapped so a failure here never recurses into another alert.
+// ============================================================
+export async function onAutomatedFailure(context: string, detail: string): Promise<void> {
+  try {
+    await notifyAdmins({
+      type: 'general',
+      title: `Automated job failed: ${context}`,
+      body: detail.slice(0, 500),
+    });
+  } catch (err) {
+    logger.error('onAutomatedFailure in-portal notify failed', err);
+  }
+  try {
+    const { sendEmail } = await import('./email');
+    const admins = await getAdminUsers();
+    if (admins.length > 0) {
+      await sendEmail(
+        admins.map(a => ({ email: a.email, name: a.name })),
+        `Portal alert: ${context} failed`,
+        `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 20px;">
+          <h2 style="color: #171717; margin-bottom: 12px;">An automated job failed</h2>
+          <p style="color: #525252; line-height: 1.6;"><strong>${context}</strong></p>
+          <pre style="color: #525252; background: #f5f5f5; padding: 12px; border-radius: 6px; white-space: pre-wrap; font-size: 12px;">${detail.slice(0, 800).replace(/[<>]/g, '')}</pre>
+          <p style="color: #a3a3a3; font-size: 12px; margin-top: 24px;">codyasmith.com automated billing</p>
+        </div>`
+      );
+    }
+  } catch (err) {
+    // Never re-alert on an alert-email failure; just log.
+    logger.error('onAutomatedFailure admin email failed', err);
+  }
+}
+
+// ============================================================
+// Dunning-escalation alert (Part B, 2026-06-05): tell the admin when a client
+// crosses into the section 5.8 'final' tier (30+ days past due, where the notice
+// names interest + the suspension consequence). The cron tells the CLIENT; this
+// surfaces the highest-stakes dunning step to the OWNER too. Informational (not
+// a failure). Best-effort; never throws into the caller. The caller fires this
+// on every 'final' send; THIS function dedups via notification existence (one
+// alert per client per ~25 days), so the weekly cadence does not re-alert and a
+// cron gap can never miss the first alert. No stored marker / migration needed.
+// ============================================================
+export async function onDunningEscalation(clientId: string, clientName: string, balanceStr: string, daysPast: number): Promise<void> {
+  // Dedup via notification existence (no stored marker / no migration, and
+  // OUTAGE-PROOF): fire once on the FIRST final notice whenever it actually
+  // lands, then suppress for ~25 days. A still-unpaid client re-alerts about
+  // monthly (a useful reminder, not weekly spam). If the dedup check itself
+  // errors, fall through and alert -- better a duplicate than a silent miss.
+  try {
+    const existing = await turso.execute({
+      sql: `SELECT 1 FROM notifications WHERE entity_type = 'dunning_final' AND entity_id = ? AND created_at > datetime('now', '-25 days') LIMIT 1`,
+      args: [clientId],
+    });
+    if (existing.rows.length > 0) return;
+  } catch (err) {
+    logger.error('onDunningEscalation dedup check failed', err);
+  }
+  const line = `${clientName} is now ${daysPast} days past due (${balanceStr}). The section 5.8 final notice (interest + possible suspension) has gone out. Any suspension is a manual decision.`;
+  try {
+    await notifyAdmins({ type: 'general', title: `Past due 30+ days: ${clientName}`, body: line, entity_type: 'dunning_final', entity_id: clientId });
+  } catch (err) {
+    logger.error('onDunningEscalation in-portal notify failed', err);
+  }
+  try {
+    const { sendEmail } = await import('./email');
+    const admins = await getAdminUsers();
+    if (admins.length > 0) {
+      await sendEmail(
+        admins.map(a => ({ email: a.email, name: a.name })),
+        `Past due 30+ days: ${clientName} (${balanceStr})`,
+        `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 20px;">
+          <h2 style="color: #171717; margin-bottom: 12px;">A client crossed 30 days past due</h2>
+          <p style="color: #525252; line-height: 1.6;">${line.replace(/[<>]/g, '')}</p>
+          <p style="color: #a3a3a3; font-size: 12px; margin-top: 24px;">codyasmith.com automated billing</p>
+        </div>`
+      );
+    }
+  } catch (err) {
+    logger.error('onDunningEscalation admin email failed', err);
+  }
+}
+
+// ============================================================
+// Stale payment_pending alert (chat-wide audit 2026-06-11). payment_pending
+// is excluded from all client-facing dunning by design ("the check is in the
+// mail"), so a never-arriving check would sit silent forever. This alerts the
+// ADMIN only -- no client email -- once per invoice per ~7 days while it stays
+// stale, via the same notification-existence dedupe as onDunningEscalation.
+// Returns whether an alert actually fired (so the caller can count).
+// ============================================================
+export async function onStalePaymentPending(invoiceId: string, clientId: string, clientName: string, invoiceNumber: string, balanceStr: string, daysPast: number): Promise<boolean> {
+  try {
+    const existing = await turso.execute({
+      sql: `SELECT 1 FROM notifications WHERE entity_type = 'stale_payment_pending' AND entity_id = ? AND created_at > datetime('now', '-7 days') LIMIT 1`,
+      args: [invoiceId],
+    });
+    if (existing.rows.length > 0) return false;
+  } catch (err) {
+    logger.error('onStalePaymentPending dedup check failed', err);
+  }
+  const line = `${clientName}'s invoice ${invoiceNumber} (${balanceStr}) has been payment-pending for ${daysPast} days past its due date. The promised payment may not have arrived -- worth a check-in. No automatic reminders go out for a payment-pending invoice; the manual Send reminder button works if you want to nudge.`;
+  try {
+    await notifyAdmins({ type: 'general', title: `Payment pending ${daysPast} days: ${clientName} ${invoiceNumber}`, body: line, entity_type: 'stale_payment_pending', entity_id: invoiceId });
+  } catch (err) {
+    logger.error('onStalePaymentPending notify failed', err);
+    return false;
+  }
+  return true;
 }
 
 // ============================================================
@@ -93,7 +273,7 @@ export async function onMilestoneCompleted(milestoneId: string): Promise<void> {
     // Auto-write client update text (System 5)
     if (milestone.client_visible) {
       await updateMilestone(milestoneId, {
-        client_update_text: `${milestone.title} completed \u2014 all tasks finished`,
+        client_update_text: `${milestone.title} completed, all tasks finished`,
       });
     }
 
@@ -222,6 +402,28 @@ export async function onPaymentRecorded(invoiceId: string, amount: number): Prom
   try {
     const invoice = await getInvoice(invoiceId);
     if (!invoice) return;
+    // A payment recorded against a terminal invoice (carried_forward / cancelled)
+    // does not fire a client receipt or notification: the balance lives on the
+    // invoice it rolled into, so a "paid in full" receipt here would be wrong
+    // (whole-system audit 2026-06-05). The payment still records on the invoice;
+    // it just does not generate client-facing comms.
+    if (invoice.status === 'carried_forward' || invoice.status === 'cancelled') return;
+
+    // Email the client a receipt (financial notice -> carries the accountant CC
+    // per the recipient model). Soft-fails so it never breaks payment recording,
+    // but a soft failure (Brevo rejected, etc.) now alerts the admin so a paid
+    // client never silently goes without a receipt. 'no_recipient' is a config
+    // state (no billing contact), not a send failure, so it does not alert.
+    try {
+      const { sendPaymentReceiptEmail } = await import('./invoice-emails');
+      const r = await sendPaymentReceiptEmail(invoiceId, amount);
+      if (!r.ok && r.reason !== 'no_recipient') {
+        await onAutomatedFailure('sendPaymentReceiptEmail', `Invoice ${invoiceId}: receipt not sent (${r.reason})`);
+      }
+    } catch (err) {
+      logger.error('payment receipt email failed', err);
+      await onAutomatedFailure('sendPaymentReceiptEmail', `Invoice ${invoiceId}: receipt threw`);
+    }
 
     // Notify admin
     await notifyAdmins({
@@ -241,8 +443,70 @@ export async function onPaymentRecorded(invoiceId: string, amount: number): Prom
         entity_type: 'invoice',
         entity_id: invoiceId,
       });
+
+      // At-signing invoice cleared = work can start (contract section 5.2).
+      // An at-signing invoice carries no billing period (recurring ones do).
+      if (!invoice.billing_period_start) {
+        await onAtSigningInvoicePaid(invoice.contract_id);
+      }
     }
   } catch (err) {
     logger.error('Trigger onPaymentRecorded failed', err);
+  }
+}
+
+// ============================================================
+// Trigger 6b: At-signing invoice cleared -> work starts
+// ============================================================
+// The throughput model gates work on cleared funds. When the at-signing
+// invoice is paid in full, auto-create the engagement project shell (a
+// home for work tracking; milestones/tasks are Cody's judgment, not
+// auto-filled), flag the admin that work can begin, and tell the client
+// they are underway. Idempotent: only fires when the contract has no
+// project yet, so repeat payments do not duplicate it.
+async function onAtSigningInvoicePaid(contractId: string): Promise<void> {
+  const contract = await getContract(contractId);
+  if (!contract) return;
+
+  const existing = await getProjectsByContract(contractId);
+  if (existing.length > 0) return; // already kicked off
+
+  const projectId = await createProject({
+    contract_id: contractId,
+    client_id: contract.client_id,
+    title: 'Engagement kickoff',
+    description: 'Your engagement is underway. Milestones will appear here as the work plan is set.',
+    client_visible: true,
+  });
+
+  await notifyAdmins({
+    type: 'payment_received',
+    title: 'Work can start',
+    body: `At-signing payment cleared for ${contract.title}. The "Engagement kickoff" project is ready; add milestones and begin.`,
+    entity_type: 'project',
+    entity_id: projectId,
+  });
+
+  // Value-first nudge to the client: payment in, work underway.
+  try {
+    const { sendEmail } = await import('./email');
+    const users = await getUsersByClientId(contract.client_id);
+    if (users.length > 0) {
+      const portalUrl = import.meta.env.SITE || 'https://codyasmith.com';
+      await sendEmail(
+        users.map(u => ({ email: u.email, name: u.name })),
+        `Payment received. We are underway on ${contract.title}.`,
+        `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
+          <h2 style="color: #171717; margin-bottom: 16px;">We are underway</h2>
+          <p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">Your payment cleared and work has started. You will see progress land in your portal as it happens.</p>
+          <a href="${portalUrl}/portal" style="display: inline-block; background: #f59e0b; color: #0a0a0a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px; margin-top: 16px;">Open your portal</a>
+          <p style="color: #a3a3a3; font-size: 12px; margin-top: 32px;"><a href="${portalUrl}" style="color: #a3a3a3;">codyasmith.com</a></p>
+        </div>
+        `
+      );
+    }
+  } catch (err) {
+    logger.error('onAtSigningInvoicePaid client email failed', err);
   }
 }

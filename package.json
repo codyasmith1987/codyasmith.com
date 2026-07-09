@@ -7,13 +7,13 @@
   },
   "scripts": {
     "dev": "astro dev",
-    "build": "astro build",
+    "build": "astro build && node scripts/postbuild-security-headers.mjs && node scripts/postbuild-assert-sitemap.mjs",
     "preview": "astro preview",
     "astro": "astro",
     "migrate:naming": "tsx scripts/migrate-naming.ts",
     "migrate:naming-phase3": "tsx scripts/migrate-naming-phase3.ts",
     "migrate:listener": "tsx scripts/migrate-listener.ts",
-    "test": "tsx tests/run-naming-unit-tests.mjs && tsx tests/run-listener-sentiment-unit-tests.mjs && tsx tests/run-naming-preview-unit-tests.mjs && tsx tests/run-naming-email-unit-tests.mjs",
+    "test": "tsx tests/run-naming-unit-tests.mjs && tsx tests/run-listener-sentiment-unit-tests.mjs && tsx tests/run-naming-preview-unit-tests.mjs && tsx tests/run-naming-email-unit-tests.mjs && tsx tests/run-contract-render-tests.mjs && tsx tests/run-csv-detector-tests.mjs && tsx tests/run-report-deltas-tests.mjs && tsx tests/run-report-windows-tests.mjs && tsx tests/run-report-assembly-tests.mjs && tsx tests/run-report-shared-tests.mjs && tsx tests/run-crawl-read-tests.mjs && tsx tests/run-report-site-health-tests.mjs && tsx tests/run-products-tests.mjs && tsx tests/run-proposal-render-tests.mjs && tsx tests/run-at-signing-tests.mjs && tsx tests/run-billing-period-tests.mjs && tsx tests/run-billing-proration-tests.mjs && tsx tests/run-billing-handoff-tests.mjs && tsx tests/run-onboarding-waiver-tests.mjs && tsx tests/run-bundle-pricing-tests.mjs && tsx tests/run-bundle-composer-tests.mjs && tsx tests/run-contract-pdf-tests.mjs && tsx tests/run-client-domains-tests.mjs && tsx tests/run-client-sites-sync-tests.mjs && tsx tests/run-proposal-ai-tests.mjs && tsx tests/run-files-taxonomy-tests.mjs && tsx tests/run-no-em-dash-lint.mjs && tsx tests/run-accessibility-insights-tests.mjs && tsx tests/run-structured-data-insights-tests.mjs && tsx tests/run-content-quality-insights-tests.mjs && tsx tests/run-supersession-key-tests.mjs && tsx tests/run-ingest-atomic-tests.mjs && tsx tests/run-page-count-sql-tests.mjs && tsx tests/run-upload-path-key-tests.mjs && tsx tests/run-bulk-insert-parity-tests.mjs && tsx tests/run-ga4-parity-tests.mjs && tsx tests/run-gsc-parity-tests.mjs && tsx tests/run-links-parity-tests.mjs && tsx tests/run-issue-urls-parity-tests.mjs && tsx tests/run-crawl-internal-parity-tests.mjs && tsx tests/run-content-urls-parity-tests.mjs && tsx tests/run-security-urls-parity-tests.mjs && tsx tests/run-structured-data-urls-parity-tests.mjs && tsx tests/run-accessibility-urls-parity-tests.mjs && tsx tests/run-images-parity-tests.mjs && tsx tests/run-redirects-parity-tests.mjs && tsx tests/run-upload-concurrency-tests.mjs && tsx tests/run-accessibility-ingest-tests.mjs && tsx tests/run-coverage-signals-tests.mjs && tsx tests/run-coverage-ingest-tests.mjs && tsx tests/run-accessibility-aggregate-tests.mjs && tsx tests/run-coverage-backfill-tests.mjs && tsx tests/run-url-insights-coverage-tests.mjs && tsx tests/run-health-coverage-render-tests.mjs && tsx tests/run-reupload-supersession-tests.mjs && tsx tests/run-issues-overview-upsert-tests.mjs && tsx tests/run-upload-batching-tests.mjs && tsx tests/run-coverage-aggregation-tests.mjs && tsx tests/run-canonical-urls-parity-tests.mjs && tsx tests/run-directive-urls-parity-tests.mjs && tsx tests/run-page-weight-urls-parity-tests.mjs && tsx tests/run-sitemap-urls-parity-tests.mjs && tsx tests/run-reparse-stored-tests.mjs && tsx tests/run-sf-generic-parity-tests.mjs && tsx tests/run-javascript-urls-parity-tests.mjs && tsx tests/run-url-structure-urls-parity-tests.mjs && tsx tests/run-hreflang-urls-parity-tests.mjs && tsx tests/run-url-insights-page-filter-tests.mjs && tsx tests/run-url-classifier-tests.mjs && tsx tests/run-invoice-helpers-tests.mjs && tsx tests/run-client-expenses-tests.mjs && tsx tests/run-invoice-recipients-tests.mjs && tsx tests/run-overdue-notice-tests.mjs && tsx tests/run-email-recipient-shape-tests.mjs && tsx tests/run-recurring-line-items-tests.mjs && tsx tests/run-dunning-stage-tests.mjs && tsx tests/run-rollforward-tests.mjs && tsx tests/run-migration-imports-lint.mjs && tsx tests/run-invoice-email-template-tests.mjs && tsx tests/run-trend-series-tests.mjs",
     "test:integration": "tsx tests/run-naming-integration-tests.mjs && tsx tests/run-listener-sentiment-integration-tests.mjs"
   },
   "dependencies": {
@@ -32,6 +32,8 @@
     "astro": "^6.1.3",
     "bcryptjs": "^3.0.3",
     "cheerio": "^1.2.0",
+    "jszip": "^3.10.1",
+    "marked": "^15.0.12",
     "nanoid": "^5.1.7",
     "papaparse": "^5.5.3",
     "pdf-parse": "^2.4.5",

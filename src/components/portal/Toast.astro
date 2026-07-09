@@ -7,16 +7,35 @@
 <script>
   const container = document.getElementById('toast-container')!;
 
-  function showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
+  function showToast(
+    messageOrOpts: string | { message?: string; type?: 'success' | 'error' | 'info' },
+    typeArg?: 'success' | 'error' | 'info'
+  ) {
+    // Two call signatures supported for backward compatibility:
+    //   showToast('msg', 'success')
+    //   showToast({ type: 'success', message: 'msg' })
+    let message: string;
+    let type: 'success' | 'error' | 'info' = 'info';
+    if (typeof messageOrOpts === 'string') {
+      message = messageOrOpts;
+      if (typeArg) type = typeArg;
+    } else {
+      message = messageOrOpts?.message || '';
+      if (messageOrOpts?.type) type = messageOrOpts.type;
+    }
+    if (!message) return;
     const toast = document.createElement('div');
+    // Editorial cream theme: text needs to be darker shade for cream
+    // background. Solid white bg with faint colored border + dark text
+    // reads cleanly as a paper-style notification card.
     const colors = {
-      success: 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400',
-      error: 'bg-red-500/10 border-red-500/20 text-red-400',
-      info: 'bg-amber-500/10 border-amber-500/20 text-amber-400',
+      success: 'bg-white border-emerald-500/40 text-emerald-800 shadow-md',
+      error: 'bg-white border-red-500/40 text-red-800 shadow-md',
+      info: 'bg-white border-amber-500/40 text-amber-700 shadow-md',
     };
 
-    toast.className = `pointer-events-auto px-5 py-3 border rounded-lg text-sm backdrop-blur-md ${colors[type]} transform transition-all duration-300 translate-y-2 opacity-0`;
-    toast.textContent = message;
+    toast.className = `pointer-events-auto px-5 py-3 border-2 rounded-lg text-sm font-medium ${colors[type]} transform transition-all duration-300 translate-y-2 opacity-0`;
+    toast.textContent = message!;
     toast.setAttribute('role', 'status');
     toast.setAttribute('aria-live', 'polite');
 
@@ -38,4 +57,26 @@
 
   // Expose globally
   (window as any).__toast = showToast;
+
+  // Run an async function while showing a button as loading. Disables
+  // the button, swaps its text to a Saving/Sending message, and
+  // restores both when the promise resolves (success or failure).
+  // Prevents double-click double-fire and gives admin instant feedback.
+  async function withButtonLoading<T>(
+    btn: HTMLButtonElement,
+    loadingText: string,
+    fn: () => Promise<T>
+  ): Promise<T> {
+    const originalText = btn.textContent || '';
+    const originalDisabled = btn.disabled;
+    btn.disabled = true;
+    btn.textContent = loadingText;
+    try {
+      return await fn();
+    } finally {
+      btn.disabled = originalDisabled;
+      btn.textContent = originalText;
+    }
+  }
+  (window as any).__withButtonLoading = withButtonLoading;
 </script>

@@ -1,0 +1,273 @@
+---
+// Admin: create a new agreement, optionally pre-filled from a finalized
+// proposal. The form posts to /portal/api/admin/agreements which
+// builds the schedule_a using the proposal's pricing formula + draft
+// selections.
+
+import Portal from '../../../../layouts/Portal.astro';
+import turso from '../../../../lib/turso';
+
+export const prerender = false;
+
+const user = Astro.locals.user;
+if (!user || user.role !== 'admin') return Astro.redirect('/portal/dashboard');
+
+const presetProposalId = new URL(Astro.request.url).searchParams.get('proposal') || '';
+
+// All finalized proposals available to issue from.
+const proposalsResult = await turso.execute(`
+  SELECT p.id, p.slug, p.title, p.client_id, p.config, c.name as client_name
+  FROM proposals p
+  JOIN clients c ON c.id = p.client_id
+  WHERE p.finalized_at IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1
+      FROM client_agreements a
+      WHERE a.proposal_id = p.id
+        AND a.status NOT IN ('voided', 'revoked')
+    )
+  ORDER BY p.finalized_at DESC
+`);
+const proposals = (proposalsResult.rows as any[]).map(r => {
+  let config: any = {};
+  try { config = JSON.parse(r[4] as string); } catch { /* defensive */ }
+  return {
+    id: r[0] as string,
+    slug: r[1] as string,
+    title: r[2] as string,
+    client_id: r[3] as string,
+    client_name: r[5] as string,
+    signers: Array.isArray(config?.signers) ? config.signers : [],
+  };
+});
+
+// Client list for the manual case (no proposal).
+const clientsResult = await turso.execute(`SELECT id, name FROM clients ORDER BY name`);
+const clients = (clientsResult.rows as any[]).map(r => ({ id: r[0] as string, name: r[1] as string }));
+
+const csrfToken = Astro.locals.csrfToken || '';
+---
+<Portal title="New agreement">
+  <div class="max-w-3xl mx-auto">
+    <div class="mb-8">
+      <a href="/portal/admin/agreements" class="text-xs font-mono text-neutral-500 hover:text-amber-600 transition-colors">← Back to agreements</a>
+      <h1 class="font-serif text-3xl text-neutral-100 mt-3">New agreement</h1>
+      <p class="text-sm text-neutral-500 mt-2">Issue a contract from a finalized proposal, or create a blank agreement and edit Schedule A by hand.</p>
+    </div>
+
+    <form id="new-agreement-form" class="space-y-6">
+      <input type="hidden" id="csrf" value={csrfToken} />
+
+      <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-6">
+        <label class="block text-xs font-mono uppercase tracking-[0.18em] text-amber-600 mb-2">From proposal</label>
+        <select id="proposal-select" class="w-full bg-neutral-950 border border-white/10 rounded-lg px-3 py-2 text-sm text-neutral-200">
+          <option value="">— Manual (no proposal) —</option>
+          {proposals.map(p => (
+            <option value={p.id} selected={p.id === presetProposalId} data-client-id={p.client_id} data-client-name={p.client_name} data-title={p.title} data-slug={p.slug} data-signers={JSON.stringify(p.signers)}>
+              {p.client_name}: {p.title}
+            </option>
+          ))}
+        </select>
+        <p class="text-xs text-neutral-400 mt-2">Picking a proposal pre-fills client, signers, title, and Schedule A from the proposal's selections.</p>
+      </div>
+
+      <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-6">
+        <label class="block text-xs font-mono uppercase tracking-[0.18em] text-amber-600 mb-2">Client</label>
+        <select id="client-select" class="w-full bg-neutral-950 border border-white/10 rounded-lg px-3 py-2 text-sm text-neutral-200">
+          <option value="">— Choose —</option>
+          {clients.map(c => <option value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
+
+      <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-6 space-y-4">
+        <div>
+          <label class="block text-xs font-mono uppercase tracking-[0.18em] text-amber-600 mb-2">Title</label>
+          <input type="text" id="title-input" placeholder="Master Services Agreement - Client name" class="w-full bg-neutral-950 border border-white/10 rounded-lg px-3 py-2 text-sm text-neutral-200" />
+        </div>
+        <div>
+          <label class="block text-xs font-mono uppercase tracking-[0.18em] text-amber-600 mb-2">Slug</label>
+          <input type="text" id="slug-input" placeholder="client-msa-2026" class="w-full bg-neutral-950 border border-white/10 rounded-lg px-3 py-2 text-sm text-neutral-200" />
+          <p class="text-xs text-neutral-400 mt-2">Lowercase letters, numbers, hyphens. This becomes /portal/contracts/[slug].</p>
+        </div>
+        <div>
+          <label class="block text-xs font-mono uppercase tracking-[0.18em] text-amber-600 mb-2">Monthly billing day</label>
+          <input type="number" id="billing-anchor-input" min="1" max="31" step="1" value="1" class="w-32 bg-neutral-950 border border-white/10 rounded-lg px-3 py-2 text-sm text-neutral-200" />
+          <p class="text-xs text-neutral-400 mt-2">Day of month every site on this agreement bills on. First invoice for any site is prorated from its go-live date to this day.</p>
+        </div>
+      </div>
+
+      <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-6">
+        <label class="block text-xs font-mono uppercase tracking-[0.18em] text-amber-600 mb-3">Signers</label>
+        <div id="signers-list" class="space-y-3"></div>
+        <button type="button" id="add-signer" class="mt-3 text-xs font-mono text-amber-600 hover:text-amber-600 transition-colors">+ Add signer</button>
+      </div>
+
+      <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-6">
+        <label class="block text-xs font-mono uppercase tracking-[0.18em] text-amber-600 mb-2">Personal note (optional)</label>
+        <textarea id="personal-note" rows="5" placeholder="Jason and Kevin, here's the contract we discussed yesterday..." class="w-full bg-neutral-950 border border-white/10 rounded-lg px-3 py-2 text-sm text-neutral-200 font-serif" style="font-family: 'Source Serif 4', Georgia, serif;"></textarea>
+        <p class="text-xs text-neutral-400 mt-2">Goes above the standard invite copy in the contract-issued email, separated by a hairline rule.</p>
+      </div>
+
+      <div class="flex items-center gap-3 pt-2">
+        <button type="button" id="save-draft" class="px-5 py-2.5 bg-neutral-800/50 border border-white/10 rounded-lg text-sm text-neutral-200 hover:bg-neutral-700/50 transition-colors">Save as draft</button>
+        <button type="button" id="save-and-issue" class="px-5 py-2.5 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-colors">Save and issue to signers</button>
+      </div>
+      <p id="status-msg" class="text-sm text-neutral-400 mt-3"></p>
+    </form>
+  </div>
+</Portal>
+
+<script is:inline define:vars={{ presetProposalId }}>
+(function() {
+  var csrf = document.getElementById('csrf').value;
+  var proposalSelect = document.getElementById('proposal-select');
+  var clientSelect = document.getElementById('client-select');
+  var titleInput = document.getElementById('title-input');
+  var slugInput = document.getElementById('slug-input');
+  var billingAnchorInput = document.getElementById('billing-anchor-input');
+  var signersList = document.getElementById('signers-list');
+  var addSignerBtn = document.getElementById('add-signer');
+  var personalNote = document.getElementById('personal-note');
+  var saveDraftBtn = document.getElementById('save-draft');
+  var saveAndIssueBtn = document.getElementById('save-and-issue');
+  var statusMsg = document.getElementById('status-msg');
+
+  function signerRow(s) {
+    s = s || {};
+    var div = document.createElement('div');
+    div.className = 'signer-row grid grid-cols-12 gap-2 items-center';
+    div.innerHTML =
+      '<input type="text" class="signer-role col-span-3 bg-neutral-950 border border-white/10 rounded px-2 py-1.5 text-xs text-neutral-200" placeholder="Role" value="' + (s.role || 'client_primary') + '">' +
+      '<input type="text" class="signer-name col-span-4 bg-neutral-950 border border-white/10 rounded px-2 py-1.5 text-xs text-neutral-200" placeholder="Name" value="' + (s.name || '') + '">' +
+      '<input type="email" class="signer-email col-span-4 bg-neutral-950 border border-white/10 rounded px-2 py-1.5 text-xs text-neutral-200" placeholder="email@example.com" value="' + (s.email || '') + '">' +
+      '<button type="button" class="signer-remove col-span-1 text-xs text-red-400 hover:text-red-300">×</button>';
+    div.querySelector('.signer-remove').addEventListener('click', function() {
+      signersList.removeChild(div);
+    });
+    return div;
+  }
+
+  function applyProposal(opt) {
+    if (!opt || !opt.value) return;
+    var clientId = opt.getAttribute('data-client-id');
+    var clientName = opt.getAttribute('data-client-name');
+    var title = opt.getAttribute('data-title');
+    var slug = opt.getAttribute('data-slug');
+    var signers = [];
+    try { signers = JSON.parse(opt.getAttribute('data-signers') || '[]'); } catch (e) {}
+    if (clientSelect) clientSelect.value = clientId;
+    if (titleInput) titleInput.value = 'Master Services Agreement - ' + clientName;
+    if (slugInput) slugInput.value = slug + '-msa';
+    signersList.innerHTML = '';
+    signers.forEach(function(s, i) {
+      signersList.appendChild(signerRow({ role: i === 0 ? 'client_primary' : 'client_secondary', name: s.name, email: s.email }));
+    });
+  }
+
+  if (proposalSelect) {
+    proposalSelect.addEventListener('change', function() {
+      applyProposal(proposalSelect.selectedOptions[0]);
+    });
+    // Apply preset on load if URL had a proposal id.
+    if (presetProposalId) applyProposal(proposalSelect.selectedOptions[0]);
+  }
+
+  addSignerBtn.addEventListener('click', function() {
+    signersList.appendChild(signerRow());
+  });
+
+  function collectPayload() {
+    var signers = [];
+    signersList.querySelectorAll('.signer-row').forEach(function(row) {
+      signers.push({
+        role: row.querySelector('.signer-role').value.trim(),
+        name: row.querySelector('.signer-name').value.trim(),
+        email: row.querySelector('.signer-email').value.trim(),
+      });
+    });
+    var anchorRaw = parseInt(billingAnchorInput.value, 10);
+    var anchor = Number.isFinite(anchorRaw) ? Math.max(1, Math.min(31, anchorRaw)) : 1;
+    return {
+      slug: slugInput.value.trim(),
+      title: titleInput.value.trim(),
+      client_id: clientSelect.value,
+      proposal_id: proposalSelect.value || null,
+      personal_note: personalNote.value,
+      billing_anchor_day: anchor,
+      signers: signers,
+    };
+  }
+
+  function submit(thenIssue) {
+    statusMsg.textContent = 'Saving...';
+    statusMsg.className = 'text-sm text-neutral-400 mt-3';
+    var payload = collectPayload();
+    // Duplicate-email check before send. Same email signing twice
+    // for one agreement isn't valid — UETA signatures bind a
+    // specific person. Audit A2.
+    var emailsLower = payload.signers.map(function(s) { return (s.email || '').toLowerCase(); }).filter(Boolean);
+    var seen = {};
+    for (var ei = 0; ei < emailsLower.length; ei++) {
+      var e = emailsLower[ei];
+      if (seen[e]) {
+        statusMsg.textContent = 'Duplicate signer email: "' + e + '". Each signer must have a unique email.';
+        statusMsg.className = 'text-sm text-red-400 mt-3';
+        // Reject so __withButtonLoading restores the button; nothing was sent.
+        return Promise.reject(new Error('duplicate-signer-email'));
+      }
+      seen[e] = true;
+    }
+    return fetch('/portal/api/admin/agreements', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-csrf-token': csrf },
+      body: JSON.stringify(payload),
+    }).then(function(r) {
+      return r.json().then(function(d) { return { ok: r.ok, data: d }; });
+    }).then(function(result) {
+      if (!result.ok) {
+        var saveErr = (result.data && result.data.error) || 'Save failed';
+        statusMsg.textContent = saveErr;
+        statusMsg.className = 'text-sm text-red-400 mt-3';
+        window.__toast(saveErr, 'error');
+        return;
+      }
+      var agreementSlug = result.data.slug;
+      var agreementId = result.data.agreement_id;
+      if (thenIssue) {
+        statusMsg.textContent = 'Saved. Issuing invites...';
+        return fetch('/portal/api/admin/agreements/' + agreementSlug + '/issue', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-csrf-token': csrf },
+          body: JSON.stringify({ personal_note: payload.personal_note }),
+        }).then(function(r2) {
+          return r2.json().then(function(d2) { return { ok: r2.ok, data: d2 }; });
+        }).then(function(issueResult) {
+          if (!issueResult.ok) {
+            var issueErr = (issueResult.data && issueResult.data.error) || 'Issue failed';
+            statusMsg.textContent = issueErr;
+            statusMsg.className = 'text-sm text-red-400 mt-3';
+            window.__toast(issueErr, 'error');
+            return;
+          }
+          window.__toast('Agreement issued to signers.', 'success');
+          window.location.href = '/portal/admin/agreements/' + agreementId;
+        });
+      } else {
+        window.__toast('Draft saved.', 'success');
+        window.location.href = '/portal/admin/agreements/' + agreementId;
+      }
+    });
+  }
+
+  saveDraftBtn.addEventListener('click', function() {
+    window.__withButtonLoading(saveDraftBtn, 'Saving...', function() {
+      return submit(false);
+    }).catch(function() {});
+  });
+  saveAndIssueBtn.addEventListener('click', function() {
+    window.__withButtonLoading(saveAndIssueBtn, 'Issuing...', function() {
+      return submit(true);
+    }).catch(function() {});
+  });
+})();
+</script>

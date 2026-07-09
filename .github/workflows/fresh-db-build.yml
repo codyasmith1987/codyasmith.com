@@ -1,0 +1,40 @@
+# Fresh-database build replay + test suite, per PR and on main.
+#
+# Catches the migration bug class that has bitten twice (migration 025's
+# billing_cc_email import drift, PR #307; the 057-before-059 ordering hazard,
+# PR #259): astro build runs the FULL migration chain via middleware during
+# prerender, so building against an empty database replays 001 -> latest from
+# scratch. Prod deploys build against the already-migrated prod DB and can
+# never catch this -- only a fresh-DB build can, and until now a human had to
+# remember to run it (chat-wide audit 2026-06-11; automate-everything rule).
+#
+# Also runs `npm test`: the only place the unit suites and lints (migration
+# imports, no-em-dash, billing/email pins) execute automatically.
+
+name: Fresh-DB build + tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  fresh-db-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # A throwaway file DB: empty at job start, so the build replays the
+      # entire migration chain exactly like a from-zero deploy would.
+      TURSO_DATABASE_URL: file:./data/_ci_fresh.db
+      TURSO_AUTH_TOKEN: ''
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Fresh-DB build (replays all migrations from zero)
+        run: npm run build
+      - name: Unit tests + lints
+        run: npm test

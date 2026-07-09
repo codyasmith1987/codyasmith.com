@@ -9,6 +9,7 @@ declare namespace App {
       role: 'admin' | 'client';
       client_id: string | null;
       permissions: string | null;
+      active: boolean;
     };
     session?: {
       id: string;

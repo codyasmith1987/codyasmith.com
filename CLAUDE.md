@@ -4,6 +4,23 @@ Standing instructions for Claude Code in this project. Read this first every ses
 
 ---
 
+## PRODUCTION SAFETY (read before any change)
+
+The portal is LIVE with real paying clients in it: Jason Roth and Kevin Adams (Raised Bar Group), and ZipKit Homes (Sven, Emree). Treat every change as a change to a product people are using right now.
+
+**Never test against production.** No test writes to the prod database or the live portal: no recompose or create POSTs, no admin API mutations (publish, status flips, draft writes), no manual database edits "just to check," no clicking flows that persist. Earlier sessions did exactly this. Stop.
+
+- Work happens **local** (your machine, a throwaway DB; logic checks via `tsx`) or on **staging** (a deployed mirror with its OWN Turso DB on a private URL). Staging does not exist yet, and creating it is Cody's one-time call, not yours: do not stand one up on your own, and never build a second. Until it exists, test locally and behind admin/flag gates. If something genuinely needs staging, flag it to Cody.
+- **Production** (codyasmith.com) changes ONLY by merging a PR to main. Never poke it directly.
+- **Deploy is not release.** Ship unfinished or risky code to prod whenever, but keep it invisible to clients behind an admin/role gate or a feature flag until it is proven. `if (isAdmin)` is the crude version. Use it.
+- Schema only through backward-compatible migrations (expand, migrate, then contract). Never hand-edit prod's schema.
+- Know the rollback (DO redeploy the previous deployment) and that prod backups are on (Turso point-in-time recovery).
+- Never copy real client data into local or staging. Seed with fakes (the Cody Test client).
+
+Full version lives in memory as `nondestructive-prod-workflow`.
+
+---
+
 ## Who I am
 
 I am Cody Smith. I run Cody A Smith LLC. I work across two laptops. I push code and docs to GitHub to stay in sync between machines. I cannot afford drift between laptops, fabricated completion claims, or work that silently goes unpushed.
@@ -42,7 +59,7 @@ Before ending, execute in order. Do not summarize or claim completion until all 
 
 4. **CLEAN UP.** Report any files left untracked and not in `.gitignore`. I want to know what was left behind so I can decide next session if it's junk or unfinished work.
 
-5. **LOG TO CLICKUP.** If this session corresponds to a ClickUp task, post a comment via `clickup_create_task_comment` (never `clickup_update_task`). Write in first person as me ("I verified... I will... my next move..."). Show the returned comment_id. If no ClickUp task was in scope, say so explicitly.
+5. **LOG TO CLICKUP.** If this session corresponds to a ClickUp task, post a comment via `clickup_create_task_comment`, first person as me ("I verified... I will... my next move..."), and show the returned comment_id. Full task updates (status, scope, descriptions) via `clickup_update_task` are allowed too. If no ClickUp task was in scope, say so explicitly.
 
 6. **HANDOFF NOTE.** In 3-5 sentences, tell me: what we finished, what's still open, what the next session's first action should be. No aspirational claims. No fabricated commit hashes. If you're not sure something shipped, say so.
 
@@ -71,10 +88,11 @@ Run all six. If any step fails, STOP there and report the failure. Do not fake c
 - Do not create files in `C:\Users\codya\projects\` (deprecated path)
 - Do not create files in Dropbox or OneDrive paths for code
 - Do not invent commit hashes in handoff notes
-- Do not claim ClickUp updates without returning the comment_id
-- Do not run `clickup_update_task` on descriptions, comments only
+- Do not claim ClickUp updates without returning the comment_id or task id for the write
 - Do not silently skip uncommitted files during end-of-session commit
 - Do not proceed past a failed verification step
+- Do not make test writes against the production portal or database (no recompose/create POSTs, admin API mutations, publish toggles, or manual DB edits to "check" something). Test locally or on staging.
+- Do not expose unfinished or unverified features to clients on prod; gate behind an admin/role check or feature flag until proven
 
 ---
 
@@ -89,6 +107,10 @@ This repo is shared. It holds the portal (admin and client surfaces), the person
 - `_backup/quiz-bg-*/`
 - The blog collection
 - Anything under `src/lib/` that the quiz also imports from. Surface before writing and get approval.
+
+**Before debugging any auth, redirect, session, or middleware symptom on the portal:** read `docs/BUGFIX-LOG.md`. Several of these have recurred. If your current symptom matches a logged one, start with the fix in the log before guessing.
+
+**When you fix a non-obvious bug**, append an entry to `docs/BUGFIX-LOG.md` in the format described at the bottom of that file. The point of the log is the pattern, not the patch.
 
 **Portal-side hard rules:**
 
@@ -111,3 +133,54 @@ This repo is shared. It holds the portal (admin and client surfaces), the person
 **Handoff file:** `HANDOFF_SLICE_18D.md` at the repo root.
 
 **Authoritative vision document:** `PORTAL-VISION-AND-RULES.md` lives in the Claude Project that hosts the controller, not in this repo. The rules above are the CC-operational subset. Controllers read the full vision doc every session.
+
+---
+
+## Private Context Protocol (us-context)
+
+Merged from the us-context kit. Use this protocol for codebase orientation, architecture questions, "what did we decide", tracing flows, impact analysis, and any task where broad file search would otherwise be the first move.
+
+### Query first
+
+Before broad exploration:
+
+1. Read `.us/CONTEXT.md` if it exists.
+2. If `.us/index.json` exists, run:
+
+   ```bash
+   python .us/scripts/query_map.py "<question or concepts>"
+   ```
+
+3. If the map is missing or clearly stale, run:
+
+   ```bash
+   python .us/scripts/build_map.py .
+   ```
+
+4. Use the map to choose source files, then inspect source directly.
+
+Never answer from `.us/REPO_MAP.md` or `.us/index.json` alone when file-level correctness matters. They are routing aids, not truth.
+
+### Confidence labels
+
+Use these labels in notes and summaries:
+
+- `EXTRACTED` - directly supported by source, command output, or user statement.
+- `INFERRED` - reasoned from available evidence but not directly stated.
+- `AMBIGUOUS` - plausible but conflicting, incomplete, or uncertain.
+
+When a claim will affect implementation, prefer `EXTRACTED` evidence with file and line references.
+
+### Memory discipline
+
+`.us/CONTEXT.md` is for stable, reusable memory: user preferences for how to work together, project-specific conventions, durable decisions and their rationale, known risks, recurring gotchas, and non-obvious commands. Do not store secrets, credentials, personal data, one-off scratch notes, or unverified guesses as durable fact. At the end of meaningful work, update `.us/CONTEXT.md` only when the fact is stable and useful later.
+
+### Freshness
+
+Treat the map as stale after meaningful file changes. Rebuild it before using it for orientation if many files changed, generated files were added or removed, the task concerns newly edited code, or query results are weak or surprising. Do not install background hooks, watchers, or global config unless the user explicitly asks.
+
+`build_map.py` refuses filesystem, home, and system roots by default. Run it from a real project directory, pass the project path explicitly, or use `--allow-broad-root` only when the broad scan is intentional.
+
+### Source truth
+
+Use the map to narrow the search. Use real files, tests, command output, and source references to decide. If the map and source disagree, source wins and the map should be rebuilt.

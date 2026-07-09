@@ -5,16 +5,57 @@ import Footer from '../components/Footer.astro';
 import Quiz from '../components/Quiz.astro';
 import { ClientRouter } from 'astro:transitions';
 
+interface ArticleMeta {
+  publishedTime: string;        // ISO 8601
+  modifiedTime?: string;        // ISO 8601
+  author?: string;
+  section?: string;             // e.g. "Articles" or "Case studies"
+  tags?: string[];
+}
+
+interface Breadcrumb {
+  name: string;
+  url: string;                  // absolute URL on this site
+}
+
 interface Props {
   title: string;
   description?: string;
   ogImage?: string;
+  ogImageAlt?: string;
   ogType?: 'website' | 'article';
+  article?: ArticleMeta;
+  breadcrumbs?: Breadcrumb[];   // when set, emits BreadcrumbList JSON-LD
+  noIndex?: boolean;            // when true, emits robots noindex,nofollow
 }
 
-const { title, description = "Cody Smith: web management, marketing strategy, and consulting for small businesses in Cedar City, Utah and beyond.", ogImage, ogType = 'website' } = Astro.props;
+const DEFAULT_DESCRIPTION = "Cody Smith: web management, strategy consulting, implementation, and training for businesses that have outgrown their website.";
+const {
+  title,
+  description = DEFAULT_DESCRIPTION,
+  ogImage,
+  ogImageAlt,
+  ogType = 'website',
+  article,
+  breadcrumbs,
+  noIndex = false,
+} = Astro.props;
+
 const canonicalURL = new URL(Astro.url.pathname, 'https://codyasmith.com');
 const resolvedOgImage = new URL(ogImage ?? '/og-default.png', 'https://codyasmith.com').href;
+const resolvedOgImageAlt = ogImageAlt
+  ?? (ogType === 'article' ? title : 'Cody Smith: web management, strategy consulting, implementation, and training');
+
+const breadcrumbJsonLd = breadcrumbs && breadcrumbs.length > 0 ? JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: breadcrumbs.map((b, i) => ({
+    '@type': 'ListItem',
+    position: i + 1,
+    name: b.name,
+    item: b.url,
+  })),
+}) : null;
 ---
 
 <!DOCTYPE html>
@@ -27,7 +68,9 @@ const resolvedOgImage = new URL(ogImage ?? '/og-default.png', 'https://codyasmit
     <link rel="manifest" href="/manifest.json" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description} />
+    <meta name="theme-color" content="#0a0a0a" />
     <link rel="canonical" href={canonicalURL.href} />
+    {noIndex && <meta name="robots" content="noindex, nofollow" />}
 
     <!-- Open Graph -->
     <meta property="og:type" content={ogType} />
@@ -39,17 +82,55 @@ const resolvedOgImage = new URL(ogImage ?? '/og-default.png', 'https://codyasmit
     <meta property="og:image" content={resolvedOgImage} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={resolvedOgImageAlt} />
+
+    {ogType === 'article' && article && (
+      <>
+        <meta property="article:published_time" content={article.publishedTime} />
+        {article.modifiedTime && <meta property="article:modified_time" content={article.modifiedTime} />}
+        {article.author && <meta property="article:author" content={article.author} />}
+        {article.section && <meta property="article:section" content={article.section} />}
+        {article.tags && article.tags.map(tag => (
+          <meta property="article:tag" content={tag} />
+        ))}
+      </>
+    )}
 
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={resolvedOgImage} />
+    <meta name="twitter:image:alt" content={resolvedOgImageAlt} />
+
+    {breadcrumbJsonLd && (
+      <script type="application/ld+json" set:html={breadcrumbJsonLd} />
+    )}
 
     <title>{title}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Lora:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet" />
+    {/* Preload the fonts CSS as a stylesheet, then load it non-render-blocking.
+        The print-media trick promotes it to all media once the browser parses it,
+        eliminating one critical-path round trip without dropping font-display:swap. */}
+    {/* Editorial type stack: Fraunces (display, variable opsz+soft+wonk axes for
+        dramatic large sizes and refined body), Newsreader (designed for screen
+        reading, has actual stroke contrast), JetBrains Mono (marginalia and code).
+        Google Fonts CDN, no self-hosting per prior iOS regression. */}
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,400,30,0;9..144,500,30,0;9..144,700,50,1;9..144,900,100,1&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=JetBrains+Mono:wght@400;500&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,400,30,0;9..144,500,30,0;9..144,700,50,1;9..144,900,100,1&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=JetBrains+Mono:wght@400;500&display=swap"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,400,30,0;9..144,500,30,0;9..144,700,50,1;9..144,900,100,1&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    </noscript>
     <ClientRouter />
     <script is:inline>
       (function() {
@@ -77,12 +158,23 @@ const resolvedOgImage = new URL(ogImage ?? '/og-default.png', 'https://codyasmit
     </script>
     <style is:inline>
       html.cs-no-quiz #quiz { display: none !important; }
+      /* iOS Safari belt-and-suspenders. After quiz completion or skip,
+         the quiz overlay is display:none but the backdrop-filter GPU
+         layer can persist and render as grey on iOS. This rule guarantees
+         the backdrop-filter is gone whenever the quiz is gone, regardless
+         of whether the JS __fieldStop path ran. See memory entry
+         project_ios_quiz_grey_screen. */
+      html.cs-no-quiz #quiz-backdrop {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        background: transparent !important;
+      }
       /* While the quiz is showing, keep page content rendered (the blur needs
          to see it for reactive theming) but block scroll on the body. */
       html.quiz-active, html.quiz-active body { overflow: hidden; }
     </style>
   </head>
-  <body class="min-h-screen flex flex-col">
+  <body class="site-editorial min-h-screen flex flex-col">
     <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:px-4 focus:py-2 focus:bg-amber-500 focus:text-neutral-950 focus:text-sm focus:font-semibold focus:rounded-lg">
       Skip to content
     </a>
@@ -92,18 +184,6 @@ const resolvedOgImage = new URL(ogImage ?? '/og-default.png', 'https://codyasmit
     </main>
     <Footer />
     <Quiz />
-
-    {import.meta.env.DEV && (
-      <div class="theme-switcher" id="theme-switcher">
-        <button data-set-theme="" title="Original (no theme)">Orig</button>
-        <button data-set-theme="sun-mountain-fall-stars" title="Sun+Mtn+Fall+Stars">SmFs</button>
-        <button data-set-theme="sun-mountain-fall-clouds" title="Sun+Mtn+Fall+Clouds">SmFc</button>
-        <button data-set-theme="moon-mountain-fall-stars" title="Moon+Mtn+Fall+Stars">MmFs</button>
-        <button data-set-theme="moon-mountain-fall-clouds" title="Moon+Mtn+Fall+Clouds">MmFc</button>
-        <button data-set-theme="moon-beach-spring-stars" title="Moon+Beach+Spring+Stars">MbSs</button>
-        <button data-set-theme="sun-beach-spring-clouds" title="Sun+Beach+Spring+Clouds">SbSc</button>
-      </div>
-    )}
 
     <script>
       function initPersonalization() {
@@ -212,45 +292,14 @@ const resolvedOgImage = new URL(ogImage ?? '/og-default.png', 'https://codyasmit
         document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
       }
 
-      function initThemeSwitcher() {
-        const switcher = document.getElementById('theme-switcher');
-        if (!switcher) return;
-
-        function setActive() {
-          const current = document.documentElement.getAttribute('data-theme') || '';
-          switcher.querySelectorAll('button').forEach(btn => {
-            const theme = (btn as HTMLButtonElement).dataset.setTheme || '';
-            btn.classList.toggle('active', theme === current);
-          });
-        }
-
-        switcher.addEventListener('click', (e) => {
-          const btn = (e.target as HTMLElement).closest('button');
-          if (!btn) return;
-          const theme = (btn as HTMLButtonElement).dataset.setTheme || '';
-          if (theme) {
-            document.documentElement.setAttribute('data-theme', theme);
-            localStorage.setItem('cs-theme', theme);
-          } else {
-            document.documentElement.removeAttribute('data-theme');
-            localStorage.removeItem('cs-theme');
-          }
-          setActive();
-        });
-
-        setActive();
-      }
-
       initReveals();
       initPersonalization();
-      initThemeSwitcher();
       document.addEventListener('astro:after-swap', () => {
         // Re-apply theme from localStorage after view transition swap
         var saved = localStorage.getItem('cs-theme');
         if (saved) document.documentElement.setAttribute('data-theme', saved);
         initReveals();
         initPersonalization();
-        initThemeSwitcher();
       });
     </script>
   </body>

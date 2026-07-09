@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { createUser, createMagicLink, getUserByEmail } from '../../../../lib/auth';
 import { logActivity } from '../../../../lib/activity';
 import { logger } from '../../../../lib/logger';
+import { escapeHtml, stripCRLF } from '../../../../lib/email-safety';
 
 export const prerender = false;
 
@@ -59,18 +60,18 @@ export const POST: APIRoute = async ({ locals, request, url }) => {
           },
           body: JSON.stringify({
             sender: { name: 'Cody Smith', email: 'cody@codyasmith.com' },
-            to: [{ email: email.trim(), name: name.trim() }],
-            subject: 'You\'ve been invited to the Client Portal',
+            to: [{ email: email.trim(), name: stripCRLF(name.trim()) }],
+            subject: stripCRLF("You've been invited to the Client Portal"),
             htmlContent: `
               <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-                <h2 style="color: #171717; margin-bottom: 16px;">Hey ${name.trim().split(' ')[0]},</h2>
+                <h2 style="color: #171717; margin-bottom: 16px;">Hey ${escapeHtml(name.trim().split(' ')[0])},</h2>
                 <p style="color: #525252; line-height: 1.6; margin-bottom: 8px;">
                   Cody has set up a client portal for you at codyasmith.com. This is where you'll find your reports, deliverables, and dashboard.
                 </p>
                 <p style="color: #525252; line-height: 1.6; margin-bottom: 24px;">
-                  Click below to log in. This link expires in 15 minutes. After that, just enter your email on the login page to get a new one.
+                  Click below to log in. This link expires in 15 minutes. If it expires, go to the login page and use "Email me a sign-in link" to get a fresh one.
                 </p>
-                <a href="${loginUrl}" style="display: inline-block; background: #f59e0b; color: #0a0a0a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">
+                <a href="${escapeHtml(loginUrl)}" style="display: inline-block; background: #f59e0b; color: #0a0a0a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">
                   Log in to your Portal
                 </a>
                 <p style="color: #a3a3a3; font-size: 12px; margin-top: 32px;">

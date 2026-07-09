@@ -1,28 +1,69 @@
 ---
 import Portal from '../../../layouts/Portal.astro';
 import { getAllClients } from '../../../lib/auth';
-import { getInvoicesByClient } from '../../../lib/invoices';
+import { getInvoicesByClient, getClientOpenBalance, getAllClientsOpenBalance } from '../../../lib/invoices';
+import { getClientExpenses } from '../../../lib/client-expenses';
+import { getClientMetadata } from '../../../lib/agreements';
 export const prerender = false;
 
 const clients = await getAllClients();
 const clientId = Astro.url.searchParams.get('client');
 const invoices = clientId ? await getInvoicesByClient(clientId) : [];
+const expenses = clientId ? await getClientExpenses(clientId) : [];
+const meta = clientId ? await getClientMetadata(clientId).catch(() => null) : null;
+// Read-only account statement: open balance, overdue portion, count. Across
+// all of this client's invoices (admin sees everything, visible or not).
+const balance = clientId ? await getClientOpenBalance(clientId) : null;
+// Selected client (for the manual-billing toggle). getAllClients carries manual_billing.
+const selectedClient = clientId ? clients.find(c => c.id === clientId) : null;
+
+// Portfolio AR rollup (the "who owes what" hub), shown when no single client is
+// selected. Joins client names + the hand-billed flag; sorted overdue-first then
+// by age so the most-at-risk clients surface at the top.
+const clientById = Object.fromEntries(clients.map(c => [c.id, c]));
+const arRows = !clientId
+  ? (await getAllClientsOpenBalance())
+      .map(r => ({ ...r, name: clientById[r.client_id]?.name || 'Unknown', manual: !!clientById[r.client_id]?.manual_billing }))
+      .sort((a, b) => (b.overdue - a.overdue) || (b.oldestDaysPast - a.oldestDaysPast) || (b.open - a.open))
+  : [];
+const arTotals = arRows.reduce((t, r) => ({ open: t.open + r.open, overdue: t.overdue + r.overdue, pending: t.pending + r.pending }), { open: 0, overdue: 0, pending: 0 });
 
 const statusColors: Record<string, string> = {
   draft: 'bg-neutral-700/30 text-neutral-400',
   sent: 'bg-blue-500/10 text-blue-400',
   paid: 'bg-emerald-500/10 text-emerald-400',
-  partial: 'bg-amber-500/10 text-amber-400',
+  partial: 'bg-amber-500/10 text-amber-600',
   overdue: 'bg-red-500/10 text-red-400',
+  payment_pending: 'bg-violet-500/10 text-violet-400',
   cancelled: 'bg-red-500/10 text-red-400',
+  carried_forward: 'bg-neutral-700/30 text-neutral-500',
+};
+const statusLabels: Record<string, string> = {
+  payment_pending: 'Payment pending',
+  carried_forward: 'Carried forward',
 };
 ---
 
 <Portal title="Invoices">
   <div class="max-w-4xl mx-auto">
     <div class="mb-10">
-      <p class="text-amber-400 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin</p>
+      <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-3">Admin</p>
       <h1 class="font-serif text-3xl md:text-4xl text-neutral-100">Invoices</h1>
+    </div>
+
+    <!-- Daily billing engine: same cycle the scheduled cron runs (generate +
+         auto-email upcoming invoices, mark overdue, send reminders + overdue
+         notices). Preview is read-only; Run now sends real client email. -->
+    <div class="mb-8 bg-neutral-900/30 border border-white/5 rounded-xl p-5 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Billing engine</p>
+        <p class="text-sm text-neutral-400">Runs the automatic cycle on demand. It also runs daily on its own.</p>
+        <p id="billing-run-result" class="text-xs text-neutral-500 mt-1 font-mono"></p>
+      </div>
+      <div class="flex items-center gap-3 shrink-0">
+        <button id="billing-preview" class="text-xs text-amber-600 hover:text-amber-500 transition-colors">Preview</button>
+        <button id="billing-run" class="px-4 py-2.5 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all">Run billing now</button>
+      </div>
     </div>
 
     <form method="GET" class="mb-8">
@@ -34,19 +75,89 @@ const statusColors: Record<string, string> = {
       </select>
     </form>
 
-    {!clientId ? (
-      <div class="text-center py-16">
-        <p class="font-serif text-xl text-neutral-100 mb-2">Select a client</p>
-        <p class="text-sm text-neutral-500">Choose a client above to view their invoices.</p>
+    {clientId && balance && (
+      <div class="mb-6 bg-neutral-900/30 border border-white/5 rounded-xl p-5 flex flex-wrap items-center gap-8">
+        <div>
+          <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Open balance</p>
+          <p class="text-2xl font-mono text-neutral-100">${balance.open.toFixed(2)}</p>
+        </div>
+        {balance.overdue > 0 && (
+          <div>
+            <p class="text-[10px] font-mono text-red-400/80 tracking-wide uppercase mb-1">Overdue</p>
+            <p class="text-2xl font-mono text-red-400">${balance.overdue.toFixed(2)}</p>
+          </div>
+        )}
+        {balance.pending > 0 && (
+          <div>
+            <p class="text-[10px] font-mono text-violet-400/80 tracking-wide uppercase mb-1" title="Payment promised / in transit (payment pending status)">Pending</p>
+            <p class="text-2xl font-mono text-violet-400">${balance.pending.toFixed(2)}</p>
+          </div>
+        )}
+        {balance.oldestDaysPast > 0 && (
+          <div>
+            <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Oldest past due</p>
+            <p class={`text-2xl font-mono ${balance.oldestDaysPast >= 30 ? 'text-red-400' : 'text-amber-600'}`}>{balance.oldestDaysPast}d</p>
+          </div>
+        )}
+        <div>
+          <p class="text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-1">Open invoices</p>
+          <p class="text-2xl font-mono text-neutral-300">{balance.count}</p>
+        </div>
       </div>
+    )}
+
+    {!clientId ? (
+      arRows.length > 0 ? (
+        <div>
+          <div class="flex flex-wrap items-baseline justify-between gap-3 mb-3">
+            <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase">Accounts receivable</p>
+            <p class="text-xs text-neutral-500 font-mono">${arTotals.open.toFixed(2)} open{arTotals.overdue > 0 ? <span class="text-red-400"> &middot; ${arTotals.overdue.toFixed(2)} overdue</span> : null}{arTotals.pending > 0 ? <span class="text-violet-400"> &middot; ${arTotals.pending.toFixed(2)} pending</span> : null}</p>
+          </div>
+          <div class="bg-neutral-900/30 border border-white/5 rounded-xl overflow-hidden">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-[10px] font-mono text-neutral-500 uppercase tracking-wide border-b border-white/5">
+                  <th class="text-left px-5 py-3 font-normal">Client</th>
+                  <th class="text-right px-4 py-3 font-normal">Open</th>
+                  <th class="text-right px-4 py-3 font-normal">Overdue</th>
+                  <th class="text-right px-4 py-3 font-normal" title="Payment promised / in transit (payment pending status)">Pending</th>
+                  <th class="text-right px-4 py-3 font-normal">Oldest</th>
+                  <th class="text-right px-5 py-3 font-normal">Invoices</th>
+                </tr>
+              </thead>
+              <tbody>
+                {arRows.map(r => (
+                  <tr class="border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition-colors">
+                    <td class="px-5 py-3">
+                      <a href={`/portal/admin/invoices?client=${r.client_id}`} class="text-neutral-200 hover:text-amber-600 transition-colors">{r.name}</a>
+                      {r.manual && <span class="ml-2 text-[10px] font-mono text-neutral-500 uppercase">hand-billed</span>}
+                    </td>
+                    <td class="px-4 py-3 text-right font-mono text-neutral-300">${r.open.toFixed(2)}</td>
+                    <td class={`px-4 py-3 text-right font-mono ${r.overdue > 0 ? 'text-red-400' : 'text-neutral-600'}`}>{r.overdue > 0 ? `$${r.overdue.toFixed(2)}` : '-'}</td>
+                    <td class={`px-4 py-3 text-right font-mono ${r.pending > 0 ? 'text-violet-400' : 'text-neutral-600'}`}>{r.pending > 0 ? `$${r.pending.toFixed(2)}` : '-'}</td>
+                    <td class={`px-4 py-3 text-right font-mono ${r.oldestDaysPast >= 30 ? 'text-red-400' : r.oldestDaysPast >= 7 ? 'text-amber-600' : 'text-neutral-600'}`}>{r.oldestDaysPast > 0 ? `${r.oldestDaysPast}d` : '-'}</td>
+                    <td class="px-5 py-3 text-right font-mono text-neutral-400">{r.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p class="text-xs text-neutral-500 mt-3">Choose a client above (or click a name) to view and manage their invoices.</p>
+        </div>
+      ) : (
+        <div class="text-center py-16">
+          <p class="font-serif text-xl text-neutral-100 mb-2">No open balances</p>
+          <p class="text-sm text-neutral-500">No client has an outstanding invoice. Choose a client above to view their billing.</p>
+        </div>
+      )
     ) : invoices.length > 0 ? (
       <div class="space-y-3">
         {invoices.map(inv => (
           <a href={`/portal/admin/invoices/${inv.id}`} class="block bg-neutral-900/30 border border-white/5 rounded-xl p-5 hover:border-white/10 transition-all group">
             <div class="flex items-center justify-between">
               <div>
-                <p class="text-sm font-medium font-mono text-neutral-200 group-hover:text-amber-400 transition-colors">{inv.invoice_number}</p>
-                <div class="flex items-center gap-4 mt-1 text-xs text-neutral-600">
+                <p class="text-sm font-medium font-mono text-neutral-200 group-hover:text-amber-600 transition-colors">{inv.invoice_number}</p>
+                <div class="flex items-center gap-4 mt-1 text-xs text-neutral-400">
                   {inv.issued_date && <span>Issued: {inv.issued_date}</span>}
                   {inv.due_date && <span>Due: {inv.due_date}</span>}
                 </div>
@@ -55,10 +166,10 @@ const statusColors: Record<string, string> = {
                 <div class="text-right">
                   <p class="text-sm font-mono text-neutral-300">${inv.total.toFixed(2)}</p>
                   {inv.amount_paid > 0 && inv.amount_paid < inv.total && (
-                    <p class="text-[10px] text-neutral-600">Paid: ${inv.amount_paid.toFixed(2)}</p>
+                    <p class="text-[10px] text-neutral-400">Paid: ${inv.amount_paid.toFixed(2)}</p>
                   )}
                 </div>
-                <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[inv.status] || ''}`}>{inv.status}</span>
+                <span class={`text-[10px] font-mono tracking-wide uppercase px-2.5 py-1 rounded-full ${statusColors[inv.status] || ''}`}>{statusLabels[inv.status] || inv.status}</span>
               </div>
             </div>
           </a>
@@ -70,5 +181,234 @@ const statusColors: Record<string, string> = {
         <p class="text-sm text-neutral-500">Create invoices from a contract's detail page.</p>
       </div>
     )}
+
+    {clientId && (
+      <div class="mt-14">
+        <div class="mb-4">
+          <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-1">Billing recipients</p>
+          <p class="text-sm text-neutral-400">Who invoices and payment notices go to. The primary contact is the recipient; the accountant is CC'd on financial notices only. Leave a field blank to clear it. (A per-invoice extra recipient is set on the invoice itself.)</p>
+        </div>
+        <div class="bg-neutral-900/30 border border-white/5 rounded-xl p-5">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2" title="Used in the email greeting ('Hi <first name>') and the To: name on invoices, reminders, and receipts. Without it, emails open with 'Hi there'.">Contact name</label>
+              <input type="text" id="bc-name" value={meta?.primary_contact_name || ''} placeholder="Sven Heistad" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+              {!meta?.primary_contact_name && <p class="text-[11px] text-amber-600/80 mt-1.5">No name on file: emails greet this client as "Hi there".</p>}
+            </div>
+            <div>
+              <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Primary contact email</label>
+              <input type="email" id="bc-primary" value={meta?.primary_contact_email || ''} placeholder="client@example.com" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+            </div>
+            <div>
+              <label class="block text-[10px] font-mono text-neutral-400 tracking-wide uppercase mb-2">Accountant CC email (optional)</label>
+              <input type="email" id="bc-cc" value={meta?.billing_cc_email || ''} placeholder="accountant@example.com" class="w-full px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+            </div>
+          </div>
+          <button id="save-billing-contacts" class="mt-4 px-5 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all">Save recipients</button>
+
+          <div class="mt-5 pt-5 border-t border-white/5">
+            <label class="flex items-start gap-3 cursor-pointer">
+              <input type="checkbox" id="manual-billing-toggle" checked={selectedClient?.manual_billing} class="mt-1 h-4 w-4 rounded border-white/20 bg-neutral-900 accent-amber-500" />
+              <span>
+                <span class="block text-sm text-neutral-200">Hand-billed (manual)</span>
+                <span class="block text-xs text-neutral-500 mt-0.5">No automatic invoices, reminders, or overdue notices for this client. Use for clients not yet on a portal contract. You invoice them by hand.</span>
+              </span>
+            </label>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {clientId && (
+      <div class="mt-14">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <p class="text-amber-600 font-mono text-[10px] tracking-[0.2em] uppercase mb-1">Recurring expenses</p>
+            <p class="text-sm text-neutral-400">Plugin and tool licenses you pay for and pass through. These auto-fill the Reimbursements section of this client's generated invoices.</p>
+          </div>
+          <button id="show-add-expense" class="text-xs text-amber-600 hover:text-amber-600 transition-colors shrink-0 ml-4">+ Add expense</button>
+        </div>
+
+        <form id="add-expense-form" class="bg-neutral-900/30 border border-white/5 rounded-xl p-5 mb-4 hidden">
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <input type="text" id="ae-name" required placeholder="Name (e.g. Kadence Ultimate)" class="sm:col-span-2 px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+            <input type="number" id="ae-amount" required step="0.01" min="0" placeholder="Amount" class="px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30" />
+            <select id="ae-frequency" class="px-4 py-3 bg-neutral-900/50 border border-white/5 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-amber-500/30">
+              <option value="monthly">Monthly</option>
+              <option value="annual">Annual</option>
+              <option value="one_time">One-time</option>
+            </select>
+          </div>
+          <div class="flex gap-3 mt-4">
+            <button type="submit" class="px-5 py-3 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all">Add</button>
+            <button type="button" id="cancel-add-expense" class="text-sm text-neutral-500 hover:text-neutral-300">Cancel</button>
+          </div>
+        </form>
+
+        {expenses.length > 0 ? (
+          <div class="space-y-2">
+            {expenses.map(e => (
+              <div class={`bg-neutral-900/30 border border-white/5 rounded-xl p-4 flex items-center justify-between ${e.active === 0 ? 'opacity-50' : ''}`}>
+                <div>
+                  <p class="text-sm text-neutral-200">{e.name}<span class="ml-2 text-[10px] font-mono text-amber-600/80 uppercase">{e.frequency.replace('_', '-')}</span></p>
+                  <p class="text-xs text-neutral-500 mt-0.5">${e.amount.toFixed(2)} {e.last_billed_on ? `(last billed ${e.last_billed_on})` : '(not yet billed)'}</p>
+                </div>
+                <div class="flex items-center gap-3">
+                  <button data-toggle-expense={e.id} data-active={e.active} class="text-xs text-neutral-400 hover:text-amber-600 transition-colors">{e.active === 1 ? 'Pause' : 'Activate'}</button>
+                  <button data-delete-expense={e.id} class="text-xs text-neutral-400 hover:text-red-400 transition-colors">Delete</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p class="text-sm text-neutral-500 py-3">No recurring expenses for this client yet.</p>
+        )}
+      </div>
+    )}
   </div>
+
+  <script>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+    const clientId = new URLSearchParams(location.search).get('client');
+
+    // Billing engine: preview (dry-run) + run now (live)
+    const billingResult = document.getElementById('billing-run-result');
+    function fmtBilling(d: any) {
+      const parts = [];
+      if (d.preview) {
+        const p = d.preview;
+        // The live run sends ONE consolidated email per client, so report the
+        // preview in the same unit: "<invoices> inv / <clients> email" so the
+        // dry-run reconciles with the post-run "reminders N / overdue notices N"
+        // (which count emails/clients), not just the invoice count.
+        const clients = (rows: Array<{ client_id?: string }> | undefined) => new Set((rows || []).map(r => r.client_id)).size;
+        parts.push(`would generate ${p.would_generate?.length || 0}`, `mark overdue ${p.would_mark_overdue?.length || 0}`, `remind ${p.would_remind?.length || 0} inv / ${clients(p.would_remind)} email`, `overdue notices ${p.would_send_overdue?.length || 0} inv / ${clients(p.would_send_overdue)} email`);
+        return 'Preview: ' + parts.join(', ');
+      }
+      parts.push(`generated ${d.invoices_generated ?? 0}`, `emailed ${d.invoices_emailed ?? 0}`, `overdue marked ${d.overdue_marked ?? 0}`, `reminders ${d.reminders_sent ?? 0}`, `overdue notices ${d.overdue_notices_sent ?? 0}`);
+      const fails = (d.invoices_email_failed || 0) + (d.reminders_failed || 0) + (d.overdue_notices_failed || 0);
+      if (fails > 0) parts.push(`FAILURES ${fails}`);
+      return 'Ran: ' + parts.join(', ');
+    }
+
+    document.getElementById('billing-preview')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget as HTMLButtonElement;
+      const run = async () => {
+        const res = await fetch('/portal/api/admin/billing/run-daily?dry=1', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken } });
+        const d = await res.json().catch(() => ({}));
+        if (res.ok) { if (billingResult) billingResult.textContent = fmtBilling(d); (window as any).__toast?.('Billing preview ready.', 'success'); }
+        else (window as any).__toast?.(d.error || 'Preview failed.', 'error');
+      };
+      if ((window as any).__withButtonLoading) await (window as any).__withButtonLoading(btn, 'Previewing…', run); else await run();
+    });
+
+    document.getElementById('billing-run')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget as HTMLButtonElement;
+      const ok = await ((window as any).__confirm?.({ title: 'Run billing now', message: 'This runs the full billing cycle immediately: it generates and EMAILS any upcoming invoices, marks overdue, and sends reminders and overdue notices to real clients. Continue?', confirmLabel: 'Run now' }) ?? Promise.resolve(true));
+      if (!ok) return;
+      const run = async () => {
+        const res = await fetch('/portal/api/admin/billing/run-daily', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken } });
+        const d = await res.json().catch(() => ({}));
+        if (res.ok) { if (billingResult) billingResult.textContent = fmtBilling(d); (window as any).__toast?.('Billing run complete.', 'success'); setTimeout(() => location.reload(), 1200); }
+        else (window as any).__toast?.(d.error || 'Billing run failed.', 'error');
+      };
+      if ((window as any).__withButtonLoading) await (window as any).__withButtonLoading(btn, 'Running…', run); else await run();
+    });
+
+    // Save billing recipients (primary contact + accountant CC)
+    document.getElementById('save-billing-contacts')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget as HTMLButtonElement;
+      const run = async () => {
+        const res = await fetch('/portal/api/admin/clients/billing-contacts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({
+            client_id: clientId,
+            primary_contact_name: (document.getElementById('bc-name') as HTMLInputElement).value.trim(),
+            primary_contact_email: (document.getElementById('bc-primary') as HTMLInputElement).value.trim(),
+            billing_cc_email: (document.getElementById('bc-cc') as HTMLInputElement).value.trim(),
+          }),
+        });
+        if (res.ok) (window as any).__toast?.('Billing recipients saved.', 'success');
+        else { const d = await res.json().catch(() => ({})); (window as any).__toast?.(d.error || 'Failed to save recipients.', 'error'); }
+      };
+      if ((window as any).__withButtonLoading) await (window as any).__withButtonLoading(btn, 'Saving…', run);
+      else await run();
+    });
+
+    // Manual-billing toggle: hand-billed clients are excluded from all automation.
+    document.getElementById('manual-billing-toggle')?.addEventListener('change', async (e) => {
+      const cb = e.currentTarget as HTMLInputElement;
+      const desired = cb.checked;
+      cb.disabled = true;
+      try {
+        const res = await fetch('/portal/api/admin/clients/manual-billing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({ client_id: clientId, manual_billing: desired }),
+        });
+        if (res.ok) (window as any).__toast?.(desired ? 'Client set to hand-billed. No automation will run.' : 'Client set to automated billing.', 'success');
+        else { cb.checked = !desired; const d = await res.json().catch(() => ({})); (window as any).__toast?.(d.error || 'Failed to update billing mode.', 'error'); }
+      } finally {
+        cb.disabled = false;
+      }
+    });
+
+    const form = document.getElementById('add-expense-form');
+    document.getElementById('show-add-expense')?.addEventListener('click', () => form?.classList.remove('hidden'));
+    document.getElementById('cancel-add-expense')?.addEventListener('click', () => form?.classList.add('hidden'));
+
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = (form as HTMLFormElement).querySelector('button[type="submit"]') as HTMLButtonElement;
+      const run = async () => {
+        const res = await fetch('/portal/api/admin/expenses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+          body: JSON.stringify({
+            client_id: clientId,
+            name: (document.getElementById('ae-name') as HTMLInputElement).value.trim(),
+            amount: Number((document.getElementById('ae-amount') as HTMLInputElement).value),
+            frequency: (document.getElementById('ae-frequency') as HTMLSelectElement).value,
+          }),
+        });
+        if (res.ok) { (window as any).__toast?.('Expense added.', 'success'); location.reload(); }
+        else { const d = await res.json().catch(() => ({})); (window as any).__toast?.(d.error || 'Failed to add expense', 'error'); }
+      };
+      if (btn && (window as any).__withButtonLoading) await (window as any).__withButtonLoading(btn, 'Adding…', run);
+      else await run();
+    });
+
+    document.querySelectorAll('[data-toggle-expense]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-toggle-expense');
+        const active = btn.getAttribute('data-active') === '1';
+        const run = async () => {
+          const res = await fetch(`/portal/api/admin/expenses/${id}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ active: !active }),
+          });
+          if (res.ok) location.reload();
+          else { const d = await res.json().catch(() => ({})); (window as any).__toast?.(d.error || 'Failed to update expense.', 'error'); }
+        };
+        if ((window as any).__withButtonLoading) await (window as any).__withButtonLoading(btn as HTMLButtonElement, active ? 'Pausing…' : 'Activating…', run);
+        else await run();
+      });
+    });
+
+    document.querySelectorAll('[data-delete-expense]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-delete-expense');
+        const ok = await ((window as any).__confirm?.({ title: 'Delete expense', message: 'Remove this recurring expense template?', confirmLabel: 'Delete', danger: true }) ?? Promise.resolve(true));
+        if (!ok) return;
+        const run = async () => {
+          const res = await fetch(`/portal/api/admin/expenses/${id}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken } });
+          if (res.ok) location.reload();
+          else { const d = await res.json().catch(() => ({})); (window as any).__toast?.(d.error || 'Failed to delete expense.', 'error'); }
+        };
+        if ((window as any).__withButtonLoading) await (window as any).__withButtonLoading(btn as HTMLButtonElement, 'Deleting…', run);
+        else await run();
+      });
+    });
+  </script>
 </Portal>

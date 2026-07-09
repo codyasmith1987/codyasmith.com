@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { setPassword } from '../../../../lib/auth';
+import { setPassword, PasswordPolicyError } from '../../../../lib/auth';
 import { logger } from '../../../../lib/logger';
 import { logActivity } from '../../../../lib/activity';
 
@@ -14,8 +14,10 @@ export const POST: APIRoute = async ({ locals, request }) => {
   try {
     const { user_id, password } = await request.json();
     if (!user_id || !password) return json({ error: 'user_id and password are required' }, 400);
-    if (password.length < 8) return json({ error: 'Password must be at least 8 characters' }, 400);
 
+    // Length enforcement happens inside setPassword via the password policy
+    // (>= 12 chars, <= 72 bytes). Caught below as PasswordPolicyError so the
+    // user sees the specific failure reason.
     await setPassword(user_id, password);
 
     await logActivity({
@@ -28,6 +30,9 @@ export const POST: APIRoute = async ({ locals, request }) => {
 
     return json({ ok: true });
   } catch (err: any) {
+    if (err instanceof PasswordPolicyError) {
+      return json({ error: err.message }, 400);
+    }
     logger.error('Set password error', err);
     return json({ error: 'Failed to set password' }, 500);
   }

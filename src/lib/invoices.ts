@@ -2,11 +2,12 @@
 
 import { nanoid } from 'nanoid';
 import turso from './turso';
+import { clearExpenseBillingForInvoice } from './client-expenses';
 
 // --- Column allowlists for dynamic UPDATE builders ---
 const UPDATABLE_COLUMNS: Record<string, Set<string>> = {
-  invoices: new Set(['status', 'issued_date', 'due_date', 'subtotal', 'tax', 'total', 'amount_paid', 'notes', 'client_visible', 'billing_period_start', 'billing_period_end', 'last_reminder_sent']),
-  invoice_items: new Set(['description', 'quantity', 'unit_price', 'amount', 'sort_order']),
+  invoices: new Set(['status', 'issued_date', 'due_date', 'subtotal', 'tax', 'total', 'amount_paid', 'notes', 'client_visible', 'billing_period_start', 'billing_period_end', 'last_reminder_sent', 'title', 'terms_label', 'bill_to_snapshot', 'reminders_paused', 'invoice_number', 'extra_recipient_email']),
+  invoice_items: new Set(['description', 'quantity', 'unit_price', 'amount', 'sort_order', 'name', 'sub_description', 'frequency', 'category']),
   change_orders: new Set(['title', 'description', 'status', 'cost_impact', 'time_impact_days']),
 };
 
@@ -46,7 +47,19 @@ async function queryAll(sql: string, args: any[] = []): Promise<any[]> {
 // Invoices
 // ============================================================
 
-export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'partial' | 'overdue' | 'cancelled';
+// 'carried_forward' (Part B, 2026-06-05): a terminal status for an overdue
+// invoice whose unpaid balance + accrued interest were rolled onto a newer
+// invoice. It is NOT open, NOT dunned, and NOT counted in the account balance
+// (every collection query whitelists sent/partial/overdue), but it stays
+// client-visible so the client sees it was carried forward (with a note linking
+// the new invoice).
+// payment_pending (2026-06-09): an intermediary state between an open invoice and
+// 'paid' for "the check is in the mail" — payment promised/in transit but not yet
+// received. It counts toward the open balance (money still owed) but is NEVER
+// treated as overdue, is excluded from all reminder/overdue dunning, and fires no
+// client email when set. Recording the actual payment later flips it to
+// paid/partial (and only THEN does the receipt send). Not a terminal status.
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'partial' | 'overdue' | 'payment_pending' | 'cancelled' | 'carried_forward';
 
 export interface Invoice {
   id: string;
@@ -66,6 +79,11 @@ export interface Invoice {
   billing_period_start: string | null;
   billing_period_end: string | null;
   last_reminder_sent: string | null;
+  title: string | null;
+  terms_label: string | null;
+  bill_to_snapshot: string | null;
+  reminders_paused: number;
+  extra_recipient_email: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -73,15 +91,23 @@ export interface Invoice {
 
 export async function generateInvoiceNumber(): Promise<string> {
   const year = new Date().getFullYear();
-  const row = await queryOne(
-    "SELECT COUNT(*) as cnt FROM invoices WHERE invoice_number LIKE ?",
-    [`INV-${year}-%`]
-  );
-  const seq = ((row?.cnt ?? 0) + 1).toString().padStart(4, '0');
+  const result = await turso.execute({
+    sql: 'SELECT invoice_number FROM invoices WHERE invoice_number LIKE ?',
+    args: [`INV-${year}-%`],
+  });
+  let maxSeq = 0;
+  const re = new RegExp(`^INV-${year}-(\\d+)$`);
+  for (const row of result.rows as any[]) {
+    const match = String(row[0] || '').match(re);
+    if (!match) continue;
+    const n = Number.parseInt(match[1], 10);
+    if (Number.isFinite(n) && n > maxSeq) maxSeq = n;
+  }
+  const seq = (maxSeq + 1).toString().padStart(4, '0');
   return `INV-${year}-${seq}`;
 }
 
-export async function createInvoice(data: {
+export interface CreateInvoiceInput {
   contract_id: string;
   client_id: string;
   milestone_id?: string;
@@ -89,18 +115,58 @@ export async function createInvoice(data: {
   due_date?: string;
   notes?: string;
   created_by: string;
-}): Promise<string> {
+  // Service period (optional). A NULL period means at-signing/one-off; a set
+  // period makes the invoice visible to the recurring engine's per-period
+  // dedupe (invoiceExistsForPeriod), so a hand-created recurring invoice does
+  // not get double-billed by the nightly generator (chat-wide audit 2026-06-11).
+  billing_period_start?: string;
+  billing_period_end?: string;
+}
+
+function isInvoiceNumberCollision(err: any): boolean {
+  const message = String(err?.message || err || '');
+  return /UNIQUE/i.test(message) && /invoice/i.test(message);
+}
+
+function isDatabaseBusy(err: any): boolean {
+  return /SQLITE_BUSY|database is locked/i.test(String(err?.message || err || ''));
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export async function createInvoice(data: CreateInvoiceInput): Promise<string> {
   const id = nanoid();
   await turso.execute({
-    sql: `INSERT INTO invoices (id, contract_id, client_id, milestone_id, invoice_number, due_date, notes, created_by)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO invoices (id, contract_id, client_id, milestone_id, invoice_number, due_date, notes, created_by, billing_period_start, billing_period_end)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       id, data.contract_id, data.client_id, data.milestone_id ?? null,
       data.invoice_number, data.due_date ?? null, data.notes ?? null,
       data.created_by,
+      data.billing_period_start ?? null, data.billing_period_end ?? null,
     ],
   });
   return id;
+}
+
+export async function createInvoiceWithGeneratedNumber(
+  data: Omit<CreateInvoiceInput, 'invoice_number'>,
+): Promise<{ id: string; invoice_number: string }> {
+  let lastErr: any;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const invoice_number = await generateInvoiceNumber();
+      const id = await createInvoice({ ...data, invoice_number });
+      return { id, invoice_number };
+    } catch (err: any) {
+      lastErr = err;
+      if (!isInvoiceNumberCollision(err) && !isDatabaseBusy(err)) throw err;
+      await delay(50 * (attempt + 1));
+    }
+  }
+  throw lastErr;
 }
 
 export async function getInvoice(id: string): Promise<Invoice | undefined> {
@@ -123,11 +189,83 @@ export async function getInvoicesByStatus(status: InvoiceStatus): Promise<Invoic
   return queryAll('SELECT * FROM invoices WHERE status = ? ORDER BY created_at DESC', [status]);
 }
 
+// Cross-client list of at-signing invoices (no billing period) still
+// awaiting payment. These gate work starting per contract 5.2, so the
+// admin needs one place to see what is blocked. Joined to client name.
+export async function getAwaitingAtSigningInvoices(): Promise<Array<{
+  id: string; invoice_number: string; total: number; amount_paid: number;
+  issued_date: string | null; due_date: string | null; status: string;
+  client_id: string; client_name: string;
+}>> {
+  return queryAll(
+    `SELECT i.id, i.invoice_number, i.total, i.amount_paid, i.issued_date, i.due_date, i.status, i.client_id,
+            c.name AS client_name
+       FROM invoices i JOIN clients c ON c.id = i.client_id
+      WHERE i.billing_period_start IS NULL
+        AND i.amount_paid < i.total
+        AND i.status IN ('sent','partial','overdue','payment_pending')
+      ORDER BY i.issued_date ASC, i.created_at ASC`
+  );
+}
+
+// Overdue invoices for the admin "Overdue" count/list. Matches a row whether
+// or not the daily cron has flipped it to 'overdue' yet: an already-marked
+// 'overdue' row, OR a still-'sent'/'partial' row already past its due date.
+// (The old query keyed only on status='sent', so once markOverdueInvoices ran
+// the count dropped to 0 even with overdue invoices present.) amount_paid <
+// total excludes anything fully settled.
 export async function getOverdueInvoices(): Promise<Invoice[]> {
   return queryAll(
-    "SELECT * FROM invoices WHERE status = 'sent' AND due_date < date('now') ORDER BY due_date",
+    "SELECT * FROM invoices WHERE (status = 'overdue' OR ((status = 'sent' OR status = 'partial') AND due_date < date('now'))) AND amount_paid < total ORDER BY due_date",
     []
   );
+}
+
+// Account-statement aggregate for one client: total owed across all open
+// invoices, the portion of that already overdue (same predicate as
+// getOverdueInvoices), and the count. Open = total - amount_paid summed over
+// not-fully-settled sent/partial/overdue rows. Used by the admin invoices
+// summary strip. (The client portal computes its own balance from the
+// client_visible subset so the figure always matches the rows it renders.)
+export async function getClientOpenBalance(clientId: string): Promise<{ open: number; overdue: number; pending: number; count: number; oldestDaysPast: number }> {
+  const row = await queryOne(
+    `SELECT
+       COALESCE(SUM(total - amount_paid), 0) AS open,
+       COALESCE(SUM(CASE WHEN status = 'overdue' OR (status IN ('sent','partial') AND due_date < date('now')) THEN total - amount_paid ELSE 0 END), 0) AS overdue,
+       COALESCE(SUM(CASE WHEN status = 'payment_pending' THEN total - amount_paid ELSE 0 END), 0) AS pending,
+       COALESCE(MAX(CASE WHEN due_date IS NOT NULL AND (status = 'overdue' OR (status IN ('sent','partial') AND due_date < date('now'))) THEN CAST(julianday('now') - julianday(due_date) AS INTEGER) ELSE 0 END), 0) AS oldest_days_past,
+       COUNT(*) AS count
+     FROM invoices
+     WHERE client_id = ? AND status IN ('sent','partial','overdue','payment_pending') AND amount_paid < total`,
+    [clientId]);
+  return { open: row?.open ?? 0, overdue: row?.overdue ?? 0, pending: row?.pending ?? 0, count: row?.count ?? 0, oldestDaysPast: row?.oldest_days_past ?? 0 };
+}
+
+// Portfolio AR rollup: one row per client that has any open invoice, with the
+// same open/overdue/age semantics as getClientOpenBalance. Backs the admin
+// "who owes what" billing hub. Only clients with a balance are returned; the
+// caller joins client names (and the manual-billing flag) from getAllClients.
+export async function getAllClientsOpenBalance(): Promise<Array<{ client_id: string; open: number; overdue: number; pending: number; count: number; oldestDaysPast: number }>> {
+  const rows = await queryAll(
+    `SELECT client_id,
+       COALESCE(SUM(total - amount_paid), 0) AS open,
+       COALESCE(SUM(CASE WHEN status = 'overdue' OR (status IN ('sent','partial') AND due_date < date('now')) THEN total - amount_paid ELSE 0 END), 0) AS overdue,
+       COALESCE(SUM(CASE WHEN status = 'payment_pending' THEN total - amount_paid ELSE 0 END), 0) AS pending,
+       COALESCE(MAX(CASE WHEN due_date IS NOT NULL AND (status = 'overdue' OR (status IN ('sent','partial') AND due_date < date('now'))) THEN CAST(julianday('now') - julianday(due_date) AS INTEGER) ELSE 0 END), 0) AS oldest_days_past,
+       COUNT(*) AS count
+     FROM invoices
+     WHERE status IN ('sent','partial','overdue','payment_pending') AND amount_paid < total
+     GROUP BY client_id
+     HAVING SUM(total - amount_paid) > 0`,
+  );
+  return rows.map(r => ({
+    client_id: r.client_id as string,
+    open: r.open ?? 0,
+    overdue: r.overdue ?? 0,
+    pending: r.pending ?? 0,
+    count: r.count ?? 0,
+    oldestDaysPast: r.oldest_days_past ?? 0,
+  }));
 }
 
 // Client-safe: excludes created_by, contract_id, milestone_id (admin context)
@@ -139,8 +277,32 @@ export async function getClientVisibleInvoices(clientId: string): Promise<Pick<I
 }
 
 export async function updateInvoice(id: string, data: Partial<Pick<Invoice,
-  'status' | 'issued_date' | 'due_date' | 'subtotal' | 'tax' | 'total' | 'amount_paid' | 'notes' | 'client_visible'
+  'status' | 'issued_date' | 'due_date' | 'subtotal' | 'tax' | 'total' | 'amount_paid' | 'notes' | 'client_visible' |
+  'billing_period_start' | 'billing_period_end' | 'last_reminder_sent' |
+  'title' | 'terms_label' | 'bill_to_snapshot' | 'reminders_paused' | 'invoice_number' | 'extra_recipient_email'
 >>): Promise<void> {
+  // The invoice number is editable (manual override of the auto-generated one),
+  // but must stay unique. Reject a collision with a DIFFERENT invoice before
+  // writing. The caller surfaces this as a 409, not a 500.
+  if (data.invoice_number !== undefined) {
+    if (!String(data.invoice_number).trim()) {
+      throw new Error('Invoice number cannot be empty');
+    }
+    const clash = await getInvoiceByNumber(data.invoice_number);
+    if (clash && clash.id !== id) {
+      throw new Error(`Invoice number "${data.invoice_number}" is already in use`);
+    }
+  }
+  // Couple visibility to a balance-bearing status (dual audit 2026-06-05): when an
+  // invoice moves into sent/partial/overdue, the CLIENT must be able to see it --
+  // otherwise their portal balance (computed from the client_visible subset)
+  // understates what they owe. Default client_visible=1 on that transition unless
+  // the caller is explicitly setting it (so a deliberate hide still wins). Covers
+  // admin status edits + recordPayment's flip to 'partial'; markOverdueInvoices
+  // sets it in its own raw UPDATE.
+  if (data.status && ['sent', 'partial', 'overdue', 'payment_pending'].includes(data.status) && data.client_visible === undefined) {
+    data = { ...data, client_visible: 1 };
+  }
   const update = buildSafeUpdate('invoices', id, data);
   if (!update) return;
   await turso.execute(update);
@@ -157,7 +319,112 @@ export async function recalculateInvoiceTotals(invoiceId: string): Promise<void>
   await updateInvoice(invoiceId, { subtotal, total: subtotal + tax });
 }
 
+// --- Category-aware subtotals (Services / Reimbursements / Past due) ---
+// Pure. A NULL or absent category counts as 'services', so legacy flat invoices
+// keep a Services subtotal equal to their old subtotal and 0 in the others.
+// past_due + late_interest (Part B roll-forward) are grouped into pastDue so a
+// carried balance + its interest render separately from current-period services
+// and the Services subtotal isn't inflated by carried debt.
+export function splitSubtotals(
+  items: Array<{ amount: number; category?: string | null }>,
+): { services: number; reimbursements: number; pastDue: number; total: number } {
+  let services = 0;
+  let reimbursements = 0;
+  let pastDue = 0;
+  for (const item of items) {
+    const c = item.category || 'services';
+    if (c === 'reimbursements') reimbursements += item.amount;
+    else if (c === 'past_due' || c === 'late_interest') pastDue += item.amount;
+    else services += item.amount;
+  }
+  return { services, reimbursements, pastDue, total: services + reimbursements + pastDue };
+}
+
+// --- Duplicate ---
+// Pure. Advance a 'YYYY-MM-DD' date by n months, clamping the day to the target
+// month length (e.g. Jan 31 plus 1 month becomes Feb 28). Used to roll a
+// duplicated invoice's billing period forward to the next cycle.
+export function addMonthsToDate(dateStr: string, n: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const monthIndex = (m - 1) + n;
+  const ny = y + Math.floor(monthIndex / 12);
+  const nm = ((monthIndex % 12) + 12) % 12; // 0-based target month
+  const lastDay = new Date(Date.UTC(ny, nm + 1, 0)).getUTCDate();
+  const nd = Math.min(d, lastDay);
+  const pad = (v: number) => String(v).padStart(2, '0');
+  return `${ny}-${pad(nm + 1)}-${pad(nd)}`;
+}
+
+// Pure. Build the header field set plus line items for a duplicate. The billing
+// period rolls forward one month; tax/title/terms carry over; every line item
+// copies verbatim (name, sub_description, frequency, category) so a duplicate is
+// a faithful starting point to tweak. Status/visibility are forced by
+// duplicateInvoice, not here.
+export function buildDuplicatePayload(
+  src: Invoice,
+  items: InvoiceItem[],
+): {
+  header: { title: string | null; terms_label: string | null; tax: number; billing_period_start: string | null; billing_period_end: string | null };
+  items: Array<{ name: string | null; sub_description: string | null; description: string; frequency: string | null; category: string; quantity: number; unit_price: number }>;
+} {
+  return {
+    header: {
+      title: src.title ?? null,
+      terms_label: src.terms_label ?? null,
+      tax: src.tax ?? 0,
+      billing_period_start: src.billing_period_start ? addMonthsToDate(src.billing_period_start, 1) : null,
+      billing_period_end: src.billing_period_end ? addMonthsToDate(src.billing_period_end, 1) : null,
+    },
+    items: items.map(it => ({
+      name: it.name ?? null,
+      sub_description: it.sub_description ?? null,
+      description: it.description,
+      frequency: it.frequency ?? null,
+      category: it.category || 'services',
+      quantity: it.quantity,
+      unit_price: it.unit_price,
+    })),
+  };
+}
+
+// Clone an invoice into a new editable DRAFT (the duplicate button). The copy is
+// not client-visible and gets a fresh generated number. Returns the new id +
+// number. EMAIL/visibility side effects: none (draft, hidden).
+export async function duplicateInvoice(sourceId: string, createdBy: string): Promise<{ id: string; invoice_number: string }> {
+  const src = await getInvoice(sourceId);
+  if (!src) throw new Error('Source invoice not found');
+  const items = await getInvoiceItems(sourceId);
+
+  const { id, invoice_number } = await createInvoiceWithGeneratedNumber({
+    contract_id: src.contract_id,
+    client_id: src.client_id,
+    milestone_id: src.milestone_id ?? undefined,
+    notes: src.notes ?? undefined,
+    created_by: createdBy,
+  });
+
+  const payload = buildDuplicatePayload(src, items);
+  await updateInvoice(id, {
+    status: 'draft',
+    client_visible: 0,
+    title: payload.header.title,
+    terms_label: payload.header.terms_label,
+    tax: payload.header.tax,
+    billing_period_start: payload.header.billing_period_start,
+    billing_period_end: payload.header.billing_period_end,
+  });
+
+  for (const item of payload.items) {
+    await addInvoiceItem({ invoice_id: id, ...item });
+  }
+
+  return { id, invoice_number };
+}
+
 export async function deleteInvoice(id: string): Promise<void> {
+  // Un-stamp any recurring-expense templates this invoice billed, so they become
+  // due again on the next generation instead of silently skipping their cycle.
+  await clearExpenseBillingForInvoice(id);
   await turso.execute({ sql: 'DELETE FROM invoice_items WHERE invoice_id = ?', args: [id] });
   await turso.execute({ sql: 'DELETE FROM payments WHERE invoice_id = ?', args: [id] });
   await turso.execute({ sql: 'DELETE FROM invoices WHERE id = ?', args: [id] });
@@ -170,7 +437,11 @@ export async function deleteInvoice(id: string): Promise<void> {
 export interface InvoiceItem {
   id: string;
   invoice_id: string;
+  name: string | null;
+  sub_description: string | null;
   description: string;
+  frequency: string | null;
+  category: string;
   quantity: number;
   unit_price: number;
   amount: number;
@@ -181,16 +452,25 @@ export interface InvoiceItem {
 export async function addInvoiceItem(data: {
   invoice_id: string;
   description: string;
+  name?: string | null;
+  sub_description?: string | null;
+  frequency?: string | null;
+  category?: string | null;
   quantity?: number;
   unit_price: number;
+  sort_order?: number | null;
 }): Promise<string> {
   const id = nanoid();
   const qty = data.quantity ?? 1;
   const amount = qty * data.unit_price;
   await turso.execute({
-    sql: `INSERT INTO invoice_items (id, invoice_id, description, quantity, unit_price, amount)
-          VALUES (?, ?, ?, ?, ?, ?)`,
-    args: [id, data.invoice_id, data.description, qty, data.unit_price, amount],
+    sql: `INSERT INTO invoice_items (id, invoice_id, name, sub_description, description, frequency, category, quantity, unit_price, amount, sort_order)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      id, data.invoice_id, data.name ?? null, data.sub_description ?? null,
+      data.description, data.frequency ?? null, data.category ?? 'services',
+      qty, data.unit_price, amount, data.sort_order ?? 0,
+    ],
   });
   await recalculateInvoiceTotals(data.invoice_id);
   return id;
@@ -201,7 +481,7 @@ export async function getInvoiceItems(invoiceId: string): Promise<InvoiceItem[]>
 }
 
 export async function updateInvoiceItem(id: string, data: Partial<Pick<InvoiceItem,
-  'description' | 'quantity' | 'unit_price' | 'sort_order'
+  'description' | 'quantity' | 'unit_price' | 'sort_order' | 'name' | 'sub_description' | 'frequency' | 'category'
 >>): Promise<void> {
   const allowed = UPDATABLE_COLUMNS.invoice_items;
   const fields: string[] = [];
@@ -285,7 +565,12 @@ export async function recordPayment(data: {
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
   const invoice = await getInvoice(data.invoice_id);
   if (invoice) {
-    const newStatus: InvoiceStatus = totalPaid >= invoice.total ? 'paid' : 'partial';
+    // A terminal invoice (carried_forward / cancelled) keeps its status: a stray
+    // payment against a rolled-forward invoice must not resurrect it to
+    // partial/sent and reintroduce its balance alongside the new invoice (dual
+    // audit 2026-06-05). amount_paid still records for the audit trail.
+    const isTerminal = invoice.status === 'carried_forward' || invoice.status === 'cancelled';
+    const newStatus: InvoiceStatus = isTerminal ? invoice.status : (totalPaid >= invoice.total ? 'paid' : 'partial');
     await updateInvoice(data.invoice_id, { amount_paid: totalPaid, status: newStatus });
   }
 
@@ -306,7 +591,11 @@ export async function deletePayment(id: string): Promise<void> {
     const totalPaid = remaining.reduce((sum, p) => sum + p.amount, 0);
     const invoice = await getInvoice(payment.invoice_id);
     if (invoice) {
-      const newStatus: InvoiceStatus = totalPaid >= invoice.total ? 'paid' : totalPaid > 0 ? 'partial' : invoice.status === 'paid' ? 'sent' : invoice.status;
+      // Terminal statuses (carried_forward / cancelled) are sticky: deleting a
+      // payment must not resurrect a rolled-forward/cancelled invoice (dual audit
+      // 2026-06-05).
+      const isTerminal = invoice.status === 'carried_forward' || invoice.status === 'cancelled';
+      const newStatus: InvoiceStatus = isTerminal ? invoice.status : (totalPaid >= invoice.total ? 'paid' : totalPaid > 0 ? 'partial' : invoice.status === 'paid' ? 'sent' : invoice.status);
       await updateInvoice(payment.invoice_id, { amount_paid: totalPaid, status: newStatus });
     }
   }

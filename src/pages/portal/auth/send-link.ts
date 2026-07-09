@@ -1,8 +1,9 @@
 import type { APIRoute } from 'astro';
-import { getUserByEmail, createMagicLink } from '../../../lib/auth';
+import { getUserByEmail, createMagicLink, userHasPassword, isUserActive } from '../../../lib/auth';
 import { rateLimit } from '../../../lib/rate-limit';
 import { logger } from '../../../lib/logger';
 import { logActivity } from '../../../lib/activity';
+import { escapeHtml, stripCRLF } from '../../../lib/email-safety';
 
 export const prerender = false;
 
@@ -11,7 +12,11 @@ const json = (data: any, status = 200) =>
 
 export const POST: APIRoute = async ({ request, url, clientAddress }) => {
   const ip = clientAddress || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-  if (!await rateLimit(`login:${ip}`, 10, 15 * 60 * 1000)) {
+  // Fail-closed and use the same login:ip:<ip> key as /portal/auth/login.
+  // Sharing the bucket means an attacker cannot bypass the per-IP login
+  // throttle by alternating between the password and magic-link paths.
+  // See security-audit-2026-05-12 round 3 SEC3-003.
+  if (!await rateLimit(`login:ip:${ip}`, 10, 15 * 60 * 1000, true)) {
     return json({ error: 'Too many login attempts. Please wait a few minutes.' }, 429);
   }
   try {
@@ -23,10 +28,33 @@ export const POST: APIRoute = async ({ request, url, clientAddress }) => {
       return json({ error: 'Invalid email address' }, 400);
     }
 
+    // Per-email throttle, in its own bucket (not the shared login:ip one).
+    // Now that this endpoint is a visible button on the login page, cap how
+    // often any single inbox can be mailed a sign-in link so it cannot be used
+    // to mailbomb a victim from rotating IPs. Return ok on throttle to keep the
+    // response uniform (no email enumeration). Fail-closed like the other
+    // auth-path limits.
+    const emailKey = email.toLowerCase().trim();
+    if (!await rateLimit(`signin-link:email:${emailKey}`, 5, 15 * 60 * 1000, true)) {
+      return json({ ok: true });
+    }
+
     const user = await getUserByEmail(email);
 
     // Always return success to prevent email enumeration
     if (!user) {
+      return json({ ok: true });
+    }
+
+    // Do not issue a sign-in link to a deactivated user. Respond uniformly.
+    if (!await isUserActive(user.id)) {
+      return json({ ok: true });
+    }
+
+    // Users with a password set use the password flow. Magic-link issuance
+    // is reserved for initial onboarding (no password yet). Returning ok
+    // here is intentional to keep response timing uniform.
+    if (await userHasPassword(user.id)) {
       return json({ ok: true });
     }
 
@@ -54,15 +82,15 @@ export const POST: APIRoute = async ({ request, url, clientAddress }) => {
         },
         body: JSON.stringify({
           sender: { name: 'Cody Smith', email: 'cody@codyasmith.com' },
-          to: [{ email: user.email, name: user.name }],
-          subject: 'Your Portal Login Link',
+          to: [{ email: user.email, name: stripCRLF(user.name) }],
+          subject: stripCRLF('Your Portal Login Link'),
           htmlContent: `
             <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 20px;">
-              <h2 style="color: #171717; margin-bottom: 16px;">Hey ${user.name.split(' ')[0]},</h2>
+              <h2 style="color: #171717; margin-bottom: 16px;">Hey ${escapeHtml(user.name.split(' ')[0])},</h2>
               <p style="color: #525252; line-height: 1.6; margin-bottom: 24px;">
-                Here's your login link for the client portal. It expires in 15 minutes.
+                Here's your sign-in link for the client portal. It expires in 15 minutes. If it expires before you use it, just request a fresh one from the login page.
               </p>
-              <a href="${loginUrl}" style="display: inline-block; background: #f59e0b; color: #0a0a0a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">
+              <a href="${escapeHtml(loginUrl)}" style="display: inline-block; background: #f59e0b; color: #0a0a0a; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 14px;">
                 Log in to Portal
               </a>
               <p style="color: #a3a3a3; font-size: 12px; margin-top: 32px; line-height: 1.5;">

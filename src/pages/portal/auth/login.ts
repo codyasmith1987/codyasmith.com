@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { verifyPassword, createSession, SESSION_COOKIE } from '../../../lib/auth';
+import { verifyPassword, createSession, SESSION_COOKIE, isUserActive } from '../../../lib/auth';
 import { rateLimit } from '../../../lib/rate-limit';
 import { logger } from '../../../lib/logger';
 import { logActivity } from '../../../lib/activity';
@@ -11,7 +11,9 @@ const json = (data: any, status = 200) =>
 
 export const POST: APIRoute = async ({ request, cookies, clientAddress }) => {
   const ip = clientAddress || request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-  if (!await rateLimit(`login:${ip}`, 10, 15 * 60 * 1000)) {
+  // Per-IP throttle, fail-closed so a Turso outage cannot bypass brute-force
+  // protection. See security-audit-2026-05-12 SEC-016.
+  if (!await rateLimit(`login:ip:${ip}`, 10, 15 * 60 * 1000, true)) {
     return json({ error: 'Too many login attempts. Please wait a few minutes.' }, 429);
   }
 
@@ -22,9 +24,22 @@ export const POST: APIRoute = async ({ request, cookies, clientAddress }) => {
       return json({ error: 'Email and password are required' }, 400);
     }
 
+    // Per-account throttle: defends against credential stuffing from
+    // rotating-IP botnets. See SEC-011. Fail-closed.
+    const emailKey = typeof email === 'string' ? email.toLowerCase().trim() : 'unknown';
+    if (!await rateLimit(`login:email:${emailKey}`, 10, 15 * 60 * 1000, true)) {
+      return json({ error: 'Too many login attempts. Please wait a few minutes.' }, 429);
+    }
+
     const userId = await verifyPassword(email, password);
     if (!userId) {
       return json({ error: 'Invalid email or password' }, 401);
+    }
+
+    // A deactivated user has a valid password but no access. Reject before
+    // issuing a session.
+    if (!await isUserActive(userId)) {
+      return json({ error: 'Your account is inactive. Contact Cody if you think this is a mistake.' }, 403);
     }
 
     const sessionToken = await createSession(userId);
@@ -41,7 +56,7 @@ export const POST: APIRoute = async ({ request, cookies, clientAddress }) => {
       path: '/portal',
       httpOnly: true,
       secure: true,
-      sameSite: 'lax',
+      sameSite: 'strict',
       maxAge: 30 * 24 * 60 * 60,
     });
 

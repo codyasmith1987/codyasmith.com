@@ -1,0 +1,19 @@
+import type { APIRoute } from 'astro';
+import { renderOg } from '../../lib/og';
+
+export const prerender = true;
+
+export const GET: APIRoute = async () => {
+  const png = await renderOg({
+    title: 'Privacy Policy.',
+    eyebrow: 'Legal',
+    kicker: 'Cedar City, Utah',
+    subtitle: 'What I collect, why, and how to delete it.',
+  });
+  return new Response(new Uint8Array(png), {
+    headers: {
+      'Content-Type': 'image/png',
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    },
+  });
+};

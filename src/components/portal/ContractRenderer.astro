@@ -1,0 +1,260 @@
+---
+// Shared contract renderer. Takes the resolved body HTML and the
+// rendered Schedule A HTML and lays them out with the editorial palette
+// the portal already uses. The renderer enforces the no-internal-
+// exposure boundary via the mode passed to the contract-render module
+// upstream; this component does NOT do any sanitizing itself, just
+// layout. Sanitizing belongs in src/lib/contract-render.ts so there is
+// one auditable chokepoint.
+
+interface Props {
+  bodyHtml: string;
+  scheduleAHtml: string;
+  title: string;
+  clientLegalName?: string;
+  status?: string;
+  bannerHtml?: string;
+  printHref?: string;
+}
+
+const { bodyHtml, scheduleAHtml, title, clientLegalName, status, bannerHtml, printHref } = Astro.props as Props;
+
+function statusLabel(s: string): string {
+  switch (s) {
+    case 'draft': return 'Draft';
+    case 'issued': return 'Awaiting signatures';
+    case 'partially_signed': return 'Partially signed';
+    case 'executed': return 'Fully executed';
+    case 'revoked': return 'Revoked';
+    case 'voided': return 'Voided';
+    case 'preview': return 'Preview';
+    default: return s;
+  }
+}
+---
+<article class="contract-doc">
+  <header class="contract-doc__header">
+    {clientLegalName && (
+      <p class="contract-doc__eyebrow">{clientLegalName}</p>
+    )}
+    <h1 class="contract-doc__title">{title}</h1>
+    {status && (
+      <p class="contract-doc__status"><span class={`status-pill status-pill--${status}`}>{statusLabel(status)}</span></p>
+    )}
+    {printHref && (
+      <p class="contract-doc__print"><a href={printHref}>Print friendly view</a></p>
+    )}
+  </header>
+
+  {bannerHtml && (
+    <div class="contract-doc__banner" set:html={bannerHtml} />
+  )}
+
+  {/*
+    Schedule A renders FIRST. It is the engagement-specific section the
+    Client cares about: their tier, fees, sites, hours. The boilerplate
+    body (sections 1-25) follows. Order of the document does not change
+    what is binding; both are part of the same agreement. UX-wise the
+    relevant content goes first.
+  */}
+  <div class="contract-doc__schedule contract-doc__schedule--top" set:html={scheduleAHtml} />
+
+  <div class="contract-doc__body" set:html={bodyHtml} />
+
+  <slot name="signing" />
+</article>
+
+<style>
+  .contract-doc {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 48px 28px 96px;
+    color: #1a1814;
+    font-family: 'Source Serif Pro', 'Source Serif 4', Georgia, serif;
+    line-height: 1.65;
+  }
+  .contract-doc__header {
+    margin-bottom: 32px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid #e6ddd0;
+  }
+  .contract-doc__eyebrow {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #6b6359;
+    margin: 0 0 12px;
+  }
+  .contract-doc__title {
+    font-family: 'Fraunces', 'Source Serif Pro', Georgia, serif;
+    font-size: 44px;
+    font-weight: 500;
+    margin: 0 0 12px;
+    color: #1a1814;
+    line-height: 1.15;
+  }
+  .contract-doc__status {
+    margin: 12px 0;
+  }
+  .status-pill {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .status-pill--draft { background: #f0ead9; color: #6b6359; }
+  .status-pill--issued { background: #cfe0ff; color: #1f3a73; }
+  .status-pill--partially_signed { background: #fce9c8; color: #8a5a1a; }
+  .status-pill--executed { background: #d6f0d5; color: #1b5e20; }
+  .status-pill--revoked { background: #fce9c8; color: #8a5a1a; }
+  .status-pill--voided { background: #f5c6c6; color: #7a1f1f; }
+  .status-pill--preview { background: #f0ead9; color: #6b6359; }
+  .contract-doc__print a {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #c47d5a;
+    text-decoration: none;
+  }
+  .contract-doc__print a:hover {
+    text-decoration: underline;
+  }
+  .contract-doc__banner {
+    margin-bottom: 32px;
+    padding: 16px 20px;
+    border-radius: 8px;
+    background: #f0ead9;
+    color: #4a4239;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .contract-doc__body :global(h2) {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 28px;
+    font-weight: 500;
+    margin: 48px 0 16px;
+    color: #1a1814;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e6ddd0;
+  }
+  .contract-doc__body :global(h3) {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 19px;
+    font-weight: 500;
+    margin: 32px 0 12px;
+    color: #2c2722;
+  }
+  .contract-doc__body :global(p) {
+    margin: 0 0 16px;
+    font-size: 16px;
+  }
+  .contract-doc__body :global(ul), .contract-doc__body :global(ol) {
+    margin: 0 0 20px 24px;
+    font-size: 16px;
+  }
+  .contract-doc__body :global(li) {
+    margin-bottom: 8px;
+  }
+  .contract-doc__body :global(table) {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 24px 0;
+    font-size: 14px;
+  }
+  .contract-doc__body :global(th), .contract-doc__body :global(td) {
+    padding: 10px 12px;
+    border: 1px solid #e6ddd0;
+    text-align: left;
+    vertical-align: top;
+  }
+  .contract-doc__body :global(th) {
+    background: #f0ead9;
+    font-weight: 600;
+    font-family: 'Fraunces', Georgia, serif;
+  }
+  .contract-doc__body :global(strong) {
+    font-weight: 600;
+  }
+  .contract-doc__body :global(em) {
+    font-style: italic;
+  }
+  .contract-doc__schedule {
+    margin-top: 64px;
+    padding-top: 40px;
+    border-top: 4px solid #c47d5a;
+  }
+  /* When Schedule A is rendered first (above the body), no top
+     border separator; the body that follows gets a top divider
+     instead. */
+  .contract-doc__schedule--top {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+  .contract-doc__schedule--top + .contract-doc__body {
+    margin-top: 64px;
+    padding-top: 40px;
+    border-top: 1px solid #e6ddd0;
+  }
+  .contract-doc__schedule--top + .contract-doc__body::before {
+    content: 'Standard terms';
+    display: block;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #6b6359;
+    margin-bottom: 16px;
+  }
+  .contract-doc__schedule :global(h2) {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 32px;
+    font-weight: 500;
+    margin: 0 0 8px;
+    color: #1a1814;
+  }
+  .contract-doc__schedule :global(h3) {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 18px;
+    font-weight: 500;
+    margin: 28px 0 10px;
+    color: #2c2722;
+  }
+  .contract-doc__schedule :global(.schedule-a-intro) {
+    color: #6b6359;
+    font-style: italic;
+    margin-bottom: 24px;
+  }
+  .contract-doc__schedule :global(p), .contract-doc__schedule :global(li) {
+    font-size: 15px;
+  }
+  .contract-doc__schedule :global(ul) {
+    margin: 0 0 16px 24px;
+  }
+  .contract-doc__schedule :global(ul ul) {
+    margin-top: 6px;
+    margin-bottom: 6px;
+  }
+  .contract-doc__schedule :global(.metadata-pending) {
+    background: #fdecec;
+    color: #7a1f1f;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  .contract-doc__body :global(.metadata-pending) {
+    background: #fdecec;
+    color: #7a1f1f;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+  }
+</style>
+

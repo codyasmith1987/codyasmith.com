@@ -1,167 +1,164 @@
 ---
 import Base from '../layouts/Base.astro';
+
+const roles = [
+  {
+    label: 'Current',
+    name: 'SC Broadband',
+    meta: 'Marketing Representative, Cedar City, UT',
+    body: 'My business card says "Marketing Representative." Strategy, web development, SEO, and brand architecture for a fiber cooperative serving 30,500 members across two states all sit on me. Built the dual-brand strategy from scratch. Launched SEO and content from zero. Won four Best of Iron County golds.',
+  },
+  {
+    label: 'Agency',
+    name: 'SEO Design Chicago',
+    meta: 'SEO Specialist',
+    body: 'Agency-side SEO across client accounts: technical audits, on-page work, content strategy across a portfolio of sites.',
+  },
+  {
+    label: 'Turnaround',
+    name: 'Truvy',
+    meta: 'Senior Director of Marketing, Draper, UT',
+    body: 'Health and wellness company in turnaround mode. $2.5M budget. Fifteen people across marketing, art, design, events, and PR. Moved NPS from 35 to 60. Increased brand recognition 33%.',
+  },
+  {
+    label: 'Growth',
+    name: 'MCC Apparel / H.M. Cole',
+    meta: 'Creative Director',
+    body: 'Photography and graphic design turned into analytics, reporting, data strategy, and sales influence. $90K budget. 120% sales increase.',
+  },
+  {
+    label: 'Training',
+    name: 'AllenComm',
+    meta: 'Technical Writer / Lead Copywriter',
+    body: 'Started as a technical writer. Ended up designing the SPTS online training program. 50,000 teachers completed it across the country. Won four awards.',
+  },
+  {
+    label: 'Regulated copy',
+    name: 'Vitality Medical',
+    meta: 'Copywriter',
+    body: 'Product copy in a regulated medical e-commerce category, where the words have to track product specifications instead of pushing on therapeutic benefits.',
+  },
+];
+
+const fieldwork = [
+  {
+    name: 'Iron County Today',
+    meta: 'Staff Writer & Photographer',
+    body: 'Covered news, politics, lifestyle, obituaries. Built the digital presence from nothing. Grew the online following 200% in six months. Won Utah Press Association Awards.',
+  },
+  {
+    name: 'Standing Rock',
+    meta: 'Photojournalism, 2016 to 2017',
+    body: 'Filed dispatches from the camps in sub-zero wind, press badge from a FedEx in Bismarck. Some of the most important work I have done.',
+  },
+  {
+    name: 'Mt. Rainier',
+    meta: 'Expedition Photographer, SummitClimb',
+    body: 'Published expedition photography with full credit. Field notes written at 12,000 feet in a tent that smelled like wet Gore-Tex and instant coffee.',
+  },
+];
 ---
 
-<Base title="Work | Marketing, Web Strategy & Writing Portfolio" description="Selected work across web management, marketing strategy, journalism, and photography.">
-  <!-- Hero -->
-  <section class="relative pt-40 pb-24 px-6 overflow-hidden">
-    <div class="absolute top-0 left-0 w-[400px] h-[400px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
-    <div class="relative max-w-4xl mx-auto">
-      <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Work</p>
-      <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10">
-        Same pattern,<br />
-        <span class="gradient-text">every time.</span>
-      </h1>
-      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" data-processing="default">
-        Hired for one thing. Ended up doing three others. Left it better than I found it. Here's the record.
-      </p>
-      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-processing="stars">
-        NPS from 35 to 60. Sales up 120% on a $90K budget. 50,000 teachers trained. Online following up 200%. Here are the numbers behind the pattern.
-      </p>
-      <p class="reveal text-neutral-400 text-lg md:text-xl leading-relaxed max-w-2xl" style="display:none" data-processing="clouds">
-        Hired for one thing. Ended up doing three others. Left it better than I found it. Every job, the same story with different characters. Here's the record.
-      </p>
+<Base title="Work | Strategy, Web Management & Writing Portfolio" description="Selected work across web management, strategy consulting, journalism, and photography." ogImage="/og/work.png" ogImageAlt="Work: same pattern, every time.">
+  <section class="broadsheet pt-ed-7 pb-ed-6">
+    <p class="dateline reveal">
+      <span>No. 04</span>
+      <span class="dateline-divider"></span>
+      <span>Work</span>
+      <span class="dateline-divider"></span>
+      <span>Receipts and field notes</span>
+    </p>
+    <hr class="masthead-rule-thick reveal mt-ed-3" />
+    <h1 class="display-h1 reveal mt-ed-5">
+      Same pattern,<br /><em>every time.</em>
+    </h1>
+    <hr class="masthead-rule-hair mt-ed-5" />
+
+    <div class="editorial-grid mt-ed-5">
+      <aside class="reveal pt-ed-2">
+        <p class="byline">Pattern</p>
+        <p class="byline mt-ed-1" style="color: var(--color-neutral-300); letter-spacing: 0.14em">
+          Hired for one thing
+        </p>
+      </aside>
+      <div>
+        <p class="lede reveal" data-processing="default">
+          Hired for one thing. Ended up doing three others. Left it better than I found it. Here's the record.
+        </p>
+        <p class="lede reveal" style="display:none" data-processing="stars">
+          NPS from 35 to 60. Sales up 120% on a $90K budget. 50,000 teachers trained. Online following up 200%. Here are the numbers behind the pattern.
+        </p>
+        <p class="lede reveal" style="display:none" data-processing="clouds">
+          Every job, the same story with different characters. Hired for one thing, trusted with more, left with receipts.
+        </p>
+      </div>
     </div>
   </section>
 
-  <!-- Web & Marketing -->
-  <section class="py-28 px-6 surface-1">
-    <div class="max-w-5xl mx-auto">
-      <div class="reveal mb-16">
-        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Web & Marketing</p>
-        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">The day jobs.</h2>
+  <section class="broadsheet pt-ed-6 pb-ed-6">
+    <div class="editorial-grid">
+      <aside class="section-marker reveal">
+        <span class="section-marker__num">01</span>
+        <span class="section-marker__label">Web & marketing</span>
+      </aside>
+      <div>
+        <h2 class="display-h2 reveal">The day jobs.</h2>
+        <ol class="service-ol mt-ed-5 reveal-stagger">
+          {roles.map((role, index) => (
+            <li class="reveal" style={`--i:${index}`}>
+              <div class="grid gap-ed-2 py-ed-4" style="grid-template-columns: 4.5rem 1fr">
+                <span class="service-ol__num" style="grid-column:1">{String(index + 1).padStart(2, '0')}</span>
+                <div style="grid-column:2">
+                  <p class="byline" style="color: var(--color-amber-400)">{role.label}</p>
+                  <h3 class="font-display text-3xl text-neutral-100 mt-ed-1">{role.name}</h3>
+                  <p class="body-news mt-ed-1" style="color: var(--color-neutral-500)">{role.meta}</p>
+                  <p class="body-news mt-ed-2">{role.body}</p>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ol>
       </div>
-      <div class="space-y-8 reveal-stagger">
-        <div class="reveal glow-card p-8" style="--i:0">
-          <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
-            <div>
-              <p class="text-amber-400 font-mono text-xs tracking-wider mb-2">Current</p>
-              <h3 class="text-neutral-100 text-xl font-medium">SC Broadband</h3>
-              <p class="text-neutral-500 text-sm">Marketing Representative, Cedar City, UT</p>
-            </div>
-          </div>
-          <p class="text-neutral-400 text-sm leading-relaxed">
-            My business card says "Marketing Representative." Strategy, web development, SEO, and brand architecture for a fiber cooperative serving 30,500 members across two states all sit on me. Built the dual-brand strategy from scratch. Launched SEO and content from zero. Won four Best of Iron County golds.
-          </p>
-        </div>
+    </div>
+  </section>
 
-        <div class="reveal glow-card p-8" style="--i:1">
-          <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
-            <div>
-              <h3 class="text-neutral-100 text-xl font-medium">SEO Design Chicago</h3>
-              <p class="text-neutral-500 text-sm">SEO Specialist</p>
-            </div>
-          </div>
-          <p class="text-neutral-400 text-sm leading-relaxed">
-            SEO Specialist at SEO Design Chicago, a Chicago digital marketing firm. Agency-side SEO across client accounts: technical audits, on-page work, content strategy across a portfolio of sites.
-          </p>
-        </div>
-
-        <div class="reveal glow-card p-8" style="--i:2">
-          <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
-            <div>
-              <h3 class="text-neutral-100 text-xl font-medium">Truvy</h3>
-              <p class="text-neutral-500 text-sm">Senior Director of Marketing, Draper, UT</p>
-            </div>
-            <div class="flex gap-4 text-xs">
-              <span class="px-3 py-1 rounded-full border border-white/10 text-neutral-400">$2.5M budget</span>
-              <span class="px-3 py-1 rounded-full border border-white/10 text-neutral-400">NPS 35→60</span>
-            </div>
-          </div>
-          <p class="text-neutral-400 text-sm leading-relaxed">
-            Health and wellness company in turnaround mode. $2.5M budget. Fifteen people across marketing, art, design, events, and PR. Moved NPS from 35 to 60. Increased brand recognition 33%. Six months. Long enough to prove the model. Short enough to know the company wasn't where I needed to be.
-          </p>
-        </div>
-
-        <div class="reveal glow-card p-8" style="--i:3">
-          <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
-            <div>
-              <h3 class="text-neutral-100 text-xl font-medium">MCC Apparel / H.M. Cole</h3>
-              <p class="text-neutral-500 text-sm">Creative Director</p>
-            </div>
-            <div class="flex gap-4 text-xs">
-              <span class="px-3 py-1 rounded-full border border-white/10 text-neutral-400">+120% sales</span>
-            </div>
-          </div>
-          <p class="text-neutral-400 text-sm leading-relaxed">
-            Dan McConkie hired me for photography and graphic design. Within months I was pulling data, building reports, running analytics, and influencing sales tactics. $90K budget. 120% sales increase. His reference letter says it better than I can: "We kept handing him hats and he kept wearing them."
-          </p>
-        </div>
-
-        <div class="reveal glow-card p-8" style="--i:4">
-          <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
-            <div>
-              <h3 class="text-neutral-100 text-xl font-medium">AllenComm</h3>
-              <p class="text-neutral-500 text-sm">Technical Writer / Lead Copywriter</p>
-            </div>
-            <div class="flex gap-4 text-xs flex-wrap">
-              <span class="px-3 py-1 rounded-full border border-amber-500/20 text-amber-400">Horizon Awards (3)</span>
-              <span class="px-3 py-1 rounded-full border border-amber-500/20 text-amber-400">Davey Award</span>
-            </div>
-          </div>
-          <p class="text-neutral-400 text-sm leading-relaxed">
-            Started as a technical writer. Ended up designing the SPTS online training program. 50,000 teachers completed it across the country. Won four awards. My supervisor's reference letter said I showed "some of the highest levels of creativity and productivity in my 20-year career." The car gets the awards. I got the check and the story.
-          </p>
-        </div>
-
-        <div class="reveal glow-card p-8" style="--i:5">
-          <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
-            <div>
-              <h3 class="text-neutral-100 text-xl font-medium">Vitality Medical</h3>
-              <p class="text-neutral-500 text-sm">Copywriter</p>
-            </div>
-          </div>
-          <p class="text-neutral-400 text-sm leading-relaxed">
-            Copywriter at Vitality Medical, a Salt Lake medical equipment e-commerce supplier. Product copy in a regulated category, where the words have to track product specifications instead of pushing on therapeutic benefits.
-          </p>
+  <section class="broadsheet pt-ed-6 pb-ed-6">
+    <div class="editorial-grid">
+      <aside class="section-marker reveal">
+        <span class="section-marker__num">02</span>
+        <span class="section-marker__label">Writing & photography</span>
+      </aside>
+      <div>
+        <h2 class="display-h2 reveal">Before it was a business.</h2>
+        <div class="grid md:grid-cols-3 gap-ed-5 mt-ed-5 reveal-stagger">
+          {fieldwork.map((item, index) => (
+            <article class="reveal" style={`--i:${index}; border-top: 1px solid var(--color-neutral-800); padding-top: var(--spacing-ed-4);`}>
+              <h3 class="font-display text-2xl text-neutral-100">{item.name}</h3>
+              <p class="byline mt-ed-1">{item.meta}</p>
+              <p class="body-news mt-ed-3">{item.body}</p>
+            </article>
+          ))}
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Writing & Photography -->
-  <section class="py-28 px-6 dot-grid">
-    <div class="max-w-5xl mx-auto">
-      <div class="reveal mb-16">
-        <p class="text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-4">Writing & Photography</p>
-        <h2 class="font-serif text-3xl md:text-5xl text-neutral-100">Before it was a business.</h2>
+  <section class="broadsheet pt-ed-6 pb-ed-8">
+    <hr class="masthead-rule" />
+    <div class="editorial-grid mt-ed-6">
+      <aside class="reveal">
+        <p class="byline">Closing notice</p>
+      </aside>
+      <div>
+        <h2 class="display-h2 reveal">Want to know more about a specific project?</h2>
+        <p class="lede mt-ed-3 reveal" data-frame="default">Just ask. I can point you to writing samples, talk through the strategy work, or explain which parts still make me wince.</p>
+        <p class="lede mt-ed-3 reveal" style="display:none" data-frame="sun">See something here that matches where you're headed? Let's talk about how that pattern applies to your business.</p>
+        <p class="lede mt-ed-3 reveal" style="display:none" data-frame="moon">If any of this sounds like what your situation needs, tell me what's going on. I'll tell you if I can help.</p>
+        <a href="/contact?interest=not-sure" class="cta-stamp reveal mt-ed-5">
+          Get in touch
+          <span aria-hidden="true">-&gt;</span>
+        </a>
       </div>
-      <div class="grid md:grid-cols-3 gap-6 reveal-stagger">
-        <div class="reveal glow-card p-8" style="--i:0">
-          <h3 class="text-neutral-100 text-lg font-medium mb-2">Iron County Today</h3>
-          <p class="text-neutral-500 text-sm mb-4">Staff Writer & Photographer</p>
-          <p class="text-neutral-400 text-sm leading-relaxed">
-            First real job that mattered. Covered news, politics, lifestyle, obituaries. Built the digital presence from nothing. Grew the online following 200% in six months. Won Utah Press Association Awards, though the awards went to the paper, not to me. I've always been the gas and the engine. The car gets the awards.
-          </p>
-        </div>
-        <div class="reveal glow-card p-8" style="--i:1">
-          <h3 class="text-neutral-100 text-lg font-medium mb-2">Standing Rock</h3>
-          <p class="text-neutral-500 text-sm mb-4">Photojournalism, 2016 to 2017</p>
-          <p class="text-neutral-400 text-sm leading-relaxed">
-            Filed dispatches from the camps in sub-zero wind, press badge from a FedEx in Bismarck. Some of the most important work I've done. Not for the portfolio, but for the reminder that showing up matters more than having a plan.
-          </p>
-        </div>
-        <div class="reveal glow-card p-8" style="--i:2">
-          <h3 class="text-neutral-100 text-lg font-medium mb-2">Mt. Rainier</h3>
-          <p class="text-neutral-500 text-sm mb-4">Expedition Photographer, SummitClimb</p>
-          <p class="text-neutral-400 text-sm leading-relaxed">
-            Published expedition photography with full credit. Field notes written at 12,000 feet in a tent that smelled like wet Gore-Tex and instant coffee. The best stories happen when you're too tired to make them up.
-          </p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- CTA -->
-  <section class="relative py-32 px-6 surface-1 overflow-hidden">
-    <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
-    <div class="relative max-w-3xl mx-auto text-center">
-      <p class="reveal text-neutral-400 text-lg mb-10" data-frame="default">Want to know more about a specific project or see writing samples? Just ask.</p>
-      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-frame="sun">See something here that matches where you're headed? Let's talk about how that pattern applies to your business.</p>
-      <p class="reveal text-neutral-400 text-lg mb-10" style="display:none" data-frame="moon">If any of this sounds like what your situation needs, tell me what's going on. I'll tell you if I can help.</p>
-      <a href="/contact?interest=not-sure" class="reveal inline-flex items-center justify-center px-8 py-4 bg-amber-500 text-neutral-950 font-semibold text-sm rounded-lg hover:bg-amber-400 transition-all duration-300 hover:shadow-[0_0_30px_rgba(245,158,11,0.25)]">
-        Get in touch
-      </a>
     </div>
   </section>
 </Base>

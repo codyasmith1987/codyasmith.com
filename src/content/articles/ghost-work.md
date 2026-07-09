@@ -1,6 +1,6 @@
 ---
 title: "Ghost Work"
-description: "The byline is a sales tool. Fifteen years inside that bargain."
+description: "The byline is a sales tool. Eleven years inside that bargain."
 publishDate: 2026-04-29T12:00:00Z
 draft: false
 tags: [writing, craft, essay]

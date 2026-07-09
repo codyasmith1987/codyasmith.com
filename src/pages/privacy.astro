@@ -7,7 +7,7 @@ import Base from '../layouts/Base.astro';
     <div class="relative max-w-3xl mx-auto">
       <p class="reveal text-amber-400 font-mono text-xs tracking-[0.2em] uppercase mb-8">Legal</p>
       <h1 class="reveal font-serif text-5xl md:text-7xl text-neutral-100 leading-[1.05] mb-10">Privacy Policy</h1>
-      <p class="reveal text-neutral-500 text-sm">Last updated: April 28, 2026</p>
+      <p class="reveal text-neutral-500 text-sm">Last updated: July 9, 2026</p>
     </div>
   </section>
 
@@ -24,10 +24,10 @@ import Base from '../layouts/Base.astro';
           <h2 class="text-neutral-100 font-serif text-2xl mb-4">What I collect and why</h2>
 
           <h3 class="text-neutral-200 font-medium text-base mt-6 mb-2">Contact form</h3>
-          <p>Your name, email, message, and which services you're interested in. I use this to reply to you. Your message is sent to me via <a href="https://www.brevo.com/legal/privacypolicy/" class="text-amber-400/60 hover:text-amber-400 transition-colors">Brevo</a> (transactional email). You also receive a confirmation email. I don't add you to any mailing list.</p>
+          <p>Your name, email, message, and which services you're interested in. If you've taken the personality quiz, your current site theme (a shorthand for your four quiz answers) is included with your message. I use this to reply to you. Your message is sent to me via <a href="https://www.brevo.com/legal/privacypolicy/" class="text-amber-400/60 hover:text-amber-400 transition-colors">Brevo</a> (transactional email). You also receive a confirmation email. I don't add you to any mailing list.</p>
 
           <h3 class="text-neutral-200 font-medium text-base mt-6 mb-2">Personality quiz</h3>
-          <p>If you take the quiz and choose to share your name and email, those are stored locally in your browser (localStorage) and optionally sent to me via Brevo. Your quiz answers are used only to personalize the site's appearance for you. They're stored in your browser, not on my server. If you clear your browser data, they're gone.</p>
+          <p>Your quiz answers are used to personalize the site's appearance for you. They stay in your browser (localStorage) unless you send them to me: if you submit the optional name-and-email step, your answers and theme are stored with your name and email in my database, I'm notified via Brevo, and you receive a confirmation email. If you use the contact form, your current theme is included with your message (see above). Retaking the quiz with the same email updates the stored record, and you can ask me to delete it. Submitting the name-and-email step is rate limited by IP address; the IP is not stored permanently. If you clear your browser data, the local copy is gone.</p>
 
           <h3 class="text-neutral-200 font-medium text-base mt-6 mb-2">Sentiment scanner</h3>
           <p>When you use the free scanner tool, I store the brand name you searched and the results. If you unlock the full report by providing your email, that email is stored and used to send you the report via Brevo. Your IP address is used for rate limiting (3 scans per day) and is not stored permanently.</p>
@@ -42,11 +42,11 @@ import Base from '../layouts/Base.astro';
         <div class="reveal">
           <h2 class="text-neutral-100 font-serif text-2xl mb-4">Third-party services</h2>
           <ul class="list-disc list-inside space-y-2">
-            <li><strong class="text-neutral-200">Brevo</strong>: transactional email delivery (contact form, magic links, scanner reports)</li>
+            <li><strong class="text-neutral-200">Brevo</strong>: transactional email delivery (contact form, quiz emails, magic links, scanner reports)</li>
             <li><strong class="text-neutral-200">Cloudflare</strong>: CDN, DNS, and bot management in front of this site</li>
             <li><strong class="text-neutral-200">DigitalOcean App Platform</strong>: hosts this site</li>
             <li><strong class="text-neutral-200">DigitalOcean Spaces</strong>: file storage for client portal documents</li>
-            <li><strong class="text-neutral-200">Turso</strong>: database hosting for portal data and the request log</li>
+            <li><strong class="text-neutral-200">Turso</strong>: database hosting for portal data, quiz leads, sentiment scanner results, and the request log</li>
             <li><strong class="text-neutral-200">Serper</strong>: web search API used by the sentiment scanner</li>
             <li><strong class="text-neutral-200">Google Fonts</strong>: font loading (Inter, Instrument Serif, Lora, JetBrains Mono)</li>
             <li><strong class="text-neutral-200">jsDelivr</strong>: CDN for Chart.js (portal dashboard)</li>

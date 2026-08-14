@@ -46,10 +46,13 @@ export const POST: APIRoute = async ({ locals, request }) => {
   if (row.rows.length === 0) return json({ error: 'Client not found' }, 404);
   const r = row.rows[0] as any;
   const clientName = String(r[0] || '').trim();
-  const clientSlug = String(r[1] || '').trim();
   const storedDomain = r[2] ? String(r[2]).trim().toLowerCase() : '';
 
-  const domain = overrideDomain || storedDomain || `${clientSlug}.com`;
+  // No slug fallback: guessing `${slug}.com` researches whoever owns
+  // that domain, not the client (AG Project got agproject.com pinned
+  // as primary this way; the real site was agproject.io). A domain
+  // must be stored on the client or passed explicitly.
+  const domain = overrideDomain || storedDomain;
   if (!domain || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) {
     return json({ error: 'A valid domain is required (set client.domain or supply override)' }, 400);
   }

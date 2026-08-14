@@ -288,6 +288,29 @@ function ecoChipLabel(pageCount: number | null): string {
                           <span class="text-[10px] text-neutral-500" title="Set an exact dollar amount to bypass the formula for this site. 0 = pro-bono. Use for grandfathered legacy rates. Empty = use formula.">$0 pro-bono, fixed = grandfathered</span>
                         </div>
                       )}
+                      <div class="mt-1 ml-[16.67%] flex items-center gap-2 flex-wrap">
+                        {!site.is_primary && (
+                          <button
+                            type="button"
+                            data-site-make-primary={site.id}
+                            data-client-id={client.id}
+                            data-site-domain={site.domain}
+                            class="px-2 py-0.5 bg-amber-500/10 border border-amber-500/40 text-amber-700 text-[10px] font-mono uppercase tracking-wide rounded hover:bg-amber-500/20 transition-colors"
+                          >
+                            Make primary
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          data-site-remove={site.id}
+                          data-client-id={client.id}
+                          data-site-domain={site.domain}
+                          data-site-primary={site.is_primary ? '1' : '0'}
+                          class="px-2 py-0.5 bg-red-500/10 border border-red-500/30 text-red-400 text-[10px] font-mono uppercase tracking-wide rounded hover:bg-red-500/20 transition-colors"
+                        >
+                          Remove site
+                        </button>
+                      </div>
                     </>
                   ))}
                 </div>
@@ -614,6 +637,86 @@ function ecoChipLabel(pageCount: number | null): string {
         } catch {
           (window as any).__toast?.('Network error saving aliases.', 'error');
           inputEl.value = priorValue;
+        }
+      });
+    });
+
+    // Promote a site to primary (action=set_primary). The primary
+    // drives NULL-site_id data attribution, formula base pricing, and
+    // research scoping; the endpoint clears the flag on every other
+    // row and re-syncs clients.domain to the new primary.
+    document.querySelectorAll('[data-site-make-primary]').forEach(btn => {
+      const btnEl = btn as HTMLButtonElement;
+      const siteId = btnEl.dataset.siteMakePrimary!;
+      const clientId = btnEl.dataset.clientId!;
+      btnEl.addEventListener('click', async () => {
+        btnEl.disabled = true;
+        const prior = btnEl.textContent;
+        btnEl.textContent = 'Promoting…';
+        try {
+          const res = await fetch('/portal/api/admin/clients/sites', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ client_id: clientId, action: 'set_primary', site_id: siteId }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.ok) {
+            (window as any).__toast?.(data.error || 'Failed to set primary.', 'error');
+            btnEl.disabled = false;
+            btnEl.textContent = prior;
+            return;
+          }
+          (window as any).__toast?.(`Primary site is now ${data.primary_domain}.`, 'success');
+          window.location.reload();
+        } catch (err: any) {
+          (window as any).__toast?.(`Network error: ${err?.message || 'fetch failed'}`, 'error');
+          btnEl.disabled = false;
+          btnEl.textContent = prior;
+        }
+      });
+    });
+
+    // Remove a site row (action=delete). Registry-only: deletes the
+    // client_sites row, never the ingested data. Removing the primary
+    // auto-promotes the next site (or clears clients.domain when none
+    // remain); the confirm spells that out before firing.
+    document.querySelectorAll('[data-site-remove]').forEach(btn => {
+      const btnEl = btn as HTMLButtonElement;
+      const siteId = btnEl.dataset.siteRemove!;
+      const clientId = btnEl.dataset.clientId!;
+      const domain = btnEl.dataset.siteDomain || 'this site';
+      const isPrimary = btnEl.dataset.sitePrimary === '1';
+      btnEl.addEventListener('click', async () => {
+        const confirmed = await (window as any).__confirm({
+          title: `Remove ${domain}`,
+          message: isPrimary
+            ? 'This is the primary site. The next site (if any) becomes primary and the client domain follows it. Uploaded data is not deleted.'
+            : 'Removes the site row only. Uploaded data is not deleted.',
+          confirmText: 'Remove',
+        });
+        if (!confirmed) return;
+        btnEl.disabled = true;
+        const prior = btnEl.textContent;
+        btnEl.textContent = 'Removing…';
+        try {
+          const res = await fetch('/portal/api/admin/clients/sites', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+            body: JSON.stringify({ client_id: clientId, action: 'delete', site_id: siteId }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.ok) {
+            (window as any).__toast?.(data.error || 'Failed to remove site.', 'error');
+            btnEl.disabled = false;
+            btnEl.textContent = prior;
+            return;
+          }
+          (window as any).__toast?.(`Removed ${domain}.`, 'success');
+          window.location.reload();
+        } catch (err: any) {
+          (window as any).__toast?.(`Network error: ${err?.message || 'fetch failed'}`, 'error');
+          btnEl.disabled = false;
+          btnEl.textContent = prior;
         }
       });
     });
